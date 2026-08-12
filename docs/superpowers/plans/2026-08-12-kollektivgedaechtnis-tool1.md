@@ -6,7 +6,7 @@
 
 **Architecture:** One Python asyncio process (the Core) is the only writer. It consumes the external STT server's SSE `/events` stream into a JSONL transcript log, receives photos and stop commands from a slim Telegram poller, runs a per-interview LLM pipeline (extract → embedding preselect → LLM merge judge → persist), keeps SQLite as the truth, and re-exports a complete `graph.json` after every change. A FastAPI server in the same process serves two static browser pages (projection + operator) and pushes changes over SSE. The frontend is plain ES modules plus a vendored Cytoscape.js — no bundler, no npm at runtime.
 
-**Tech Stack:** Python 3.12 (via `uv`), SQLite (stdlib `sqlite3`, WAL), FastAPI + uvicorn, httpx, python-telegram-bot, Pillow, Anthropic SDK (`claude-opus-5`), sentence-transformers (local embeddings, CPU), Cytoscape.js (vendored), Playwright (headless pre-render + frontend tests), pytest.
+**Tech Stack:** Python 3.12 (via `uv`), SQLite (stdlib `sqlite3`, WAL), FastAPI + uvicorn, httpx, python-telegram-bot, Pillow, Anthropic SDK (`claude-opus-5`), OpenRouter `/api/v1/embeddings` via httpx with a persistent embedding cache (spec §6.2 — **no local sentence-transformers**), Cytoscape.js (vendored), Playwright (headless pre-render + frontend tests), pytest.
 
 **Source of truth:** `docs/superpowers/specs/2026-08-12-kollektivgedaechtnis-design.md` (APPROVED). Section references below (§) point into that spec. Everything in spec §12 is out of scope and must not be built.
 
@@ -18,7 +18,8 @@
 - Aesthetics: **no legend, no filters, no cluster hubs, no statistics bar** — bare organic net (spec §2).
 - GDPR is **not** a selection criterion; cloud services permitted (spec §2).
 - Machine: laptop on site, **no GPU assumed** (spec §2). Every model must run on CPU.
-- Credentials: exactly **one LLM key + one bot token**, read from env (`ANTHROPIC_API_KEY`, `KG_TELEGRAM_TOKEN`). Never read `~/.hermes/.env`, never commit a key (spec §2).
+- Credentials: read from env only — `ANTHROPIC_API_KEY` (extraction/merge LLM), `KG_TELEGRAM_TOKEN` (bot), `OPENROUTER_API_KEY` (embeddings; a separate key from the extraction LLM is explicitly acceptable, spec §6.2). Never read `~/.hermes/.env`, never commit a key (spec §2).
+- Embeddings run against **OpenRouter `/api/v1/embeddings`** (OpenAI-compatible) and **must be cached by term text**, so a simulation re-run is free and offline (spec §6.2). No local embedding model, no `sentence-transformers` dependency.
 - **No agent in the live loop** — deterministic plain-Python pipeline, no Hermes runtime (spec §2).
 - **Do NOT fork or modify the STT server.** The Core is an independent SSE consumer (spec §4).
 - Serial interviews only — exactly one interview open at a time (spec §5).
@@ -48,7 +49,7 @@ kg/photos.py                   Task 6   portrait normalisation
 kg/telegram_bot.py             Task 7   photo/stop poller
 kg/llm.py                      Task 8   Anthropic wrapper, strict schema, retry
 kg/extraction.py               Task 8   extraction prompt + call
-kg/embeddings.py               Task 9   Embedder protocol + implementations
+kg/embeddings.py               Task 9   Embedder protocol + OpenRouter client + cache
 kg/merging.py                  Task 9   candidate preselect + LLM judge + apply
 kg/export.py                   Task 10  graph.json builder (atomic write)
 kg/pipeline.py                 Task 11  cut → extract → merge → persist → export
@@ -110,8 +111,6 @@ dependencies = [
     "python-telegram-bot>=21.6",
     "pillow>=11.0",
     "pydantic>=2.9",
-    "numpy>=2.1",
-    "sentence-transformers>=3.2",
 ]
 
 [dependency-groups]
@@ -178,6 +177,7 @@ def test_load_config_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("KG_TELEGRAM_TOKEN", "123:abc")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
     cfg = load_config(cfg_file)
 
@@ -192,6 +192,7 @@ def test_load_config_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
     assert cfg.stop_phrases == ["Interview beendet", "Aufnahme beenden"]
     assert cfg.anthropic_api_key == "sk-test"
     assert cfg.telegram_token == "123:abc"
+    assert cfg.openrouter_api_key == "sk-or-test"
 
 
 def test_defaults_apply_when_keys_missing(tmp_path):
@@ -206,6 +207,10 @@ def test_defaults_apply_when_keys_missing(tmp_path):
     assert cfg.tail_seconds == 120
     assert cfg.merge_neighbours == 5
     assert cfg.anthropic_api_key is None
+    assert cfg.openrouter_api_key is None
+    # Embeddings come from OpenRouter, never from a local model (spec 6.2).
+    assert cfg.embedding_url == "https://openrouter.ai/api/v1/embeddings"
+    assert cfg.embedding_model == "openai/text-embedding-3-small"
 
 
 def test_data_dir_is_created(tmp_path):
@@ -217,6 +222,16 @@ def test_data_dir_is_created(tmp_path):
     assert cfg.data_dir.is_dir()
     assert cfg.photo_dir.is_dir()
     assert cfg.portrait_dir.is_dir()
+
+
+def test_embedding_cache_lives_outside_the_run_directory(tmp_path):
+    """The cache must survive `rm -rf out/` between simulation runs (spec 6.2)."""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\n', encoding="utf-8")
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.embedding_cache_path == (tmp_path / "state" / "embeddings.sqlite3").resolve()
 ```
 
 - [ ] **Step 3: Run the test and confirm it fails**
@@ -265,17 +280,27 @@ class Config:
     llm_model: str = "claude-opus-5"
     llm_effort: str = "high"
     llm_max_tokens: int = 16000
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # Embeddings: OpenRouter, OpenAI-compatible endpoint (spec 6.2). Cloud is
+    # explicitly fine here; the cache makes re-runs free and offline.
+    embedding_model: str = "openai/text-embedding-3-small"
+    embedding_url: str = "https://openrouter.ai/api/v1/embeddings"
     default_min_mentions: int = 1
     portrait_size: int = 512
     server_host: str = "127.0.0.1"
     server_port: int = 8800
     anthropic_api_key: str | None = None
     telegram_token: str | None = None
+    openrouter_api_key: str | None = None
 
     @property
     def db_path(self) -> Path:
         return self.data_dir / "kg.db"
+
+    @property
+    def embedding_cache_path(self) -> Path:
+        # Deliberately in data_dir, not in a run directory: simulation runs wipe
+        # their own db but must keep the embedding cache (spec 6.2).
+        return self.data_dir / "embeddings.sqlite3"
 
     @property
     def graph_json_path(self) -> Path:
@@ -313,6 +338,7 @@ _FIELD_NAMES = {
     "llm_effort",
     "llm_max_tokens",
     "embedding_model",
+    "embedding_url",
     "default_min_mentions",
     "portrait_size",
     "server_host",
@@ -334,6 +360,7 @@ def load_config(path: Path | None = None) -> Config:
         data_dir=data_dir,
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
         telegram_token=os.environ.get("KG_TELEGRAM_TOKEN"),
+        openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"),
         **kwargs,
     )
 ```
@@ -341,7 +368,7 @@ def load_config(path: Path | None = None) -> Config:
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_config.py -v`
-Expected: PASS (3 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 6: Write `config.example.toml`**
 
@@ -350,10 +377,13 @@ Expected: PASS (3 tests)
 # Secrets are NOT stored here — export them in the environment:
 #   export ANTHROPIC_API_KEY=...
 #   export KG_TELEGRAM_TOKEN=...
+#   export OPENROUTER_API_KEY=...      # embeddings only, may be a separate key
 
 data_dir = "data"
 
 # External STT server (see docs/stt-contract.md). Do not fork it.
+# Start it from the fundusbot checkout with:
+#   python -m fundusapps.stt_server elevenlabs-scribe --language de
 stt_url = "http://127.0.0.1:5051"
 
 # Only accept Telegram messages from this chat (leave unset to accept all).
@@ -377,6 +407,11 @@ merge_neighbours = 5
 
 llm_model = "claude-opus-5"
 llm_effort = "high"
+
+# Embedding preselection via OpenRouter (spec 6.2). Cached by term text in
+# data_dir/embeddings.sqlite3, so simulation re-runs are free and offline.
+embedding_model = "openai/text-embedding-3-small"
+embedding_url = "https://openrouter.ai/api/v1/embeddings"
 
 # Display filter start value; the operator dial changes it at runtime (spec 7).
 default_min_mentions = 1
@@ -971,7 +1006,7 @@ git commit -m "feat: sqlite schema and store (single writer)"
 
 ---
 
-### Task 3: STT contract verification, SSE decoder, transcript log, STT consumer
+### Task 3: STT contract (verified), SSE decoder, transcript log, STT consumer
 
 **Files:**
 - Create: `docs/stt-contract.md`, `kg/sse.py`, `kg/transcript.py`, `kg/stt_client.py`
@@ -981,32 +1016,102 @@ git commit -m "feat: sqlite schema and store (single writer)"
 - Consumes: `kg.config.Config` (Task 1).
 - Produces:
   - `kg.sse.SSEDecoder.feed(line: str) -> dict | None` — returns the parsed JSON payload when a `data:` block is terminated by a blank line; `None` otherwise (comments, keep-alives, partial blocks).
-  - `kg.transcript.TranscriptionEvent` frozen dataclass with `from_dict(d: dict)`.
+  - `kg.transcript.TranscriptionEvent` frozen dataclass with `from_dict(d: dict)` — carries all **ten** verified fields incl. `extending: bool | None`.
   - `kg.transcript.TranscriptLog(path)` with `append(event)`, `read_range(start, end) -> list[TranscriptionEvent]`, `text_between(start, end) -> str`.
   - `kg.stt_client.STTClient(url, log, on_final, on_partial, on_state)` with `async def run()`.
 
-**⚠️ Blocking open item (spec §4, §14.1).** The version inspected during brainstorming was an older copy at `/home/birk/tmp/stt_server` containing only local backends. During plan writing the current repository could not be located: it is **not** a repository under the `birkschmithuesen` GitHub account, and `hermes-agent` contains no `stt_server` tree. Step 1 below must resolve this before the consumer is trusted. The code in this task is written against the inspected contract and is deliberately tolerant of unknown/missing fields, so a changed contract means editing `TranscriptionEvent.from_dict` and nothing else.
+**✅ The contract is VERIFIED (2026-08-12) — no open item left (spec §4, §14.1 RESOLVED).** Source of truth: private repo **`meredityman/fundusbot`**, branch **`win_fundusfantasma-dev-clean`**, path `fundusapps/stt_server/` (reachable via `gh api` as `birkschmithuesen`). Verified against `events.py`, `app.py`, `args.py` and `backends/elevenlabs_scribe_backend.py`.
 
-- [ ] **Step 1: Verify the current STT server and write down the contract**
+The event has **ten** fields — `extending` is new versus the older copy. We consume `type == "final"` only, so `extending` must merely be **tolerated** by the decoder, never acted on.
 
-Locate the current source (ask Birk for the exact remote if none of these hit):
+- [ ] **Step 1: Write down the verified contract in `docs/stt-contract.md`**
+
+No verification work is left; this step records the facts below verbatim. **Do not modify or fork the STT server** (spec §4).
+
+````markdown
+# STT server contract (verified 2026-08-12)
+
+**Source of truth:** private repo `meredityman/fundusbot`, branch
+`win_fundusfantasma-dev-clean`, path `fundusapps/stt_server/`.
+Read with `gh api repos/meredityman/fundusbot/contents/fundusapps/stt_server/<file>?ref=win_fundusfantasma-dev-clean --jq .content | base64 -d`.
+Verified files: `events.py`, `app.py`, `args.py`,
+`backends/elevenlabs_scribe_backend.py`.
+
+**Do NOT fork or modify this server.** The Core is an independent SSE consumer.
+
+## Run
 
 ```bash
-gh repo list birkschmithuesen --limit 200 | grep -i -E "stt|fundus|versuch"
-ls /home/birk/tmp/stt_server
+python -m fundusapps.stt_server elevenlabs-scribe --language de
 ```
 
-Then, with the STT server running (`ElevenLabs` backend), confirm the wire format:
+Backend name on the wire: `elevenlabs-scribe` (`BACKEND_NAME` in
+`elevenlabs_scribe_backend.py`). API key from the env var named by
+`--api-key-env`, default **`ELEVENLABS_API_KEY`**. Other options: `--model`
+(default `scribe_v2_realtime`), `--commit-strategy` (`vad` | `manual`, default
+`vad`), `--silence-timeout` (default `0.7`). Host/port come from `STT_HOST` /
+`STT_PORT` in the server's own `.env`.
+
+## Endpoints
+
+`GET /events` (SSE), `GET /status`, `POST /pause`, `POST /resume`,
+`GET /operator`. We use `/events` and `/status` only.
+
+## Wire format
+
+Unnamed SSE messages, one JSON object per event:
+
+```
+data: {"recognizer_id": "left", "type": "final", ...}\n\n
+```
+
+Between events, `: keep-alive\n\n` comments every 15 s (from `app.py:events()`).
+
+## Event fields (`events.py`, TranscriptionEvent — TEN fields)
+
+| field | type | note |
+|---|---|---|
+| `recognizer_id` | str | per audio channel |
+| `type` | `"partial"` \| `"final"` | we consume `final` only |
+| `text` | str | |
+| `timestamp` | float | wall clock, epoch seconds |
+| `backend` | str | `elevenlabs-scribe` here |
+| `status` | str \| null | |
+| `confidence` | float \| null | not set by the Scribe backend |
+| `turn_id` | str \| null | ULID, stable per utterance |
+| `partial_seq` | int \| null | partials only |
+| `extending` | bool \| null | **NEW** — see below |
+
+## `extending` — why it exists
+
+ElevenLabs Scribe **revises** partials mid-utterance (unlike the
+LocalAgreement-2 whisper path, whose partials are strictly growing prefixes).
+Per `on_partial_transcript`, the backend emits two parallel partial streams:
+`extending=False` for every distinct live partial (the revisable full text) and
+`extending=True` for the confirmed, strictly-growing prefix. `null` means the
+backend does not distinguish (legacy vosk / whisper).
+
+`final` events are published by `on_committed_transcript` and leave `extending`
+at its default `null`.
+
+**Consequence for us:** we consume `type == "final"` only, so `extending` never
+affects our logic — the decoder must merely tolerate the field. Partials go to
+the operator display, where revision is fine.
+
+## Utterance boundaries are the provider's, not ours
+
+With the default `--commit-strategy vad`, a `final` is emitted exactly when
+ElevenLabs' server VAD sends `committed_transcript`
+(`elevenlabs_scribe_backend.py`; its `tick()` is a documented no-op).
+**We do not implement silence detection.**
+
+## Optional live re-check on site
 
 ```bash
 curl -s http://127.0.0.1:5051/status
 curl -N -s --max-time 20 http://127.0.0.1:5051/events | head -20
 ```
-
-Expected shape (from the inspected `stt_server/app.py` and `events.py`): unnamed SSE messages `data: {json}\n\n`, with `: keep-alive\n\n` comments between; the JSON object carries
-`recognizer_id, type ("partial"|"final"), text, timestamp (epoch seconds), backend, status, confidence, turn_id, partial_seq`.
-
-Record the result in `docs/stt-contract.md`, including: the source location that was verified, the date, whether the ElevenLabs backend is present, how to start the server, and the observed field list. If any field name changed, adjust `TranscriptionEvent.from_dict` in Step 4 — **do not modify the STT server** (spec §4).
+````
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1064,6 +1169,39 @@ def test_event_parsing_is_tolerant_of_missing_and_unknown_fields():
     assert event.timestamp == 5.0
     assert event.turn_id is None
     assert event.backend == ""
+    assert event.extending is None
+
+
+def test_full_elevenlabs_scribe_event_round_trips():
+    """The verified 10-field contract (docs/stt-contract.md)."""
+    payload = {
+        "recognizer_id": "left",
+        "type": "final",
+        "text": "Wir bauen zu viel Neues.",
+        "timestamp": 1754990000.5,
+        "backend": "elevenlabs-scribe",
+        "status": None,
+        "confidence": None,
+        "turn_id": "01K2ABCDEF",
+        "partial_seq": None,
+        "extending": None,
+    }
+    event = TranscriptionEvent.from_dict(payload)
+    assert event.backend == "elevenlabs-scribe"
+    assert event.turn_id == "01K2ABCDEF"
+    assert event.extending is None
+
+
+def test_extending_is_tolerated_but_never_changes_handling():
+    """Scribe revises partials; we only ever consume finals (spec 4)."""
+    revision = TranscriptionEvent.from_dict(
+        {"type": "partial", "text": "Wir bauen", "timestamp": 1.0, "extending": False}
+    )
+    confirmed = TranscriptionEvent.from_dict(
+        {"type": "partial", "text": "Wir bauen", "timestamp": 1.0, "extending": True}
+    )
+    assert revision.extending is False
+    assert confirmed.extending is True
 
 
 def test_append_and_read_range_filters_to_finals_in_window(tmp_path):
@@ -1116,10 +1254,13 @@ async def test_finals_are_logged_and_dispatched(tmp_path):
     stream = FakeStream(
         [
             [
-                'data: {"type": "partial", "text": "hal", "timestamp": 1.0}',
+                # Realistic elevenlabs-scribe shape incl. the 10th field.
+                'data: {"type": "partial", "text": "hal", "timestamp": 1.0,'
+                ' "backend": "elevenlabs-scribe", "extending": false}',
                 "",
                 ": keep-alive",
-                'data: {"type": "final", "text": "hallo", "timestamp": 2.0}',
+                'data: {"type": "final", "text": "hallo", "timestamp": 2.0,'
+                ' "backend": "elevenlabs-scribe", "turn_id": "01K2AB"}',
                 "",
             ]
         ]
@@ -1221,6 +1362,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class TranscriptionEvent:
+    """The verified 10-field STT contract — see docs/stt-contract.md."""
+
     type: str
     text: str
     timestamp: float
@@ -1230,6 +1373,11 @@ class TranscriptionEvent:
     confidence: float | None = None
     turn_id: str | None = None
     partial_seq: int | None = None
+    # elevenlabs-scribe revises partials mid-utterance: True = extends the
+    # previous partial, False = revision, None = backend doesn't distinguish
+    # (and always None on finals). We consume finals only, so this field is
+    # carried, logged and otherwise ignored.
+    extending: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TranscriptionEvent":
@@ -1244,6 +1392,7 @@ class TranscriptionEvent:
             confidence=data.get("confidence"),
             turn_id=data.get("turn_id"),
             partial_seq=data.get("partial_seq"),
+            extending=data.get("extending"),
         )
 
 
@@ -1363,7 +1512,7 @@ class STTClient:
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_sse.py tests/test_transcript.py tests/test_stt_client.py -v`
-Expected: PASS (9 tests)
+Expected: PASS (11 tests)
 
 - [ ] **Step 6: Commit**
 
@@ -2513,12 +2662,17 @@ git commit -m "feat: LLM client with strict schemas and interview extraction"
 - Test: `tests/test_embeddings.py`, `tests/test_merging.py`
 
 **Interfaces:**
-- Consumes: `kg.store.Store` (Task 2), `kg.llm.LLMClient` (Task 8), `Config.merge_neighbours`, `Config.merge_style`, `Config.embedding_model` (Task 1).
+- Consumes: `kg.store.Store` (Task 2), `kg.llm.LLMClient` (Task 8), `Config.merge_neighbours`, `Config.merge_style`, `Config.embedding_model`, `Config.embedding_url`, `Config.openrouter_api_key`, `Config.embedding_cache_path` (Task 1).
 - Produces:
   - `kg.embeddings.Embedder` protocol with `embed(texts: Sequence[str]) -> list[list[float]]`.
   - `kg.embeddings.HashEmbedder` — deterministic, dependency-free; used by tests and by the simulation's frozen mode.
-  - `kg.embeddings.SentenceTransformerEmbedder(model_name)` — CPU, lazy model load.
+  - `kg.embeddings.OpenRouterEmbedder(model, api_key, url, post=...)` — OpenAI-compatible `POST /api/v1/embeddings` over httpx, injectable transport for tests (spec §6.2).
+  - `kg.embeddings.EmbeddingCache(path)` — SQLite, keyed by `(model, text)`.
+  - `kg.embeddings.CachedEmbedder(inner, cache, model)` — **only cache misses go over the network**.
+  - `kg.embeddings.build_embedder(cfg, hash_only=False) -> Embedder` — the one place the wiring is decided.
   - `kg.embeddings.cosine(a, b) -> float`, `kg.embeddings.nearest(vec, candidates: dict[str, list[float]], k) -> list[str]`.
+
+**Embeddings run in the cloud (OpenRouter), not locally** — Birk decided this explicitly (spec §6.2); `sentence-transformers` is not a dependency and must not be reintroduced. The cache is **mandatory**, not an optimisation: without it every simulation re-run costs money and needs the network, which would make the §9 regression runs slow and online-only.
   - `kg.merging.MergeGroup(canonical_label: str, members: list[str])`, `kg.merging.MergeResult(groups: list[MergeGroup])`.
   - `kg.merging.split_known(store, labels) -> tuple[dict[str, str], list[str]]` — already-decided labels resolve straight to term ids, no LLM.
   - `kg.merging.build_candidates(new_labels, existing_labels, embedder, k) -> dict[str, list[str]]`.
@@ -2532,7 +2686,16 @@ Embedding is preselection only; the LLM judges and names (spec §6.2). Merge agg
 `tests/test_embeddings.py`:
 
 ```python
-from kg.embeddings import HashEmbedder, cosine, nearest
+import pytest
+
+from kg.embeddings import (
+    CachedEmbedder,
+    EmbeddingCache,
+    HashEmbedder,
+    OpenRouterEmbedder,
+    cosine,
+    nearest,
+)
 
 
 def test_hash_embedder_is_deterministic_and_normalised():
@@ -2562,6 +2725,108 @@ def test_nearest_returns_the_k_closest_keys_in_order():
 def test_nearest_handles_fewer_candidates_than_k():
     e = HashEmbedder(dim=16)
     assert nearest(e.embed(["x"])[0], {}, k=5) == []
+
+
+class FakePost:
+    """Stands in for the httpx POST. Records every request body."""
+
+    def __init__(self, dim=4):
+        self.dim = dim
+        self.bodies = []
+
+    def __call__(self, url, headers, json):
+        self.bodies.append(json)
+        return {
+            "data": [
+                {"index": i, "embedding": [float(len(t))] + [0.0] * (self.dim - 1)}
+                for i, t in enumerate(json["input"])
+            ]
+        }
+
+
+def test_openrouter_embedder_sends_an_openai_compatible_request():
+    post = FakePost()
+    embedder = OpenRouterEmbedder(
+        model="openai/text-embedding-3-small",
+        api_key="sk-or-test",
+        url="https://openrouter.ai/api/v1/embeddings",
+        post=post,
+    )
+
+    vectors = embedder.embed(["Holzbau", "Bodenpreise"])
+
+    assert post.bodies == [
+        {"model": "openai/text-embedding-3-small", "input": ["Holzbau", "Bodenpreise"]}
+    ]
+    assert len(vectors) == 2
+    # Vectors come back normalised so `cosine` is a plain dot product.
+    assert abs(sum(x * x for x in vectors[0]) - 1.0) < 1e-6
+
+
+def test_openrouter_embedder_reorders_by_index():
+    class ShuffledPost:
+        def __call__(self, url, headers, json):
+            return {"data": [
+                {"index": 1, "embedding": [0.0, 1.0]},
+                {"index": 0, "embedding": [1.0, 0.0]},
+            ]}
+
+    embedder = OpenRouterEmbedder("m", "k", "u", post=ShuffledPost())
+    assert embedder.embed(["a", "b"]) == [[1.0, 0.0], [0.0, 1.0]]
+
+
+def test_openrouter_embedder_refuses_to_run_without_a_key():
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        OpenRouterEmbedder("m", None, "u").embed(["a"])
+
+
+def test_openrouter_embedder_skips_the_call_for_an_empty_batch():
+    post = FakePost()
+    assert OpenRouterEmbedder("m", "k", "u", post=post).embed([]) == []
+    assert post.bodies == []
+
+
+def test_cache_only_sends_misses_and_preserves_input_order(tmp_path):
+    post = FakePost()
+    inner = OpenRouterEmbedder("m", "k", "u", post=post)
+    cache = EmbeddingCache(tmp_path / "emb.sqlite3")
+    embedder = CachedEmbedder(inner, cache, model="m")
+
+    first = embedder.embed(["Holzbau", "Bodenpreise"])
+    second = embedder.embed(["Bodenpreise", "Holzbau", "Leerstand"])
+
+    # Second call sends ONLY the unseen label.
+    assert [b["input"] for b in post.bodies] == [
+        ["Holzbau", "Bodenpreise"],
+        ["Leerstand"],
+    ]
+    assert second[0] == first[1]
+    assert second[1] == first[0]
+
+
+def test_cache_survives_a_restart_so_a_rerun_is_offline_and_free(tmp_path):
+    """Spec 6.2: the second simulation run must need neither key nor network."""
+    path = tmp_path / "emb.sqlite3"
+    post = FakePost()
+    warm = CachedEmbedder(OpenRouterEmbedder("m", "k", "u", post=post), EmbeddingCache(path), "m")
+    expected = warm.embed(["Holzbau"])
+
+    class ExplodingPost:
+        def __call__(self, *args, **kwargs):
+            raise AssertionError("cache miss: the re-run went online")
+
+    offline = CachedEmbedder(
+        OpenRouterEmbedder("m", None, "u", post=ExplodingPost()), EmbeddingCache(path), "m"
+    )
+    assert offline.embed(["Holzbau"]) == expected
+
+
+def test_cache_is_keyed_by_model_as_well_as_text(tmp_path):
+    cache = EmbeddingCache(tmp_path / "emb.sqlite3")
+    post = FakePost()
+    CachedEmbedder(OpenRouterEmbedder("m1", "k", "u", post=post), cache, "m1").embed(["Holzbau"])
+    CachedEmbedder(OpenRouterEmbedder("m2", "k", "u", post=post), cache, "m2").embed(["Holzbau"])
+    assert len(post.bodies) == 2
 ```
 
 `tests/test_merging.py`:
@@ -2700,7 +2965,15 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'kg.embeddings'`
 - [ ] **Step 3: Implement `kg/embeddings.py`**
 
 ```python
-"""Embeddings are preselection only — milliseconds, negligible cost (spec 6.2).
+"""Embeddings are preselection only — negligible cost (spec 6.2).
+
+Provider: OpenRouter's OpenAI-compatible /api/v1/embeddings. Deliberately NOT a
+local sentence-transformers model — Birk decided for the cloud endpoint
+(spec 6.2); do not reintroduce a local model.
+
+Every embedding is cached by (model, text) in SQLite. That is a requirement,
+not an optimisation: the simulation (spec 9) is a regression net that must be
+re-runnable for free and offline.
 
 The naming decision is the LLM's; see kg.merging.
 """
@@ -2708,9 +2981,12 @@ The naming decision is the LLM's; see kg.merging.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
+import sqlite3
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Protocol
 
 _WORD = re.compile(r"\w+", flags=re.UNICODE)
@@ -2744,29 +3020,122 @@ class HashEmbedder:
         return [v / norm for v in vector]
 
 
-class SentenceTransformerEmbedder:
-    """Multilingual MiniLM on CPU. Model is downloaded once and cached."""
+def _httpx_post(url: str, headers: dict, json: dict) -> dict:
+    import httpx
 
-    def __init__(self, model_name: str) -> None:
-        self.model_name = model_name
-        self._model = None
+    response = httpx.post(url, headers=headers, json=json, timeout=30.0)
+    response.raise_for_status()
+    return response.json()
 
-    def _ensure(self):
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self.model_name, device="cpu")
-        return self._model
+def _normalise(vector: Sequence[float]) -> list[float]:
+    norm = math.sqrt(sum(float(v) * float(v) for v in vector))
+    if norm == 0:
+        return [float(v) for v in vector]
+    return [float(v) / norm for v in vector]
 
-    def warm_up(self) -> None:
-        """Load the model before the festival starts, not during an interview."""
-        self._ensure().encode(["Aufwärmen"])
+
+class OpenRouterEmbedder:
+    """OpenAI-compatible embeddings endpoint (spec 6.2).
+
+    `post` is injectable so the tests never touch the network.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None,
+        url: str,
+        post=_httpx_post,
+    ) -> None:
+        self.model = model
+        self.api_key = api_key
+        self.url = url
+        self.post = post
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        texts = list(texts)
         if not texts:
             return []
-        vectors = self._ensure().encode(list(texts), normalize_embeddings=True)
-        return [list(map(float, v)) for v in vectors]
+        if not self.api_key:
+            raise RuntimeError(
+                "OPENROUTER_API_KEY is not set — embeddings need it on a cache miss"
+            )
+        payload = self.post(
+            self.url,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model, "input": texts},
+        )
+        rows = sorted(payload["data"], key=lambda row: row.get("index", 0))
+        return [_normalise(row["embedding"]) for row in rows]
+
+
+class EmbeddingCache:
+    """One embedding per (model, text), ever. Survives `rm -rf out/`."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS embedding ("
+            " model TEXT NOT NULL, text TEXT NOT NULL, vector TEXT NOT NULL,"
+            " PRIMARY KEY (model, text))"
+        )
+        self.conn.commit()
+
+    def get_many(self, model: str, texts: Sequence[str]) -> dict[str, list[float]]:
+        found: dict[str, list[float]] = {}
+        for text in dict.fromkeys(texts):
+            row = self.conn.execute(
+                "SELECT vector FROM embedding WHERE model=? AND text=?", (model, text)
+            ).fetchone()
+            if row:
+                found[text] = json.loads(row[0])
+        return found
+
+    def put_many(self, model: str, vectors: dict[str, list[float]]) -> None:
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO embedding(model, text, vector) VALUES (?,?,?)",
+            [(model, text, json.dumps(vec)) for text, vec in vectors.items()],
+        )
+        self.conn.commit()
+
+
+class CachedEmbedder:
+    """Only cache misses go over the network (spec 6.2)."""
+
+    def __init__(self, inner: "Embedder", cache: EmbeddingCache, model: str) -> None:
+        self.inner = inner
+        self.cache = cache
+        self.model = model
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        texts = list(texts)
+        if not texts:
+            return []
+        known = self.cache.get_many(self.model, texts)
+        missing = [t for t in dict.fromkeys(texts) if t not in known]
+        if missing:
+            fresh = dict(zip(missing, self.inner.embed(missing)))
+            self.cache.put_many(self.model, fresh)
+            known |= fresh
+        return [known[text] for text in texts]
+
+
+def build_embedder(cfg, hash_only: bool = False) -> "Embedder":
+    """The single place where embedder wiring is decided."""
+    if hash_only:
+        return HashEmbedder()
+    return CachedEmbedder(
+        OpenRouterEmbedder(
+            model=cfg.embedding_model,
+            api_key=cfg.openrouter_api_key,
+            url=cfg.embedding_url,
+        ),
+        EmbeddingCache(cfg.embedding_cache_path),
+        model=cfg.embedding_model,
+    )
 
 
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:
@@ -2932,7 +3301,7 @@ def apply_merges(
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_embeddings.py tests/test_merging.py -v`
-Expected: PASS (12 tests)
+Expected: PASS (20 tests)
 
 - [ ] **Step 6: Commit**
 
@@ -5350,7 +5719,7 @@ import uvicorn
 from kg.bus import EventBus
 from kg.config import load_config
 from kg.core import Core
-from kg.embeddings import SentenceTransformerEmbedder
+from kg.embeddings import build_embedder
 from kg.export import write_graph_json
 from kg.llm import LLMClient
 from kg.server import create_app
@@ -5373,8 +5742,9 @@ async def main_async(args) -> None:
         max_tokens=cfg.llm_max_tokens,
         api_key=cfg.anthropic_api_key,
     )
-    embedder = SentenceTransformerEmbedder(cfg.embedding_model)
-    embedder.warm_up()  # never load the model during an interview
+    # OpenRouter + persistent cache (spec 6.2). Nothing to warm up: no local
+    # model, and repeated terms are served from the cache.
+    embedder = build_embedder(cfg)
 
     core = Core(cfg, store, bus, transcript_log, llm, embedder)
     write_graph_json(store, cfg.graph_json_path)  # state is reconstructed from SQLite
@@ -5448,7 +5818,7 @@ curl -s http://127.0.0.1:8800/api/state
 kill %1
 ```
 
-Expected: a valid empty graph and a state object. The first run downloads the embedding model — that is why `warm_up()` exists.
+Expected: a valid empty graph and a state object. No model download and no network call happens here — embeddings are only requested when an interview is processed, and then only for terms that are not already in the cache.
 
 - [ ] **Step 7: Commit**
 
@@ -5779,7 +6149,7 @@ Expected: PASS (7 tests)
 - [ ] **Step 5: Generate and commit the corpus**
 
 ```bash
-export ANTHROPIC_API_KEY=...    # one key, from the environment
+export ANTHROPIC_API_KEY=...    # LLM key, from the environment
 uv run python -m sim.generate_interviews --count 60 --out sim/data
 ls sim/data/interviews | wc -l   # 60
 head -20 sim/data/expectations.yaml
@@ -6053,7 +6423,7 @@ def main() -> None:
     import yaml
 
     from kg.config import load_config
-    from kg.embeddings import HashEmbedder, SentenceTransformerEmbedder
+    from kg.embeddings import build_embedder
     from kg.export import write_graph_json
     from kg.llm import LLMClient
     from kg.store import Store
@@ -6063,7 +6433,9 @@ def main() -> None:
     parser.add_argument("--db", default="out/sim.db")
     parser.add_argument("--speed", type=float, default=0.0, help="0 = as fast as possible")
     parser.add_argument("--limit", type=int, default=0, help="stop after N interviews")
-    parser.add_argument("--hash-embedder", action="store_true", help="no model download")
+    parser.add_argument(
+        "--hash-embedder", action="store_true", help="deterministic local hashing, no API call"
+    )
     args = parser.parse_args()
 
     cfg = load_config()
@@ -6085,7 +6457,9 @@ def main() -> None:
         max_tokens=cfg.llm_max_tokens,
         api_key=cfg.anthropic_api_key,
     )
-    embedder = HashEmbedder() if args.hash_embedder else SentenceTransformerEmbedder(cfg.embedding_model)
+    # NB: built from `cfg`, not `run_cfg` — the embedding cache must live in the
+    # real data_dir so a second run over the same corpus is free and offline.
+    embedder = build_embedder(cfg, hash_only=args.hash_embedder)
 
     corpus = load_corpus(data / "interviews")
     if args.limit:
@@ -6526,6 +6900,7 @@ cd "$(dirname "$0")/.."
 
 : "${ANTHROPIC_API_KEY:?export ANTHROPIC_API_KEY first}"
 : "${KG_TELEGRAM_TOKEN:?export KG_TELEGRAM_TOKEN first}"
+: "${OPENROUTER_API_KEY:?export OPENROUTER_API_KEY first}"
 
 HOST=127.0.0.1
 PORT=8800
@@ -6571,14 +6946,20 @@ Include, with the values measured during Tasks 19–20:
 # Betrieb — Station Kollektivgedächtnis
 
 ## Vor dem Festival
-1. `export ANTHROPIC_API_KEY=...` und `export KG_TELEGRAM_TOKEN=...`
-   (nur diese zwei Geheimnisse; nie `~/.hermes/.env` verwenden)
+1. `export ANTHROPIC_API_KEY=...`, `export KG_TELEGRAM_TOKEN=...` und
+   `export OPENROUTER_API_KEY=...` (nur diese drei Geheimnisse; nie
+   `~/.hermes/.env` verwenden). `OPENROUTER_API_KEY` ist nur für die
+   Embeddings und darf ein eigener Schlüssel sein.
 2. `cp config.example.toml config.toml` und Werte prüfen —
    `terms_per_interview`, `merge_style` und `default_min_mentions` stehen auf den
    in der Simulation kalibrierten Werten (siehe unten) und werden im Betrieb NICHT verändert.
-3. `uv sync` und einmal `uv run python -m kg --no-telegram --no-stt` starten,
-   damit das Embedding-Modell heruntergeladen und gecacht ist.
-4. STT-Server starten (siehe `docs/stt-contract.md`) und
+3. `uv sync` und einmal `uv run python -m kg --no-telegram --no-stt` starten
+   (Rauchtest). Es wird kein Modell heruntergeladen; Embeddings kommen von
+   OpenRouter und liegen danach im Cache `data/embeddings.sqlite3` — diese
+   Datei nicht löschen, sie spart Geld und macht Wiederholungsläufe offline-fähig.
+4. STT-Server starten (siehe `docs/stt-contract.md`):
+   `python -m fundusapps.stt_server elevenlabs-scribe --language de`
+   (braucht `ELEVENLABS_API_KEY` in dessen eigener Umgebung) und
    `curl -N http://127.0.0.1:5051/events` gegenprüfen.
 
 ## Start am Ausstellungstag
@@ -6643,7 +7024,7 @@ git commit -m "feat: crash recovery, failure-mode coverage and on-site runbook"
 
 ## Open items carried forward from the spec (§14)
 
-1. **Verify the current STT server repo** — Task 3, Step 1. It is blocking for the consumer and could not be resolved while writing this plan: the repository is not under the `birkschmithuesen` GitHub account and `hermes-agent` contains no `stt_server` tree; only an older copy exists at `/home/birk/tmp/stt_server`. Ask Birk for the remote before starting Task 3.
+1. ~~Verify the current STT server repo~~ — **RESOLVED 2026-08-12** (spec §14.1). Source, branch, run command and the changed 10-field event contract (`extending`) are recorded in Task 3, Step 1 and in the spec §4. Nothing is blocked.
 2. **Second screen specs** from the organiser — affects Tool 2, not this build. Nothing here depends on it.
 3. **Touch hardware decision** — procurement track. If touch is absent, camera mode `pan` (Task 14) carries the station; no code change needed.
 4. **Density calibration values** — produced by Task 19, recorded in `docs/operations.md` in Task 21.
