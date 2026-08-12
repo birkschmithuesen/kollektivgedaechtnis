@@ -742,6 +742,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 from kg.db import connect
@@ -753,6 +754,7 @@ _PREFIXES = {"person": "p", "term": "t", "edge": "e", "quote": "q", "merge": "m"
 class Store:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+        self._id_lock = threading.Lock()
 
     @classmethod
     def open(cls, path: Path) -> "Store":
@@ -765,13 +767,22 @@ class Store:
 
     def _next_id(self, kind: str) -> str:
         # No RETURNING clause: the target SQLite (3.34) predates 3.35's support
-        # for it. Single-writer process, so the upsert-then-read is not racy.
-        self.conn.execute(
-            "INSERT INTO counters(name, value) VALUES (?, 1) "
-            "ON CONFLICT(name) DO UPDATE SET value = value + 1",
-            (kind,),
-        )
-        row = self.conn.execute("SELECT value FROM counters WHERE name=?", (kind,)).fetchone()
+        # for it, so this is an upsert followed by a separate read. The two
+        # statements are made atomic with `_id_lock`: `kg.db.connect` opens the
+        # connection with check_same_thread=False specifically so a single
+        # connection can be reused across threads (FastAPI runs sync route
+        # handlers in a threadpool), so without the lock two threads could
+        # interleave between the UPSERT and the SELECT, read the same counter
+        # value, and mint a duplicate id.
+        with self._id_lock:
+            self.conn.execute(
+                "INSERT INTO counters(name, value) VALUES (?, 1) "
+                "ON CONFLICT(name) DO UPDATE SET value = value + 1",
+                (kind,),
+            )
+            row = self.conn.execute(
+                "SELECT value FROM counters WHERE name=?", (kind,)
+            ).fetchone()
         return f"{_PREFIXES[kind]}{row['value']}"
 
     # -- person ------------------------------------------------------------
@@ -1022,7 +1033,7 @@ def _edge(row: sqlite3.Row) -> Edge:
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_store.py -v`
-Expected: PASS (11 tests)
+Expected: PASS (12 tests — the 11 above plus a concurrency test proving `_next_id` never mints a duplicate id under threaded use)
 
 - [ ] **Step 7: Commit**
 
