@@ -195,7 +195,10 @@ def test_load_config_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
     assert cfg.openrouter_api_key == "sk-or-test"
 
 
-def test_defaults_apply_when_keys_missing(tmp_path):
+def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
+    # Must not depend on what happens to be exported in the shell.
+    for name in ("ANTHROPIC_API_KEY", "KG_TELEGRAM_TOKEN", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text('data_dir = "state"\n', encoding="utf-8")
 
