@@ -1,6 +1,6 @@
 # Design Spec: Kollektivgedächtnis (Tool 1 — Live-Interview-Graph)
 
-- **Status:** awaiting Birk's review (all design decisions taken in dialogue 2026-08-12)
+- **Status:** APPROVED by Birk 2026-08-12 — ready for phase 2 (writing-plans)
 - **Phase:** 1 of 3 (brainstorm → plan → execute). Next: `superpowers:writing-plans` in a fresh Claude Code session.
 - **Project:** Station „Kollektivgedächtnis", Festival NEW bauhaus, Sept 2026 (on-site build/test from 01.09.)
 - **Repo:** `birkschmithuesen/kollektivgedaechtnis` (private)
