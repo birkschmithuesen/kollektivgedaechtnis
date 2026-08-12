@@ -371,7 +371,7 @@ def load_config(path: Path | None = None) -> Config:
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_config.py -v`
-Expected: PASS (5 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 6: Write `config.example.toml`**
 
@@ -445,7 +445,7 @@ git commit -m "feat: project skeleton and configuration loading"
   - `kg.models.Term(id, label, created_at, hidden)`
   - `kg.models.Edge(id, person_id, term_id, created_at)`
   - `kg.models.Quote(id, person_id, text, created_at)`
-  - `kg.store.Store` with the methods listed in Step 4 below. **`Store` is the only module that talks to SQLite.**
+  - `kg.store.Store` with the methods listed in Step 5 below. **`Store` is the only module that talks to SQLite.** Note `set_setting_default(key, value)` — seeds a setting only when absent, so startup can apply the calibrated `Config.default_min_mentions` without clobbering a dial the operator turned before a crash.
 
 IDs are deterministic and human-readable: `p1`, `t1`, `e1`, `q1`, assigned from a `counters` table so two simulation runs over the same data produce identical ids (spec §9 reproducibility).
 
@@ -562,6 +562,16 @@ def test_settings_round_trip_with_default(store):
     assert store.get_setting("min_mentions", "1") == "1"
     store.set_setting("min_mentions", "2")
     assert store.get_setting("min_mentions", "1") == "2"
+
+
+def test_set_setting_default_seeds_once_and_never_clobbers(store):
+    """Startup seeds the configured density; an operator's live change wins."""
+    store.set_setting_default("min_mentions", "3")
+    assert store.get_setting("min_mentions", "1") == "3"
+
+    store.set_setting("min_mentions", "1")  # operator turns the dial down
+    store.set_setting_default("min_mentions", "3")  # next restart
+    assert store.get_setting("min_mentions", "1") == "1"
 
 
 def test_state_survives_reopening(tmp_path):
@@ -965,6 +975,17 @@ class Store:
         )
         self.conn.commit()
 
+    def set_setting_default(self, key: str, value: str) -> None:
+        """Seed a setting only if it has never been set.
+
+        Startup uses this to apply the calibrated `default_min_mentions` without
+        overwriting a dial the operator turned before the crash (spec 7, 10.5).
+        """
+        self.conn.execute(
+            "INSERT OR IGNORE INTO setting(key, value) VALUES (?,?)", (key, str(value))
+        )
+        self.conn.commit()
+
 
 def _person(row: sqlite3.Row) -> Person:
     return Person(
@@ -998,7 +1019,7 @@ def _edge(row: sqlite3.Row) -> Edge:
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_store.py -v`
-Expected: PASS (9 tests)
+Expected: PASS (11 tests)
 
 - [ ] **Step 7: Commit**
 
@@ -2559,22 +2580,33 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-EXTRACTION_SYSTEM = """\
+# The five real guiding questions from the briefing. Single source of truth:
+# the simulation corpus generator (sim/generate_interviews.py) imports these,
+# so the test corpus can never drift away from the extraction prompt (spec 9).
+GUIDING_QUESTIONS = [
+    "Wenn Sie an das Haus oder die Stadt denken, in der Sie in 20 Jahren leben "
+    "wollen — was wäre das Erste, das anders sein sollte als heute?",
+    "Eine KI plant Ihr nächstes Zuhause — bis wohin vertrauen Sie ihr? Wo wollen "
+    "Sie unbedingt einen Menschen entscheiden lassen?",
+    "Braucht das Bauen einen radikalen Bruch mit dem System — oder reicht es, das "
+    "Bestehende klüger zu reparieren?",
+    "Wer sollte entscheiden, wie Ihr Ort/Ihre Stadt sich verändert — und fühlen "
+    "Sie sich dabei gehört?",
+    "Worauf würden Sie beim Bauen verzichten, damit für die Natur mehr übrig "
+    "bleibt? Gibt es etwas, auf das Sie niemals verzichten möchten?",
+]
+
+_QUESTION_BLOCK = "\n".join(
+    f"{number}. {question}" for number, question in enumerate(GUIDING_QUESTIONS, start=1)
+)
+
+EXTRACTION_SYSTEM = f"""\
 Du verdichtest das Transkript eines gesprochenen Interviews auf einer \
 Architektur- und Baukultur-Konferenz (Festival NEW bauhaus 2026) zu wenigen, \
 sehr konkreten Begriffen.
 
 Den Personen wurden diese fünf Leitfragen gestellt:
-1. Wenn Sie an das Haus oder die Stadt denken, in der Sie in 20 Jahren leben \
-wollen — was wäre das Erste, das anders sein sollte als heute?
-2. Eine KI plant Ihr nächstes Zuhause — bis wohin vertrauen Sie ihr? Wo wollen \
-Sie unbedingt einen Menschen entscheiden lassen?
-3. Braucht das Bauen einen radikalen Bruch mit dem System — oder reicht es, das \
-Bestehende klüger zu reparieren?
-4. Wer sollte entscheiden, wie Ihr Ort/Ihre Stadt sich verändert — und fühlen \
-Sie sich dabei gehört?
-5. Worauf würden Sie beim Bauen verzichten, damit für die Natur mehr übrig \
-bleibt? Gibt es etwas, auf das Sie niemals verzichten möchten?
+{_QUESTION_BLOCK}
 
 Das Transkript kommt aus automatischer Spracherkennung: Füllwörter, \
 abgebrochene Sätze, Wiederholungen, Hörfehler. Es reicht absichtlich über das \
@@ -3304,7 +3336,7 @@ def apply_merges(
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_embeddings.py tests/test_merging.py -v`
-Expected: PASS (20 tests)
+Expected: PASS (19 tests)
 
 - [ ] **Step 6: Commit**
 
@@ -3873,7 +3905,7 @@ git commit -m "feat: per-interview pipeline (cut, extract, merge, persist, expor
 ### Task 12: Event bus and HTTP/SSE server
 
 **Files:**
-- Create: `kg/bus.py`, `kg/server.py`
+- Create: `kg/bus.py`, `kg/server.py`, plus the minimal pages the server mounts: `frontend/projection.html`, `frontend/operator.html`, `frontend/static/graph-model.js` (Step 5 — they are replaced/extended by Tasks 13–15)
 - Test: `tests/test_bus.py`, `tests/test_server.py`
 
 **Interfaces:**
@@ -4599,9 +4631,16 @@ def view(page, static_server):
     return page
 
 
+def wait_for_layout(page):
+    """The cose layout is animated (LAYOUT.animationDuration) and positions are
+    only reported at `layoutstop`. Wait for the real signal — a fixed timeout
+    shorter than the animation would make these tests flaky."""
+    page.wait_for_function("() => window.kgView.layoutPending === false")
+
+
 def update(page, graph, min_mentions=1):
     page.evaluate("(args) => window.kgView.update(args[0], args[1])", [graph, min_mentions])
-    page.wait_for_timeout(400)  # let the layout settle
+    wait_for_layout(page)
 
 
 def test_nodes_and_edges_are_rendered(view):
@@ -4642,12 +4681,12 @@ def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
     person_position = view.evaluate("window.kgView.cy.$('#p1').position()")
 
     view.evaluate("window.kgView.setMinMentions(2)")
-    view.wait_for_timeout(300)
+    wait_for_layout(view)
 
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 0
     assert view.evaluate("window.kgView.cy.$('#p1').length") == 1
     view.evaluate("window.kgView.setMinMentions(1)")
-    view.wait_for_timeout(400)
+    wait_for_layout(view)
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
     assert view.evaluate("window.kgView.cy.$('#p1').position()") == person_position
 ```
@@ -4778,6 +4817,9 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
   const camera = new Camera(cy);
   let lastGraph = { nodes: [], edges: [], min_mentions: 1 };
   let minMentions = 1;
+  // True while an animated layout is running. Tests and the pre-render wait on
+  // this instead of guessing a timeout; positions land only at `layoutstop`.
+  let layoutPending = false;
 
   function render() {
     const view = visibleGraph(lastGraph, minMentions);
@@ -4817,6 +4859,7 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       const existing = cy.nodes().filter((n) => !fresh.includes(n.id()));
       existing.lock();
       const layout = cy.layout(LAYOUT);
+      layoutPending = true;
       layout.one('layoutstop', () => {
         existing.unlock();
         const positions = {};
@@ -4825,6 +4868,7 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
         });
         onPositions(positions);
         camera.onGraphChanged();
+        layoutPending = false;
       });
       layout.run();
     } else {
@@ -4843,6 +4887,9 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
   return {
     cy,
     camera,
+    get layoutPending() {
+      return layoutPending;
+    },
     update(graph, value) {
       lastGraph = graph;
       if (value !== undefined) minMentions = value;
@@ -5307,9 +5354,12 @@ Expected: FAIL — 404 / selector `.wedge` never appears
 <html lang="de">
 <meta charset="utf-8">
 <title>Testbild — Whiteboard</title>
+<!-- Ground comes from theme-d.css so the wedge is read against the same
+     background as variant A, not against a hard-coded copy of it. -->
+<link rel="stylesheet" href="static/theme-d.css">
 <style>
   html, body { margin: 0; padding: 0; }
-  body { width: 1920px; height: 1080px; overflow: hidden; background: #101014; color: #fff;
+  body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: #fff;
          font-family: Georgia, 'Times New Roman', serif; }
   .wedge { display: flex; height: 260px; }
   .wedge .step { flex: 1; display: flex; align-items: flex-end; justify-content: center;
@@ -5355,13 +5405,16 @@ Expected: FAIL — 404 / selector `.wedge` never appears
 
 - [ ] **Step 4: Add `theme-d.css` and the server route**
 
-`frontend/static/theme-d.css` (kept alongside the others so the pre-render series can address D uniformly):
+`frontend/static/theme-d.css` — the test pattern's own background, so it is measured against the same ground as variant A:
 
 ```css
-/* Variant D is the test pattern page, not a graph theme. This file exists so
-   the pre-render series can address A/B/C/D uniformly. */
+/* Variant D is the test pattern page, not a graph theme: it is rendered from
+   /testpattern, not from /projection?theme=d. Its ground matches theme A so
+   the greyscale wedge is read against the reference background. */
 :root { --bg: #101014; }
 ```
+
+`frontend/testpattern.html` must therefore link `base.css` and `theme-d.css` rather than carrying an inline `<style>` block for the background — otherwise this file is dead weight.
 
 In `kg/server.py`, next to the `/operator` route:
 
@@ -5737,6 +5790,9 @@ async def main_async(args) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     store = Store.open(cfg.db_path)
+    # Apply the calibrated start density on a fresh database. On a restart the
+    # operator's live setting is already stored and must win (spec 7, 10.5).
+    store.set_setting_default("min_mentions", str(cfg.default_min_mentions))
     bus = EventBus()
     transcript_log = TranscriptLog(cfg.transcript_log_path)
     llm = LLMClient(
@@ -5956,18 +6012,11 @@ from pathlib import Path
 
 import yaml
 
-QUESTIONS = [
-    "Wenn Sie an das Haus oder die Stadt denken, in der Sie in 20 Jahren leben "
-    "wollen — was wäre das Erste, das anders sein sollte als heute?",
-    "Eine KI plant Ihr nächstes Zuhause — bis wohin vertrauen Sie ihr? Wo wollen "
-    "Sie unbedingt einen Menschen entscheiden lassen?",
-    "Braucht das Bauen einen radikalen Bruch mit dem System — oder reicht es, das "
-    "Bestehende klüger zu reparieren?",
-    "Wer sollte entscheiden, wie Ihr Ort/Ihre Stadt sich verändert — und fühlen "
-    "Sie sich dabei gehört?",
-    "Worauf würden Sie beim Bauen verzichten, damit für die Natur mehr übrig "
-    "bleibt? Gibt es etwas, auf das Sie niemals verzichten möchten?",
-]
+from kg.extraction import GUIDING_QUESTIONS as QUESTIONS  # noqa: F401  (re-exported)
+
+# NOT redefined here: the corpus must be generated from the SAME five guiding
+# questions the extraction prompt names, otherwise the simulation tests the
+# wrong text genre (spec 9).
 
 SPEAKER_TYPES = [
     "sehr knapp, zwei Sätze, fast unwillig",
@@ -6653,7 +6702,13 @@ def render_series(
             for theme in themes:
                 page.goto(f"{base_url}/projection?theme={theme}")
                 page.wait_for_function("window.kgReady === true", timeout=20000)
-                page.wait_for_timeout(2500)  # let the layout animation settle
+                # Wait for the real signal, not a guessed duration: the cose
+                # layout is animated and nodes are still moving until layoutstop.
+                page.wait_for_function(
+                    "() => window.kgView && window.kgView.layoutPending === false",
+                    timeout=20000,
+                )
+                page.wait_for_timeout(200)  # let the final frame paint
                 target = out_dir / f"{theme}.png"
                 page.screenshot(path=str(target))
                 written.append(target)
@@ -6710,6 +6765,7 @@ git commit -m "feat: headless 1920x1080 pre-render comparison series"
 
 **Files:**
 - Create: `tests/test_resilience.py`, `docs/operations.md`, `scripts/start.sh`
+- Modify: `kg/session.py` (adds `SessionTracker.adopt()`), `kg/core.py` (adds `Core.recover()`), `kg/__main__.py` (calls it at startup)
 - Test: `tests/test_resilience.py`
 
 **Interfaces:**
@@ -6843,7 +6899,7 @@ async def test_a_dead_stt_server_is_visible_but_not_fatal(tmp_path):
         transcript_log=TranscriptLog(cfg.transcript_log_path),
         llm=object(),
         embedder=HashEmbedder(dim=16),
-        processor=lambda *a: ProcessResult(a[6], "done", [], ""),
+        processor=lambda *a: ProcessResult(a[5], "done", [], ""),
     )
 
     core.on_stt_state(False)
