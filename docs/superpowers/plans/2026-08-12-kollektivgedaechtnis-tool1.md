@@ -764,12 +764,15 @@ class Store:
     # -- ids ---------------------------------------------------------------
 
     def _next_id(self, kind: str) -> str:
-        cur = self.conn.execute(
+        # No RETURNING clause: the target SQLite (3.34) predates 3.35's support
+        # for it. Single-writer process, so the upsert-then-read is not racy.
+        self.conn.execute(
             "INSERT INTO counters(name, value) VALUES (?, 1) "
-            "ON CONFLICT(name) DO UPDATE SET value = value + 1 RETURNING value",
+            "ON CONFLICT(name) DO UPDATE SET value = value + 1",
             (kind,),
         )
-        return f"{_PREFIXES[kind]}{cur.fetchone()[0]}"
+        row = self.conn.execute("SELECT value FROM counters WHERE name=?", (kind,)).fetchone()
+        return f"{_PREFIXES[kind]}{row['value']}"
 
     # -- person ------------------------------------------------------------
 
