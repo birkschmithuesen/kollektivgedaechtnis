@@ -1,0 +1,45 @@
+# Copy to config.toml on the exhibition machine and adjust.
+# Secrets are NOT stored here — export them in the environment:
+#   export ANTHROPIC_API_KEY=...
+#   export KG_TELEGRAM_TOKEN=...
+#   export OPENROUTER_API_KEY=...      # embeddings only, may be a separate key
+
+data_dir = "data"
+
+# External STT server (see docs/stt-contract.md). Do not fork it.
+# Start it from the fundusbot checkout with:
+#   python -m fundusapps.stt_server elevenlabs-scribe --language de
+stt_url = "http://127.0.0.1:5051"
+
+# Only accept Telegram messages from this chat (leave unset to accept all).
+# telegram_chat_id = 123456789
+
+# Safety net so a forgotten stop cannot swallow the next interview (spec 5).
+interview_timeout_s = 900
+# Extra transcript beyond the stop marker handed to the LLM (spec 6.1).
+tail_seconds = 120
+
+stop_phrases = [
+    "Interview beendet",
+    "Interview ist beendet",
+    "Aufnahme beenden",
+    "Aufnahme ist beendet",
+]
+
+# Calibrated in simulation (spec 6.3), NOT runtime-adjustable.
+terms_per_interview = 5
+merge_neighbours = 5
+
+llm_model = "claude-opus-5"
+llm_effort = "high"
+
+# Embedding preselection via OpenRouter (spec 6.2). Cached by term text in
+# data_dir/embeddings.sqlite3, so simulation re-runs are free and offline.
+embedding_model = "openai/text-embedding-3-small"
+embedding_url = "https://openrouter.ai/api/v1/embeddings"
+
+# Display filter start value; the operator dial changes it at runtime (spec 7).
+default_min_mentions = 1
+
+server_host = "127.0.0.1"
+server_port = 8800
