@@ -42,7 +42,7 @@ retrofit.
 | Aesthetics | no legend, no filters, no cluster hubs, no statistics bar — bare organic net | Konzept |
 | GDPR | **not a selection criterion** for this installation; cloud services permitted | Birk 2026-08-12 |
 | Machine | laptop on site, no GPU assumed | Birk 2026-08-12 |
-| Credentials | the exhibition machine gets ONE LLM key + one bot token — never `~/.hermes/.env` | Briefing §5a |
+| Credentials | the exhibition machine gets ONLY the keys it needs (LLM, embeddings, ElevenLabs, bot token) — never `~/.hermes/.env` | Briefing §5a |
 | No agent in the live loop | deterministic pipeline, plain Python process, no Hermes runtime, no token spend | Briefing §5a + AGENTS.md house rule |
 
 ### Decided earlier, do NOT reopen
@@ -113,19 +113,23 @@ already includes an **ElevenLabs realtime backend**. It runs **continuously**
 for the entire exhibition day — cost is negligible at ElevenLabs realtime
 pricing (Birk 2026-08-12), and a continuous transcript is wanted for monitoring.
 
-### 🔴 Open verification (assumption, unproven at spec time)
-The version inspected during brainstorming was an **older copy** from
-`Nextcloud:Hermes-Agent/RoboCloud/stt_server/` and contains only local backends
-(Vosk, faster-whisper, faster-whisper-streaming) — **no cloud provider**. Birk
-confirmed the current GitHub version has the ElevenLabs backend but could not
-pull it during the session.
+### ✅ VERIFIED against the current source (2026-08-12)
+Source of truth: **`meredityman/fundusbot`** (private; accessible with Birk's
+`birkschmithuesen` gh login), branch **`win_fundusfantasma-dev-clean`**, path
+`fundusapps/stt_server/`. The backend is
+`backends/elevenlabs_scribe_backend.py`, backend name `"elevenlabs-scribe"`.
 
-**Phase 2 MUST re-verify against the current repo before implementing the
-consumer.** What matters is only the event contract below; if it changed,
-adapt the consumer, not the server.
+Run as: `python -m fundusapps.stt_server elevenlabs-scribe`
+CLI options (from `args.py`): `--model` (default `scribe_v2_realtime`),
+`--language` (default `de`), `--commit-strategy` (`vad` | `manual`, default
+`vad`), `--silence-timeout` (default 0.7), `--api-key-env` (default
+`ELEVENLABS_API_KEY`).
+
+**🔴 The event contract CHANGED versus the older Nextcloud copy** — it now has a
+TENTH field, `extending`. A consumer written against nine fields is wrong.
 
 ### The contract we depend on
-From `stt_server/events.py` (inspected, old version):
+From `stt_server/events.py` (verified in the current branch):
 
 ```python
 TranscriptionEvent(
@@ -133,17 +137,29 @@ TranscriptionEvent(
     type: "partial" | "final",
     text: str,
     timestamp: float,     # wall clock, epoch seconds
-    backend: str,
+    backend: "vosk" | "whisper" | "whisper-streaming" | "elevenlabs-scribe",
     status: str | None,
     confidence: float | None,
     turn_id: str | None,      # stable per utterance
     partial_seq: int | None,
+    extending: bool | None,   # NEW — see below
 )
 ```
 Delivered as SSE over `GET /events` (JSON per event, `: keep-alive` comments
-between). Other endpoints observed: `/status`, `/pause`, `/resume`.
+between). Other endpoints: `/status`, `/pause`, `/resume`, `/operator`.
 
-**We consume `type == "final"` only.** Partials are for the operator display.
+**`extending` exists because Scribe REVISES partials mid-utterance** (unlike the
+LocalAgreement-2 whisper path, whose partials are strictly growing prefixes):
+`True` = this partial extends the previous one, `False` = it is a revision,
+`None` = backend doesn't distinguish (legacy whisper/vosk).
+
+**We consume `type == "final"` only** — so `extending` never affects our logic;
+the consumer must merely tolerate the field. Partials go to the operator
+display, where revision is fine.
+
+**Utterance boundaries are the provider's, not ours.** With the default
+`--commit-strategy vad`, a `final` is emitted exactly when ElevenLabs' server
+VAD sends `committed_transcript`. We do not implement silence detection.
 
 ### Integration rule
 **Do NOT fork or modify the STT server.** The Core is an independent SSE
@@ -231,6 +247,15 @@ ask an LLM pair by pair. Split by capability:
 
 - **Embedding = preselection.** For each new term, find nearest neighbours among
   existing terms. Milliseconds, negligible cost.
+  **Provider: OpenRouter's embeddings endpoint** (`/api/v1/embeddings`,
+  OpenAI-compatible, live since Nov 2025; models filterable by
+  `output_modalities=embeddings`). Decision by Birk 2026-08-12 — a cloud
+  embedding model is explicitly fine, no local `sentence-transformers`
+  requirement. Separate key from the extraction LLM is acceptable.
+  **Embeddings MUST be cached by term text** (one embedding per distinct term,
+  ever). Otherwise every simulation re-run costs money and needs the network,
+  which would make the §9 regression runs slow and online-only. With the cache,
+  the second run is free and offline.
 - **LLM = judgement + naming.** The candidate group goes out as **one single LLM
   call per interview** (~50 calls over the whole festival): which of these mean
   the same thing, and what is the resulting node called?
@@ -434,8 +459,9 @@ photo, merge decision, node position, hidden flag.
 
 ## 14. Open items carried into phase 2
 
-1. **Verify the current STT server repo** (§4) — event contract, ElevenLabs
-   backend, how to run it. Blocking for the consumer implementation.
+1. ~~Verify the current STT server repo~~ — **RESOLVED 2026-08-12.** Source,
+   branch, run command and the changed 10-field event contract are recorded in
+   §4. Not blocking any more.
 2. **Second screen specs** from the organiser (type/connector/resolution) —
    affects Tool 2, not Tool 1's core.
 3. **Touch hardware decision** (IR frame vs. interactive UST beamer) — Konzept,
