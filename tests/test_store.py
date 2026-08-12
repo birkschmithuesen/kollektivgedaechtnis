@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 from kg.store import Store
@@ -14,6 +16,54 @@ def test_ids_are_sequential_and_prefixed(store):
     a = store.create_person(started_at=100.0)
     b = store.create_person(started_at=200.0)
     assert (a.id, b.id) == ("p1", "p2")
+
+
+def test_next_id_is_thread_safe_under_concurrent_creation(store):
+    # kg.db.connect opens SQLite with check_same_thread=False so a single Store
+    # (and its connection) can be shared across FastAPI's threadpool. Hammer
+    # _next_id ("person" ids, as create_person does) from many threads at once:
+    # if the upsert-then-read in _next_id were not atomic, two threads could
+    # read the same counter value and mint the same id, which would then
+    # collide against person's TEXT PRIMARY KEY.
+    #
+    # This calls _next_id directly rather than create_person: create_person's
+    # subsequent INSERT + commit are unprotected by this lock (by design - the
+    # fix is scoped to _next_id only) and racing them concurrently trips an
+    # unrelated hazard in Python's sqlite3 module itself (concurrent threads
+    # issuing statements against one connection can raise "cannot start a
+    # transaction within a transaction"). That is a separate, pre-existing
+    # limitation of sharing one connection across threads and is out of scope
+    # for this fix; this test isolates the exact race described in the
+    # finding.
+    # Small thread/iteration counts race too rarely to reliably catch a
+    # regression (verified empirically: 8x25 and even 32x200 sometimes missed
+    # the interleave in manual trials). 48x300 reproduced the duplicate-id
+    # race on every trial observed (with the lock removed) while still
+    # running in well under a second with the fix in place.
+    thread_count = 48
+    creations_per_thread = 300
+    ids: list[str] = []
+    ids_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            for _ in range(creations_per_thread):
+                new_id = store._next_id("person")
+                with ids_lock:
+                    ids.append(new_id)
+        except BaseException as exc:  # noqa: BLE001 - surface any thread failure
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(thread_count)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    assert len(ids) == thread_count * creations_per_thread
+    assert len(set(ids)) == len(ids)
 
 
 def test_person_lifecycle(store):
