@@ -5669,6 +5669,60 @@ def test_stt_connection_state_is_visible(ui):
         [GRAPH, {**STATE, "stt_connected": False}],
     )
     assert ui.eval_on_selector("#stt", "el => el.classList.contains('ok')") is False
+
+
+def test_a_rejected_fetch_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    warnings = []
+    ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
+    ui.evaluate("window.fetch = () => Promise.reject(new Error('network down')); void 0;")
+
+    ui.select_option("#min-mentions", "3")
+    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+
+    ui.select_option("#camera", "fit")
+    assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
+
+    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/camera" in w for w in warnings)
+
+    # The page keeps working afterwards: a subsequent request still fires normally.
+    ui.evaluate(
+        "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
+    )
+    ui.click("#entry-t1 button.hide")
+    assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
+
+
+def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    warnings = []
+    ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
+    ui.evaluate(
+        "window.fetch = () => Promise.resolve({ok: false, status: 400, statusText: 'Bad Request',"
+        " json: () => Promise.resolve({})}); void 0;"
+    )
+
+    ui.select_option("#min-mentions", "3")
+    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+
+    ui.select_option("#camera", "fit")
+    assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
+
+    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/camera" in w for w in warnings)
+
+    # The page keeps working afterwards: the hide list still re-renders and a
+    # subsequent request still fires normally.
+    assert ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)") == [
+        "Unfug",
+        "Holzbau",
+    ]
+    ui.evaluate(
+        "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
+    )
+    ui.click("#entry-t1 button.hide")
+    assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -5714,12 +5768,30 @@ Expected: FAIL — timeout waiting for `window.kgOperator`
 ```javascript
 // One action per entry: hide. No approving, no editing, no queue (spec 8).
 
+// The last graph/state a render() call actually received — from the server,
+// via /events, not merely attempted. post() reverts to these on failure, so
+// this is the exhibition's only feedback for a control the server never
+// confirmed (see the catch below): no toast/banner, just the control
+// snapping back to the truth.
+let lastGraph = { nodes: [], edges: [], quotes: [] };
+let lastState = { min_mentions: 1, camera_mode: 'fit', stt_connected: false, interview: null };
+
 function post(url, body) {
   return fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    })
+    .catch((error) => {
+      // This is the sole human control surface for the exhibition: a write
+      // that the server never confirmed must not leave the operator staring
+      // at a control showing a change that did not happen.
+      console.warn(`request to ${url} failed`, error);
+      render(lastGraph, lastState);
+    });
 }
 
 function entryRow(node) {
@@ -5727,14 +5799,17 @@ function entryRow(node) {
   item.className = `entry ${node.hidden ? 'hidden' : ''}`.trim();
   item.id = `entry-${node.id}`;
 
+  // render() only ever passes term nodes here (see the filter below), so
+  // this has no person branch to fall into — kept simple on purpose rather
+  // than handling a case that can't occur.
   const label = document.createElement('span');
   label.className = 'label';
-  label.textContent = node.type === 'term' ? node.label : node.id;
+  label.textContent = node.label;
   item.appendChild(label);
 
   const meta = document.createElement('span');
   meta.className = 'meta';
-  meta.textContent = node.type === 'term' ? `${node.mentions}×` : 'Person';
+  meta.textContent = `${node.mentions}×`;
   item.appendChild(meta);
 
   const button = document.createElement('button');
@@ -5748,6 +5823,9 @@ function entryRow(node) {
 }
 
 function render(graph, state) {
+  lastGraph = graph;
+  lastState = state;
+
   document.getElementById('min-mentions').value = String(state.min_mentions);
   document.getElementById('camera').value = state.camera_mode;
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
@@ -5809,7 +5887,7 @@ button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_operator_ui.py -v`
-Expected: PASS (7 tests)
+Expected: PASS (9 tests)
 
 - [ ] **Step 7: Commit**
 

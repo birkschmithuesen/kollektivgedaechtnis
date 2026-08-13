@@ -74,3 +74,57 @@ def test_stt_connection_state_is_visible(ui):
         [GRAPH, {**STATE, "stt_connected": False}],
     )
     assert ui.eval_on_selector("#stt", "el => el.classList.contains('ok')") is False
+
+
+def test_a_rejected_fetch_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    warnings = []
+    ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
+    ui.evaluate("window.fetch = () => Promise.reject(new Error('network down')); void 0;")
+
+    ui.select_option("#min-mentions", "3")
+    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+
+    ui.select_option("#camera", "fit")
+    assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
+
+    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/camera" in w for w in warnings)
+
+    # The page keeps working afterwards: a subsequent request still fires normally.
+    ui.evaluate(
+        "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
+    )
+    ui.click("#entry-t1 button.hide")
+    assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
+
+
+def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    warnings = []
+    ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
+    ui.evaluate(
+        "window.fetch = () => Promise.resolve({ok: false, status: 400, statusText: 'Bad Request',"
+        " json: () => Promise.resolve({})}); void 0;"
+    )
+
+    ui.select_option("#min-mentions", "3")
+    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+
+    ui.select_option("#camera", "fit")
+    assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
+
+    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/camera" in w for w in warnings)
+
+    # The page keeps working afterwards: the hide list still re-renders and a
+    # subsequent request still fires normally.
+    assert ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)") == [
+        "Unfug",
+        "Holzbau",
+    ]
+    ui.evaluate(
+        "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
+    )
+    ui.click("#entry-t1 button.hide")
+    assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]

@@ -1,11 +1,29 @@
 // One action per entry: hide. No approving, no editing, no queue (spec 8).
 
+// The last graph/state a render() call actually received — from the server,
+// via /events, not merely attempted. post() reverts to these on failure, so
+// this is the exhibition's only feedback for a control the server never
+// confirmed (see the catch below): no toast/banner, just the control
+// snapping back to the truth.
+let lastGraph = { nodes: [], edges: [], quotes: [] };
+let lastState = { min_mentions: 1, camera_mode: 'fit', stt_connected: false, interview: null };
+
 function post(url, body) {
   return fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    })
+    .catch((error) => {
+      // This is the sole human control surface for the exhibition: a write
+      // that the server never confirmed must not leave the operator staring
+      // at a control showing a change that did not happen.
+      console.warn(`request to ${url} failed`, error);
+      render(lastGraph, lastState);
+    });
 }
 
 function entryRow(node) {
@@ -13,14 +31,17 @@ function entryRow(node) {
   item.className = `entry ${node.hidden ? 'hidden' : ''}`.trim();
   item.id = `entry-${node.id}`;
 
+  // render() only ever passes term nodes here (see the filter below), so
+  // this has no person branch to fall into — kept simple on purpose rather
+  // than handling a case that can't occur.
   const label = document.createElement('span');
   label.className = 'label';
-  label.textContent = node.type === 'term' ? node.label : node.id;
+  label.textContent = node.label;
   item.appendChild(label);
 
   const meta = document.createElement('span');
   meta.className = 'meta';
-  meta.textContent = node.type === 'term' ? `${node.mentions}×` : 'Person';
+  meta.textContent = `${node.mentions}×`;
   item.appendChild(meta);
 
   const button = document.createElement('button');
@@ -34,6 +55,9 @@ function entryRow(node) {
 }
 
 function render(graph, state) {
+  lastGraph = graph;
+  lastState = state;
+
   document.getElementById('min-mentions').value = String(state.min_mentions);
   document.getElementById('camera').value = state.camera_mode;
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
