@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import sqlite3
 import threading
@@ -14,16 +15,58 @@ from kg.models import Edge, Person, Quote, Term
 _PREFIXES = {"person": "p", "term": "t", "edge": "e", "quote": "q", "merge": "m"}
 
 
+def _locked(method):
+    """Serialise one public `Store` method call through the store-wide lock.
+
+    See the rationale on `Store._lock` in `__init__`. Plain wrapper (not
+    itself a `@contextlib.contextmanager`-style method) so it is safe to
+    stack on `transaction()`-adjacent methods too: it just acquires
+    `self._lock`, runs the wrapped call, and releases it — re-entrant on the
+    same thread because `self._lock` is an `RLock`.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Store:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
-        self._id_lock = threading.Lock()
+        # kg.db.connect opens the connection with check_same_thread=False so
+        # a single connection (and this Store) can be shared across threads:
+        # FastAPI runs sync route handlers in a threadpool (kg/server.py),
+        # and the Core loop and the per-interview pipeline write through the
+        # same Store instance from their own threads. Python's sqlite3
+        # module does not serialise statements against a shared connection
+        # by itself — two threads issuing statements at once can interleave
+        # mid-transaction (each sees "no transaction active" and both issue
+        # BEGIN, the second raising "cannot start a transaction within a
+        # transaction"), or interleave between an UPSERT and the following
+        # SELECT in `_next_id` and read the same counter value, minting a
+        # duplicate id.
+        #
+        # This RLock serialises every public method below (via the
+        # `@_locked` decorator) — reads included, since a read racing a
+        # write on one shared connection is exactly as unsafe as two writes
+        # racing. It must be re-entrant, not a plain Lock: `_next_id` is
+        # called from inside other locked methods (create_person,
+        # get_or_create_term, add_edge, add_quote, record_merge_decision),
+        # and `transaction()` below holds this same lock for an entire
+        # multi-call block while calling other `@_locked` public methods
+        # within that block. A plain Lock would deadlock the instant any of
+        # that happened on the thread already holding it.
+        self._lock = threading.RLock()
         self._tx_depth = 0
 
     @classmethod
     def open(cls, path: Path) -> "Store":
         return cls(connect(Path(path)))
 
+    @_locked
     def close(self) -> None:
         self.conn.close()
 
@@ -40,27 +83,38 @@ class Store:
         helper method that opens its own `transaction()` still works
         correctly when called from within a caller's larger one.
 
-        This re-entrancy is deliberate groundwork for task 12b, which will
-        wrap every public `Store` method in a store-wide `threading.RLock`:
-        once that lands, `transaction()` will acquire that lock for the whole
-        block, and the public methods it calls inside will re-acquire the
-        same RLock without deadlocking.
+        Holds `self._lock` (see `__init__`) for the entire block: the `with
+        self._lock:` below wraps everything, including the `yield`, so the
+        lock stays held from before the first statement inside the caller's
+        `with store.transaction():` body runs until after the last one
+        finishes — another thread can never commit, or even interleave a
+        statement, inside this open transaction. `self._lock` is an RLock
+        precisely so the `@_locked` public methods called inside the block
+        (and a nested `transaction()`) can re-acquire it on the same thread
+        without deadlocking.
         """
-        self._tx_depth += 1
-        try:
-            yield
-        except Exception:
-            if self._tx_depth == 1:
-                self.conn.rollback()
-            raise
-        else:
-            if self._tx_depth == 1:
-                self.conn.commit()
-        finally:
-            self._tx_depth -= 1
+        with self._lock:
+            self._tx_depth += 1
+            try:
+                yield
+            except Exception:
+                if self._tx_depth == 1:
+                    self.conn.rollback()
+                raise
+            else:
+                if self._tx_depth == 1:
+                    self.conn.commit()
+            finally:
+                self._tx_depth -= 1
 
     def _commit(self) -> None:
-        """Commit now, unless an enclosing `transaction()` will do it instead."""
+        """Commit now, unless an enclosing `transaction()` will do it instead.
+
+        Only ever called from within a `@_locked` public method or from
+        inside an open `transaction()` (itself locked), so this read of
+        `self._tx_depth` always happens on a thread that already holds
+        `self._lock`.
+        """
         if self._tx_depth == 0:
             self.conn.commit()
 
@@ -69,13 +123,12 @@ class Store:
     def _next_id(self, kind: str) -> str:
         # No RETURNING clause: the target SQLite (3.34) predates 3.35's support
         # for it, so this is an upsert followed by a separate read. The two
-        # statements are made atomic with `_id_lock`: `kg.db.connect` opens the
-        # connection with check_same_thread=False specifically so a single
-        # connection can be reused across threads (FastAPI runs sync route
-        # handlers in a threadpool), so without the lock two threads could
-        # interleave between the UPSERT and the SELECT, read the same counter
-        # value, and mint a duplicate id.
-        with self._id_lock:
+        # statements are made atomic with `self._lock` (see the rationale in
+        # `__init__`): every caller of `_next_id` is itself a `@_locked`
+        # public method, so this lock is always re-entrant, but it is taken
+        # explicitly here too so `_next_id` stays correct even if ever called
+        # some other way.
+        with self._lock:
             self.conn.execute(
                 "INSERT INTO counters(name, value) VALUES (?, 1) "
                 "ON CONFLICT(name) DO UPDATE SET value = value + 1",
@@ -88,6 +141,7 @@ class Store:
 
     # -- person ------------------------------------------------------------
 
+    @_locked
     def create_person(
         self,
         started_at: float,
@@ -102,6 +156,7 @@ class Store:
         self._commit()
         return self.get_person(person_id)
 
+    @_locked
     def close_person(self, person_id: str, stopped_at: float, reason: str) -> None:
         self.conn.execute(
             "UPDATE person SET stopped_at=?, stop_reason=?, status='closed' WHERE id=?",
@@ -109,14 +164,17 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def set_person_transcript(self, person_id: str, text: str) -> None:
         self.conn.execute("UPDATE person SET transcript=? WHERE id=?", (text, person_id))
         self._commit()
 
+    @_locked
     def set_person_status(self, person_id: str, status: str) -> None:
         self.conn.execute("UPDATE person SET status=? WHERE id=?", (status, person_id))
         self._commit()
 
+    @_locked
     def set_person_portrait(self, person_id: str, photo_path: str, portrait_path: str) -> None:
         self.conn.execute(
             "UPDATE person SET photo_path=?, portrait_path=? WHERE id=?",
@@ -124,22 +182,26 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def get_person(self, person_id: str) -> Person | None:
         row = self.conn.execute("SELECT * FROM person WHERE id=?", (person_id,)).fetchone()
         return _person(row) if row else None
 
+    @_locked
     def open_person(self) -> Person | None:
         row = self.conn.execute(
             "SELECT * FROM person WHERE stopped_at IS NULL ORDER BY started_at DESC LIMIT 1"
         ).fetchone()
         return _person(row) if row else None
 
+    @_locked
     def list_persons(self) -> list[Person]:
         rows = self.conn.execute("SELECT * FROM person ORDER BY started_at").fetchall()
         return [_person(r) for r in rows]
 
     # -- term --------------------------------------------------------------
 
+    @_locked
     def get_or_create_term(self, label: str, created_at: float) -> Term:
         existing = self.get_term_by_label(label)
         if existing:
@@ -156,14 +218,17 @@ class Store:
         self._commit()
         return self.get_term(term_id)
 
+    @_locked
     def get_term(self, term_id: str) -> Term | None:
         row = self.conn.execute("SELECT * FROM term WHERE id=?", (term_id,)).fetchone()
         return _term(row) if row else None
 
+    @_locked
     def get_term_by_label(self, label: str) -> Term | None:
         row = self.conn.execute("SELECT * FROM term WHERE label=?", (label,)).fetchone()
         return _term(row) if row else None
 
+    @_locked
     def rename_term(self, term_id: str, new_label: str) -> None:
         old = self.get_term(term_id)
         if old is None or old.label == new_label:
@@ -177,6 +242,7 @@ class Store:
             )
         self._commit()
 
+    @_locked
     def add_alias(self, term_id: str, surface: str) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
@@ -184,6 +250,7 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def fold_term(self, loser_id: str, winner_id: str) -> None:
         """Merge `loser_id` into `winner_id` (spec 6.2, 7): a merge is the
         finding that more people meant the same thing, so the winner must
@@ -223,6 +290,7 @@ class Store:
             self.conn.execute("DELETE FROM position WHERE node_id=?", (f"term:{loser_id}",))
             self.conn.execute("DELETE FROM term WHERE id=?", (loser_id,))
 
+    @_locked
     def find_term_by_alias(self, surface: str) -> Term | None:
         row = self.conn.execute(
             "SELECT t.* FROM term_alias a JOIN term t ON t.id = a.term_id WHERE a.surface=?",
@@ -230,12 +298,14 @@ class Store:
         ).fetchone()
         return _term(row) if row else None
 
+    @_locked
     def list_terms(self) -> list[Term]:
         rows = self.conn.execute("SELECT * FROM term ORDER BY created_at, id").fetchall()
         return [_term(r) for r in rows]
 
     # -- edges / quotes ----------------------------------------------------
 
+    @_locked
     def add_edge(self, person_id: str, term_id: str, created_at: float) -> Edge:
         row = self.conn.execute(
             "SELECT * FROM edge WHERE person_id=? AND term_id=?", (person_id, term_id)
@@ -251,16 +321,19 @@ class Store:
         row = self.conn.execute("SELECT * FROM edge WHERE id=?", (edge_id,)).fetchone()
         return _edge(row)
 
+    @_locked
     def list_edges(self) -> list[Edge]:
         rows = self.conn.execute("SELECT * FROM edge ORDER BY created_at, id").fetchall()
         return [_edge(r) for r in rows]
 
+    @_locked
     def mention_count(self, term_id: str) -> int:
         row = self.conn.execute(
             "SELECT COUNT(DISTINCT person_id) AS n FROM edge WHERE term_id=?", (term_id,)
         ).fetchone()
         return int(row["n"])
 
+    @_locked
     def add_quote(self, person_id: str, text: str, created_at: float) -> Quote:
         quote_id = self._next_id("quote")
         self.conn.execute(
@@ -271,12 +344,14 @@ class Store:
         row = self.conn.execute("SELECT * FROM quote WHERE id=?", (quote_id,)).fetchone()
         return Quote(row["id"], row["person_id"], row["text"], row["created_at"])
 
+    @_locked
     def list_quotes(self) -> list[Quote]:
         rows = self.conn.execute("SELECT * FROM quote ORDER BY created_at, id").fetchall()
         return [Quote(r["id"], r["person_id"], r["text"], r["created_at"]) for r in rows]
 
     # -- flags, positions, decisions, settings ------------------------------
 
+    @_locked
     def set_hidden(self, node_id: str, hidden: bool) -> None:
         kind, _, ident = node_id.partition(":")
         if kind not in ("person", "term") or not ident:
@@ -284,6 +359,7 @@ class Store:
         self.conn.execute(f"UPDATE {kind} SET hidden=? WHERE id=?", (1 if hidden else 0, ident))
         self._commit()
 
+    @_locked
     def save_positions(self, positions: dict[str, tuple[float, float]]) -> None:
         self.conn.executemany(
             "INSERT INTO position(node_id, x, y) VALUES (?,?,?) "
@@ -292,10 +368,12 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def get_positions(self) -> dict[str, tuple[float, float]]:
         rows = self.conn.execute("SELECT node_id, x, y FROM position").fetchall()
         return {r["node_id"]: (r["x"], r["y"]) for r in rows}
 
+    @_locked
     def record_merge_decision(self, person_id: str, payload: dict, created_at: float) -> None:
         self.conn.execute(
             "INSERT INTO merge_decision(id, person_id, payload, created_at) VALUES (?,?,?,?)",
@@ -303,6 +381,7 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def list_merge_decisions(self) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM merge_decision ORDER BY created_at, id"
@@ -317,10 +396,12 @@ class Store:
             for r in rows
         ]
 
+    @_locked
     def get_setting(self, key: str, default: str) -> str:
         row = self.conn.execute("SELECT value FROM setting WHERE key=?", (key,)).fetchone()
         return row["value"] if row else default
 
+    @_locked
     def set_setting(self, key: str, value: str) -> None:
         self.conn.execute(
             "INSERT INTO setting(key, value) VALUES (?,?) "
@@ -329,6 +410,7 @@ class Store:
         )
         self._commit()
 
+    @_locked
     def set_setting_default(self, key: str, value: str) -> None:
         """Seed a setting only if it has never been set.
 
