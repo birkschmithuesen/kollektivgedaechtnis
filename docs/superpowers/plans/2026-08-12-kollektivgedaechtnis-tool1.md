@@ -1993,7 +1993,7 @@ git commit -m "feat: tolerant spoken stop-command matching and stripping"
 - Consumes: `kg.segmentation.find_stop_phrase` (Task 4), `Config.interview_timeout_s`, `Config.stop_phrases` (Task 1).
 - Produces:
   - `kg.session.Transition(kind: str, at: float, reason: str)` — `kind` is `"opened"` or `"closed"`; `reason` is `"photo"` for opens and one of `"text" | "spoken" | "timeout" | "new_photo"` for closes.
-  - `kg.session.SessionTracker(timeout_s, stop_phrases)` with `photo(at)`, `text_message(at)`, `transcript(text, at)`, `tick(now)`, each returning `list[Transition]`, plus the property `open_since: float | None`.
+  - `kg.session.SessionTracker(timeout_s, stop_phrases, open_since=None)` with `photo(at)`, `text_message(at)`, `transcript(text, at)`, `tick(now)`, each returning `list[Transition]`, plus the property `open_since: float | None`. `open_since` lets a caller resume an interview that was already open in storage (Task 17, after a crash) instead of losing track of it.
 
 `SessionTracker` is pure — no store, no clock, no I/O — so every lifecycle rule from spec §5 is unit-testable. Task 11 executes the transitions.
 
@@ -2070,6 +2070,15 @@ def test_only_one_interview_can_be_open_at_a_time():
     t.photo(at=200.0)
     t.photo(at=300.0)
     assert t.open_since == 300.0
+
+
+def test_a_tracker_can_resume_an_interview_already_open_in_storage():
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, open_since=100.0)
+    assert t.open_since == 100.0
+    assert t.photo(at=400.0) == [
+        Transition("closed", 400.0, "new_photo"),
+        Transition("opened", 400.0, "photo"),
+    ]
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -2103,10 +2112,18 @@ class Transition:
 
 
 class SessionTracker:
-    def __init__(self, timeout_s: float, stop_phrases: Sequence[str]) -> None:
+    def __init__(
+        self,
+        timeout_s: float,
+        stop_phrases: Sequence[str],
+        open_since: float | None = None,
+    ) -> None:
         self.timeout_s = float(timeout_s)
         self.stop_phrases = list(stop_phrases)
-        self._open_since: float | None = None
+        # Lets a caller resume an interview that was already open in storage
+        # (a restart after a crash) instead of silently forgetting it and
+        # opening a second one on the next photo.
+        self._open_since = open_since
 
     @property
     def open_since(self) -> float | None:
@@ -2145,7 +2162,7 @@ class SessionTracker:
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_session.py -v`
-Expected: PASS (8 tests)
+Expected: PASS (9 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -6213,6 +6230,52 @@ async def test_a_failing_pipeline_does_not_stop_the_core(tmp_path):
     await core.drain()
     assert core.store.open_person().id == "p2"
     store.close()
+
+
+async def test_a_restart_resumes_an_interview_left_open_by_a_crash(tmp_path):
+    cfg = Config(data_dir=tmp_path / "state", interview_timeout_s=900)
+    calls = []
+
+    def processor(store_, cfg_, llm_, embedder_, log_, person_id, started_at, stopped_at):
+        calls.append((person_id, started_at, stopped_at))
+        return ProcessResult(person_id, "done", [], "")
+
+    # Session 1: open an interview, then "crash" (no close_person call).
+    store1 = Store.open(cfg.db_path)
+    core1 = Core(
+        cfg=cfg,
+        store=store1,
+        bus=EventBus(),
+        transcript_log=TranscriptLog(cfg.transcript_log_path),
+        llm=object(),
+        embedder=HashEmbedder(dim=16),
+        processor=processor,
+    )
+    core1.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
+    await core1.drain()
+    store1.close()
+
+    # Session 2: a fresh process against the same database must resume the
+    # still-open interview, not lose track of it and open a second one.
+    store2 = Store.open(cfg.db_path)
+    core2 = Core(
+        cfg=cfg,
+        store=store2,
+        bus=EventBus(),
+        transcript_log=TranscriptLog(cfg.transcript_log_path),
+        llm=object(),
+        embedder=HashEmbedder(dim=16),
+        processor=processor,
+    )
+    core2.on_photo(photo_path="b.jpg", portrait_path="b.png", at=500.0)
+    await core2.drain()
+
+    persons = {p.id: p for p in core2.store.list_persons()}
+    assert persons["p1"].stop_reason == "new_photo"
+    assert persons["p1"].stopped_at == 500.0
+    assert core2.store.open_person().id == "p2"
+    assert calls == [("p1", 100.0, 500.0)]
+    store2.close()
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -6256,7 +6319,17 @@ class Core:
         self.llm = llm
         self.embedder = embedder
         self.processor = processor
-        self.tracker = SessionTracker(cfg.interview_timeout_s, cfg.stop_phrases)
+        # A crash can leave a person "open" in the store with nothing in
+        # memory to say so. Resuming from the store here, instead of always
+        # starting empty, is what keeps a restart a resume rather than a
+        # reset (spec: state must be reconstructible from SQLite) and keeps
+        # the one-interview-at-a-time guarantee across a restart.
+        open_person = store.open_person()
+        self.tracker = SessionTracker(
+            cfg.interview_timeout_s,
+            cfg.stop_phrases,
+            open_since=open_person.started_at if open_person else None,
+        )
         self._queue: asyncio.Queue = asyncio.Queue()
         self._tasks: set[asyncio.Task] = set()
 
@@ -6469,7 +6542,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_core.py -v`
-Expected: PASS (9 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 6: Smoke-test the process without external services**
 

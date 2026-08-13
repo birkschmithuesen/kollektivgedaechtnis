@@ -21,10 +21,18 @@ class Transition:
 
 
 class SessionTracker:
-    def __init__(self, timeout_s: float, stop_phrases: Sequence[str]) -> None:
+    def __init__(
+        self,
+        timeout_s: float,
+        stop_phrases: Sequence[str],
+        open_since: float | None = None,
+    ) -> None:
         self.timeout_s = float(timeout_s)
         self.stop_phrases = list(stop_phrases)
-        self._open_since: float | None = None
+        # Lets a caller resume an interview that was already open in storage
+        # (a restart after a crash) instead of silently forgetting it and
+        # opening a second one on the next photo.
+        self._open_since = open_since
 
     @property
     def open_since(self) -> float | None:

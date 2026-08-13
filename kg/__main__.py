@@ -1,0 +1,98 @@
+"""Entrypoint: one process, four concerns (STT, Telegram, pipeline, HTTP)."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import logging
+from pathlib import Path
+
+import uvicorn
+
+from kg.bus import EventBus
+from kg.config import load_config
+from kg.core import Core
+from kg.embeddings import build_embedder
+from kg.export import write_graph_json
+from kg.llm import LLMClient
+from kg.server import create_app
+from kg.store import Store
+from kg.stt_client import STTClient
+from kg.telegram_bot import TelegramSource
+from kg.transcript import TranscriptLog
+
+
+async def main_async(args) -> None:
+    cfg = load_config(Path(args.config) if args.config else None)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+    store = Store.open(cfg.db_path)
+    # Apply the calibrated start density on a fresh database. On a restart the
+    # operator's live setting is already stored and must win (spec 7, 10.5).
+    store.set_setting_default("min_mentions", str(cfg.default_min_mentions))
+    bus = EventBus()
+    transcript_log = TranscriptLog(cfg.transcript_log_path)
+    llm = LLMClient(
+        model=cfg.llm_model,
+        effort=cfg.llm_effort,
+        max_tokens=cfg.llm_max_tokens,
+        api_key=cfg.anthropic_api_key,
+    )
+    # OpenRouter + persistent cache (spec 6.2). Nothing to warm up: no local
+    # model, and repeated terms are served from the cache.
+    embedder = build_embedder(cfg)
+
+    core = Core(cfg, store, bus, transcript_log, llm, embedder)
+    write_graph_json(store, cfg.graph_json_path)  # state is reconstructed from SQLite
+
+    app = create_app(store, cfg, bus)
+    server = uvicorn.Server(
+        uvicorn.Config(app, host=cfg.server_host, port=cfg.server_port, log_level="info")
+    )
+
+    tasks = [
+        asyncio.create_task(server.serve()),
+        asyncio.create_task(core.run_worker()),
+        asyncio.create_task(core.run_tick_loop()),
+    ]
+
+    if not args.no_stt:
+        stt = STTClient(
+            url=cfg.stt_url,
+            log=transcript_log,
+            on_final=core.on_final,
+            on_partial=core.on_partial,
+            on_state=core.on_stt_state,
+        )
+        tasks.append(asyncio.create_task(stt.run()))
+
+    if not args.no_telegram and cfg.telegram_token:
+        source = TelegramSource(
+            token=cfg.telegram_token,
+            chat_id=cfg.telegram_chat_id,
+            photo_dir=cfg.photo_dir,
+            portrait_dir=cfg.portrait_dir,
+            portrait_size=cfg.portrait_size,
+            on_photo=core.on_photo,
+            on_text=core.on_text,
+        )
+        application = source.build_application()
+        await application.initialize()
+        await application.updater.start_polling()
+        await application.start()
+
+    print(f"projection:  http://{cfg.server_host}:{cfg.server_port}/projection")
+    print(f"operator:    http://{cfg.server_host}:{cfg.server_port}/operator")
+    await asyncio.gather(*tasks)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="kg")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--no-telegram", action="store_true")
+    parser.add_argument("--no-stt", action="store_true")
+    asyncio.run(main_async(parser.parse_args()))
+
+
+if __name__ == "__main__":
+    main()

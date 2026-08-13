@@ -66,3 +66,12 @@ def test_only_one_interview_can_be_open_at_a_time():
     t.photo(at=200.0)
     t.photo(at=300.0)
     assert t.open_since == 300.0
+
+
+def test_a_tracker_can_resume_an_interview_already_open_in_storage():
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, open_since=100.0)
+    assert t.open_since == 100.0
+    assert t.photo(at=400.0) == [
+        Transition("closed", 400.0, "new_photo"),
+        Transition("opened", 400.0, "photo"),
+    ]
