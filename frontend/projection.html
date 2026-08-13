@@ -13,7 +13,14 @@
 
   const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
-  const themeHref = `static/theme-${params.get('theme') || 'a'}.css`;
+  // Validate against the themes that actually exist. This is an unattended
+  // wall, not a form with a user to correct a typo: an unrecognised
+  // `?theme=` value (typo, retired name, anything) must fall back to the
+  // default rather than ever producing a broken href.
+  const KNOWN_THEMES = ['a', 'b', 'c'];
+  const requestedTheme = params.get('theme');
+  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'a';
+  const themeHref = `static/theme-${theme}.css`;
   // Swapping `href` starts an async fetch. createGraphView() reads the
   // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),
   // so it must not run until the new stylesheet has actually loaded — a
@@ -28,6 +35,21 @@
       return;
     }
     themeLink.addEventListener('load', resolve, { once: true });
+    // Defensive fallback for a legitimate theme file missing or broken at
+    // deploy time (the `?theme=` value itself is already validated above,
+    // so this only fires for a deploy-time asset problem). A stylesheet
+    // that fails to load fires `error`, never `load` — without this, the
+    // promise above would hang forever and the wall would show nothing
+    // indefinitely with no operator recourse. A degraded render (whatever
+    // CSS state exists) beats a blank wall.
+    themeLink.addEventListener(
+      'error',
+      () => {
+        console.warn(`theme stylesheet failed to load: ${themeHref}`);
+        resolve();
+      },
+      { once: true },
+    );
     themeLink.href = themeHref;
   });
 

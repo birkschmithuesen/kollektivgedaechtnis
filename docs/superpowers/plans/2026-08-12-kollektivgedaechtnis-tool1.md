@@ -5106,11 +5106,26 @@ def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server
         page.goto(f"{static_server}/frontend/projection.html?theme={theme}")
         page.wait_for_function("window.kgView !== undefined")
         page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
-        page.wait_for_function("() => window.kgView.layoutPending === false")
+        wait_for_layout(page)
         colors[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-color')")
 
     assert colors["a"] != colors["b"] != colors["c"] != colors["a"]
     assert colors == THEME_RING_COLOR
+
+
+def test_unknown_theme_falls_back_and_still_renders(page, static_server):
+    # Regression test: a `?theme=` value that does not resolve to an existing
+    # stylesheet must never leave the theme-load promise unresolved forever.
+    # That is the worst failure mode for an unattended wall — window.kgView
+    # never gets set, /events never connects, and the projection shows
+    # nothing indefinitely with no operator recourse. A bad theme must
+    # degrade to the default theme and still render, not hang. The wait is
+    # bounded so a regression fails the suite instead of hanging it.
+    page.goto(f"{static_server}/frontend/projection.html?theme=nonexistent")
+    page.wait_for_function("window.kgView !== undefined", timeout=5000)
+    page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=5000)
+    assert page.evaluate("window.kgView.cy.nodes().length") == 1
 
 
 def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
@@ -5399,7 +5414,14 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
 
   const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
-  const themeHref = `static/theme-${params.get('theme') || 'a'}.css`;
+  // Validate against the themes that actually exist. This is an unattended
+  // wall, not a form with a user to correct a typo: an unrecognised
+  // `?theme=` value (typo, retired name, anything) must fall back to the
+  // default rather than ever producing a broken href.
+  const KNOWN_THEMES = ['a', 'b', 'c'];
+  const requestedTheme = params.get('theme');
+  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'a';
+  const themeHref = `static/theme-${theme}.css`;
   // Swapping `href` starts an async fetch. createGraphView() reads the
   // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),
   // so it must not run until the new stylesheet has actually loaded — a
@@ -5414,6 +5436,21 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       return;
     }
     themeLink.addEventListener('load', resolve, { once: true });
+    // Defensive fallback for a legitimate theme file missing or broken at
+    // deploy time (the `?theme=` value itself is already validated above,
+    // so this only fires for a deploy-time asset problem). A stylesheet
+    // that fails to load fires `error`, never `load` — without this, the
+    // promise above would hang forever and the wall would show nothing
+    // indefinitely with no operator recourse. A degraded render (whatever
+    // CSS state exists) beats a blank wall.
+    themeLink.addEventListener(
+      'error',
+      () => {
+        console.warn(`theme stylesheet failed to load: ${themeHref}`);
+        resolve();
+      },
+      { once: true },
+    );
     themeLink.href = themeHref;
   });
 
@@ -5521,10 +5558,13 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_camera.py tests/test_projection.py -v`
-Expected: PASS (14 tests) — verified by a real run on 2026-08-13 during the
-task-14 review-findings pass (8 camera + 6 projection; the original brief's
-10 became 14 after adding the camera-interactivity tests for finding 3 and
-the theme-baking regression test for finding 1).
+Expected: PASS (15 tests) — verified by a real run on 2026-08-13 during the
+task-14 review-findings pass (8 camera + 7 projection; the original brief's
+10 became 15 after adding the camera-interactivity tests for finding 3, the
+theme-baking regression test for finding 1, and the theme-error-fallback
+regression test for the finding-2 follow-up (a bad `?theme=` value must
+degrade to the default theme and still render instead of hanging the
+theme-load promise forever).
 
 - [ ] **Step 7: Commit**
 

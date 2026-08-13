@@ -107,11 +107,26 @@ def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server
         page.goto(f"{static_server}/frontend/projection.html?theme={theme}")
         page.wait_for_function("window.kgView !== undefined")
         page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
-        page.wait_for_function("() => window.kgView.layoutPending === false")
+        wait_for_layout(page)
         colors[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-color')")
 
     assert colors["a"] != colors["b"] != colors["c"] != colors["a"]
     assert colors == THEME_RING_COLOR
+
+
+def test_unknown_theme_falls_back_and_still_renders(page, static_server):
+    # Regression test: a `?theme=` value that does not resolve to an existing
+    # stylesheet must never leave the theme-load promise unresolved forever.
+    # That is the worst failure mode for an unattended wall — window.kgView
+    # never gets set, /events never connects, and the projection shows
+    # nothing indefinitely with no operator recourse. A bad theme must
+    # degrade to the default theme and still render, not hang. The wait is
+    # bounded so a regression fails the suite instead of hanging it.
+    page.goto(f"{static_server}/frontend/projection.html?theme=nonexistent")
+    page.wait_for_function("window.kgView !== undefined", timeout=5000)
+    page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=5000)
+    assert page.evaluate("window.kgView.cy.nodes().length") == 1
 
 
 def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
