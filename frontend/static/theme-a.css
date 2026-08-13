@@ -1,0 +1,17 @@
+:root {
+  --bg: #101014;
+  --person-size: 96;
+  --person-fill: #23232a;
+  --ring-color: #C9A227;
+  --ring-width: 5;
+  --term-dot: 14;
+  --term-dot-color: #EDE7D8;
+  --label-color: #F5F1E6;
+  --label-font: Georgia, "Times New Roman", serif;
+  --label-size: 22;
+  --label-outline-width: 3;
+  --label-outline-color: #101014;
+  --edge-color: #8A8578;
+  --edge-width: 2;
+  --edge-opacity: 0.75;
+}

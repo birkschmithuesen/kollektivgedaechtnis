@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>render harness</title>
+<link rel="stylesheet" href="./base.css">
+<link rel="stylesheet" href="./theme-a.css">
+<style>#cy { width: 1920px; height: 1080px; }</style>
+<div id="cy"></div>
+<script src="./vendor/cytoscape.min.js"></script>
+<script type="module">
+  import { createGraphView } from './projection.js';
+  window.kgPositions = [];
+  window.kgView = createGraphView(document.getElementById('cy'), {
+    onPositions: (p) => window.kgPositions.push(p),
+  });
+</script>

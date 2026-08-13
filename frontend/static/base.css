@@ -1,0 +1,2 @@
+html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
+#cy { position: fixed; inset: 0; width: 100vw; height: 100vh; }

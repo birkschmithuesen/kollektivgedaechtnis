@@ -1,2 +1,40 @@
 <!doctype html>
-<title>Projektion</title>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivgedächtnis</title>
+<!-- Asset paths are relative so the page also loads from a plain file server
+     (tests, pre-render harness); served at /projection they resolve to /static/… -->
+<link rel="stylesheet" href="static/base.css">
+<link id="theme" rel="stylesheet" href="static/theme-a.css">
+<div id="cy"></div>
+<script src="static/vendor/cytoscape.min.js"></script>
+<script type="module">
+  import { createGraphView } from './static/projection.js';
+
+  const params = new URLSearchParams(location.search);
+  document.getElementById('theme').href = `static/theme-${params.get('theme') || 'a'}.css`;
+
+  const view = createGraphView(document.getElementById('cy'), {
+    onPositions: (positions) =>
+      fetch('/api/positions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ positions }),
+      }).catch(() => {}),
+  });
+  window.kgView = view;
+  window.kgReady = false;
+
+  const events = new EventSource('/events');
+  events.onmessage = (message) => {
+    const payload = JSON.parse(message.data);
+    if (payload.type === 'graph') {
+      view.update(payload.graph);
+      window.kgReady = true;
+    } else if (payload.type === 'state') {
+      view.setMinMentions(payload.state.min_mentions);
+      view.camera.setMode(payload.state.camera_mode);
+    }
+  };
+</script>
+</html>
