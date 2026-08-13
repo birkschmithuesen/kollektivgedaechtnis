@@ -4875,8 +4875,15 @@ import pytest
 CY_STUB = """
 window.cyStub = {
   calls: [],
+  // Interactivity toggles are recorded separately from `calls` so that
+  // existing assertions on `calls` (e.g. "manual mode produces zero calls")
+  // are unaffected by the interactivity gating the camera also does now.
+  interactivity: [],
   _pan: {x: 0, y: 0},
   _zoom: 1,
+  _panningEnabled: true,
+  _zoomingEnabled: true,
+  _autoungrabify: false,
   fit(padding) { this.calls.push(['fit', padding]); },
   pan(p) { if (p === undefined) return this._pan; this._pan = p; this.calls.push(['pan', p]); },
   zoom(z) { if (z === undefined) return this._zoom; this._zoom = z; },
@@ -4884,6 +4891,21 @@ window.cyStub = {
   width() { return 1920; },
   height() { return 1080; },
   elements() { return {length: 4}; },
+  userPanningEnabled(v) {
+    if (v === undefined) return this._panningEnabled;
+    this._panningEnabled = v;
+    this.interactivity.push(['userPanningEnabled', v]);
+  },
+  userZoomingEnabled(v) {
+    if (v === undefined) return this._zoomingEnabled;
+    this._zoomingEnabled = v;
+    this.interactivity.push(['userZoomingEnabled', v]);
+  },
+  autoungrabify(v) {
+    if (v === undefined) return this._autoungrabify;
+    this._autoungrabify = v;
+    this.interactivity.push(['autoungrabify', v]);
+  },
 };
 """
 
@@ -4936,6 +4958,40 @@ def test_pan_reverses_at_the_edge_instead_of_running_away(camera):
 
 def test_an_unknown_mode_is_rejected(camera):
     assert camera.evaluate("(() => { try { window.cam.setMode('warp'); return 'no'; } catch (e) { return 'raised'; } })()") == "raised"
+
+
+def test_initial_fit_mode_disables_panning_zooming_and_grabbing(camera):
+    # A stray touch/mouse must not be able to pan the wall or drag a node off
+    # its persisted position from the moment the camera is constructed, not
+    # only from the first setMode() call onward.
+    assert camera.evaluate("window.cyStub._panningEnabled") is False
+    assert camera.evaluate("window.cyStub._zoomingEnabled") is False
+    assert camera.evaluate("window.cyStub._autoungrabify") is True
+
+
+def test_manual_mode_enables_panning_zooming_and_grabbing(camera):
+    camera.evaluate("window.cyStub.interactivity.length = 0")
+    camera.evaluate("window.cam.setMode('manual')")
+    calls = camera.evaluate("window.cyStub.interactivity")
+    assert ["userPanningEnabled", True] in calls
+    assert ["userZoomingEnabled", True] in calls
+    assert ["autoungrabify", False] in calls
+    assert camera.evaluate("window.cyStub._panningEnabled") is True
+    assert camera.evaluate("window.cyStub._zoomingEnabled") is True
+    assert camera.evaluate("window.cyStub._autoungrabify") is False
+
+
+def test_fit_and_pan_modes_disable_panning_zooming_and_grabbing(camera):
+    for mode in ("fit", "pan"):
+        camera.evaluate("window.cyStub.interactivity.length = 0")
+        camera.evaluate(f"window.cam.setMode('{mode}')")
+        calls = camera.evaluate("window.cyStub.interactivity")
+        assert ["userPanningEnabled", False] in calls, mode
+        assert ["userZoomingEnabled", False] in calls, mode
+        assert ["autoungrabify", True] in calls, mode
+        assert camera.evaluate("window.cyStub._panningEnabled") is False, mode
+        assert camera.evaluate("window.cyStub._zoomingEnabled") is False, mode
+        assert camera.evaluate("window.cyStub._autoungrabify") is True, mode
 ```
 
 `tests/test_projection.py`:
@@ -5019,6 +5075,44 @@ def test_new_node_positions_are_reported_for_persistence(view):
     assert "p2" in reported and "t2" in reported
 
 
+THEME_RING_COLOR = {
+    # Declared --ring-color tokens from the theme files, as Cytoscape reports
+    # a resolved colour back through its own style API (rgb(...), no spaces).
+    "a": "rgb(201,162,39)",  # theme-a.css --ring-color: #C9A227
+    "b": "rgb(138,107,31)",  # theme-b.css --ring-color: #8A6B1F
+    "c": "rgb(224,181,49)",  # theme-c.css --ring-color: #E0B531
+}
+
+ONE_PERSON = {
+    "version": 1,
+    "min_mentions": 1,
+    "nodes": [{"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 0, "y": 0}],
+    "edges": [],
+    "quotes": [],
+}
+
+
+def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server):
+    # Regression test for a bug where createGraphView() ran before the
+    # `?theme=` stylesheet swap had actually loaded: cssVar() reads through
+    # getComputedStyle synchronously, so it silently baked in the PREVIOUS
+    # (default theme-a) stylesheet's values regardless of `?theme=`. Only the
+    # live CSS background (base.css `background: var(--bg)`) ever switched.
+    # A test that only checks the background would not catch this — it must
+    # read a value Cytoscape itself baked into style, through Cytoscape's own
+    # API, on a real Chromium page loading the actual `projection.html`.
+    colors = {}
+    for theme in ("a", "b", "c"):
+        page.goto(f"{static_server}/frontend/projection.html?theme={theme}")
+        page.wait_for_function("window.kgView !== undefined")
+        page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
+        page.wait_for_function("() => window.kgView.layoutPending === false")
+        colors[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-color')")
+
+    assert colors["a"] != colors["b"] != colors["c"] != colors["a"]
+    assert colors == THEME_RING_COLOR
+
+
 def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
     update(view, GRAPH_2)
     person_position = view.evaluate("window.kgView.cy.$('#p1').position()")
@@ -5054,6 +5148,11 @@ export class Camera {
     this.padding = padding;
     this._mode = 'fit';
     this._direction = -1;
+    // At an unattended exhibition a stray touch/mouse must never be able to
+    // pan the viewport off-frame or drag a node off its persisted position.
+    // `manual` is the only mode where a visitor is meant to move anything;
+    // apply that for the initial mode too, not just from setMode onward.
+    this._applyInteractivity(this._mode);
   }
 
   get mode() {
@@ -5063,7 +5162,15 @@ export class Camera {
   setMode(mode) {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
     this._mode = mode;
+    this._applyInteractivity(mode);
     if (mode === 'fit') this.cy.fit(this.padding);
+  }
+
+  _applyInteractivity(mode) {
+    const interactive = mode === 'manual';
+    this.cy.userPanningEnabled(interactive);
+    this.cy.userZoomingEnabled(interactive);
+    this.cy.autoungrabify(!interactive);
   }
 
   onGraphChanged() {
@@ -5105,7 +5212,7 @@ function style() {
         width: cssVar('--person-size', '96'),
         height: cssVar('--person-size', '96'),
         'background-color': cssVar('--person-fill', '#222'),
-        'background-image': 'data(portrait)',
+        'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'border-width': cssVar('--ring-width', '5'),
         'border-color': cssVar('--ring-color', '#C9A227'),
@@ -5192,7 +5299,12 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       // over the same graph must produce the same picture.
       fresh.forEach((id, index) => {
         const node = cy.$id(id);
-        if (node.position('x') || node.position('y')) return;
+        // `fresh` already excludes every id in `placed` (an explicit x/y
+        // null-check against the graph data, not a truthy check on the
+        // rendered position), so every node reached here is genuinely
+        // unseeded and must always be positioned. A `position('x') ||
+        // position('y')` guard here would be confused by a node legitimately
+        // seeded to exactly (0, 0) and skip it.
         const anchor = node.neighborhood('node').filter((n) => !fresh.includes(n.id()))[0];
         const base = anchor ? anchor.position() : { x: 0, y: 0 };
         const angle = index * 2.39996;
@@ -5285,31 +5397,50 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
 <script type="module">
   import { createGraphView } from './static/projection.js';
 
+  const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
-  document.getElementById('theme').href = `static/theme-${params.get('theme') || 'a'}.css`;
-
-  const view = createGraphView(document.getElementById('cy'), {
-    onPositions: (positions) =>
-      fetch('/api/positions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ positions }),
-      }).catch(() => {}),
-  });
-  window.kgView = view;
-  window.kgReady = false;
-
-  const events = new EventSource('/events');
-  events.onmessage = (message) => {
-    const payload = JSON.parse(message.data);
-    if (payload.type === 'graph') {
-      view.update(payload.graph);
-      window.kgReady = true;
-    } else if (payload.type === 'state') {
-      view.setMinMentions(payload.state.min_mentions);
-      view.camera.setMode(payload.state.camera_mode);
+  const themeHref = `static/theme-${params.get('theme') || 'a'}.css`;
+  // Swapping `href` starts an async fetch. createGraphView() reads the
+  // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),
+  // so it must not run until the new stylesheet has actually loaded — a
+  // requestAnimationFrame is not a substitute for the real `load` event,
+  // it only guarantees a paint tick, not that the async fetch resolved.
+  // Reassigning `href` to the value it already has (the `?theme=a` default,
+  // matching the markup's initial href) does NOT fire another `load` event
+  // in Chromium, so that case must resolve immediately instead of waiting.
+  const themeLoaded = new Promise((resolve) => {
+    if (themeLink.getAttribute('href') === themeHref) {
+      resolve();
+      return;
     }
-  };
+    themeLink.addEventListener('load', resolve, { once: true });
+    themeLink.href = themeHref;
+  });
+
+  themeLoaded.then(() => {
+    const view = createGraphView(document.getElementById('cy'), {
+      onPositions: (positions) =>
+        fetch('/api/positions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        }).catch((error) => console.warn('failed to persist positions', error)),
+    });
+    window.kgView = view;
+    window.kgReady = false;
+
+    const events = new EventSource('/events');
+    events.onmessage = (message) => {
+      const payload = JSON.parse(message.data);
+      if (payload.type === 'graph') {
+        view.update(payload.graph);
+        window.kgReady = true;
+      } else if (payload.type === 'state') {
+        view.setMinMentions(payload.state.min_mentions);
+        view.camera.setMode(payload.state.camera_mode);
+      }
+    };
+  });
 </script>
 </html>
 ```
@@ -5333,7 +5464,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   --term-dot: 14;
   --term-dot-color: #EDE7D8;
   --label-color: #F5F1E6;
-  --label-font: Georgia, 'Times New Roman', serif;
+  --label-font: Georgia, "Times New Roman", serif;
   --label-size: 22;
   --label-outline-width: 3;
   --label-outline-color: #101014;
@@ -5355,7 +5486,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   --term-dot: 14;
   --term-dot-color: #2B2B2B;
   --label-color: #1A1A1A;
-  --label-font: Georgia, 'Times New Roman', serif;
+  --label-font: Georgia, "Times New Roman", serif;
   --label-size: 22;
   --label-outline-width: 2;
   --label-outline-color: #F4F1EA;
@@ -5377,10 +5508,10 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   --term-dot: 20;
   --term-dot-color: #FFFFFF;
   --label-color: #FFFFFF;
-  --label-font: Georgia, 'Times New Roman', serif;
+  --label-font: Georgia, "Times New Roman", serif;
   --label-size: 30;
   --label-outline-width: 5;
-  --label-outline-color: #000000;
+  --label-outline-color: #101014;
   --edge-color: #C8C3B4;
   --edge-width: 4;
   --edge-opacity: 1;
@@ -5390,7 +5521,10 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_camera.py tests/test_projection.py -v`
-Expected: PASS (10 tests)
+Expected: PASS (14 tests) — verified by a real run on 2026-08-13 during the
+task-14 review-findings pass (8 camera + 6 projection; the original brief's
+10 became 14 after adding the camera-interactivity tests for finding 3 and
+the theme-baking regression test for finding 1).
 
 - [ ] **Step 7: Commit**
 

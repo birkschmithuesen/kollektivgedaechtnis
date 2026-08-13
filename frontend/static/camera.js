@@ -10,6 +10,11 @@ export class Camera {
     this.padding = padding;
     this._mode = 'fit';
     this._direction = -1;
+    // At an unattended exhibition a stray touch/mouse must never be able to
+    // pan the viewport off-frame or drag a node off its persisted position.
+    // `manual` is the only mode where a visitor is meant to move anything;
+    // apply that for the initial mode too, not just from setMode onward.
+    this._applyInteractivity(this._mode);
   }
 
   get mode() {
@@ -19,7 +24,15 @@ export class Camera {
   setMode(mode) {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
     this._mode = mode;
+    this._applyInteractivity(mode);
     if (mode === 'fit') this.cy.fit(this.padding);
+  }
+
+  _applyInteractivity(mode) {
+    const interactive = mode === 'manual';
+    this.cy.userPanningEnabled(interactive);
+    this.cy.userZoomingEnabled(interactive);
+    this.cy.autoungrabify(!interactive);
   }
 
   onGraphChanged() {

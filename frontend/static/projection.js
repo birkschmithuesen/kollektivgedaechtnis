@@ -102,7 +102,12 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       // over the same graph must produce the same picture.
       fresh.forEach((id, index) => {
         const node = cy.$id(id);
-        if (node.position('x') || node.position('y')) return;
+        // `fresh` already excludes every id in `placed` (an explicit x/y
+        // null-check against the graph data, not a truthy check on the
+        // rendered position), so every node reached here is genuinely
+        // unseeded and must always be positioned. A `position('x') ||
+        // position('y')` guard here would be confused by a node legitimately
+        // seeded to exactly (0, 0) and skip it.
         const anchor = node.neighborhood('node').filter((n) => !fresh.includes(n.id()))[0];
         const base = anchor ? anchor.position() : { x: 0, y: 0 };
         const angle = index * 2.39996;

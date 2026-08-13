@@ -11,30 +11,49 @@
 <script type="module">
   import { createGraphView } from './static/projection.js';
 
+  const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
-  document.getElementById('theme').href = `static/theme-${params.get('theme') || 'a'}.css`;
-
-  const view = createGraphView(document.getElementById('cy'), {
-    onPositions: (positions) =>
-      fetch('/api/positions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ positions }),
-      }).catch(() => {}),
-  });
-  window.kgView = view;
-  window.kgReady = false;
-
-  const events = new EventSource('/events');
-  events.onmessage = (message) => {
-    const payload = JSON.parse(message.data);
-    if (payload.type === 'graph') {
-      view.update(payload.graph);
-      window.kgReady = true;
-    } else if (payload.type === 'state') {
-      view.setMinMentions(payload.state.min_mentions);
-      view.camera.setMode(payload.state.camera_mode);
+  const themeHref = `static/theme-${params.get('theme') || 'a'}.css`;
+  // Swapping `href` starts an async fetch. createGraphView() reads the
+  // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),
+  // so it must not run until the new stylesheet has actually loaded — a
+  // requestAnimationFrame is not a substitute for the real `load` event,
+  // it only guarantees a paint tick, not that the async fetch resolved.
+  // Reassigning `href` to the value it already has (the `?theme=a` default,
+  // matching the markup's initial href) does NOT fire another `load` event
+  // in Chromium, so that case must resolve immediately instead of waiting.
+  const themeLoaded = new Promise((resolve) => {
+    if (themeLink.getAttribute('href') === themeHref) {
+      resolve();
+      return;
     }
-  };
+    themeLink.addEventListener('load', resolve, { once: true });
+    themeLink.href = themeHref;
+  });
+
+  themeLoaded.then(() => {
+    const view = createGraphView(document.getElementById('cy'), {
+      onPositions: (positions) =>
+        fetch('/api/positions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        }).catch((error) => console.warn('failed to persist positions', error)),
+    });
+    window.kgView = view;
+    window.kgReady = false;
+
+    const events = new EventSource('/events');
+    events.onmessage = (message) => {
+      const payload = JSON.parse(message.data);
+      if (payload.type === 'graph') {
+        view.update(payload.graph);
+        window.kgReady = true;
+      } else if (payload.type === 'state') {
+        view.setMinMentions(payload.state.min_mentions);
+        view.camera.setMode(payload.state.camera_mode);
+      }
+    };
+  });
 </script>
 </html>
