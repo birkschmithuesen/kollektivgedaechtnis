@@ -5613,9 +5613,16 @@ def ui(page, static_server):
     page.goto(f"{static_server}/frontend/operator.html")
     page.wait_for_function("window.kgOperator !== undefined")
     page.evaluate("window.kgFetches = []")
+    # The trailing `void 0;` is load-bearing, not stylistic: without it the
+    # expression's completion value is the assigned function itself, and
+    # Playwright's evaluate() calls that completion value with no arguments
+    # while producing its own return value — a driver-level artifact
+    # (reproduces on about:blank with any unrelated global name, nothing to
+    # do with fetch or this app), which throws inside our mock on
+    # `opts.body` before `render()` ever gets a chance to run.
     page.evaluate(
         "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
-        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
     )
     page.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
     return page

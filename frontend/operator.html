@@ -1,2 +1,28 @@
 <!doctype html>
-<title>Operator</title>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivgedächtnis — Operator</title>
+<!-- Relative, like projection.html: served at /operator these resolve to /static/… -->
+<link rel="stylesheet" href="static/operator.css">
+<header>
+  <span id="stt" class="badge">STT</span>
+  <label>Dichte
+    <select id="min-mentions">
+      <option value="1">1 — alles</option>
+      <option value="2">2 — geteilt</option>
+      <option value="3">3 — nur häufig</option>
+    </select>
+  </label>
+  <label>Kamera
+    <select id="camera">
+      <option value="fit">alles zeigen</option>
+      <option value="manual">manuell</option>
+      <option value="pan">automatisch schwenken</option>
+    </select>
+  </label>
+  <span id="interview"></span>
+</header>
+<pre id="transcript"></pre>
+<ul id="entries"></ul>
+<script type="module" src="static/operator.js"></script>
+</html>

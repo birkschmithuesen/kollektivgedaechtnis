@@ -1,0 +1,12 @@
+body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #16161a; color: #eee; }
+header { display: flex; gap: 1.5rem; align-items: center; padding: 0.75rem 1rem; background: #1f1f26; }
+select { font: inherit; padding: 0.2rem; }
+.badge { padding: 0.15rem 0.5rem; border-radius: 3px; background: #7a2626; }
+.badge.ok { background: #2c6e3f; }
+#transcript { margin: 0; padding: 0.75rem 1rem; min-height: 4rem; color: #b9b9c4; white-space: pre-wrap; }
+#entries { list-style: none; margin: 0; padding: 0 1rem 2rem; }
+.entry { display: flex; gap: 1rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #2a2a33; }
+.entry .label { flex: 1; }
+.entry .meta { color: #8b8b96; }
+.entry.hidden .label { text-decoration: line-through; color: #7a7a85; }
+button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
