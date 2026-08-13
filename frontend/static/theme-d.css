@@ -1,0 +1,4 @@
+/* Variant D is the test pattern page, not a graph theme: it is rendered from
+   /testpattern, not from /projection?theme=d. Its ground matches theme A so
+   the greyscale wedge is read against the reference background. */
+:root { --bg: #101014; }

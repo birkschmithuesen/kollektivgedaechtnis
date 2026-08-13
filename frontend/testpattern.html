@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Testbild — Whiteboard</title>
+<!-- Relative, like projection.html: served at /testpattern these resolve to
+     /static/…. Ground comes from theme-d.css, linked after base.css (same
+     order as projection.html), so the wedge is read against the same
+     background as variant A, not a hard-coded copy of it. -->
+<link rel="stylesheet" href="static/base.css">
+<link rel="stylesheet" href="static/theme-d.css">
+<style>
+  body { width: 1920px; height: 1080px; color: #fff;
+         font-family: Georgia, "Times New Roman", serif; }
+  .wedge { display: flex; height: 260px; }
+  .wedge .step { flex: 1; display: flex; align-items: flex-end; justify-content: center;
+                 font: 14px system-ui, sans-serif; padding-bottom: 8px; }
+  .ladder { padding: 40px 60px; }
+  .rung { margin-bottom: 18px; white-space: nowrap; }
+  .rule { height: 2px; background: #fff; margin: 0 60px 30px; }
+  .strokes { display: flex; gap: 40px; padding: 0 60px; align-items: center; }
+  .strokes div { background: #fff; width: 240px; }
+</style>
+<div class="wedge"></div>
+<div class="rule"></div>
+<div class="ladder"></div>
+<div class="strokes">
+  <div style="height:1px"></div><div style="height:2px"></div>
+  <div style="height:4px"></div><div style="height:6px"></div><div style="height:9px"></div>
+</div>
+<script>
+  const wedge = document.querySelector('.wedge');
+  for (let value = 0; value <= 100; value += 10) {
+    const step = document.createElement('div');
+    step.className = 'step';
+    step.dataset.value = String(value);
+    const channel = Math.round((value / 100) * 255);
+    step.style.background = `rgb(${channel},${channel},${channel})`;
+    step.style.color = value > 50 ? '#000' : '#fff';
+    step.textContent = `${value}%`;
+    wedge.appendChild(step);
+  }
+
+  const ladder = document.querySelector('.ladder');
+  for (const size of [14, 18, 22, 26, 30, 36, 44]) {
+    const rung = document.createElement('div');
+    rung.className = 'rung';
+    rung.dataset.size = String(size);
+    rung.style.fontSize = `${size}px`;
+    rung.textContent = `${size}px — Betonspritzen mit Drohnen · Genossenschaftliches Wohnen`;
+    ladder.appendChild(rung);
+  }
+</script>
+</html>

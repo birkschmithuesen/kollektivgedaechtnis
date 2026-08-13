@@ -76,6 +76,10 @@ def create_app(store, cfg, bus) -> FastAPI:
     def operator() -> FileResponse:
         return FileResponse(FRONTEND / "operator.html")
 
+    @app.get("/testpattern")
+    def testpattern() -> FileResponse:
+        return FileResponse(FRONTEND / "testpattern.html")
+
     @app.get("/graph.json")
     def graph_json() -> JSONResponse:
         return JSONResponse(build_graph(store))

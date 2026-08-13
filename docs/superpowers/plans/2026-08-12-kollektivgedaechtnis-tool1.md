@@ -5956,13 +5956,15 @@ Expected: FAIL — 404 / selector `.wedge` never appears
 <html lang="de">
 <meta charset="utf-8">
 <title>Testbild — Whiteboard</title>
-<!-- Ground comes from theme-d.css so the wedge is read against the same
-     background as variant A, not against a hard-coded copy of it. -->
+<!-- Relative, like projection.html: served at /testpattern these resolve to
+     /static/…. Ground comes from theme-d.css, linked after base.css (same
+     order as projection.html), so the wedge is read against the same
+     background as variant A, not a hard-coded copy of it. -->
+<link rel="stylesheet" href="static/base.css">
 <link rel="stylesheet" href="static/theme-d.css">
 <style>
-  html, body { margin: 0; padding: 0; }
-  body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: #fff;
-         font-family: Georgia, 'Times New Roman', serif; }
+  body { width: 1920px; height: 1080px; color: #fff;
+         font-family: Georgia, "Times New Roman", serif; }
   .wedge { display: flex; height: 260px; }
   .wedge .step { flex: 1; display: flex; align-items: flex-end; justify-content: center;
                  font: 14px system-ui, sans-serif; padding-bottom: 8px; }
