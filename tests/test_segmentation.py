@@ -55,3 +55,20 @@ def test_strip_handles_the_variant_spelling_too():
 def test_strip_is_a_no_op_without_a_match():
     text = "Wir brauchen mehr Genossenschaften."
     assert strip_stop_phrases(text, PHRASES) == text
+
+
+def test_inflected_word_containing_a_phrase_does_not_trigger():
+    text = "Die Aufnahme beendende Handlung war klar."
+    assert find_stop_phrase(text, PHRASES) is None
+    assert strip_stop_phrases(text, PHRASES) == text
+
+
+def test_unlisted_punctuation_inside_the_command_is_stripped():
+    text = "Bitte Aufnahme… beenden jetzt."
+    assert find_stop_phrase(text, PHRASES) == "Aufnahme beenden"
+    stripped = strip_stop_phrases(text, PHRASES)
+    assert "Aufnahme" not in stripped
+    assert "beenden" not in stripped
+    assert "…" not in stripped
+    assert "Bitte" in stripped
+    assert "jetzt" in stripped

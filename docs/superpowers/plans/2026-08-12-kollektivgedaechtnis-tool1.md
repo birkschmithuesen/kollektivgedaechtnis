@@ -1638,6 +1638,23 @@ def test_strip_handles_the_variant_spelling_too():
 def test_strip_is_a_no_op_without_a_match():
     text = "Wir brauchen mehr Genossenschaften."
     assert strip_stop_phrases(text, PHRASES) == text
+
+
+def test_inflected_word_containing_a_phrase_does_not_trigger():
+    text = "Die Aufnahme beendende Handlung war klar."
+    assert find_stop_phrase(text, PHRASES) is None
+    assert strip_stop_phrases(text, PHRASES) == text
+
+
+def test_unlisted_punctuation_inside_the_command_is_stripped():
+    text = "Bitte Aufnahme… beenden jetzt."
+    assert find_stop_phrase(text, PHRASES) == "Aufnahme beenden"
+    stripped = strip_stop_phrases(text, PHRASES)
+    assert "Aufnahme" not in stripped
+    assert "beenden" not in stripped
+    assert "…" not in stripped
+    assert "Bitte" in stripped
+    assert "jetzt" in stripped
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -1659,12 +1676,14 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 _UMLAUTS = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
 _PUNCT = re.compile(r"[^\w\s]", flags=re.UNICODE)
 _SPACES = re.compile(r"\s+")
 # STT delivers "beended" as well as "beendet": fold a word-final d onto t.
 _FINAL_D = re.compile(r"d\b")
+_WORD = re.compile(r"\w+", re.UNICODE)
 
 
 def normalize(text: str) -> str:
@@ -1679,51 +1698,92 @@ def _fuzzy(text: str) -> str:
     return _FINAL_D.sub("t", normalize(text))
 
 
+@dataclass(frozen=True)
+class _Token:
+    normalized: str
+    start: int
+    end: int
+
+
+def _tokenize(text: str) -> tuple[str, list[_Token]]:
+    """Tokenise once over NFC text; each raw \\w+ run corresponds 1:1 to a
+    normalised token, since normalize() maps every [^\\w\\s] char to a space.
+    """
+    nfc_text = unicodedata.normalize("NFC", text)
+    tokens = [
+        _Token(normalized=_fuzzy(match.group()), start=match.start(), end=match.end())
+        for match in _WORD.finditer(nfc_text)
+    ]
+    return nfc_text, tokens
+
+
+def _phrase_tokens(phrase: str) -> list[str]:
+    return [_fuzzy(word) for word in _WORD.findall(phrase)]
+
+
+def _find_sublist_occurrences(
+    needle: list[str], haystack: list[_Token]
+) -> list[tuple[int, int]]:
+    """Return raw (start, end) spans in the NFC text for every contiguous,
+    whole-token occurrence of needle in haystack.
+    """
+    if not needle:
+        return []
+    spans = []
+    n = len(needle)
+    for i in range(len(haystack) - n + 1):
+        if all(haystack[i + j].normalized == needle[j] for j in range(n)):
+            spans.append((haystack[i].start, haystack[i + n - 1].end))
+    return spans
+
+
 def find_stop_phrase(text: str, phrases: Sequence[str]) -> str | None:
-    haystack = _fuzzy(text)
-    if not haystack:
+    _, tokens = _tokenize(text)
+    if not tokens:
         return None
     for phrase in phrases:
-        needle = _fuzzy(phrase)
-        if needle and needle in haystack:
+        needle = _phrase_tokens(phrase)
+        if needle and _find_sublist_occurrences(needle, tokens):
             return phrase
     return None
 
 
 def strip_stop_phrases(text: str, phrases: Sequence[str]) -> str:
     """Remove every occurrence of a stop phrase. MUST run before extraction (spec 5)."""
-    result = text
+    nfc_text, tokens = _tokenize(text)
+    spans: list[tuple[int, int]] = []
     for phrase in phrases:
-        needle = _fuzzy(phrase)
+        needle = _phrase_tokens(phrase)
         if not needle:
             continue
-        words = needle.split(" ")
-        # Build a whitespace/punctuation tolerant pattern over the raw text.
-        pattern = r"[\s,\.\-–—!?;:]*".join(
-            _word_pattern(word) for word in words
-        )
-        result = re.sub(pattern, " ", result, flags=re.IGNORECASE)
-    return _SPACES.sub(" ", result).strip()
+        spans.extend(_find_sublist_occurrences(needle, tokens))
 
+    if not spans:
+        return _SPACES.sub(" ", nfc_text).strip()
 
-def _word_pattern(word: str) -> str:
-    """Match a normalized word against raw text (umlauts back, final d/t either way)."""
-    chars = []
-    for index, char in enumerate(word):
-        if char == "t" and index == len(word) - 1:
-            chars.append("[td]")
+    spans.sort()
+    merged: list[list[int]] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
         else:
-            chars.append(re.escape(char))
-    pattern = "".join(chars)
-    for folded, raw in (("ae", "[aä]"), ("oe", "[oö]"), ("ue", "[uü]"), ("ss", "(ss|ß)")):
-        pattern = pattern.replace(folded, raw)
-    return pattern
+            merged.append([start, end])
+
+    pieces = []
+    cursor = 0
+    for start, end in merged:
+        pieces.append(nfc_text[cursor:start])
+        pieces.append(" ")
+        cursor = end
+    pieces.append(nfc_text[cursor:])
+    result = "".join(pieces)
+    return _SPACES.sub(" ", result).strip()
 ```
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_segmentation.py -v`
-Expected: PASS (13 tests)
+Expected: PASS (15 tests)
 
 - [ ] **Step 5: Commit**
 
