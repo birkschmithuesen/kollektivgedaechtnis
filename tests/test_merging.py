@@ -156,6 +156,50 @@ def test_apply_merges_folds_two_existing_terms_together_and_combines_mention_cou
     assert store.find_term_by_alias("Solarzellen aufs Dach").id == winner.id
 
 
+def test_apply_merges_folds_three_existing_terms_together_and_combines_mention_counts(store):
+    # Finding B (Task 9 fix round 2): fold_term's winner_id, *loser_ids =
+    # existing_ids unpacking is only exercised by the tests with exactly TWO
+    # already-existing terms in a group. A group of THREE must fold every
+    # loser onto the same winner, not just the first, and a person who
+    # mentioned two of the three originals must count once toward the
+    # winner's mention_count, not twice.
+    a = store.get_or_create_term("Regenwasser sammeln", created_at=1.0)
+    b = store.get_or_create_term("Zisterne im Garten", created_at=1.0)
+    c = store.get_or_create_term("Grauwasser nutzen", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    p3 = store.create_person(started_at=3.0)
+    store.add_edge(p1.id, a.id, created_at=1.0)
+    store.add_edge(p2.id, b.id, created_at=2.0)
+    # p3 mentioned both b and c — must count once toward the winner, not twice.
+    store.add_edge(p3.id, b.id, created_at=3.0)
+    store.add_edge(p3.id, c.id, created_at=3.0)
+
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Wasser im Kreislauf",
+                members=["Regenwasser sammeln", "Zisterne im Garten", "Grauwasser nutzen"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=4.0)
+
+    term_ids = apply_merges(store, person.id, ["Regenwasser sammeln"], result, at=5.0)
+
+    remaining = store.list_terms()
+    assert len(remaining) == 1  # both losers are gone, not just aliased away
+    winner = remaining[0]
+    assert winner.label == "Wasser im Kreislauf"
+    assert term_ids == [winner.id]
+    # p1, p2, p3 are three distinct people — p3's double mention (b and c)
+    # must not inflate the count.
+    assert store.mention_count(winner.id) == 3
+    assert store.find_term_by_alias("Regenwasser sammeln").id == winner.id
+    assert store.find_term_by_alias("Zisterne im Garten").id == winner.id
+    assert store.find_term_by_alias("Grauwasser nutzen").id == winner.id
+
+
 def test_apply_merges_folds_a_canonical_label_collision_instead_of_raising(store):
     # Finding 2: `term.label` is UNIQUE. If a group resolves to an existing
     # term (via a member match) but the chosen canonical_label already belongs
