@@ -1,3 +1,5 @@
+import unicodedata
+
 import pytest
 
 from kg.segmentation import find_stop_phrase, normalize, strip_stop_phrases
@@ -72,3 +74,24 @@ def test_unlisted_punctuation_inside_the_command_is_stripped():
     assert "…" not in stripped
     assert "Bitte" in stripped
     assert "jetzt" in stripped
+
+
+def test_nfd_normalized_stop_phrases_match_correctly():
+    """Regression: stop phrases in NFD form must be normalized to NFC before tokenizing."""
+    nfd_phrase = unicodedata.normalize("NFD", "Größe beenden")
+    nfc_phrase = "Größe beenden"
+    text = "Bitte Größe beenden jetzt."
+
+    # NFD phrase must match despite its Unicode form
+    assert find_stop_phrase(text, [nfd_phrase]) == nfd_phrase
+
+    # Strip must work with NFD phrase
+    stripped = strip_stop_phrases(text, [nfd_phrase])
+    assert "Größe" not in stripped
+    assert "beenden" not in stripped
+    assert "Bitte" in stripped
+    assert "jetzt" in stripped
+
+    # Verify both forms produce identical results
+    assert find_stop_phrase(text, [nfd_phrase]) == nfd_phrase
+    assert find_stop_phrase(text, [nfc_phrase]) == nfc_phrase

@@ -51,7 +51,8 @@ def _tokenize(text: str) -> tuple[str, list[_Token]]:
 
 
 def _phrase_tokens(phrase: str) -> list[str]:
-    return [_fuzzy(word) for word in _WORD.findall(phrase)]
+    nfc_phrase = unicodedata.normalize("NFC", phrase)
+    return [_fuzzy(word) for word in _WORD.findall(nfc_phrase)]
 
 
 def _find_sublist_occurrences(

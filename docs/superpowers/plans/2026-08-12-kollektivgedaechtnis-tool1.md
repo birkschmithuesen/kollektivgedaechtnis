@@ -1581,6 +1581,8 @@ Matching is case-insensitive, punctuation-insensitive, umlaut-folding, and toler
 `tests/test_segmentation.py`:
 
 ```python
+import unicodedata
+
 import pytest
 
 from kg.segmentation import find_stop_phrase, normalize, strip_stop_phrases
@@ -1655,6 +1657,27 @@ def test_unlisted_punctuation_inside_the_command_is_stripped():
     assert "…" not in stripped
     assert "Bitte" in stripped
     assert "jetzt" in stripped
+
+
+def test_nfd_normalized_stop_phrases_match_correctly():
+    """Regression: stop phrases in NFD form must be normalized to NFC before tokenizing."""
+    nfd_phrase = unicodedata.normalize("NFD", "Größe beenden")
+    nfc_phrase = "Größe beenden"
+    text = "Bitte Größe beenden jetzt."
+
+    # NFD phrase must match despite its Unicode form
+    assert find_stop_phrase(text, [nfd_phrase]) == nfd_phrase
+
+    # Strip must work with NFD phrase
+    stripped = strip_stop_phrases(text, [nfd_phrase])
+    assert "Größe" not in stripped
+    assert "beenden" not in stripped
+    assert "Bitte" in stripped
+    assert "jetzt" in stripped
+
+    # Verify both forms produce identical results
+    assert find_stop_phrase(text, [nfd_phrase]) == nfd_phrase
+    assert find_stop_phrase(text, [nfc_phrase]) == nfc_phrase
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -1718,7 +1741,8 @@ def _tokenize(text: str) -> tuple[str, list[_Token]]:
 
 
 def _phrase_tokens(phrase: str) -> list[str]:
-    return [_fuzzy(word) for word in _WORD.findall(phrase)]
+    nfc_phrase = unicodedata.normalize("NFC", phrase)
+    return [_fuzzy(word) for word in _WORD.findall(nfc_phrase)]
 
 
 def _find_sublist_occurrences(
@@ -1783,7 +1807,7 @@ def strip_stop_phrases(text: str, phrases: Sequence[str]) -> str:
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_segmentation.py -v`
-Expected: PASS (15 tests)
+Expected: PASS (16 tests)
 
 - [ ] **Step 5: Commit**
 
