@@ -1,4 +1,4 @@
-"""FastAPI app: two static pages, one SSE stream, the operator API."""
+"""FastAPI app: three static pages, one SSE stream, the operator API."""
 
 from __future__ import annotations
 

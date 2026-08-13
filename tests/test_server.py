@@ -75,4 +75,5 @@ def test_pages_and_static_assets_are_served(client):
     assert client.get("/", follow_redirects=False).status_code in (302, 307)
     assert client.get("/projection").status_code == 200
     assert client.get("/operator").status_code == 200
+    assert client.get("/testpattern").status_code == 200
     assert client.get("/static/graph-model.js").status_code == 200

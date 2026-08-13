@@ -4375,6 +4375,7 @@ def test_pages_and_static_assets_are_served(client):
     assert client.get("/", follow_redirects=False).status_code in (302, 307)
     assert client.get("/projection").status_code == 200
     assert client.get("/operator").status_code == 200
+    assert client.get("/testpattern").status_code == 200
     assert client.get("/static/graph-model.js").status_code == 200
 ```
 
@@ -4421,7 +4422,7 @@ class EventBus:
 - [ ] **Step 4: Implement `kg/server.py`**
 
 ```python
-"""FastAPI app: two static pages, one SSE stream, the operator API."""
+"""FastAPI app: three static pages, one SSE stream, the operator API."""
 
 from __future__ import annotations
 
