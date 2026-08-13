@@ -1,0 +1,139 @@
+"""FastAPI app: two static pages, one SSE stream, the operator API."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import Literal
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from kg.export import build_graph, write_graph_json
+
+FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
+
+
+class MinMentions(BaseModel):
+    value: int = Field(ge=1, le=10)
+
+
+class HiddenFlag(BaseModel):
+    node_id: str
+    hidden: bool
+
+
+class CameraMode(BaseModel):
+    mode: Literal["fit", "manual", "pan"]
+
+
+class Point(BaseModel):
+    x: float
+    y: float
+
+
+class Positions(BaseModel):
+    positions: dict[str, Point]
+
+
+def current_state(store) -> dict:
+    person = store.open_person()
+    return {
+        "min_mentions": int(store.get_setting("min_mentions", "1")),
+        "camera_mode": store.get_setting("camera_mode", "fit"),
+        "stt_connected": store.get_setting("stt_connected", "0") == "1",
+        "interview": None
+        if person is None
+        else {"person_id": person.id, "started_at": person.started_at},
+    }
+
+
+def broadcast_graph(store, cfg, bus) -> None:
+    bus.publish({"type": "graph", "graph": write_graph_json(store, cfg.graph_json_path)})
+
+
+def broadcast_state(store, bus) -> None:
+    bus.publish({"type": "state", "state": current_state(store)})
+
+
+def create_app(store, cfg, bus) -> FastAPI:
+    app = FastAPI(title="Kollektivgedächtnis")
+    app.mount("/static", StaticFiles(directory=FRONTEND / "static"), name="static")
+    app.mount("/media/portraits", StaticFiles(directory=cfg.portrait_dir), name="portraits")
+
+    @app.get("/")
+    def index() -> RedirectResponse:
+        return RedirectResponse("/projection")
+
+    @app.get("/projection")
+    def projection() -> FileResponse:
+        return FileResponse(FRONTEND / "projection.html")
+
+    @app.get("/operator")
+    def operator() -> FileResponse:
+        return FileResponse(FRONTEND / "operator.html")
+
+    @app.get("/graph.json")
+    def graph_json() -> JSONResponse:
+        return JSONResponse(build_graph(store))
+
+    @app.get("/api/state")
+    def api_state() -> dict:
+        return current_state(store)
+
+    @app.post("/api/min_mentions")
+    def api_min_mentions(payload: MinMentions) -> dict:
+        store.set_setting("min_mentions", str(payload.value))
+        broadcast_state(store, bus)
+        broadcast_graph(store, cfg, bus)
+        return {"ok": True}
+
+    @app.post("/api/hidden")
+    def api_hidden(payload: HiddenFlag) -> dict:
+        try:
+            store.set_hidden(payload.node_id, payload.hidden)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        broadcast_graph(store, cfg, bus)
+        return {"ok": True}
+
+    @app.post("/api/camera")
+    def api_camera(payload: CameraMode) -> dict:
+        store.set_setting("camera_mode", payload.mode)
+        broadcast_state(store, bus)
+        return {"ok": True}
+
+    @app.post("/api/positions")
+    def api_positions(payload: Positions) -> dict:
+        # No broadcast: positions come FROM the renderer; echoing them would loop.
+        store.save_positions({k: (p.x, p.y) for k, p in payload.positions.items()})
+        return {"ok": True}
+
+    @app.get("/events")
+    async def events() -> StreamingResponse:
+        queue = bus.subscribe()
+
+        async def stream():
+            try:
+                yield _sse({"type": "graph", "graph": build_graph(store)})
+                yield _sse({"type": "state", "state": current_state(store)})
+                while True:
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    except TimeoutError:
+                        yield ": keep-alive\n\n"
+                        continue
+                    yield _sse(event)
+            finally:
+                bus.unsubscribe(queue)
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    return app
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
