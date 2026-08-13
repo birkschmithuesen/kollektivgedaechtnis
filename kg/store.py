@@ -97,7 +97,17 @@ class Store:
             self._tx_depth += 1
             try:
                 yield
-            except Exception:
+            except BaseException:
+                # Not `except Exception`: a BaseException raised inside the
+                # block (KeyboardInterrupt when the operator stops the
+                # station, a thread's SystemExit) must roll back too, or
+                # `finally` below drops `_tx_depth` back to 0 and releases
+                # the lock while `conn` is left sitting in an uncommitted
+                # implicit transaction — the next unrelated write's own
+                # `_commit()` would then commit this partial write right
+                # along with it, permanently persisting a half-applied
+                # change (e.g. a `fold_term` with its loser deleted but the
+                # loser's edges not yet moved).
                 if self._tx_depth == 1:
                     self.conn.rollback()
                 raise
@@ -108,15 +118,10 @@ class Store:
                 self._tx_depth -= 1
 
     def _commit(self) -> None:
-        """Commit now, unless an enclosing `transaction()` will do it instead.
-
-        Only ever called from within a `@_locked` public method or from
-        inside an open `transaction()` (itself locked), so this read of
-        `self._tx_depth` always happens on a thread that already holds
-        `self._lock`.
-        """
-        if self._tx_depth == 0:
-            self.conn.commit()
+        """Commit now, unless an enclosing `transaction()` will do it instead."""
+        with self._lock:
+            if self._tx_depth == 0:
+                self.conn.commit()
 
     # -- ids ---------------------------------------------------------------
 

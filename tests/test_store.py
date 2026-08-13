@@ -27,15 +27,14 @@ def test_next_id_is_thread_safe_under_concurrent_creation(store):
     # read the same counter value and mint the same id, which would then
     # collide against person's TEXT PRIMARY KEY.
     #
-    # This calls _next_id directly rather than create_person: create_person's
-    # subsequent INSERT + commit are unprotected by this lock (by design - the
-    # fix is scoped to _next_id only) and racing them concurrently trips an
-    # unrelated hazard in Python's sqlite3 module itself (concurrent threads
-    # issuing statements against one connection can raise "cannot start a
-    # transaction within a transaction"). That is a separate, pre-existing
-    # limitation of sharing one connection across threads and is out of scope
-    # for this fix; this test isolates the exact race described in the
-    # finding.
+    # This calls _next_id directly rather than create_person: as of the
+    # store-wide lock (task 12b), create_person's INSERT + commit *are*
+    # covered too - the `@_locked` decorator serialises the whole method, not
+    # just _next_id - and test_concurrent_pipeline_and_operator_writes_do_not_corrupt_state
+    # below drives create_person concurrently to prove exactly that. This
+    # test instead isolates the narrower race the finding originally
+    # described: the upsert-then-read inside _next_id racing against itself
+    # across threads and minting a duplicate id.
     # Small thread/iteration counts race too rarely to reliably catch a
     # regression (verified empirically: 8x25 and even 32x200 sometimes missed
     # the interleave in manual trials). 48x300 reproduced the duplicate-id
@@ -124,8 +123,16 @@ def test_concurrent_pipeline_and_operator_writes_do_not_corrupt_state(store):
     ]
     for t in threads:
         t.start()
+    # A timeout, not a bare join(): the single most likely regression here is
+    # reverting `threading.RLock()` back to `threading.Lock()` at
+    # kg/store.py:62 (re-entrancy is the non-obvious half of the fix), and
+    # that regression doesn't fail this test - it deadlocks it, in
+    # create_person -> _next_id, forever. Bound the wait and assert the
+    # thread actually finished, so that regression becomes a named failure
+    # instead of a silent hang of the whole suite.
     for t in threads:
-        t.join()
+        t.join(timeout=60)
+        assert not t.is_alive(), "thread did not finish within 60s - suspect a deadlock regression"
 
     assert not errors, errors
     persons = store.list_persons()
@@ -135,6 +142,15 @@ def test_concurrent_pipeline_and_operator_writes_do_not_corrupt_state(store):
     assert len(edges) == person_count
     assert len(set(e.id for e in edges)) == person_count
     assert len(store.list_terms()) == person_count
+
+    # No lost writes on the operator side either: both operator threads'
+    # position keys must be present, and the setting must hold one of the
+    # values the operator threads actually wrote (never something else, and
+    # never absent).
+    positions = store.get_positions()
+    assert "pos-a" in positions
+    assert "pos-b" in positions
+    assert store.get_setting("min_mentions", "unset") in {"1", "2", "3", "4", "5"}
 
 
 def test_person_lifecycle(store):
@@ -273,6 +289,41 @@ def test_nested_transaction_does_not_commit_until_the_outer_block_exits(tmp_path
             assert visible_mid_block == 0
         visible_after = other_conn.execute("SELECT COUNT(*) FROM person").fetchone()[0]
         assert visible_after == 2
+    finally:
+        other_conn.close()
+        store.close()
+
+
+def test_transaction_rolls_back_on_base_exception_not_just_exception(tmp_path):
+    # Finding 5 / task 12b review: transaction() only caught `Exception`, so a
+    # BaseException raised inside the block (KeyboardInterrupt when the
+    # operator stops the station, a thread's SystemExit) skipped the
+    # rollback while `finally` still dropped `_tx_depth` back to 0 and
+    # released the lock, leaving `conn` sitting in an uncommitted implicit
+    # transaction. That partial write is invisible from another connection
+    # right after the exception (nothing has committed it yet either way),
+    # but the *next* unrelated write's own `_commit()` then commits
+    # everything still pending together, permanently persisting the partial
+    # write alongside it. That is a half-applied `fold_term` (loser deleted,
+    # its edges not yet moved) reaching disk permanently.
+    path = tmp_path / "kg.db"
+    store = Store.open(path)
+    other_conn = sqlite3.connect(str(path))
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            with store.transaction():
+                store.create_person(started_at=1.0)
+                raise KeyboardInterrupt()
+
+        # Not committed yet, so invisible even under the bug.
+        assert other_conn.execute("SELECT COUNT(*) FROM person").fetchone()[0] == 0
+
+        # The Store must still be usable, and this unrelated write must not
+        # resurrect the partial write from the failed transaction.
+        later = store.create_person(started_at=2.0)
+
+        rows = other_conn.execute("SELECT id FROM person ORDER BY id").fetchall()
+        assert [r[0] for r in rows] == [later.id]
     finally:
         other_conn.close()
         store.close()
