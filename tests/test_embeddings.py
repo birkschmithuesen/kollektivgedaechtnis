@@ -87,6 +87,43 @@ def test_openrouter_embedder_reorders_by_index():
     assert embedder.embed(["a", "b"]) == [[1.0, 0.0], [0.0, 1.0]]
 
 
+def test_openrouter_embedder_raises_on_a_short_response():
+    # Finding 5: fewer rows than inputs would otherwise mis-pair vectors onto
+    # the wrong labels by position after the sort.
+    class ShortPost:
+        def __call__(self, url, headers, json):
+            return {"data": [{"index": 0, "embedding": [1.0, 0.0]}]}
+
+    embedder = OpenRouterEmbedder("m", "k", "u", post=ShortPost())
+    with pytest.raises(RuntimeError, match="2"):
+        embedder.embed(["a", "b"])
+
+
+def test_openrouter_embedder_raises_when_indices_are_missing():
+    # Finding 5: rows missing "index" all default to 0 and collide in the
+    # sort, silently mis-pairing vectors — this must raise instead.
+    class MissingIndexPost:
+        def __call__(self, url, headers, json):
+            return {"data": [{"embedding": [1.0, 0.0]}, {"embedding": [0.0, 1.0]}]}
+
+    embedder = OpenRouterEmbedder("m", "k", "u", post=MissingIndexPost())
+    with pytest.raises(RuntimeError):
+        embedder.embed(["a", "b"])
+
+
+def test_openrouter_embedder_raises_when_indices_are_duplicated():
+    class DuplicateIndexPost:
+        def __call__(self, url, headers, json):
+            return {"data": [
+                {"index": 0, "embedding": [1.0, 0.0]},
+                {"index": 0, "embedding": [0.0, 1.0]},
+            ]}
+
+    embedder = OpenRouterEmbedder("m", "k", "u", post=DuplicateIndexPost())
+    with pytest.raises(RuntimeError):
+        embedder.embed(["a", "b"])
+
+
 def test_openrouter_embedder_refuses_to_run_without_a_key():
     with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         OpenRouterEmbedder("m", None, "u").embed(["a"])

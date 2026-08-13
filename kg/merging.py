@@ -104,40 +104,71 @@ def decide_merges(
 def apply_merges(
     store, person_id: str, new_labels: Sequence[str], result: MergeResult, at: float
 ) -> list[str]:
-    """Persist the decision and return one term id per input label, in order."""
+    """Persist the decision and return one term id per input label, in order.
+
+    Runs as a single `store.transaction()`: a crash partway through must
+    leave no rename, fold or alias committed without the matching decision
+    log, or the graph state could never be reproduced or undone.
+    """
     resolved: dict[str, str] = {}
+    claimed: set[str] = set()  # members an earlier group in this call already used
 
-    for group in result.groups:
-        members = [m for m in group.members if m]
-        if not members:
-            continue
-        term = None
-        for member in members:
-            term = store.find_term_by_alias(member) or store.get_term_by_label(member)
-            if term is not None:
-                break
-        if term is None:
-            term = store.get_or_create_term(group.canonical_label, created_at=at)
-        elif term.label != group.canonical_label:
-            store.rename_term(term.id, group.canonical_label)
-        for member in members:
-            store.add_alias(term.id, member)
-        for member in members:
-            resolved[member] = term.id
+    with store.transaction():
+        for group in result.groups:
+            members = list(dict.fromkeys(m for m in group.members if m))
+            # Group 1's aliases are visible to group 2 within the same call.
+            # A member an earlier group already claimed must not silently
+            # drag this group's *other* members along with it — drop it here
+            # and let it resolve on its own (standalone) below.
+            members = [m for m in members if m not in claimed]
+            if len(members) < 2:
+                continue
 
-    term_ids: list[str] = []
-    for label in new_labels:
-        term_id = resolved.get(label)
-        if term_id is None:
-            existing = store.find_term_by_alias(label)
-            term = existing or store.get_or_create_term(label, created_at=at)
-            term_id = term.id
-            resolved[label] = term_id
-        term_ids.append(term_id)
+            existing_ids: list[str] = []
+            for member in members:
+                term = store.find_term_by_alias(member) or store.get_term_by_label(member)
+                if term is not None and term.id not in existing_ids:
+                    existing_ids.append(term.id)
 
-    store.record_merge_decision(
-        person_id,
-        json.loads(result.model_dump_json()) | {"labels": list(new_labels)},
-        created_at=at,
-    )
+            # The model was told to prefer an existing formulation, so the
+            # canonical label itself may already belong to some OTHER term
+            # (`term.label` is UNIQUE). Treat that as a merge with that term
+            # too, rather than letting the rename below raise.
+            collision = store.get_term_by_label(group.canonical_label)
+            if collision is not None and collision.id not in existing_ids:
+                existing_ids.append(collision.id)
+
+            if existing_ids:
+                # Every existing term the group touches folds onto one
+                # winner — the loser's edges and aliases move over, nothing
+                # is left stranded on an unreachable second node.
+                winner_id, *loser_ids = existing_ids
+                for loser_id in loser_ids:
+                    store.fold_term(loser_id, winner_id)
+                winner = store.get_term(winner_id)
+                if winner.label != group.canonical_label:
+                    store.rename_term(winner_id, group.canonical_label)
+            else:
+                winner_id = store.get_or_create_term(group.canonical_label, created_at=at).id
+
+            for member in members:
+                store.add_alias(winner_id, member)
+                resolved[member] = winner_id
+                claimed.add(member)
+
+        term_ids: list[str] = []
+        for label in new_labels:
+            term_id = resolved.get(label)
+            if term_id is None:
+                existing = store.find_term_by_alias(label)
+                term = existing or store.get_or_create_term(label, created_at=at)
+                term_id = term.id
+                resolved[label] = term_id
+            term_ids.append(term_id)
+
+        store.record_merge_decision(
+            person_id,
+            json.loads(result.model_dump_json()) | {"labels": list(new_labels)},
+            created_at=at,
+        )
     return term_ids

@@ -99,7 +99,23 @@ class OpenRouterEmbedder:
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"model": self.model, "input": texts},
         )
-        rows = sorted(payload["data"], key=lambda row: row.get("index", 0))
+        rows = payload["data"]
+        if len(rows) != len(texts):
+            raise RuntimeError(
+                f"OpenRouter embeddings: expected {len(texts)} rows for "
+                f"{len(texts)} inputs, got {len(rows)}"
+            )
+        # A row missing "index" (or two rows sharing one) would otherwise
+        # collide in the sort below and silently mis-pair a vector onto the
+        # wrong label. -1 is never a valid index, so it can never complete a
+        # 0..len(texts)-1 permutation — any row that is missing or duplicate
+        # is caught here instead of degrading preselection silently.
+        indices = sorted(row.get("index", -1) for row in rows)
+        if indices != list(range(len(texts))):
+            raise RuntimeError(
+                "OpenRouter embeddings: response rows are missing or duplicate an index"
+            )
+        rows = sorted(rows, key=lambda row: row["index"])
         return [_normalise(row["embedding"]) for row in rows]
 
 

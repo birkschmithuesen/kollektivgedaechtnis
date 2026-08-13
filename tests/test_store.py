@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 
 import pytest
@@ -166,6 +167,78 @@ def test_set_setting_default_seeds_once_and_never_clobbers(store):
     store.set_setting("min_mentions", "1")  # operator turns the dial down
     store.set_setting_default("min_mentions", "3")  # next restart
     assert store.get_setting("min_mentions", "1") == "1"
+
+
+def test_transaction_commits_all_writes_together_on_clean_exit(store):
+    with store.transaction():
+        store.create_person(started_at=1.0)
+        store.create_person(started_at=2.0)
+    assert len(store.list_persons()) == 2
+
+
+def test_transaction_rolls_back_all_writes_on_exception(store):
+    with pytest.raises(RuntimeError, match="boom"):
+        with store.transaction():
+            store.create_person(started_at=1.0)
+            raise RuntimeError("boom")
+    assert store.list_persons() == []
+
+
+def test_nested_transaction_does_not_commit_until_the_outer_block_exits(tmp_path):
+    # Finding 3 / task 12b: transaction() must be re-entrant so a helper method
+    # that opens its own transaction() still works correctly when called from
+    # inside a larger one — only the outermost block may commit. Observed from
+    # a second, independent connection: uncommitted writes on the store's
+    # connection are invisible there regardless of journal mode, so if the
+    # inner block committed early, this would see 1 row instead of 0.
+    path = tmp_path / "kg.db"
+    store = Store.open(path)
+    other_conn = sqlite3.connect(str(path))
+    try:
+        with store.transaction():
+            store.create_person(started_at=1.0)
+            with store.transaction():
+                store.create_person(started_at=2.0)
+            visible_mid_block = other_conn.execute("SELECT COUNT(*) FROM person").fetchone()[0]
+            assert visible_mid_block == 0
+        visible_after = other_conn.execute("SELECT COUNT(*) FROM person").fetchone()[0]
+        assert visible_after == 2
+    finally:
+        other_conn.close()
+        store.close()
+
+
+def test_fold_term_moves_edges_aliases_and_deletes_the_loser(store):
+    winner = store.get_or_create_term("Sonnenenergie am Haus", created_at=1.0)
+    loser = store.get_or_create_term("Solarzellen aufs Dach", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, winner.id, created_at=1.0)
+    store.add_edge(p2.id, loser.id, created_at=2.0)
+    store.save_positions({f"term:{loser.id}": (1.0, 2.0)})
+
+    store.fold_term(loser.id, winner.id)
+
+    assert store.get_term(loser.id) is None
+    assert [t.id for t in store.list_terms()] == [winner.id]
+    assert store.find_term_by_alias("Solarzellen aufs Dach").id == winner.id
+    assert store.mention_count(winner.id) == 2
+    assert f"term:{loser.id}" not in store.get_positions()
+
+
+def test_fold_term_does_not_duplicate_an_edge_shared_by_both_terms(store):
+    # A person who already has an edge to the winner must not end up with two
+    # edges after the fold (edge has UNIQUE(person_id, term_id)).
+    winner = store.get_or_create_term("Sonnenenergie am Haus", created_at=1.0)
+    loser = store.get_or_create_term("Solarzellen aufs Dach", created_at=1.0)
+    same_person = store.create_person(started_at=1.0)
+    store.add_edge(same_person.id, winner.id, created_at=1.0)
+    store.add_edge(same_person.id, loser.id, created_at=2.0)
+
+    store.fold_term(loser.id, winner.id)
+
+    assert len(store.list_edges()) == 1
+    assert store.mention_count(winner.id) == 1
 
 
 def test_state_survives_reopening(tmp_path):

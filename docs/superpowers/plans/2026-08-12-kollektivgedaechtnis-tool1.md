@@ -740,6 +740,7 @@ def connect(path: Path) -> sqlite3.Connection:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import threading
@@ -755,6 +756,7 @@ class Store:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
         self._id_lock = threading.Lock()
+        self._tx_depth = 0
 
     @classmethod
     def open(cls, path: Path) -> "Store":
@@ -762,6 +764,43 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """An all-or-nothing block spanning multiple `Store` calls.
+
+        Every public method below commits its own write individually via
+        `_commit`. Inside an open `transaction()`, those per-method commits
+        are suppressed; the block commits once, as a whole, on clean exit, or
+        rolls back everything on exception. Re-entrant: nesting a
+        `transaction()` inside an already-open one only tracks depth — the
+        outermost block is the one that actually commits or rolls back — so a
+        helper method that opens its own `transaction()` still works
+        correctly when called from within a caller's larger one.
+
+        This re-entrancy is deliberate groundwork for task 12b, which will
+        wrap every public `Store` method in a store-wide `threading.RLock`:
+        once that lands, `transaction()` will acquire that lock for the whole
+        block, and the public methods it calls inside will re-acquire the
+        same RLock without deadlocking.
+        """
+        self._tx_depth += 1
+        try:
+            yield
+        except Exception:
+            if self._tx_depth == 1:
+                self.conn.rollback()
+            raise
+        else:
+            if self._tx_depth == 1:
+                self.conn.commit()
+        finally:
+            self._tx_depth -= 1
+
+    def _commit(self) -> None:
+        """Commit now, unless an enclosing `transaction()` will do it instead."""
+        if self._tx_depth == 0:
+            self.conn.commit()
 
     # -- ids ---------------------------------------------------------------
 
@@ -798,7 +837,7 @@ class Store:
             "INSERT INTO person(id, started_at, photo_path, portrait_path) VALUES (?,?,?,?)",
             (person_id, started_at, photo_path, portrait_path),
         )
-        self.conn.commit()
+        self._commit()
         return self.get_person(person_id)
 
     def close_person(self, person_id: str, stopped_at: float, reason: str) -> None:
@@ -806,22 +845,22 @@ class Store:
             "UPDATE person SET stopped_at=?, stop_reason=?, status='closed' WHERE id=?",
             (stopped_at, reason, person_id),
         )
-        self.conn.commit()
+        self._commit()
 
     def set_person_transcript(self, person_id: str, text: str) -> None:
         self.conn.execute("UPDATE person SET transcript=? WHERE id=?", (text, person_id))
-        self.conn.commit()
+        self._commit()
 
     def set_person_status(self, person_id: str, status: str) -> None:
         self.conn.execute("UPDATE person SET status=? WHERE id=?", (status, person_id))
-        self.conn.commit()
+        self._commit()
 
     def set_person_portrait(self, person_id: str, photo_path: str, portrait_path: str) -> None:
         self.conn.execute(
             "UPDATE person SET photo_path=?, portrait_path=? WHERE id=?",
             (photo_path, portrait_path, person_id),
         )
-        self.conn.commit()
+        self._commit()
 
     def get_person(self, person_id: str) -> Person | None:
         row = self.conn.execute("SELECT * FROM person WHERE id=?", (person_id,)).fetchone()
@@ -852,7 +891,7 @@ class Store:
             "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
             (label, term_id),
         )
-        self.conn.commit()
+        self._commit()
         return self.get_term(term_id)
 
     def get_term(self, term_id: str) -> Term | None:
@@ -874,14 +913,53 @@ class Store:
                 "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
                 (surface, term_id),
             )
-        self.conn.commit()
+        self._commit()
 
     def add_alias(self, term_id: str, surface: str) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
             (surface, term_id),
         )
-        self.conn.commit()
+        self._commit()
+
+    def fold_term(self, loser_id: str, winner_id: str) -> None:
+        """Merge `loser_id` into `winner_id` (spec 6.2, 7): a merge is the
+        finding that more people meant the same thing, so the winner must
+        come out at least as strong as either term was alone — every alias
+        and edge the loser carried moves onto the winner, mention counts
+        combine, and the loser term itself is deleted so it cannot linger as
+        an unreachable second node on the wall.
+
+        Edges are folded through `add_edge`, which is idempotent per
+        (person_id, term_id): a person who mentioned both terms ends up with
+        exactly one edge to the winner, never two (edge has
+        UNIQUE(person_id, term_id)).
+        """
+        if loser_id == winner_id:
+            return
+        loser = self.get_term(loser_id)
+        if loser is None:
+            return
+        with self.transaction():
+            # Point every alias the loser owned at the winner instead. The
+            # loser's own label must stay reachable too — a decision, once
+            # made, is never re-derived.
+            self.conn.execute(
+                "UPDATE term_alias SET term_id=? WHERE term_id=?", (winner_id, loser_id)
+            )
+            self.conn.execute(
+                "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
+                (loser.label, winner_id),
+            )
+            loser_edges = self.conn.execute(
+                "SELECT person_id, created_at FROM edge WHERE term_id=?", (loser_id,)
+            ).fetchall()
+            for row in loser_edges:
+                self.add_edge(row["person_id"], winner_id, created_at=row["created_at"])
+            self.conn.execute("DELETE FROM edge WHERE term_id=?", (loser_id,))
+            # The loser's position row would otherwise point at a deleted node.
+            self.conn.execute("DELETE FROM position WHERE node_id=?", (f"term:{loser_id}",))
+            self.conn.execute("DELETE FROM term WHERE id=?", (loser_id,))
 
     def find_term_by_alias(self, surface: str) -> Term | None:
         row = self.conn.execute(
@@ -907,7 +985,7 @@ class Store:
             "INSERT INTO edge(id, person_id, term_id, created_at) VALUES (?,?,?,?)",
             (edge_id, person_id, term_id, created_at),
         )
-        self.conn.commit()
+        self._commit()
         row = self.conn.execute("SELECT * FROM edge WHERE id=?", (edge_id,)).fetchone()
         return _edge(row)
 
@@ -927,7 +1005,7 @@ class Store:
             "INSERT INTO quote(id, person_id, text, created_at) VALUES (?,?,?,?)",
             (quote_id, person_id, text, created_at),
         )
-        self.conn.commit()
+        self._commit()
         row = self.conn.execute("SELECT * FROM quote WHERE id=?", (quote_id,)).fetchone()
         return Quote(row["id"], row["person_id"], row["text"], row["created_at"])
 
@@ -942,7 +1020,7 @@ class Store:
         if kind not in ("person", "term") or not ident:
             raise ValueError(f"unknown node id: {node_id!r}")
         self.conn.execute(f"UPDATE {kind} SET hidden=? WHERE id=?", (1 if hidden else 0, ident))
-        self.conn.commit()
+        self._commit()
 
     def save_positions(self, positions: dict[str, tuple[float, float]]) -> None:
         self.conn.executemany(
@@ -950,7 +1028,7 @@ class Store:
             "ON CONFLICT(node_id) DO UPDATE SET x=excluded.x, y=excluded.y",
             [(node_id, float(x), float(y)) for node_id, (x, y) in positions.items()],
         )
-        self.conn.commit()
+        self._commit()
 
     def get_positions(self) -> dict[str, tuple[float, float]]:
         rows = self.conn.execute("SELECT node_id, x, y FROM position").fetchall()
@@ -961,7 +1039,7 @@ class Store:
             "INSERT INTO merge_decision(id, person_id, payload, created_at) VALUES (?,?,?,?)",
             (self._next_id("merge"), person_id, json.dumps(payload, ensure_ascii=False), created_at),
         )
-        self.conn.commit()
+        self._commit()
 
     def list_merge_decisions(self) -> list[dict]:
         rows = self.conn.execute(
@@ -987,7 +1065,7 @@ class Store:
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, str(value)),
         )
-        self.conn.commit()
+        self._commit()
 
     def set_setting_default(self, key: str, value: str) -> None:
         """Seed a setting only if it has never been set.
@@ -998,7 +1076,7 @@ class Store:
         self.conn.execute(
             "INSERT OR IGNORE INTO setting(key, value) VALUES (?,?)", (key, str(value))
         )
-        self.conn.commit()
+        self._commit()
 
 
 def _person(row: sqlite3.Row) -> Person:
@@ -3392,42 +3470,73 @@ def decide_merges(
 def apply_merges(
     store, person_id: str, new_labels: Sequence[str], result: MergeResult, at: float
 ) -> list[str]:
-    """Persist the decision and return one term id per input label, in order."""
+    """Persist the decision and return one term id per input label, in order.
+
+    Runs as a single `store.transaction()`: a crash partway through must
+    leave no rename, fold or alias committed without the matching decision
+    log, or the graph state could never be reproduced or undone.
+    """
     resolved: dict[str, str] = {}
+    claimed: set[str] = set()  # members an earlier group in this call already used
 
-    for group in result.groups:
-        members = [m for m in group.members if m]
-        if not members:
-            continue
-        term = None
-        for member in members:
-            term = store.find_term_by_alias(member) or store.get_term_by_label(member)
-            if term is not None:
-                break
-        if term is None:
-            term = store.get_or_create_term(group.canonical_label, created_at=at)
-        elif term.label != group.canonical_label:
-            store.rename_term(term.id, group.canonical_label)
-        for member in members:
-            store.add_alias(term.id, member)
-        for member in members:
-            resolved[member] = term.id
+    with store.transaction():
+        for group in result.groups:
+            members = list(dict.fromkeys(m for m in group.members if m))
+            # Group 1's aliases are visible to group 2 within the same call.
+            # A member an earlier group already claimed must not silently
+            # drag this group's *other* members along with it — drop it here
+            # and let it resolve on its own (standalone) below.
+            members = [m for m in members if m not in claimed]
+            if len(members) < 2:
+                continue
 
-    term_ids: list[str] = []
-    for label in new_labels:
-        term_id = resolved.get(label)
-        if term_id is None:
-            existing = store.find_term_by_alias(label)
-            term = existing or store.get_or_create_term(label, created_at=at)
-            term_id = term.id
-            resolved[label] = term_id
-        term_ids.append(term_id)
+            existing_ids: list[str] = []
+            for member in members:
+                term = store.find_term_by_alias(member) or store.get_term_by_label(member)
+                if term is not None and term.id not in existing_ids:
+                    existing_ids.append(term.id)
 
-    store.record_merge_decision(
-        person_id,
-        json.loads(result.model_dump_json()) | {"labels": list(new_labels)},
-        created_at=at,
-    )
+            # The model was told to prefer an existing formulation, so the
+            # canonical label itself may already belong to some OTHER term
+            # (`term.label` is UNIQUE). Treat that as a merge with that term
+            # too, rather than letting the rename below raise.
+            collision = store.get_term_by_label(group.canonical_label)
+            if collision is not None and collision.id not in existing_ids:
+                existing_ids.append(collision.id)
+
+            if existing_ids:
+                # Every existing term the group touches folds onto one
+                # winner — the loser's edges and aliases move over, nothing
+                # is left stranded on an unreachable second node.
+                winner_id, *loser_ids = existing_ids
+                for loser_id in loser_ids:
+                    store.fold_term(loser_id, winner_id)
+                winner = store.get_term(winner_id)
+                if winner.label != group.canonical_label:
+                    store.rename_term(winner_id, group.canonical_label)
+            else:
+                winner_id = store.get_or_create_term(group.canonical_label, created_at=at).id
+
+            for member in members:
+                store.add_alias(winner_id, member)
+                resolved[member] = winner_id
+                claimed.add(member)
+
+        term_ids: list[str] = []
+        for label in new_labels:
+            term_id = resolved.get(label)
+            if term_id is None:
+                existing = store.find_term_by_alias(label)
+                term = existing or store.get_or_create_term(label, created_at=at)
+                term_id = term.id
+                resolved[label] = term_id
+            term_ids.append(term_id)
+
+        store.record_merge_decision(
+            person_id,
+            json.loads(result.model_dump_json()) | {"labels": list(new_labels)},
+            created_at=at,
+        )
     return term_ids
 ```
 
