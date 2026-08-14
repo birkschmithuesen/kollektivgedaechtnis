@@ -16,8 +16,6 @@ stt_url = "http://127.0.0.1:5051"
 
 # Safety net so a forgotten stop cannot swallow the next interview (spec 5).
 interview_timeout_s = 900
-# Extra transcript beyond the stop marker handed to the LLM (spec 6.1).
-tail_seconds = 120
 
 stop_phrases = [
     "Interview beendet",

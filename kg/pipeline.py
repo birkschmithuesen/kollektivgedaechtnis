@@ -30,11 +30,15 @@ def process_interview(
     person_id: str,
     started_at: float,
     stopped_at: float,
+    *,
+    cut_end: float | None = None,
 ) -> ProcessResult:
     store.set_person_status(person_id, "processing")
 
-    # 1. Cut, with a generous tail beyond the stop marker (spec 6.1).
-    raw = transcript_log.text_between(started_at, stopped_at + cfg.tail_seconds)
+    # 1. Cut between the markers. Only the Telegram-text stop path extends the
+    # end past stopped_at, to the final that landed inside its settle window
+    # (kg.core.settle_cut_end); every other path leaves cut_end at stopped_at.
+    raw = transcript_log.text_between(started_at, stopped_at if cut_end is None else cut_end)
     text = strip_stop_phrases(raw, cfg.stop_phrases)
 
     if not text.strip():

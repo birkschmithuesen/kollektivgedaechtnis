@@ -47,7 +47,6 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
     assert cfg.llm_model == "claude-opus-5"
     assert cfg.llm_effort == "high"
     assert cfg.default_min_mentions == 1
-    assert cfg.tail_seconds == 120
     assert cfg.merge_neighbours == 5
     assert cfg.anthropic_api_key is None
     assert cfg.openrouter_api_key is None

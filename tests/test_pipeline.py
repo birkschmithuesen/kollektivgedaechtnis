@@ -14,7 +14,7 @@ from kg.transcript import TranscriptionEvent, TranscriptLog
 
 @pytest.fixture()
 def env(tmp_path):
-    cfg = Config(data_dir=tmp_path / "state", terms_per_interview=3, tail_seconds=60)
+    cfg = Config(data_dir=tmp_path / "state", terms_per_interview=3)
     store = Store.open(cfg.db_path)
     log = TranscriptLog(cfg.transcript_log_path)
     yield cfg, store, log
@@ -94,9 +94,12 @@ def test_the_stop_command_is_stripped_before_the_llm_sees_the_text(env):
     assert "Holzbau ist gut." in llm.prompts[0]
 
 
-def test_the_tail_is_handed_over_but_cut_at_the_detected_end(env):
+def test_the_settled_cut_end_is_handed_to_the_llm_but_transcript_stops_at_the_detected_end(env):
     cfg, store, log = env
-    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 175.0)])
+    # A final at 150.9 lands just inside a plausible 3s settle window after a
+    # stop marker at 150.0 (kg.core.settle_cut_end handles the actual wait;
+    # here the caller just passes the resulting cut_end straight through).
+    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 150.9)])
     person = store.create_person(started_at=100.0)
     llm = ScriptedLLM(
         [
@@ -105,12 +108,28 @@ def test_the_tail_is_handed_over_but_cut_at_the_detected_end(env):
         ]
     )
 
-    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+    process_interview(
+        store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0, cut_end=150.9
+    )
 
-    # Tail was offered to the model...
+    # The settled final was offered to the model...
     assert "Wo ist der Kaffee?" in llm.prompts[0]
     # ...but the stored transcript stops where the interview really ended.
     assert store.get_person(person.id).transcript == "Bodenpreise sind das Problem."
+
+
+def test_without_cut_end_the_cut_stops_at_stopped_at(env):
+    cfg, store, log = env
+    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 150.9)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [ExtractionResult(interview_end_index=9999, terms=[], quotes=[]), MergeResult(groups=[])]
+    )
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert "Bodenpreise sind das Problem." in llm.prompts[0]
+    assert "Wo ist der Kaffee?" not in llm.prompts[0]
 
 
 def test_a_merge_maps_a_new_label_onto_an_existing_node(env):

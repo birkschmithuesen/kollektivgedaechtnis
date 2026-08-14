@@ -28,7 +28,6 @@ class Config:
     stt_url: str = "http://127.0.0.1:5051"
     telegram_chat_id: int | None = None
     interview_timeout_s: int = 900
-    tail_seconds: int = 120
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
     terms_per_interview: int = 5
     merge_neighbours: int = 5
@@ -85,7 +84,6 @@ _FIELD_NAMES = {
     "stt_url",
     "telegram_chat_id",
     "interview_timeout_s",
-    "tail_seconds",
     "stop_phrases",
     "terms_per_interview",
     "merge_neighbours",
