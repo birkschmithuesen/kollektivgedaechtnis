@@ -70,6 +70,7 @@ sim/generate_interviews.py     Task 18  synthetic corpus generator
 sim/data/interviews/*.json     Task 18  committed fixtures
 sim/data/expectations.yaml     Task 18  documented expected merges
 sim/replay.py                  Task 19  time-lapse feeder + score
+sim/seed_graph.py              Task 20  Store-seeded realistic graph (no simulation)
 sim/prerender.py               Task 20  headless PNG series A–D
 docs/stt-contract.md           Task 3   verified event contract
 docs/operations.md             Task 21  on-site runbook
@@ -7317,17 +7318,28 @@ git commit -m "feat: time-lapse replay harness with expectation scoring"
 ### Task 20: Pre-render comparison series (A–D)
 
 **Files:**
-- Create: `sim/prerender.py`
-- Test: `tests/test_prerender.py`
+- Create: `sim/__init__.py`, `sim/seed_graph.py`, `sim/prerender.py`
+- Test: `tests/test_seed_graph.py`, `tests/test_prerender.py`
+
+**REPRIORITISED AND DECOUPLED — decision by Birk, 2026-08-14 (binding).** Task 20 runs BEFORE Tasks
+18 and 19, and must NOT depend on the simulation. The graph state is seeded directly through the
+Store: ~50 person nodes plus terms, realistic long German term labels, a realistic edge
+distribution, portraits substituted by placeholder images. Rationale: the point of the series is
+legibility, stroke weight and black level on a whiteboard, which needs realistic **density** and
+**label lengths** — not real LLM extraction. Spec §10.4 amended to match.
 
 **Interfaces:**
-- Consumes: `kg.server.create_app` (Task 12), the themes (Task 14, 16), a simulation database (Task 19).
+- Consumes: `kg.server.create_app` (Task 12), the themes (Task 14, 16), `kg.store.Store` and `kg.photos.make_portrait` (Tasks 2, 6). NOT the simulation.
 - Produces:
+  - `sim.seed_graph.TERM_LABELS` — 100 realistic long German labels; list order IS the Zipf popularity ranking.
+  - `sim.seed_graph.seed_graph(data_dir, persons=50, seed=20260814) -> Path` — deterministic; returns `Config(data_dir).db_path`.
   - `sim.prerender.serve(store, cfg) -> (base_url, shutdown)` — starts the real app on an ephemeral port in a background thread.
-  - `sim.prerender.render_series(db_path, out_dir, themes=("a", "b", "c"), include_testpattern=True) -> list[Path]`
-  - CLI: `uv run python -m sim.prerender --db out/sim.db --out out/prerender`
+  - `sim.prerender.render_series(db_path, out_dir, themes=("a", "b", "c"), include_testpattern=True) -> list[Path]` — a pure renderer over an existing db.
+  - CLI: `uv run python -m sim.prerender --db out/prerender-state/kg.db --out out/prerender --persons 50` (seeds the db if it does not exist).
 
-The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4) and are fed by real graph states from the simulation, not fixtures. Variants: **A** dark reference, **B** inverted, **C** heavier strokes and larger minimum font, **D** the test pattern.
+The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4). Variants: **A** dark reference, **B** inverted, **C** heavier strokes and larger minimum font, **D** the test pattern.
+
+The db must sit at `<data_dir>/kg.db`: `render_series` derives `Config(data_dir=db_path.parent)` and the app mounts `cfg.portrait_dir` from it, so a db elsewhere silently breaks the portraits. The `wait_for_function` timeouts are 60000 ms, not the 20000 ms a toy graph needed. `sim/prerender.py` reuses `tests/conftest.py`'s cached-chromium `executable_path` fallback — this host cannot `playwright install`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -7494,8 +7506,7 @@ Expected: PASS (2 tests)
 - [ ] **Step 5: Produce the real comparison series and hand it to Birk**
 
 ```bash
-uv run python -m sim.replay --db out/sim.db          # if not already run
-uv run python -m sim.prerender --db out/sim.db --out out/prerender
+uv run python -m sim.prerender --db out/prerender-state/kg.db --out out/prerender --persons 50
 ```
 
 Show `out/prerender/{a,b,c,d}.png` to Birk and ask which variant the whiteboard gets. The named outcomes to decide between (spec §10.3): (1) everything is displayable at once, (2) the font would have to become too small → zoom is needed, (3) an automatic pan is needed once the graph exceeds the frame. The camera already supports all three; this is a setting, not a rebuild.
@@ -7503,8 +7514,8 @@ Show `out/prerender/{a,b,c,d}.png` to Birk and ask which variant the whiteboard 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add sim/prerender.py tests/test_prerender.py
-git commit -m "feat: headless 1920x1080 pre-render comparison series"
+git add sim/ tests/test_seed_graph.py tests/test_prerender.py .gitignore
+git commit -m "feat: store-seeded pre-render comparison series (A-D) at 1920x1080"
 ```
 
 ---

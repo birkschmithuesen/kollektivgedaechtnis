@@ -226,7 +226,10 @@ def seed_graph(data_dir: Path, persons: int = 50, seed: int = 20260814) -> Path:
                     photo_path=str(src),
                     portrait_path=str(dest),
                 )
-                store.close_person(person.id, stopped_at=stopped_at, reason="stop_phrase")
+                # "spoken" is a real kg.session.Transition reason; the state
+                # machine emits only text/spoken/timeout/new_photo, so seeded
+                # rows must not invent a fifth value.
+                store.close_person(person.id, stopped_at=stopped_at, reason="spoken")
                 store.set_person_status(person.id, "done")
 
                 for label in _draw_terms_for_person(rng, weights):
