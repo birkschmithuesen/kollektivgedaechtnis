@@ -191,6 +191,20 @@ and the control commands.**
 4. **Processing** — the Core cuts the transcript between the markers and runs
    extraction (§6).
 
+**Settle delay — only on the text-message path** (revised 2026-08-14, Birk).
+The only real problem here is STT *delivery* latency, not doubt about where the
+interview ended:
+- **spoken stop** → process immediately. The command arrived *as* a transcript
+  final, so by construction every earlier utterance has already been delivered
+  (finals are ordered). Waiting gains nothing.
+- **timeout** → process immediately. 15 minutes have passed; nothing is in
+  flight.
+- **text message** → wait **up to 3 s**, but proceed as soon as a final arrives
+  whose timestamp is after the stop marker (typically ~1 s). This is the one
+  path where a human keypress races an in-flight utterance: the last spoken
+  sentence may still be inside ElevenLabs' server VAD when the marker is set.
+  The cut end moves to that final's timestamp. Not a fixed sleep.
+
 ### Spoken stop command
 Cheap because the transcript is already flowing: a string match on text we
 already receive. No wake-word engine, no extra model, no extra latency or cost.
@@ -231,8 +245,12 @@ interview is **explicitly out of scope, kept for a later iteration** (Birk).
 
 ### 6.1 Pipeline per interview
 
-1. **Cut** — all `final` events between start and stop marker, plus a generous
-   tail beyond the stop marker.
+1. **Cut** — all `final` events between the start and stop markers. On the
+   text-message stop path only, the end extends to the final that landed inside
+   the ≤3 s settle window (§5). There is **no configurable tail** beyond that:
+   a tail past a timeout only moves an already-arbitrary cut later — if 15
+   minutes is too short, raise `interview_timeout_s` instead
+   (revised 2026-08-14, Birk).
 2. **Find the end** — the LLM is explicitly tasked with locating the actual end
    of the interview inside the text (Birk's requirement). This is what makes a
    forgotten stop harmless.
@@ -387,8 +405,15 @@ requires as a fallback. The fallback is a mode, not an extra.
 
 ### 10.4 Pre-render (independent of everything else, §7 of the briefing)
 Headless PNGs at exactly 1920×1080, **with the same renderer that later runs
-live** — otherwise a look is tested that must be rebuilt afterwards. Fed by
-real graph states from the simulation, not fixtures.
+live** — otherwise a look is tested that must be rebuilt afterwards.
+
+**Decoupled from the simulation (revised 2026-08-14, Birk).** The series is
+needed before the simulation exists. What it measures is legibility, stroke
+weight and black level on a whiteboard, and that needs realistic *density* and
+realistic *label lengths* — not real LLM extraction. The graph state is
+therefore seeded directly through the Store (~50 person nodes plus terms, long
+German term labels, a realistic edge distribution, placeholder portraits). The
+renderer is still the live one; only the data source changed.
 
 Comparison series (the projection is onto a **whiteboard**, where black is
 whatever ambient light sits on the surface — a dark-mode design collapses most

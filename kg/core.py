@@ -66,6 +66,7 @@ class Core:
         self.llm = llm
         self.embedder = embedder
         self.processor = processor
+        # Code-level knobs and test seams, deliberately NOT config-file keys.
         self.settle_timeout_s = settle_timeout_s
         self.settle_poll_s = settle_poll_s
         # A crash can leave a person "open" in the store with nothing in

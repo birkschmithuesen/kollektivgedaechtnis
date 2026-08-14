@@ -207,7 +207,6 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
     assert cfg.llm_model == "claude-opus-5"
     assert cfg.llm_effort == "high"
     assert cfg.default_min_mentions == 1
-    assert cfg.tail_seconds == 120
     assert cfg.merge_neighbours == 5
     assert cfg.anthropic_api_key is None
     assert cfg.openrouter_api_key is None
@@ -275,7 +274,6 @@ class Config:
     stt_url: str = "http://127.0.0.1:5051"
     telegram_chat_id: int | None = None
     interview_timeout_s: int = 900
-    tail_seconds: int = 120
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
     terms_per_interview: int = 5
     merge_neighbours: int = 5
@@ -332,7 +330,6 @@ _FIELD_NAMES = {
     "stt_url",
     "telegram_chat_id",
     "interview_timeout_s",
-    "tail_seconds",
     "stop_phrases",
     "terms_per_interview",
     "merge_neighbours",
@@ -394,8 +391,6 @@ stt_url = "http://127.0.0.1:5051"
 
 # Safety net so a forgotten stop cannot swallow the next interview (spec 5).
 interview_timeout_s = 900
-# Extra transcript beyond the stop marker handed to the LLM (spec 6.1).
-tail_seconds = 120
 
 stop_phrases = [
     "Interview beendet",
@@ -3906,9 +3901,9 @@ git commit -m "feat: complete graph.json export (atomic write)"
 - Consumes: everything from Tasks 2, 3, 4, 8, 9, 10.
 - Produces:
   - `kg.pipeline.ProcessResult(person_id: str, status: str, term_ids: list[str], transcript: str)` — `status` is `"done"` or `"failed"`.
-  - `kg.pipeline.process_interview(store, cfg, llm, embedder, transcript_log, person_id, started_at, stopped_at) -> ProcessResult`
+  - `kg.pipeline.process_interview(store, cfg, llm, embedder, transcript_log, person_id, started_at, stopped_at, *, cut_end: float | None = None) -> ProcessResult`
 
-Order (spec §6.1): cut with a generous tail → strip the spoken stop command → one extraction call (end detection + terms + quotes) → truncate at the detected end → resolve already-decided labels → one merge call for the rest → persist person↔term edges and quotes → re-export `graph.json`. An LLM failure marks the interview `failed` and leaves the person node standing; it must never crash the process (spec §13).
+Order (spec §6.1): cut between the markers (`cut_end` defaults to `stopped_at`; only the Telegram-text stop path passes a later one — see Task 17's settle window) → strip the spoken stop command → one extraction call (end detection + terms + quotes) → truncate at the detected end → resolve already-decided labels → one merge call for the rest → persist person↔term edges and quotes → re-export `graph.json`. An LLM failure marks the interview `failed` and leaves the person node standing; it must never crash the process (spec §13).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3931,7 +3926,7 @@ from kg.transcript import TranscriptionEvent, TranscriptLog
 
 @pytest.fixture()
 def env(tmp_path):
-    cfg = Config(data_dir=tmp_path / "state", terms_per_interview=3, tail_seconds=60)
+    cfg = Config(data_dir=tmp_path / "state", terms_per_interview=3)
     store = Store.open(cfg.db_path)
     log = TranscriptLog(cfg.transcript_log_path)
     yield cfg, store, log
@@ -4011,9 +4006,12 @@ def test_the_stop_command_is_stripped_before_the_llm_sees_the_text(env):
     assert "Holzbau ist gut." in llm.prompts[0]
 
 
-def test_the_tail_is_handed_over_but_cut_at_the_detected_end(env):
+def test_the_settled_cut_end_is_handed_to_the_llm_but_transcript_stops_at_the_detected_end(env):
     cfg, store, log = env
-    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 175.0)])
+    # A final at 150.9 lands just inside a plausible 3s settle window after a
+    # stop marker at 150.0 (kg.core.settle_cut_end handles the actual wait;
+    # here the caller just passes the resulting cut_end straight through).
+    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 150.9)])
     person = store.create_person(started_at=100.0)
     llm = ScriptedLLM(
         [
@@ -4022,12 +4020,28 @@ def test_the_tail_is_handed_over_but_cut_at_the_detected_end(env):
         ]
     )
 
-    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+    process_interview(
+        store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0, cut_end=150.9
+    )
 
-    # Tail was offered to the model...
+    # The settled final was offered to the model...
     assert "Wo ist der Kaffee?" in llm.prompts[0]
     # ...but the stored transcript stops where the interview really ended.
     assert store.get_person(person.id).transcript == "Bodenpreise sind das Problem."
+
+
+def test_without_cut_end_the_cut_stops_at_stopped_at(env):
+    cfg, store, log = env
+    fill_log(log, [("Bodenpreise sind das Problem.", 105.0), ("Wo ist der Kaffee?", 150.9)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [ExtractionResult(interview_end_index=9999, terms=[], quotes=[]), MergeResult(groups=[])]
+    )
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert "Bodenpreise sind das Problem." in llm.prompts[0]
+    assert "Wo ist der Kaffee?" not in llm.prompts[0]
 
 
 def test_a_merge_maps_a_new_label_onto_an_existing_node(env):
@@ -4156,11 +4170,15 @@ def process_interview(
     person_id: str,
     started_at: float,
     stopped_at: float,
+    *,
+    cut_end: float | None = None,
 ) -> ProcessResult:
     store.set_person_status(person_id, "processing")
 
-    # 1. Cut, with a generous tail beyond the stop marker (spec 6.1).
-    raw = transcript_log.text_between(started_at, stopped_at + cfg.tail_seconds)
+    # 1. Cut between the markers. Only the Telegram-text stop path extends the
+    # end past stopped_at, to the final that landed inside its settle window
+    # (kg.core.settle_cut_end); every other path leaves cut_end at stopped_at.
+    raw = transcript_log.text_between(started_at, stopped_at if cut_end is None else cut_end)
     text = strip_stop_phrases(raw, cfg.stop_phrases)
 
     if not text.strip():
@@ -6069,7 +6087,8 @@ git commit -m "feat: whiteboard legibility test pattern (series D)"
 **Interfaces:**
 - Consumes: Tasks 2, 3, 5, 8, 9, 11, 12.
 - Produces:
-  - `kg.core.Core(cfg, store, bus, transcript_log, llm, embedder, processor=process_interview)` with the sync callbacks `on_photo(photo_path, portrait_path, at)`, `on_text(text, at)`, `on_final(event)`, `on_partial(event)`, `on_stt_state(connected)`, the coroutine `run_tick_loop(interval=5.0)`, and `async def drain()` (tests + shutdown: process the queue and await running pipeline tasks).
+  - `kg.core.settle_cut_end(transcript_log, stopped_at, timeout=SETTLE_TIMEOUT_S, poll_interval=SETTLE_POLL_S) -> float` — the ≤3 s Telegram-text-only settle window (spec §5).
+  - `kg.core.Core(cfg, store, bus, transcript_log, llm, embedder, processor=process_interview, settle_timeout_s=SETTLE_TIMEOUT_S, settle_poll_s=SETTLE_POLL_S)` with the sync callbacks `on_photo(photo_path, portrait_path, at)`, `on_text(text, at)`, `on_final(event)`, `on_partial(event)`, `on_stt_state(connected)`, the coroutine `run_tick_loop(interval=5.0)`, and `async def drain()` (tests + shutdown: process the queue and await running pipeline tasks).
   - `python -m kg [--config config.toml] [--no-telegram] [--no-stt]`
 
 The person node with the portrait appears **immediately** on the photo trigger; terms grow only after the stop (spec §6). The pipeline therefore runs as a background task so the next photo is never blocked by a running LLM call.
@@ -6300,6 +6319,39 @@ from kg.session import SessionTracker
 
 log = logging.getLogger(__name__)
 
+SETTLE_TIMEOUT_S = 3.0
+SETTLE_POLL_S = 0.1
+
+
+async def settle_cut_end(
+    transcript_log,
+    stopped_at: float,
+    timeout: float = SETTLE_TIMEOUT_S,
+    poll_interval: float = SETTLE_POLL_S,
+) -> float:
+    """Wait briefly for an in-flight final on the Telegram-text stop path.
+
+    This exists ONLY for the Telegram-text race: a human keypress can land
+    while the visitor's last sentence is still inside ElevenLabs' server VAD,
+    so its final publishes slightly after the stop marker. The spoken and
+    timeout paths deliberately never call this — a spoken stop arrives as a
+    final itself (finals are ordered, so nothing earlier can still be in
+    flight), and after a 15-minute timeout nothing is in flight either.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        finals = [
+            e
+            for e in transcript_log.read_range(stopped_at, float("inf"))
+            if e.timestamp > stopped_at
+        ]
+        if finals:
+            return max(e.timestamp for e in finals)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return stopped_at
+        await asyncio.sleep(min(poll_interval, remaining))
+
 
 class Core:
     def __init__(
@@ -6311,6 +6363,8 @@ class Core:
         llm,
         embedder,
         processor=process_interview,
+        settle_timeout_s: float = SETTLE_TIMEOUT_S,
+        settle_poll_s: float = SETTLE_POLL_S,
     ) -> None:
         self.cfg = cfg
         self.store = store
@@ -6319,6 +6373,9 @@ class Core:
         self.llm = llm
         self.embedder = embedder
         self.processor = processor
+        # Code-level knobs and test seams, deliberately NOT config-file keys.
+        self.settle_timeout_s = settle_timeout_s
+        self.settle_poll_s = settle_poll_s
         # A crash can leave a person "open" in the store with nothing in
         # memory to say so. Resuming from the store here, instead of always
         # starting empty, is what keeps a restart a resume rather than a
@@ -6412,11 +6469,23 @@ class Core:
             return
         self.store.close_person(person.id, stopped_at=transition.at, reason=transition.reason)
         broadcast_state(self.store, self.bus)
-        task = asyncio.create_task(self._process(person.id, person.started_at, transition.at))
+        task = asyncio.create_task(
+            self._process(person.id, person.started_at, transition.at, transition.reason)
+        )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _process(self, person_id: str, started_at: float, stopped_at: float) -> None:
+    async def _process(
+        self, person_id: str, started_at: float, stopped_at: float, reason: str
+    ) -> None:
+        cut_end = stopped_at
+        if reason == "text":
+            # Only a Telegram text stop races an in-flight utterance still
+            # inside ElevenLabs' server VAD; the spoken and timeout paths have
+            # nothing in flight, so they skip the wait entirely.
+            cut_end = await settle_cut_end(
+                self.transcript_log, stopped_at, self.settle_timeout_s, self.settle_poll_s
+            )
         try:
             await asyncio.to_thread(
                 self.processor,
@@ -6428,6 +6497,7 @@ class Core:
                 person_id,
                 started_at,
                 stopped_at,
+                cut_end=cut_end,
             )
         except Exception as exc:  # already handled inside the pipeline; belt and braces
             log.error("pipeline crashed for %s: %s", person_id, exc)
