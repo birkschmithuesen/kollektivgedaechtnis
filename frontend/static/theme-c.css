@@ -1,17 +1,30 @@
+/* C: much larger type, heaviest strokes. 44px labels (2x A), a 6px outline
+   under them, and rings/dots/edges heavy enough to still read as a net at
+   that type size. Same dark ground and same palette as A and B. This is the
+   upper end of the legibility ladder: whatever cannot be read here cannot be
+   read at all at 50 persons in one frame, and the answer is the camera
+   (spec 10.3), not more type.
+
+   --person-size shrunk 168 -> 100 (Birk's 3rd review, same date), keeping
+   the A/B/C ladder proportional: the fill is now a flat, information-free
+   placeholder, so it no longer needs to dominate the frame — --ring-width
+   stays at its full weight and does that job instead. */
 :root {
   --bg: #101014;
-  --person-size: 112;
+  --person-size: 100;
   --person-fill: #23232a;
-  --ring-color: #E0B531;
-  --ring-width: 9;
-  --term-dot: 20;
-  --term-dot-color: #FFFFFF;
-  --label-color: #FFFFFF;
+  --ring-color: #C9A227;
+  --ring-width: 10;
+  --term-dot: 28;
+  --term-dot-color: #EDE7D8;
+  --label-color: #F5F1E6;
   --label-font: Georgia, "Times New Roman", serif;
-  --label-size: 30;
-  --label-outline-width: 5;
+  --label-size: 44;
+  --label-outline-width: 6;
   --label-outline-color: #101014;
-  --edge-color: #C8C3B4;
-  --edge-width: 4;
-  --edge-opacity: 1;
+  --label-max-width: 440px;
+  --label-margin-y: 11;
+  --edge-color: #8A8578;
+  --edge-width: 5;
+  --edge-opacity: 0.85;
 }

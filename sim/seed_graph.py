@@ -9,11 +9,10 @@ exist yet). This module writes state directly through `kg.store.Store` +
 from __future__ import annotations
 
 import argparse
-import colorsys
 import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from kg.config import Config
 from kg.photos import make_portrait
@@ -165,33 +164,30 @@ def _draw_terms_for_person(rng: random.Random, weights: list[float]) -> list[str
     return chosen
 
 
-def _placeholder_photo(rng: random.Random, dest: Path) -> Path:
-    """A deterministic, distinguishable non-uniform placeholder — not a real photo.
+_PLACEHOLDER_FILL = (0x3A, 0x3A, 0x42)  # muted warm-neutral slate (Birk's 3rd review)
 
-    Phone-photo aspect (900x1200 portrait), a soft vertical gradient in a
-    per-person hue, and a lighter ellipse roughly where a face would sit so
-    the crop-and-mask in `make_portrait` has something non-uniform to show.
+
+def _placeholder_photo(rng: random.Random, dest: Path) -> Path:
+    """A flat, uniform placeholder — deliberately NOT information.
+
+    Birk's third pre-render review (2026-08-14): the previous per-person hue
+    gradient plus face ellipse read as data, but the colours meant nothing —
+    misleading, and fighting the term text. Every person now gets the exact
+    same muted, desaturated `_PLACEHOLDER_FILL`: visible against the #101014
+    ground, sitting inside the golden ring (the ring, not the fill, is the
+    concept's carrier). Real photographs will bring their own structure once
+    they arrive through this same `make_portrait` path — the placeholder must
+    not pretend to have any.
     """
     width, height = 900, 1200
-    hue = rng.random()
-    image = Image.new("RGB", (width, height))
-    pixels = image.load()
-    for y in range(height):
-        # Gradient darkens towards the bottom of the frame.
-        value = 0.85 - 0.45 * (y / height)
-        r, g, b = colorsys.hsv_to_rgb(hue, 0.45, value)
-        row_rgb = (int(r * 255), int(g * 255), int(b * 255))
-        for x in range(width):
-            pixels[x, y] = row_rgb
-
-    face = Image.new("L", (width, height), 0)
-    draw = ImageDraw.Draw(face)
-    cx, cy = width * 0.5, height * 0.38
-    rx, ry = width * 0.28, height * 0.22
-    draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=255)
-    lighter = Image.new("RGB", (width, height), (255, 255, 255))
-    image = Image.composite(lighter, image, face.point(lambda a: int(a * 0.35)))
-
+    # A draw is still taken from `rng` here, even though the colour no longer
+    # depends on it: this is the Nth value in the shared rng's call sequence
+    # for person N, and every term drawn after it depends on that sequence
+    # staying put. Dropping the draw would reshuffle every downstream term
+    # pick and silently change the seeded graph's shape (75 terms / 25
+    # mentioned once, at persons=50, seed=20260814).
+    rng.random()
+    image = Image.new("RGB", (width, height), _PLACEHOLDER_FILL)
     dest.parent.mkdir(parents=True, exist_ok=True)
     image.save(dest, format="JPEG", quality=90)
     return dest

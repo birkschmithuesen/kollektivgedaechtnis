@@ -1,17 +1,31 @@
+/* B: larger type. 32px labels (1.45x A) with the dots, rings, edges and text
+   outline scaled with them so the picture stays balanced rather than becoming
+   big text over a thin net. Same dark ground and same palette as A — this
+   variant answers "is it the size?", nothing else.
+
+   B was the inverted light-ground variant until 2026-08-14; Birk rejected
+   that outright (white on black stays), and the slot went to legibility.
+
+   --person-size shrunk 128 -> 76 (Birk's 3rd review, same date), same ratio
+   as A and C: the placeholder fill is now uniform and carries no
+   information, so the disc can shrink while --ring-width stays as heavy as
+   before — the ring, not the fill, is the concept's carrier. */
 :root {
-  --bg: #F4F1EA;
-  --person-size: 96;
-  --person-fill: #E2DED3;
-  --ring-color: #8A6B1F;
-  --ring-width: 5;
-  --term-dot: 14;
-  --term-dot-color: #2B2B2B;
-  --label-color: #1A1A1A;
+  --bg: #101014;
+  --person-size: 76;
+  --person-fill: #23232a;
+  --ring-color: #C9A227;
+  --ring-width: 7;
+  --term-dot: 20;
+  --term-dot-color: #EDE7D8;
+  --label-color: #F5F1E6;
   --label-font: Georgia, "Times New Roman", serif;
-  --label-size: 22;
-  --label-outline-width: 2;
-  --label-outline-color: #F4F1EA;
-  --edge-color: #4A4A4A;
-  --edge-width: 2;
-  --edge-opacity: 0.85;
+  --label-size: 32;
+  --label-outline-width: 4;
+  --label-outline-color: #101014;
+  --label-max-width: 320px;
+  --label-margin-y: 8;
+  --edge-color: #8A8578;
+  --edge-width: 3;
+  --edge-opacity: 0.8;
 }

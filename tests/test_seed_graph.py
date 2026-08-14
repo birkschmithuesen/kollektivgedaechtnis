@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import colorsys
+import random
 from collections import Counter
 
 from PIL import Image
 
 from kg.config import Config
 from kg.store import Store
-from sim.seed_graph import TERM_LABELS, seed_graph
+from sim.seed_graph import TERM_LABELS, _placeholder_photo, seed_graph
 
 PERSONS = 12
 SEED = 20260814
@@ -115,5 +117,62 @@ def test_min_mentions_setting_is_one(tmp_path):
     store = Store.open(db_path)
     try:
         assert store.get_setting("min_mentions", "0") == "1"
+    finally:
+        store.close()
+
+
+def test_placeholder_photo_is_a_single_uniform_colour(tmp_path):
+    # Birk's third pre-render review: the hue gradient + face ellipse read as
+    # information (it wasn't). A placeholder now has to look like nothing.
+    dest = tmp_path / "placeholder.jpg"
+    _placeholder_photo(random.Random(1), dest)
+    with Image.open(dest) as image:
+        colours = image.convert("RGB").getcolors(maxcolors=2)
+    assert colours is not None and len(colours) == 1
+
+
+def test_placeholder_photo_is_byte_identical_across_persons(tmp_path):
+    # The old version painted a per-person hue; the new one must not vary at
+    # all, regardless of where in the rng sequence a given person's draw falls.
+    rng = random.Random(SEED)
+    dest_a = tmp_path / "person-a.jpg"
+    dest_b = tmp_path / "person-b.jpg"
+    _placeholder_photo(rng, dest_a)  # consumes the first rng value
+    rng.random()  # simulate other draws happening for an intervening person
+    _placeholder_photo(rng, dest_b)  # consumes a later rng value
+    assert dest_a.read_bytes() == dest_b.read_bytes()
+
+
+def test_placeholder_fill_is_muted_and_distinguishable_from_the_background(tmp_path):
+    dest = tmp_path / "placeholder.jpg"
+    _placeholder_photo(random.Random(1), dest)
+    with Image.open(dest) as image:
+        r, g, b = image.convert("RGB").getpixel((0, 0))
+
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    assert s < 0.2, "placeholder fill must read as 'no information', not a hue"
+
+    bg_r, bg_g, bg_b = 0x10, 0x10, 0x14  # --bg in all three themes
+    distance = ((r - bg_r) ** 2 + (g - bg_g) ** 2 + (b - bg_b) ** 2) ** 0.5
+    assert distance > 30, "placeholder must still be visible against --bg"
+
+
+def test_seeded_50_person_graph_keeps_its_75_term_25_single_shape(tmp_path):
+    # Regression guard for the rng call sequence: _placeholder_photo must keep
+    # consuming exactly one `random.Random` value per person even though the
+    # colour no longer uses it, or every downstream term draw reshuffles and
+    # this round's whole pre-render comparison series stops matching
+    # out/prerender2-state/kg.db. Runs 50 persons (vs. 12 elsewhere in this
+    # file), so it's the slow test in this module — still a few seconds.
+    _, db_path = _seed(tmp_path, persons=50, seed=SEED)
+    store = Store.open(db_path)
+    try:
+        terms = store.list_terms()
+        edges = store.list_edges()
+        assert len(terms) == 75
+
+        counts = Counter(e.term_id for e in edges)
+        singles = sum(1 for n in counts.values() if n == 1)
+        assert singles == 25
     finally:
         store.close()
