@@ -417,12 +417,86 @@ renderer is still the live one; only the data source changed.
 
 Comparison series (the projection is onto a **whiteboard**, where black is
 whatever ambient light sits on the surface — a dark-mode design collapses most
-strongly there):
-- **A:** dark mode as in the concept rendering (reference)
-- **B:** inverted — light ground, dark lines/labels
-- **C:** dark mode with markedly heavier strokes + larger minimum font
+strongly there).
+
+**Second pre-render review (revised 2026-08-14, Birk, binding): white on
+black stays.** The inverted, light-ground variant (the old B) is rejected
+outright and is gone from the series; its slot became a legibility variant
+instead. The three graph variants are now dark-mode only and differ **only**
+in type size and stroke/outline weight — palette and background identical
+across all three, so the series answers "is it the size?", nothing else:
+- **A:** dark mode as in the concept rendering (reference) — 22px labels,
+  5px rings
+- **B:** larger type — 32px labels, 7px rings, dots/edges/outline scaled to
+  match
+- **C:** much larger type, heaviest strokes — 44px labels, 10px rings, the
+  upper end of the legibility ladder
 - **D:** test pattern with greyscale wedge + font-size ladder (measures the
-  legibility limit and the real black level on site)
+  legibility limit and the real black level on site) — unchanged
+
+A, B and C share one background and palette (`--bg #101014`, person fill
+`#23232a`, golden ring `#C9A227`, warm label `#F5F1E6` on Georgia/"Times New
+Roman"/serif, `#8A8578` edges) — a variant that also moved the palette would
+not answer the legibility question.
+
+**Layout now fills the 16:9 canvas (found at the same review).** Cytoscape's
+`cose` measures repulsion with each node's width and height swapped, so a
+from-scratch placement settles portrait-shaped — the wrong way round for a
+16:9 wall. `frameToAspect()` (`projection.js`) turns a from-scratch placement
+a quarter turn and then stretches the short axis to the canvas aspect,
+iteratively and capped. It only ever touches a placement with no
+already-placed nodes — an already-placed net is never re-shaped (§11: the
+layout must never re-shuffle a net that is already on the wall). Measured at
+50 persons / 125 nodes: the node cloud went from 30% of the canvas width
+(34% counting the labels) to 83% (88% counting the labels).
+
+**Open, deliberately:** live the net grows one person at a time, so the
+from-scratch framing fires on the first person and never again — a live
+evening therefore drifts back towards a round cloud. Deciding what the wall
+does about that (re-frame on a quiet moment, or the camera, §10.3) needs the
+simulation (Tasks 18/19) and is not settled by this series.
+
+**The camera gained a zoom factor and a focus method.** Fit-all at 50 persons
+is settled as illegible, so this is a setting of the existing camera
+component, not a second implementation: `setZoomFactor(f)` (f ≥ 1; 1 =
+fit-all, f = that many times tighter, re-framed in every non-manual mode) and
+`focus(eles, padding)` (point the camera at a subset — e.g. one person with
+their terms, the frame an automatic traversal dwells on — without changing
+the mode).
+
+**Third pre-render review (2026-08-14, Birk, binding).** Theme **B** (32px
+labels) is the settled choice and is what the series renders; A and C stay
+regenerable for the on-site projector call, which only a real projector can
+make. Three decisions:
+
+1. **Placeholder portraits are one colour and smaller.** The per-person hue
+   was misleading — the colours meant nothing — and it fought the term text.
+   All placeholders are now the same muted slate at a smaller disc size,
+   with the golden ring kept at full weight: the ring, not the fill, is the
+   concept's carrier. Real photographs will bring their own structure
+   through the same path.
+2. **A term node is its dot PLUS its label, and the layout now knows it.**
+   `settlePlacement()` separates the *measured* dot+label boxes after the
+   16:9 framing (the framing may rotate the net, and a rotation moves the
+   dots while the labels stay horizontal, so separating first is thrown
+   away), and `declutterLabels()` then nudges label offsets — never node
+   positions, §11 is untouchable — apart, treating portrait discs as fixed
+   obstacles. Text on a person bubble is worse than text on text, because
+   that disc becomes a real photograph later. Both passes are deterministic
+   under the same seed and never re-shape an already-placed net. Measured on
+   the seeded 50-person / 75-term graph at theme B: 43 overlapping label
+   pairs and 30 labels on discs from the force layout alone, 24 / 14 after
+   the placement, **18 / 4** after the declutter pass.
+3. **The `min_mentions` dial (§7) gets its own series**, since it may solve
+   much of the crowding by itself: the same graph and the same placement at
+   1, 2 and 3 — 75, 50 and 31 term nodes, 253, 228 and 190 edges — through
+   the real display filter, never a second renderer.
+
+**Still open after this round:** fit-all at 75 terms with 32px type cannot be
+made fully clean by layout alone — 18 overlapping label pairs remain, all in
+the dense middle of the net where the portraits cluster. The dial and the
+camera are the levers that reach the rest, and which of them the wall uses is
+an on-site decision.
 
 ### 10.5 Kiosk operation
 Browser fullscreen, auto-restart, crash recovery. State is fully reconstructible

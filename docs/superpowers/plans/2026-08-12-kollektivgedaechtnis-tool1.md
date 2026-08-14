@@ -4894,9 +4894,39 @@ git commit -m "feat: browser display-filter logic with playwright tests"
 **Interfaces:**
 - Consumes: `graph-model.js` (Task 13), the vendored Cytoscape build (Task 13), `/events` + `/graph.json` + `POST /api/positions` (Task 12).
 - Produces:
-  - `camera.js`: `class Camera(cy, {panSpeed})` with `setMode(mode)`, `get mode()`, `onGraphChanged()`, `step(dtSeconds)`.
-  - `projection.js`: `createGraphView(container, {onPositions}) -> {cy, camera, update(graph, minMentions), setMinMentions(value)}`.
+  - `camera.js`: `class Camera(cy, {panSpeed, padding, zoomFactor})` with `setMode(mode)`, `get mode()`, `setZoomFactor(factor)`, `get zoomFactor()`, `focus(eles, padding)`, `onGraphChanged()`, `step(dtSeconds)`. The zoom factor and `focus()` came with the second pre-render review (2026-08-14): fit-all at 50 persons is illegible, so the zoom level is a setting of this component rather than a second camera.
+  - `projection.js`: `createGraphView(container, {onPositions}) -> {cy, camera, update(graph, minMentions), setMinMentions(value), labelOverlaps(), labelOverlapStats, declutterLabels(), resetLabelOffsets()}`, plus the pieces of the from-scratch placement pipeline, each exported so it can be exercised on its own: `frameToAspect(cy, target, {rotate})`, `separateOverlappingNodes(cy)`, `settlePlacement(cy)`, `declutterLabels(cy)`, `resetLabelOffsets(cy)`, `countLabelOverlaps(cy) -> {labelPairs, labelsOnPersons}`, `LAYOUT`. None of them touches an already-placed net (spec §11).
   - `projection.html` exposes `window.kgView` (used by Task 20's pre-render and by these tests).
+
+**Third pre-render review — decision by Birk, 2026-08-14 (binding).** The labels must stop
+piling up: the layout has to know that a term node is its dot PLUS its text block, a
+post-layout pass must nudge label offsets (never node positions) apart, and labels must treat
+portrait discs as obstacles they may not sit on — text on a person bubble is worse than text
+on text, because the disc becomes a real photograph later. `settlePlacement()` carries the
+first, `declutterLabels()` the other two.
+
+Three things that took a measurement to find, all on the seeded 50-person / 75-term graph
+(Task 20) at theme b, and all worth keeping in mind before touching this pipeline:
+
+1. **Rotate before separating, never after.** `frameToAspect()` may turn the whole net a
+   quarter turn, and a rotation moves the dots while every label stays horizontal. Separating
+   first took 43 overlapping label pairs down to 20 and the rotation put it straight back to
+   48. `settlePlacement()` therefore frames first (rotation included) and separates after,
+   with `{rotate: false}` on every later framing call.
+2. **Neither relaxation is monotone.** Pushing box A clear of B pushes it into C, so both
+   passes wander rather than descend (placement rounds measured 41, 32, 32, 28, 30, 33, 26,
+   27, ...; a declutter run measured 44 pairs in and 49 out). Both therefore score every
+   state, keep the best one they saw, and apply that — which also makes the declutter pass
+   incapable of returning something worse than its own input.
+3. **The caps were the binding constraint, not the step sizes.** The declutter pass needed
+   300 iterations rather than 30, and the placement loop needs to run until the rounds stop
+   paying rather than a fixed few.
+
+The dial's own reshuffle bug belongs here too: raising `min_mentions` REMOVES term nodes, so
+lowering it again re-adds them, and until the server has persisted this session's positions
+those nodes carry `x`/`y` null and read as brand new — which re-ran a layout and moved half
+the net. `createGraphView` remembers where each node was last seen and puts returning nodes
+back exactly there.
 
 The camera is its own component **from the start**, even if everything ends up fitting (spec §10.3): `fit` (fit-all), `manual` (zoom/pan by hand or touch), `pan` (slow automatic pan — this mode *is* the touch fallback). Node design: person = portrait circle with a golden ring, no name, no quote; term = its label, the only text in the net (spec §10.2).
 
@@ -4921,9 +4951,24 @@ window.cyStub = {
   _panningEnabled: true,
   _zoomingEnabled: true,
   _autoungrabify: false,
-  fit(padding) { this.calls.push(['fit', padding]); },
+  // cy.fit() takes either a padding or (collection, padding) — the camera
+  // uses both, so the stub records which elements it was pointed at.
+  fit(a, b) {
+    // The real cy.fit() *sets* the zoom to the fit-all level; 1 stands in for
+    // that here, so a zoom factor is always applied to a fresh fit and never
+    // compounds with the level a previous call left behind.
+    this._zoom = 1;
+    if (b === undefined) this.calls.push(['fit', a]);
+    else this.calls.push(['fit', a.stubName, b]);
+  },
   pan(p) { if (p === undefined) return this._pan; this._pan = p; this.calls.push(['pan', p]); },
-  zoom(z) { if (z === undefined) return this._zoom; this._zoom = z; },
+  // cy.zoom() takes a level or {level, renderedPosition}; the camera zooms
+  // about the viewport centre, so the object form has to be understood.
+  zoom(z) {
+    if (z === undefined) return this._zoom;
+    this._zoom = typeof z === 'object' ? z.level : z;
+    this.calls.push(['zoom', this._zoom]);
+  },
   extent() { return {x1: 0, y1: 0, x2: 4000, y2: 1000, w: 4000, h: 1000}; },
   width() { return 1920; },
   height() { return 1080; },
@@ -4991,6 +5036,50 @@ def test_pan_reverses_at_the_edge_instead_of_running_away(camera):
     )
     assert min(positions) > -100000 and max(positions) < 100000
     assert any(a > b for a, b in zip(positions, positions[1:]))  # direction reversed
+
+
+def test_the_default_zoom_factor_fits_the_whole_net(camera):
+    assert camera.evaluate("window.cam.zoomFactor") == 1
+    camera.evaluate("window.cam.onGraphChanged()")
+    # Fit-all must stay exactly a fit: no zoom call on top of it.
+    assert camera.evaluate("window.cyStub.calls.filter(c => c[0] === 'zoom').length") == 0
+
+
+def test_a_zoom_factor_sits_that_many_times_tighter_than_fit_all(camera):
+    camera.evaluate("window.cam.setZoomFactor(2)")
+    assert camera.evaluate("window.cam.zoomFactor") == 2
+    # fit() first (the stub leaves zoom at 1 = the fit-all level), then 2x it.
+    assert camera.evaluate("window.cyStub._zoom") == 2
+    assert camera.evaluate("window.cyStub.calls.filter(c => c[0] === 'fit').length") == 1
+
+
+def test_the_zoom_factor_is_reapplied_when_the_graph_changes(camera):
+    camera.evaluate("window.cam.setZoomFactor(3)")
+    camera.evaluate("window.cyStub.calls.length = 0")
+    camera.evaluate("window.cam.onGraphChanged()")
+    assert camera.evaluate("window.cyStub.calls") == [["fit", 60], ["zoom", 3]]
+
+
+def test_a_zoom_factor_below_one_is_rejected(camera):
+    # Below 1 would frame emptiness around the net on an unattended wall.
+    assert (
+        camera.evaluate(
+            "(() => { try { window.cam.setZoomFactor(0.5); return 'no'; } catch (e) { return 'raised'; } })()"
+        )
+        == "raised"
+    )
+
+
+def test_manual_mode_is_never_reframed_by_a_zoom_factor_change(camera):
+    camera.evaluate("window.cam.setMode('manual')")
+    camera.evaluate("window.cyStub.calls.length = 0")
+    camera.evaluate("window.cam.setZoomFactor(4)")
+    assert camera.evaluate("window.cyStub.calls.length") == 0
+
+
+def test_focus_frames_only_the_given_elements(camera):
+    camera.evaluate("window.cam.focus({stubName: 'cluster'}, 40)")
+    assert camera.evaluate("window.cyStub.calls") == [["fit", "cluster", 40]]
 
 
 def test_an_unknown_mode_is_rejected(camera):
@@ -5112,19 +5201,110 @@ def test_new_node_positions_are_reported_for_persistence(view):
     assert "p2" in reported and "t2" in reported
 
 
-THEME_RING_COLOR = {
-    # Declared --ring-color tokens from the theme files, as Cytoscape reports
-    # a resolved colour back through its own style API (rgb(...), no spaces).
-    "a": "rgb(201,162,39)",  # theme-a.css --ring-color: #C9A227
-    "b": "rgb(138,107,31)",  # theme-b.css --ring-color: #8A6B1F
-    "c": "rgb(224,181,49)",  # theme-c.css --ring-color: #E0B531
+def _unplaced_net(persons=8, terms_per_person=4, term_pool=12):
+    """A graph with no persisted positions: the layout places all of it."""
+    nodes = [
+        {"id": f"p{i}", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+        for i in range(persons)
+    ] + [
+        {
+            "id": f"t{i}",
+            "type": "term",
+            "label": f"Kreislaufgerechte Bauteilkataloge {i}",
+            "mentions": 2,
+            "hidden": False,
+            "x": None,
+            "y": None,
+        }
+        for i in range(term_pool)
+    ]
+    edges = [
+        {"id": f"e{i}-{j}", "source": f"p{i}", "target": f"t{(i * 3 + j) % term_pool}"}
+        for i in range(persons)
+        for j in range(terms_per_person)
+    ]
+    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+
+
+CANVAS_ASPECT = 1920 / 1080
+
+
+def test_a_from_scratch_layout_is_shaped_like_the_16_9_canvas(view):
+    # A force layout is isotropic, so its settled cloud is round and leaves
+    # the sides of a 16:9 wall empty (measured 2026-08-14: the node cloud
+    # covered 30% of the canvas width). The placement is framed to the
+    # canvas instead of the camera over-zooming, which would clip top and
+    # bottom.
+    update(view, _unplaced_net())
+
+    box = view.evaluate(
+        "() => window.kgView.cy.nodes().boundingBox({ includeLabels: true })"
+    )
+    assert box["w"] / box["h"] == pytest.approx(CANVAS_ASPECT, rel=0.1)
+
+
+def test_the_framed_net_covers_the_canvas_width_after_a_fit(view):
+    # The number that matters is what reaches the wall, so measure the
+    # rendered box under the camera's own fit, not just the model box.
+    update(view, _unplaced_net())
+
+    covered = view.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             const box = cy.nodes().renderedBoundingBox({ includeLabels: true });
+             return box.w / cy.width();
+           }"""
+    )
+    assert covered > 0.8
+
+
+def test_framing_never_reshuffles_an_already_placed_net(view):
+    # Framing is part of placing a net from scratch. Once nodes carry
+    # positions, spec 11 rules: nothing already on the wall may move.
+    update(view, _unplaced_net())
+    before = view.evaluate("window.kgView.cy.$('#p0').position()")
+
+    grown = _unplaced_net()
+    for node in grown["nodes"]:
+        position = view.evaluate("(id) => window.kgView.cy.$id(id).position()", node["id"])
+        node["x"], node["y"] = position["x"], position["y"]
+    grown["nodes"].append(
+        {"id": "pX", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+    )
+    grown["edges"].append({"id": "eX", "source": "pX", "target": "t0"})
+    update(view, grown)
+
+    assert view.evaluate("window.kgView.cy.$('#p0').position()") == before
+
+
+THEME_LABEL_SIZE = {
+    # Declared --label-size tokens from the theme files. Since 2026-08-14 the
+    # series is three dark variants that differ in type size and stroke
+    # weight only (the inverted variant is gone), so this is the token that
+    # separates them — and the one the whole series exists to decide.
+    "a": "22px",
+    "b": "32px",
+    "c": "44px",
 }
+
+THEME_RING_WIDTH = {"a": "5px", "b": "7px", "c": "10px"}
 
 ONE_PERSON = {
     "version": 1,
     "min_mentions": 1,
-    "nodes": [{"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 0, "y": 0}],
-    "edges": [],
+    "nodes": [
+        {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 0, "y": 0},
+        {
+            "id": "t1",
+            "type": "term",
+            "label": "Holzbau",
+            "mentions": 1,
+            "hidden": False,
+            "x": 200,
+            "y": 0,
+        },
+    ],
+    "edges": [{"id": "e1", "source": "p1", "target": "t1"}],
     "quotes": [],
 }
 
@@ -5138,16 +5318,18 @@ def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server
     # A test that only checks the background would not catch this — it must
     # read a value Cytoscape itself baked into style, through Cytoscape's own
     # API, on a real Chromium page loading the actual `projection.html`.
-    colors = {}
+    sizes = {}
+    rings = {}
     for theme in ("a", "b", "c"):
         page.goto(f"{static_server}/frontend/projection.html?theme={theme}")
         page.wait_for_function("window.kgView !== undefined")
         page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
         wait_for_layout(page)
-        colors[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-color')")
+        sizes[theme] = page.evaluate("window.kgView.cy.$('#t1').style('font-size')")
+        rings[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-width')")
 
-    assert colors["a"] != colors["b"] != colors["c"] != colors["a"]
-    assert colors == THEME_RING_COLOR
+    assert sizes == THEME_LABEL_SIZE
+    assert rings == THEME_RING_WIDTH
 
 
 def test_unknown_theme_falls_back_and_still_renders(page, static_server):
@@ -5162,7 +5344,7 @@ def test_unknown_theme_falls_back_and_still_renders(page, static_server):
     page.wait_for_function("window.kgView !== undefined", timeout=5000)
     page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
     page.wait_for_function("() => window.kgView.layoutPending === false", timeout=5000)
-    assert page.evaluate("window.kgView.cy.nodes().length") == 1
+    assert page.evaluate("window.kgView.cy.nodes().length") == len(ONE_PERSON["nodes"])
 
 
 def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
@@ -5178,6 +5360,325 @@ def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
     wait_for_layout(view)
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
     assert view.evaluate("window.kgView.cy.$('#p1').position()") == person_position
+
+
+# --- Label declutter (Birk's third pre-render review, 2026-08-14) ---------
+#
+# series-b-dark-larger-label32.png (50 persons, 75 terms) showed labels
+# piled on top of each other and on top of person discs. Three fixes:
+#   a) the from-scratch placement must know a term node is its dot PLUS its
+#      label box, not just the dot (cose's own nodeDimensionsIncludeLabels
+#      is not enough on its own — measured below);
+#   b) a post-layout pass nudges label OFFSETS (never positions) apart;
+#   c) that pass treats person discs as fixed obstacles labels may not sit on.
+
+# The real labels the pre-render shoots, not a short cycled sample of them.
+# An earlier version of this module cycled 18 strings across 75 term nodes,
+# which made the harness net measurably easier than the wall's own graph: the
+# whole pipeline came out at 0 overlaps here while the seeded 50-person graph
+# came out at 44 (2026-08-14). Distinct labels of very mixed length are the
+# thing that makes this hard, so the fixture uses the same source the seeded
+# graph does.
+from sim.seed_graph import TERM_LABELS
+
+
+def _dense_net(persons=50, terms=75, edges_per_person=5):
+    """The density and label mix that first showed the label collisions this
+    module exists to fix (Birk's 3rd pre-render review: 50 persons, 75
+    distinct long German term labels, ~250 edges, on a 1920x1080 wall).
+    Mentions cycle 1-2-3 so raising min_mentions removes some terms, not all
+    of them, which is what the redeclutter-on-filter-change test needs."""
+    nodes = [
+        {"id": f"p{i}", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+        for i in range(persons)
+    ] + [
+        {
+            "id": f"t{i}",
+            "type": "term",
+            "label": TERM_LABELS[i % len(TERM_LABELS)],
+            "mentions": (i % 3) + 1,
+            "hidden": False,
+            "x": None,
+            "y": None,
+        }
+        for i in range(terms)
+    ]
+    edges = [
+        {"id": f"e{i}-{j}", "source": f"p{i}", "target": f"t{(i * 7 + j * 3) % terms}"}
+        for i in range(persons)
+        for j in range(edges_per_person)
+    ]
+    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+
+
+def test_count_label_overlaps_detects_overlapping_labels_and_person_collisions(page, static_server):
+    # A narrow, hand-placed unit test of the geometry itself, independent of
+    # layout: two identical labels 5px apart must overlap (1 pair), a third
+    # label placed exactly on a person disc must count against that person,
+    # and a label far from everything must not pollute either count.
+    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.wait_for_function("window.kgView !== undefined")
+    result = page.evaluate(
+        """async () => {
+             const { countLabelOverlaps } = await import('/frontend/static/projection.js');
+             const cy = window.kgView.cy;
+             cy.add([
+               { data: { id: 'pa', type: 'person' }, classes: 'person', position: { x: 0, y: 0 } },
+               { data: { id: 'ta', type: 'term', label: 'Alpha Beta Gamma' }, classes: 'term', position: { x: 500, y: 500 } },
+               { data: { id: 'tb', type: 'term', label: 'Alpha Beta Gamma' }, classes: 'term', position: { x: 505, y: 500 } },
+               { data: { id: 'tc', type: 'term', label: 'Far Away Label' }, classes: 'term', position: { x: 0, y: 0 } },
+             ]);
+             return countLabelOverlaps(cy);
+           }"""
+    )
+    assert result["labelPairs"] == 1
+    assert result["labelsOnPersons"] == 1
+
+
+def test_reset_label_offsets_returns_to_the_theme_default(view):
+    update(view, GRAPH_1)
+    result = view.evaluate(
+        """async () => {
+             const { resetLabelOffsets } = await import('/frontend/static/projection.js');
+             const cy = window.kgView.cy;
+             const node = cy.$('#t1');
+             node.style({ 'text-margin-x': 40, 'text-margin-y': 90 });
+             resetLabelOffsets(cy);
+             return { x: node.numericStyle('text-margin-x'), y: node.numericStyle('text-margin-y') };
+           }"""
+    )
+    # render-harness.html is pinned to theme-a: --label-margin-y: 6.
+    assert result == {"x": 0, "y": 6}
+
+
+def test_declutter_never_moves_a_node_position(view):
+    # Position persistence (spec 11) is untouchable: decluttering is only
+    # ever allowed to change where a LABEL sits relative to its own dot.
+    update(view, _dense_net())
+    before = view.evaluate(
+        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
+    )
+
+    view.evaluate("() => window.kgView.declutterLabels()")
+
+    after = view.evaluate(
+        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
+    )
+    assert after == before
+
+
+def test_declutter_clears_every_label_on_person_overlap(view):
+    # Hard rule (c): text on a portrait disc is worse than text on text,
+    # because the disc becomes a real photo later.
+    update(view, _dense_net())
+    overlaps = view.evaluate("() => window.kgView.labelOverlaps()")
+    assert overlaps["labelsOnPersons"] == 0
+
+
+def test_label_overlap_stats_record_before_and_after_declutter(view):
+    update(view, _dense_net())
+    stats = view.evaluate("() => window.kgView.labelOverlapStats")
+    assert set(stats.keys()) == {"before", "after"}
+    assert stats["after"]["labelPairs"] <= stats["before"]["labelPairs"]
+    assert stats["after"]["labelsOnPersons"] <= stats["before"]["labelsOnPersons"]
+
+
+def test_declutter_and_placement_are_deterministic(page, static_server):
+    # Same seed, same picture: two independent from-scratch runs over the
+    # identical graph must settle on identical node positions AND identical
+    # label offsets, or the pre-render series (A-D at the same seed) would
+    # stop being a fair comparison.
+    graph = _dense_net()
+
+    def run_once():
+        page.goto(f"{static_server}/frontend/static/render-harness.html")
+        page.wait_for_function("window.kgView !== undefined")
+        update(page, graph)
+        return page.evaluate(
+            """() => {
+                 const cy = window.kgView.cy;
+                 const positions = {};
+                 const offsets = {};
+                 cy.nodes().forEach((n) => {
+                   positions[n.id()] = n.position();
+                   offsets[n.id()] = {
+                     x: n.numericStyle('text-margin-x'),
+                     y: n.numericStyle('text-margin-y'),
+                   };
+                 });
+                 return { positions, offsets };
+               }"""
+        )
+
+    first = run_once()
+    second = run_once()
+    assert first == second
+
+
+def test_declutter_never_reshuffles_an_already_placed_dense_net(view):
+    # Mirrors test_framing_never_reshuffles_an_already_placed_net at the
+    # density where declutter actually does work: growing an already-placed
+    # net must not move any existing node, even though every render re-runs
+    # the full declutter pass over the whole graph (including those nodes).
+    update(view, _dense_net())
+    before = view.evaluate("window.kgView.cy.$('#p0').position()")
+
+    grown = _dense_net()
+    for node in grown["nodes"]:
+        position = view.evaluate("(id) => window.kgView.cy.$id(id).position()", node["id"])
+        node["x"], node["y"] = position["x"], position["y"]
+    grown["nodes"].append(
+        {"id": "pX", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+    )
+    grown["edges"].append({"id": "eX", "source": "pX", "target": "t0"})
+    update(view, grown)
+
+    assert view.evaluate("window.kgView.cy.$('#p0').position()") == before
+
+
+def test_the_net_is_turned_to_landscape_before_it_is_separated(view):
+    # The bug this pins down (found in the 3rd pre-render run, 2026-08-14):
+    # frameToAspect may turn the whole net a quarter turn, and a rotation
+    # moves the dots while every label stays horizontal. Separating first and
+    # rotating after therefore throws the result away — measured on the
+    # seeded graph, separation took 43 overlapping pairs down to 20 and the
+    # rotation put it straight back to 48. So by the time the net is settled,
+    # it must be BOTH landscape and clear; landscape alone or clear alone
+    # would have passed while the picture on the wall was still a pile.
+    update(view, _dense_net())
+
+    box = view.evaluate(
+        "() => window.kgView.cy.nodes().boundingBox({ includeLabels: true })"
+    )
+    assert box["w"] > box["h"]
+    assert view.evaluate("() => window.kgView.labelOverlaps()") == {
+        "labelPairs": 0,
+        "labelsOnPersons": 0,
+    }
+
+
+def test_declutter_never_hands_back_a_worse_net_than_it_was_given(view):
+    # Relaxation is not monotone: pushing a label clear of a person disc at
+    # full strength drops it onto two others, and on the seeded graph a run
+    # measured 44 overlapping pairs in and 49 out (2026-08-14). Whatever it
+    # does in between, the pass must keep the best state it saw — and its own
+    # untouched input is one of the candidates, so it can never regress.
+    update(view, _dense_net())
+    # Start from a deliberately bad state: every label shoved the same way,
+    # so the pass has real work to do and a real chance to overshoot.
+    # The braces matter: cy's forEach returns the collection, and serialising
+    # that back to the driver crashes the page (same trap as PORTRAITS_LOADED
+    # in sim/prerender.py). Return nothing.
+    view.evaluate(
+        "() => { window.kgView.cy.nodes('.term').forEach(n => n.style({'text-margin-x': 120})); }"
+    )
+    before = view.evaluate("() => window.kgView.labelOverlaps()")
+
+    view.evaluate("() => window.kgView.declutterLabels()")
+
+    after = view.evaluate("() => window.kgView.labelOverlaps()")
+    assert after["labelPairs"] <= before["labelPairs"]
+    assert after["labelsOnPersons"] <= before["labelsOnPersons"]
+
+
+def test_lowering_the_dial_puts_the_returning_terms_back_where_they_were(view):
+    # Raising min_mentions REMOVES term nodes from cy, so lowering it again
+    # re-adds them. In a session whose positions the server has not yet
+    # persisted back into the graph data, those nodes carry x/y null and would
+    # read as brand new — which would re-run a layout and reshuffle half the
+    # net under the visitor's eyes (spec 11). Found in the 3rd pre-render run:
+    # the min_mentions 3 -> 1 shot came back 117% of the canvas height while
+    # the identical picture on the way up had been 82%.
+    update(view, _dense_net())
+    before = view.evaluate(
+        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
+    )
+
+    view.evaluate("() => window.kgView.setMinMentions(3)")
+    wait_for_layout(view)
+    view.evaluate("() => window.kgView.setMinMentions(1)")
+    wait_for_layout(view)
+
+    after = view.evaluate(
+        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
+    )
+    assert after == before
+
+
+def test_raising_min_mentions_redeclutters_and_lowers_overlap_count(view):
+    # Removing labels only ever helps decluttering (fewer boxes to collide),
+    # and render() must take that free win on every filter change, not just
+    # on a from-scratch placement — a min_mentions change adds no new nodes
+    # and so runs no layout at all.
+    update(view, _dense_net())
+    before = view.evaluate("() => window.kgView.labelOverlapStats.after")
+    before_term_count = view.evaluate("() => window.kgView.cy.nodes('.term').length")
+
+    view.evaluate("window.kgView.setMinMentions(2)")
+    wait_for_layout(view)
+
+    after = view.evaluate("() => window.kgView.labelOverlapStats.after")
+    after_term_count = view.evaluate("() => window.kgView.cy.nodes('.term').length")
+
+    assert after_term_count < before_term_count
+    assert after["labelPairs"] <= before["labelPairs"]
+
+
+def test_layout_separation_beats_coses_own_label_handling_alone(page, static_server):
+    # cose's nodeDimensionsIncludeLabels only sizes a node's OWN repulsion
+    # off its measured extent; it never learns that its neighbours are wide
+    # too. Measured 2026-08-14 on theme-b (32px labels) at 50 persons / 75
+    # terms, same deterministic golden-angle seeding both sides so this
+    # isolates the fix rather than comparing against a differently-seeded
+    # run: cose alone (nodeDimensionsIncludeLabels on, no post-layout
+    # separation, no declutter) reproducibly settles at 9 overlapping
+    # label-box pairs and 3 labels sitting on person discs. The full
+    # from-scratch pipeline (separation pass + declutter) reproducibly
+    # clears both to zero on this net — not just "fewer", gone.
+    page.goto(f"{static_server}/frontend/projection.html?theme=b")
+    page.wait_for_function("window.kgView !== undefined")
+    graph = _dense_net()
+    update(page, graph)
+
+    after = page.evaluate("() => window.kgView.labelOverlaps()")
+
+    raw = page.evaluate(
+        """async (graph) => {
+             const { toCytoscape } = await import('/frontend/static/graph-model.js');
+             const { countLabelOverlaps, LAYOUT } = await import('/frontend/static/projection.js');
+             const el = document.createElement('div');
+             el.style.width = '1920px';
+             el.style.height = '1080px';
+             document.body.appendChild(el);
+             const cy = cytoscape({
+               container: el,
+               style: window.kgView.cy.style().json(),
+               elements: toCytoscape({ nodes: graph.nodes, edges: graph.edges }),
+             });
+             // Mirror projection.js's own from-scratch seeding exactly (golden
+             // angle, radius 140, around the origin), so the only difference
+             // from window.kgView's own run is the separation pass and the
+             // declutter pass that follow layoutstop in production.
+             graph.nodes.forEach((n, index) => {
+               const angle = index * 2.39996;
+               cy.$id(n.id).position({ x: Math.cos(angle) * 140, y: Math.sin(angle) * 140 });
+             });
+             await new Promise((resolve) => {
+               const layout = cy.layout({ ...LAYOUT, animate: false });
+               layout.one('layoutstop', resolve);
+               layout.run();
+             });
+             const overlaps = countLabelOverlaps(cy);
+             cy.destroy();
+             el.remove();
+             return overlaps;
+           }""",
+        graph,
+    )
+
+    assert raw["labelPairs"] >= 5
+    assert raw["labelsOnPersons"] >= 1
+    assert after == {"labelPairs": 0, "labelsOnPersons": 0}
 ```
 
 - [ ] **Step 2: Run the tests and confirm they fail**
@@ -5194,10 +5695,15 @@ Expected: FAIL — `camera.js` / `render-harness.html` do not exist (404 / impor
 const MODES = ['fit', 'manual', 'pan'];
 
 export class Camera {
-  constructor(cy, { panSpeed = 18, padding = 60 } = {}) {
+  constructor(cy, { panSpeed = 18, padding = 60, zoomFactor = 1 } = {}) {
     this.cy = cy;
     this.panSpeed = panSpeed;
     this.padding = padding;
+    // 1 = the whole net in frame. >1 = that many times tighter, i.e. only
+    // 1/factor of the net's width is on the wall. Fit-all is illegible at 50
+    // persons (pre-render series, 2026-08-14), so the zoom level is a setting
+    // of this component, not a second camera bolted on next to it.
+    this._zoomFactor = 1;
     this._mode = 'fit';
     this._direction = -1;
     // At an unattended exhibition a stray touch/mouse must never be able to
@@ -5205,17 +5711,51 @@ export class Camera {
     // `manual` is the only mode where a visitor is meant to move anything;
     // apply that for the initial mode too, not just from setMode onward.
     this._applyInteractivity(this._mode);
+    this.setZoomFactor(zoomFactor);
   }
 
   get mode() {
     return this._mode;
   }
 
+  get zoomFactor() {
+    return this._zoomFactor;
+  }
+
   setMode(mode) {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
     this._mode = mode;
     this._applyInteractivity(mode);
-    if (mode === 'fit') this.cy.fit(this.padding);
+    if (mode === 'fit') this._frame();
+  }
+
+  setZoomFactor(factor) {
+    if (!(factor >= 1)) throw new Error(`zoom factor must be >= 1: ${factor}`);
+    const changed = factor !== this._zoomFactor;
+    this._zoomFactor = factor;
+    // Manual is the visitor's mode: re-framing under their hands would fight
+    // them. Every other mode is driven, so it re-frames at the new level.
+    if (changed && this._mode !== 'manual') this._frame();
+  }
+
+  /** Point the camera at a subset — one cluster instead of the whole net.
+   *
+   * This is the framing an automatic traversal dwells on, and what the
+   * pre-render shoots for the close view. It deliberately does not change the
+   * mode: the interaction rules stay whatever the operator set. */
+  focus(eles, padding = this.padding) {
+    this.cy.fit(eles, padding);
+  }
+
+  _frame() {
+    this.cy.fit(this.padding);
+    if (this._zoomFactor === 1) return;
+    // Zoom about the middle of the viewport, so the net stays centred on the
+    // wall instead of drifting towards the model origin.
+    this.cy.zoom({
+      level: this.cy.zoom() * this._zoomFactor,
+      renderedPosition: { x: this.cy.width() / 2, y: this.cy.height() / 2 },
+    });
   }
 
   _applyInteractivity(mode) {
@@ -5226,7 +5766,7 @@ export class Camera {
   }
 
   onGraphChanged() {
-    if (this._mode === 'fit') this.cy.fit(this.padding);
+    if (this._mode === 'fit') this._frame();
   }
 
   step(dtSeconds) {
@@ -5283,9 +5823,11 @@ function style() {
         'font-family': cssVar('--label-font', 'Georgia, serif'),
         'font-size': cssVar('--label-size', '22'),
         'text-valign': 'bottom',
-        'text-margin-y': 6,
+        // Both scale with the type: a wrap width and a gap tuned for 22px
+        // labels turn 44px ones into a stack of short lines under the dot.
+        'text-margin-y': cssVar('--label-margin-y', '6'),
         'text-wrap': 'wrap',
-        'text-max-width': '220px',
+        'text-max-width': cssVar('--label-max-width', '220px'),
         'text-outline-width': cssVar('--label-outline-width', '3'),
         'text-outline-color': cssVar('--label-outline-color', '#101014'),
       },
@@ -5302,7 +5844,7 @@ function style() {
   ];
 }
 
-const LAYOUT = {
+export const LAYOUT = {
   name: 'cose',
   randomize: false,
   animate: true,
@@ -5314,6 +5856,384 @@ const LAYOUT = {
   nodeDimensionsIncludeLabels: true,
 };
 
+// Nodes are always visited in this order, never Cytoscape's own collection
+// order (which is insertion order and so depends on network/API timing) —
+// otherwise the same seed could settle differently between two runs.
+function byId(a, b) {
+  const idA = a.id();
+  const idB = b.id();
+  if (idA < idB) return -1;
+  if (idA > idB) return 1;
+  return 0;
+}
+
+function boxesOverlap(a, b) {
+  return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+}
+
+// The minimum-translation vector to move box `a` clear of box `b`, along
+// whichever axis needs the smaller push. Ties (concentric boxes) resolve
+// toward positive x/y, deterministically, rather than toward whatever
+// floating-point noise happens to fall out of the centre comparison.
+function overlapVector(a, b) {
+  const ox = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
+  const oy = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+  if (ox <= 0 || oy <= 0) return null;
+  const ac = { x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 };
+  const bc = { x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2 };
+  if (ox < oy) return { x: ac.x >= bc.x ? ox : -ox, y: 0 };
+  return { x: 0, y: ac.y >= bc.y ? oy : -oy };
+}
+
+/** Count overlapping term-label boxes, and label-on-person collisions.
+ *
+ * `includeNodes: false` on a boundingBox call isolates the LABEL's own box
+ * from its dot — Cytoscape's real measured text extent (font metrics, wrap
+ * width), not a guess — so this is exactly what a viewer would see collide.
+ * Exported so the pre-render CLI and the dev console can both ask "how bad
+ * is it right now" without reaching into private state.
+ */
+export function countLabelOverlaps(cy) {
+  const terms = cy.nodes('.term').sort(byId);
+  const boxes = terms.map((node) => node.boundingBox({ includeLabels: true, includeNodes: false }));
+  let labelPairs = 0;
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      if (boxesOverlap(boxes[i], boxes[j])) labelPairs += 1;
+    }
+  }
+
+  const personBoxes = cy.nodes('.person').map((node) => node.boundingBox({ includeNodes: true, includeLabels: false }));
+  let labelsOnPersons = 0;
+  boxes.forEach((box) => {
+    personBoxes.forEach((personBox) => {
+      if (boxesOverlap(box, personBox)) labelsOnPersons += 1;
+    });
+  });
+
+  return { labelPairs, labelsOnPersons };
+}
+
+// cose's own nodeDimensionsIncludeLabels sizes each node's repulsion off its
+// OWN measured extent, but never learns that a neighbour's label is wide too
+// — measured 2026-08-14 on the seeded 50-person / 75-term graph at theme b,
+// cose alone settles at 43 overlapping label-box pairs and 30 labels sitting
+// on person discs. This pass pushes the MEASURED dot+label boxes
+// (Cytoscape's own boundingBox, not a guessed constant) apart directly, in
+// node-position space, so the layout finally "knows" a term node is its dot
+// plus its caption.
+//
+// It is a relaxation with a cap, NOT a solver: on that graph it does not
+// reach a clean state within the cap, and raising the cap to 400 only takes
+// one round's result from 25 pairs to 17 for ~5x the time. Getting to zero
+// is the job of the rounds in settlePlacement() and the declutter pass
+// afterwards, both of which are far cheaper per pair removed.
+const SEPARATION_ITERATIONS = 60;
+// Resolve half of every overlap per pass, not all of it: a node colliding
+// with several neighbours at once would otherwise overshoot on each of them
+// simultaneously.
+const SEPARATION_STEP = 0.5;
+
+function fullBox(node) {
+  return node.boundingBox({ includeLabels: true });
+}
+
+export function separateOverlappingNodes(cy) {
+  const nodes = cy.nodes().sort(byId);
+  if (nodes.length < 2) return;
+  for (let iteration = 0; iteration < SEPARATION_ITERATIONS; iteration += 1) {
+    const boxes = nodes.map((node) => fullBox(node));
+    const push = nodes.map(() => ({ x: 0, y: 0 }));
+    let anyOverlap = false;
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const v = overlapVector(boxes[i], boxes[j]);
+        if (!v) continue;
+        anyOverlap = true;
+        push[i].x += v.x * SEPARATION_STEP;
+        push[i].y += v.y * SEPARATION_STEP;
+        push[j].x -= v.x * SEPARATION_STEP;
+        push[j].y -= v.y * SEPARATION_STEP;
+      }
+    }
+    if (!anyOverlap) break;
+    nodes.forEach((node, index) => {
+      const at = node.position();
+      node.position({ x: at.x + push[index].x, y: at.y + push[index].y });
+    });
+  }
+}
+
+// This is a relaxation, and on a crowded net it needs room to run: measured
+// 2026-08-14 from the settled placement of the seeded 50-person / 75-term
+// graph at theme b, a 30-iteration cap stalls at 18 overlapping label pairs
+// while 300 clears the same state to zero (~1s). The cap is the binding
+// constraint here, not the step size and not the displacement budget below —
+// no label ever reaches that budget on this net.
+const DECLUTTER_ITERATIONS = 300;
+const DECLUTTER_STEP = 0.5;
+// A label may wander further than this from its dot's default position
+// before it stops reading as that dot's caption. Scaled off the label's
+// OWN measured box height, not a constant, because the theme series ranges
+// from 22px to 44px type — a fixed pixel cap tuned for one theme would be
+// meaningless (too tight or too loose) on the others.
+const MAX_LABEL_DISPLACEMENT_LINES = 2;
+// How many label-on-label pairs one label-on-portrait collision is worth when
+// scoring a candidate state (rule (c) over rule (b), see below).
+const PERSON_COLLISION_WEIGHT = 3;
+
+/** Nudge label OFFSETS (never node positions) until no two term-label boxes
+ * overlap, and no term-label box overlaps a person disc.
+ *
+ * Idempotent: it starts from whatever text-margin-x/y a node already
+ * carries (0 / the theme's --label-margin-y default if untouched, or a
+ * previous call's result), so calling it again on an already-clear net
+ * measures zero overlaps on the first iteration and changes nothing.
+ * Person discs are fixed obstacles here — only the label moves.
+ */
+export function declutterLabels(cy) {
+  const terms = cy.nodes('.term').sort(byId);
+  if (terms.length === 0) return;
+  const persons = cy.nodes('.person').toArray();
+  const baseMarginY = Number(cssVar('--label-margin-y', '6'));
+
+  const state = terms.map((node) => ({
+    node,
+    x: node.numericStyle('text-margin-x'),
+    y: node.numericStyle('text-margin-y'),
+    // A label's own box height barely changes with its margin (the margin
+    // shifts it, the wrap width sizes it), so its displacement budget is
+    // measured once, up front, from that near-constant height.
+    cap: node.boundingBox({ includeLabels: true, includeNodes: false }).h * MAX_LABEL_DISPLACEMENT_LINES,
+  }));
+
+  const applyState = () => state.forEach(({ node, x, y }) => node.style({ 'text-margin-x': x, 'text-margin-y': y }));
+
+  // Relaxation this simple is not monotone: a label pushed clear of a person
+  // disc at full strength lands on two other labels, and on a crowded net a
+  // late iteration can end up worse than an early one (measured 2026-08-14:
+  // 48 pairs in, 70 pairs out, on the seeded graph before this guard). So
+  // every iteration is scored and the best one is what gets applied at the
+  // end — including iteration 0, the untouched input, which makes the pass
+  // incapable of handing back something worse than it was given.
+  let best = null;
+  const remember = (score) => {
+    if (best && score >= best.score) return;
+    best = { score, offsets: state.map(({ x, y }) => ({ x, y })) };
+  };
+
+  for (let iteration = 0; iteration < DECLUTTER_ITERATIONS; iteration += 1) {
+    applyState();
+    const boxes = state.map(({ node }) => node.boundingBox({ includeLabels: true, includeNodes: false }));
+    const personBoxes = persons.map((p) => p.boundingBox({ includeNodes: true, includeLabels: false }));
+
+    const push = state.map(() => ({ x: 0, y: 0 }));
+    let anyOverlap = false;
+    let labelPairs = 0;
+    let labelsOnPersons = 0;
+
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const v = overlapVector(boxes[i], boxes[j]);
+        if (!v) continue;
+        anyOverlap = true;
+        labelPairs += 1;
+        push[i].x += v.x * DECLUTTER_STEP;
+        push[i].y += v.y * DECLUTTER_STEP;
+        push[j].x -= v.x * DECLUTTER_STEP;
+        push[j].y -= v.y * DECLUTTER_STEP;
+      }
+      // A person disc never moves, so a label overlapping one is resolved
+      // at full strength rather than split — the hard "may not overlap"
+      // rule (c) should win out over the softer label-label spacing (b).
+      personBoxes.forEach((personBox) => {
+        const v = overlapVector(boxes[i], personBox);
+        if (!v) return;
+        anyOverlap = true;
+        labelsOnPersons += 1;
+        push[i].x += v.x;
+        push[i].y += v.y;
+      });
+    }
+
+    // Rule (c) outranks rule (b): a label on a portrait disc is worse than a
+    // label on a label, because the disc becomes a real photograph later. A
+    // state that clears one person collision is therefore preferred even if
+    // it costs a few label-on-label pairs.
+    remember(labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons);
+    if (!anyOverlap) break;
+
+    state.forEach((entry, index) => {
+      entry.x += push[index].x;
+      entry.y += push[index].y;
+      const dx = entry.x;
+      const dy = entry.y - baseMarginY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > entry.cap && dist > 0) {
+        const scale = entry.cap / dist;
+        entry.x = dx * scale;
+        entry.y = baseMarginY + dy * scale;
+      }
+    });
+  }
+
+  if (best) {
+    state.forEach((entry, index) => {
+      entry.x = best.offsets[index].x;
+      entry.y = best.offsets[index].y;
+    });
+  }
+  applyState();
+}
+
+/** Clear every per-node label offset back to the theme default, undoing
+ * declutterLabels(). Removing the style bypass (rather than setting it to
+ * a computed default) means a later theme swap still takes effect through
+ * the normal stylesheet cascade.
+ */
+export function resetLabelOffsets(cy) {
+  cy.nodes('.term').forEach((node) => node.removeStyle('text-margin-x text-margin-y'));
+}
+
+// The projection surface is 16:9. A force layout is isotropic, so its settled
+// cloud is round: on 1920x1080 that leaves the sides empty (measured
+// 2026-08-14: 30% of the canvas width) and the camera cannot recover it —
+// zooming in further only clips the top and bottom.
+const CANVAS_ASPECT = 16 / 9;
+// A label keeps its own width when the nodes around it move apart, so one
+// correction always undershoots the target. Iterate to it instead.
+const FRAME_STEPS = 6;
+const FRAME_TOLERANCE = 0.01;
+// The stretch is the part of the framing that does distort, so it is bounded:
+// beyond this the net is a smear, and something about the layout is wrong.
+const MAX_STRETCH = 3;
+
+/** Shape a from-scratch placement like the canvas it is projected onto.
+ *
+ * Deterministic: a pure function of the settled positions, so the same seed
+ * still yields the same picture. Exported so it can be exercised on its own.
+ */
+export function frameToAspect(cy, target = CANVAS_ASPECT, { rotate = true } = {}) {
+  const nodes = cy.nodes();
+  if (nodes.length < 2) return;
+  let box = nodes.boundingBox({ includeLabels: true });
+  if (!(box.w > 0) || !(box.h > 0)) return;
+
+  // Cytoscape's cose measures repulsion with each node's width and height
+  // swapped, so a net of wide labels settles PORTRAIT — exactly the wrong way
+  // round for this wall. A quarter turn costs no distortion at all and does
+  // most of the work; only what remains is stretched.
+  if (rotate && (box.w < box.h) === (target > 1)) {
+    const centre = { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
+    nodes.positions((node) => {
+      const at = node.position();
+      return { x: centre.x + (at.y - centre.y), y: centre.y - (at.x - centre.x) };
+    });
+    box = nodes.boundingBox({ includeLabels: true });
+  }
+
+  let stretched = 1;
+  for (let step = 0; step < FRAME_STEPS; step += 1) {
+    const aspect = box.w / box.h;
+    // Only ever pull the short axis out to the target. Squeezing the long one
+    // would push labels together, which is what this whole series is about.
+    const scale = aspect < target ? { x: target / aspect, y: 1 } : { x: 1, y: aspect / target };
+    if (Math.max(scale.x, scale.y) < 1 + FRAME_TOLERANCE) return;
+    const capped = Math.min(Math.max(scale.x, scale.y), MAX_STRETCH / stretched);
+    if (capped <= 1) return;
+    stretched *= capped;
+    const factor = { x: scale.x > 1 ? capped : 1, y: scale.y > 1 ? capped : 1 };
+    const centre = { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
+    nodes.positions((node) => {
+      const at = node.position();
+      return {
+        x: centre.x + (at.x - centre.x) * factor.x,
+        y: centre.y + (at.y - centre.y) * factor.y,
+      };
+    });
+    box = nodes.boundingBox({ includeLabels: true });
+  }
+}
+
+// Separation and framing pull against each other, so one round of each
+// undershoots: separating pushes boxes apart along whichever axis is
+// cheapest, which pulls the cloud back towards square, and re-stretching it
+// to 16:9 opens gaps that let the next separation round resolve collisions
+// it previously had no room for. It takes several rounds to break through —
+// measured 2026-08-14 on the live projection page at theme b with the seeded
+// 50-person / 75-term graph, overlapping label pairs by round: 24, 24, 24,
+// 24, 5, 4, 2, then flat. Stopping at four (which looked like plenty on the
+// offline runs) leaves 18 pairs on the wall; running on to convergence
+// leaves 2.
+//
+// So this is a cap, not a target: the loop below stops as soon as the rounds
+// stop paying, and each round costs real time (~1-3s on that graph, all of
+// it inside boundingBox). It runs once, on a from-scratch placement only.
+const PLACEMENT_ROUNDS = 16;
+// Rounds that buy nothing before giving up. One flat round is not enough
+// evidence — the measurement above sat at 24 for four rounds before it broke
+// through to 5.
+const PLACEMENT_PATIENCE = 5;
+
+/** Shape a from-scratch placement for this wall: 16:9, and with the layout
+ * finally knowing that a term node is its dot PLUS its label box.
+ *
+ * ORDER MATTERS, and it is the opposite of the obvious one. `frameToAspect`
+ * may turn the whole net a quarter turn, and a rotation moves the dots while
+ * every label stays horizontal — so a net separated first and rotated after
+ * comes out overlapping again (measured on the same graph: separation took
+ * 43 pairs down to 20, and the rotation put it back to 48). Rotate FIRST, in
+ * the orientation the wall will actually show, and only then separate.
+ */
+export function settlePlacement(cy) {
+  frameToAspect(cy);
+  const nodes = cy.nodes().sort(byId);
+  const snapshot = () => nodes.map((node) => ({ ...node.position() }));
+  let best = { score: Infinity, positions: null };
+  let flatRounds = 0;
+
+  for (let round = 0; round < PLACEMENT_ROUNDS; round += 1) {
+    separateOverlappingNodes(cy);
+    // No rotation from here on: the orientation is settled above, and a
+    // separation round that happens to leave the cloud taller than wide must
+    // not be allowed to spin the whole picture a quarter turn.
+    frameToAspect(cy, CANVAS_ASPECT, { rotate: false });
+    const { labelPairs, labelsOnPersons } = countLabelOverlaps(cy);
+    const score = labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons;
+    if (score < best.score) {
+      best = { score, positions: snapshot() };
+      flatRounds = 0;
+    } else if ((flatRounds += 1) >= PLACEMENT_PATIENCE) {
+      break;
+    }
+    if (labelPairs === 0 && labelsOnPersons === 0) break;
+  }
+
+  // Pushing node A clear of B can push it into C, so the rounds do not
+  // descend cleanly — measured 2026-08-14 on the seeded graph they wander
+  // (41, 32, 32, 28, 30, 33, 26, 27, ...). Ending on whatever the last round
+  // happened to produce would throw away a better picture the loop had
+  // already found and paid for, so the best one is what gets kept.
+  if (best.positions) {
+    nodes.forEach((node, index) => node.position({ ...best.positions[index] }));
+  }
+}
+
+// Reset then declutter, and measure both sides of it. `before` is the
+// layout's own settled state (positions final, labels still at the theme
+// default); `after` is what a viewer actually sees. Run on every render —
+// including a min_mentions change, which adds no new nodes and so runs no
+// layout — because raising the dial only ever removes labels and the pass
+// should take that free win immediately, not carry over stale offsets
+// sized for a denser picture.
+function settleLabels(cy) {
+  resetLabelOffsets(cy);
+  const before = countLabelOverlaps(cy);
+  declutterLabels(cy);
+  const after = countLabelOverlaps(cy);
+  return { before, after };
+}
+
 export function createGraphView(container, { onPositions = () => {} } = {}) {
   const cy = cytoscape({ container, style: style(), wheelSensitivity: 0.2 });
   const camera = new Camera(cy);
@@ -5322,11 +6242,23 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
   // True while an animated layout is running. Tests and the pre-render wait on
   // this instead of guessing a timeout; positions land only at `layoutstop`.
   let layoutPending = false;
+  const emptyStats = { labelPairs: 0, labelsOnPersons: 0 };
+  let labelOverlapStats = { before: emptyStats, after: emptyStats };
+  // Where each node was last seen, by id. The dial hides term nodes by
+  // REMOVING them from cy, so turning it back down re-adds them — and until
+  // the server has round-tripped this session's positions back into
+  // `lastGraph`, those nodes carry x/y null and would read as brand new. Left
+  // to that, lowering the dial would re-run a layout and visibly reshuffle
+  // the returning half of the net (spec 11). They go back exactly where they
+  // were instead.
+  const lastSeen = new Map();
 
   function render() {
     const view = visibleGraph(lastGraph, minMentions);
     const wanted = new Set(view.nodes.map((n) => n.id).concat(view.edges.map((e) => e.id)));
     const present = cy.elements().map((el) => el.id());
+
+    cy.nodes().forEach((n) => lastSeen.set(n.id(), { ...n.position() }));
 
     // Remove what dropped out of the view. Positions of the rest are untouched.
     cy.elements()
@@ -5340,9 +6272,11 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
         .filter((n) => n.x !== null && n.x !== undefined && n.y !== null && n.y !== undefined)
         .map((n) => n.id),
     );
-    const fresh = newNodeIds(present, view).filter((id) => !placed.has(id));
+    const returning = newNodeIds(present, view).filter((id) => !placed.has(id) && lastSeen.has(id));
+    const fresh = newNodeIds(present, view).filter((id) => !placed.has(id) && !lastSeen.has(id));
     const toAdd = toCytoscape(view).filter((el) => cy.$id(el.data.id).length === 0);
     if (toAdd.length) cy.add(toAdd);
+    returning.forEach((id) => cy.$id(id).position({ ...lastSeen.get(id) }));
 
     if (fresh.length) {
       // Seed each new node next to a neighbour it already has, so the layout
@@ -5365,10 +6299,18 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       // Existing nodes are locked: the net must never re-shuffle (spec 11).
       const existing = cy.nodes().filter((n) => !fresh.includes(n.id()));
       existing.lock();
+      // Nothing is placed yet, so this layout owns the whole picture and may
+      // shape it to the canvas. Every later layout only adds to a net that is
+      // already on the wall, and must leave that net exactly where it is.
+      const fromScratch = existing.length === 0;
       const layout = cy.layout(LAYOUT);
       layoutPending = true;
       layout.one('layoutstop', () => {
         existing.unlock();
+        // The layout only ever separated dots; this shapes the placement to
+        // the wall and teaches it about the label boxes it settled without.
+        if (fromScratch) settlePlacement(cy);
+        labelOverlapStats = settleLabels(cy);
         const positions = {};
         cy.nodes().forEach((n) => {
           positions[n.id()] = { x: n.position('x'), y: n.position('y') };
@@ -5379,6 +6321,7 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
       });
       layout.run();
     } else {
+      labelOverlapStats = settleLabels(cy);
       camera.onGraphChanged();
     }
   }
@@ -5397,6 +6340,9 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
     get layoutPending() {
       return layoutPending;
     },
+    get labelOverlapStats() {
+      return labelOverlapStats;
+    },
     update(graph, value) {
       lastGraph = graph;
       if (value !== undefined) minMentions = value;
@@ -5406,6 +6352,15 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
     setMinMentions(value) {
       minMentions = value;
       render();
+    },
+    declutterLabels() {
+      declutterLabels(cy);
+    },
+    resetLabelOffsets() {
+      resetLabelOffsets(cy);
+    },
+    labelOverlaps() {
+      return countLabelOverlaps(cy);
     },
   };
 }
@@ -5526,12 +6481,25 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 #cy { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 ```
 
-`frontend/static/theme-a.css` — **A: dark mode as in the concept rendering (reference)**:
+`frontend/static/theme-a.css` — **A: the reference — white on black at the concept
+rendering's weights** (second pre-render review, revised 2026-08-14: the series A-B-C now
+varies only type size and stroke/outline weight; Birk could not read the 22px labels on
+1080 lines):
 
 ```css
+/* A: the reference. White on black at the concept rendering's weights.
+   The series A-B-C varies ONLY type size and stroke/outline weight (Birk,
+   2026-08-14: he could not read the labels at 22px on 1080 lines). Every
+   colour below is therefore identical in all three themes — a variant that
+   also moved the palette would not answer the legibility question.
+
+   --person-size shrunk 96 -> 56 (Birk's 3rd review, same date): the fill is
+   now a flat placeholder colour with no information in it, so the disc no
+   longer needs to be large enough to carry a face-shaped gradient — only the
+   --ring-color ring does, and that stays untouched here. */
 :root {
   --bg: #101014;
-  --person-size: 96;
+  --person-size: 56;
   --person-fill: #23232a;
   --ring-color: #C9A227;
   --ring-width: 5;
@@ -5542,66 +6510,101 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   --label-size: 22;
   --label-outline-width: 3;
   --label-outline-color: #101014;
+  --label-max-width: 220px;
+  --label-margin-y: 6;
   --edge-color: #8A8578;
   --edge-width: 2;
   --edge-opacity: 0.75;
 }
 ```
 
-`frontend/static/theme-b.css` — **B: inverted, light ground, dark lines/labels** (the whiteboard's own white is the darkest available "black"):
+`frontend/static/theme-b.css` — **B: larger type** (second pre-render review, revised
+2026-08-14: B was the inverted light-ground variant until now; Birk rejected that outright
+— white on black stays — and the slot went to legibility instead):
 
 ```css
+/* B: larger type. 32px labels (1.45x A) with the dots, rings, edges and text
+   outline scaled with them so the picture stays balanced rather than becoming
+   big text over a thin net. Same dark ground and same palette as A — this
+   variant answers "is it the size?", nothing else.
+
+   B was the inverted light-ground variant until 2026-08-14; Birk rejected
+   that outright (white on black stays), and the slot went to legibility.
+
+   --person-size shrunk 128 -> 76 (Birk's 3rd review, same date), same ratio
+   as A and C: the placeholder fill is now uniform and carries no
+   information, so the disc can shrink while --ring-width stays as heavy as
+   before — the ring, not the fill, is the concept's carrier. */
 :root {
-  --bg: #F4F1EA;
-  --person-size: 96;
-  --person-fill: #E2DED3;
-  --ring-color: #8A6B1F;
-  --ring-width: 5;
-  --term-dot: 14;
-  --term-dot-color: #2B2B2B;
-  --label-color: #1A1A1A;
+  --bg: #101014;
+  --person-size: 76;
+  --person-fill: #23232a;
+  --ring-color: #C9A227;
+  --ring-width: 7;
+  --term-dot: 20;
+  --term-dot-color: #EDE7D8;
+  --label-color: #F5F1E6;
   --label-font: Georgia, "Times New Roman", serif;
-  --label-size: 22;
-  --label-outline-width: 2;
-  --label-outline-color: #F4F1EA;
-  --edge-color: #4A4A4A;
-  --edge-width: 2;
-  --edge-opacity: 0.85;
+  --label-size: 32;
+  --label-outline-width: 4;
+  --label-outline-color: #101014;
+  --label-max-width: 320px;
+  --label-margin-y: 8;
+  --edge-color: #8A8578;
+  --edge-width: 3;
+  --edge-opacity: 0.8;
 }
 ```
 
-`frontend/static/theme-c.css` — **C: dark mode with markedly heavier strokes and a larger minimum font**:
+`frontend/static/theme-c.css` — **C: much larger type, heaviest strokes** (second
+pre-render review, revised 2026-08-14: same dark ground and palette as A and B, not a
+separate colour treatment):
 
 ```css
+/* C: much larger type, heaviest strokes. 44px labels (2x A), a 6px outline
+   under them, and rings/dots/edges heavy enough to still read as a net at
+   that type size. Same dark ground and same palette as A and B. This is the
+   upper end of the legibility ladder: whatever cannot be read here cannot be
+   read at all at 50 persons in one frame, and the answer is the camera
+   (spec 10.3), not more type.
+
+   --person-size shrunk 168 -> 100 (Birk's 3rd review, same date), keeping
+   the A/B/C ladder proportional: the fill is now a flat, information-free
+   placeholder, so it no longer needs to dominate the frame — --ring-width
+   stays at its full weight and does that job instead. */
 :root {
   --bg: #101014;
-  --person-size: 112;
+  --person-size: 100;
   --person-fill: #23232a;
-  --ring-color: #E0B531;
-  --ring-width: 9;
-  --term-dot: 20;
-  --term-dot-color: #FFFFFF;
-  --label-color: #FFFFFF;
+  --ring-color: #C9A227;
+  --ring-width: 10;
+  --term-dot: 28;
+  --term-dot-color: #EDE7D8;
+  --label-color: #F5F1E6;
   --label-font: Georgia, "Times New Roman", serif;
-  --label-size: 30;
-  --label-outline-width: 5;
+  --label-size: 44;
+  --label-outline-width: 6;
   --label-outline-color: #101014;
-  --edge-color: #C8C3B4;
-  --edge-width: 4;
-  --edge-opacity: 1;
+  --label-max-width: 440px;
+  --label-margin-y: 11;
+  --edge-color: #8A8578;
+  --edge-width: 5;
+  --edge-opacity: 0.85;
 }
 ```
 
 - [ ] **Step 6: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_camera.py tests/test_projection.py -v`
-Expected: PASS (15 tests) — verified by a real run on 2026-08-13 during the
-task-14 review-findings pass (8 camera + 7 projection; the original brief's
-10 became 15 after adding the camera-interactivity tests for finding 3, the
-theme-baking regression test for finding 1, and the theme-error-fallback
-regression test for the finding-2 follow-up (a bad `?theme=` value must
-degrade to the default theme and still render instead of hanging the
-theme-load promise forever).
+Expected: PASS (24 tests) — 15 verified by a real run on 2026-08-13 during
+the task-14 review-findings pass (8 camera + 7 projection; the original
+brief's 10 became 15 after adding the camera-interactivity tests for finding
+3, the theme-baking regression test for finding 1, and the
+theme-error-fallback regression test for the finding-2 follow-up (a bad
+`?theme=` value must degrade to the default theme and still render instead of
+hanging the theme-load promise forever)). The second pre-render review
+(2026-08-14) added the remaining 9: six for the camera's zoom factor and
+`focus()`, and three for the 16:9 framing of a from-scratch placement.
 
 - [ ] **Step 7: Commit**
 
@@ -7334,10 +8337,52 @@ legibility, stroke weight and black level on a whiteboard, which needs realistic
   - `sim.seed_graph.TERM_LABELS` — 100 realistic long German labels; list order IS the Zipf popularity ranking.
   - `sim.seed_graph.seed_graph(data_dir, persons=50, seed=20260814) -> Path` — deterministic; returns `Config(data_dir).db_path`.
   - `sim.prerender.serve(store, cfg) -> (base_url, shutdown)` — starts the real app on an ephemeral port in a background thread.
-  - `sim.prerender.render_series(db_path, out_dir, themes=("a", "b", "c"), include_testpattern=True) -> list[Path]` — a pure renderer over an existing db.
-  - CLI: `uv run python -m sim.prerender --db out/prerender-state/kg.db --out out/prerender --persons 50` (seeds the db if it does not exist).
+  - `sim.prerender.Shot` — frozen dataclass `(path, description, coverage)`; `coverage` is a measurement dict (fraction of the canvas the node cloud covers, zoom, fraction of nodes in frame, etc.).
+  - `sim.prerender.render_series(db_path, out_dir, themes=(), include_testpattern=False, include_camera_views=False, camera_theme="a", include_density_series=True, density_theme="b", min_mentions_values=(1, 2, 3)) -> list[Shot]` — a pure renderer over an existing db. The density series is what it renders by default (see the third review below); the type-size series, the camera series (fit-all reference, fit at zoom factor 2, and a close-up on the tightest person-and-terms cluster) and the test pattern are all opt-in.
+  - CLI: `uv run python -m sim.prerender --db out/prerender3-state/kg.db --out out/prerender3 --persons 50 --seed 20260814 --reseed --themes {a,b,c} --camera-theme {a,b,c} --camera-views --testpattern` (seeds the db if it does not exist; `--reseed` deletes the seeded state first — the renderer persists node positions into the db, so an existing db pins the placement). Output filenames: `theme-b-min-mentions-{1,2,3}-<n>-terms.png`, `theme-b-min-mentions-1-labels-BEFORE-declutter.png`, and behind the flags `series-a-dark-base-label22.png`, `series-b-dark-larger-label32.png`, `series-c-dark-largest-label44.png`, `camera-1-fit-all-reference.png`, `camera-2-zoom2x-half-the-net.png`, `camera-3-cluster-closeup.png`, `series-d-testpattern-greyscale-and-font-ladder.png`.
 
-The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4). Variants: **A** dark reference, **B** inverted, **C** heavier strokes and larger minimum font, **D** the test pattern.
+The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4). Variants: **A** dark reference, **B** larger type, **C** much larger type and heaviest strokes — all three share one dark palette and background, differing only in size and stroke weight — **D** the test pattern.
+
+**Second pre-render review — decision by Birk, 2026-08-14 (binding).** White on black stays:
+the inverted, light-ground variant (the old B) is rejected outright and dropped from the
+series; its slot became a legibility variant instead, so A/B/C now differ only in type size
+and stroke/outline weight over one shared dark palette (see the theme files, Task 14). Two
+more findings from the same review: the settled placement is now framed to the 16:9 canvas
+(`frameToAspect()` in `projection.js` — a from-scratch layout only, never an already-placed
+net, per spec §11) — at 50 persons / 125 nodes the node cloud went from 30% of the canvas
+width to about 89%; and the camera (Task 14) gained `setZoomFactor()` and `focus()`, since
+fit-all at 50 persons is settled as illegible. `sim/prerender.py` now also shoots a camera
+series over the identical graph and reports a `coverage` measurement per shot. Every graph
+variant still shares one placement — the renderer persists settled positions and the next
+variant loads them; laid out separately, a bigger label size would spread the net out and
+the camera's fit would zoom back out by the same factor, so the labels would reach the wall
+at the same size and the series would compare nothing. Spec §10.4 amended to match.
+
+**Third pre-render review — decision by Birk, 2026-08-14 (binding).** Theme B (32px labels) is
+his settled choice and becomes the default theme rendered; A and C stay regenerable behind
+`--themes`, because only a real projector on site can make the final call. Three findings:
+
+1. The multicoloured placeholder discs are misleading — the colours mean nothing — and they
+   fight the term text. All placeholders are now one muted colour and noticeably smaller,
+   with the golden ring kept at full weight: the ring, not the fill, is the concept's carrier
+   (Task 14's themes and `sim/seed_graph.py`).
+2. The label pile-up gets three structural fixes, carried by Task 14 and described there.
+3. The `min_mentions` dial gets its own series — the SAME graph at 1, 2 and 3 — because it may
+   already solve much of the crowding and Birk has never seen it. It goes through the real
+   display-filter path (Task 13's `visibleGraph`, driven here through
+   `window.kgView.setMinMentions`), never a second, special-case renderer.
+
+No separate theme-B full-graph shot is rendered: `min_mentions=1` hides nothing, so that shot
+IS the theme-B picture, and delivering the identical picture twice under two filenames would
+read as two findings. One extra shot repeats it with the declutter pass switched off, so the
+improvement can be seen and not only read as a pair count.
+
+Measured on the seeded graph at theme b, overlapping label pairs / labels sitting on portrait
+discs: 43 / 30 from cose alone, 24 / 14 after the placement pipeline, 18 / 4 after the
+declutter pass. Raising the dial takes the same picture to 16 / 13 -> 12 / 3 at
+`min_mentions=2` (50 terms) and 9 / 12 -> 8 / 2 at 3 (31 terms). Spec §10.4 amended to match.
+
+The Step 1–4 listings below carry the shipped files, all three amendments included.
 
 The db must sit at `<data_dir>/kg.db`: `render_series` derives `Config(data_dir=db_path.parent)` and the app mounts `cfg.portrait_dir` from it, so a db elsewhere silently breaks the portraits. The `wait_for_function` timeouts are 60000 ms, not the 20000 ms a toy graph needed. `sim/prerender.py` reuses `tests/conftest.py`'s cached-chromium `executable_path` fallback — this host cannot `playwright install`.
 
@@ -7346,45 +8391,222 @@ The db must sit at `<data_dir>/kg.db`: `render_series` derives `Config(data_dir=
 `tests/test_prerender.py`:
 
 ```python
+"""sim.prerender shoots the live renderer headless (Task 20 brief).
+
+Adapted from the plan's Task 20 Step 1, but fed by sim.seed_graph through the
+Store instead of fixture edges (Birk's 2026-08-14 decision: no simulation
+dependency), and against a small seeded db so the test stays fast.
+"""
+
+from __future__ import annotations
+
+import pytest
 from PIL import Image
 
-from kg.config import Config
-from kg.store import Store
 from sim.prerender import render_series
+from sim.seed_graph import seed_graph
+
+PERSONS = 6
+SEED = 20260814
 
 
-def build_db(tmp_path):
-    cfg = Config(data_dir=tmp_path / "state")
-    store = Store.open(cfg.db_path)
-    for index in range(4):
-        person = store.create_person(started_at=float(index))
-        term = store.get_or_create_term(f"Begriff {index}", created_at=float(index))
-        store.add_edge(person.id, term.id, created_at=float(index))
-        if index:
-            store.add_edge(person.id, store.list_terms()[0].id, created_at=float(index))
-    store.close()
-    return cfg.db_path
+@pytest.fixture(scope="module")
+def seeded_db(tmp_path_factory):
+    data_dir = tmp_path_factory.mktemp("prerender-state")
+    return seed_graph(data_dir, persons=PERSONS, seed=SEED)
 
 
-def test_the_series_renders_one_png_per_variant_at_1920x1080(tmp_path):
-    db_path = build_db(tmp_path)
+def _placement_by_id(coverage):
+    # coverage["placement"] is a list of [id, x, y] triples from MEASURE,
+    # arriving from Playwright as JSON (lists, not tuples) — reshape once here
+    # instead of repeating the conversion in every test.
+    return {row[0]: (row[1], row[2]) for row in coverage["placement"]}
+
+
+def test_the_series_renders_one_png_per_variant_at_1920x1080(tmp_path, seeded_db):
     out_dir = tmp_path / "prerender"
 
-    paths = render_series(db_path, out_dir)
+    shots = render_series(seeded_db, out_dir)
 
-    assert [p.name for p in paths] == ["a.png", "b.png", "c.png", "d.png"]
-    for path in paths:
-        with Image.open(path) as img:
+    # Third iteration's default: the density dial's four shots on theme B
+    # (Birk's settled choice) and nothing else. No separate theme-B shot —
+    # min_mentions=1 hides nothing, so that IS the full-graph theme-B
+    # picture; a/c, the camera series and the test pattern are all opt-in
+    # this round (see CLI flags).
+    names = [s.path.name for s in shots]
+    assert names[0].startswith("theme-b-min-mentions-1-all-") and names[0].endswith("-terms.png")
+    assert names[1].startswith("theme-b-min-mentions-2-") and names[1].endswith("-terms.png")
+    assert names[2].startswith("theme-b-min-mentions-3-") and names[2].endswith("-terms.png")
+    assert names[3] == "theme-b-min-mentions-1-labels-BEFORE-declutter.png"
+    assert len(names) == 4
+    for shot in shots:
+        with Image.open(shot.path) as img:
             assert img.size == (1920, 1080)
 
 
-def test_the_variants_differ_from_each_other(tmp_path):
-    db_path = build_db(tmp_path)
+def test_the_variants_differ_from_each_other(tmp_path, seeded_db):
     out_dir = tmp_path / "prerender"
 
-    paths = render_series(db_path, out_dir, themes=("a", "b"), include_testpattern=False)
+    shots = render_series(
+        seeded_db,
+        out_dir,
+        themes=("a", "b"),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=False,
+    )
 
-    assert paths[0].read_bytes() != paths[1].read_bytes()
+    assert shots[0].path.read_bytes() != shots[1].path.read_bytes()
+
+
+def test_every_graph_variant_shares_one_placement(tmp_path, seeded_db):
+    # The variants differ in type size. If each got its own layout, the bigger
+    # type would spread the net out and the camera's fit would zoom back out
+    # by the same factor — the labels would reach the wall at the same size
+    # and the series would compare nothing.
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=("a", "b", "c"),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=False,
+    )
+
+    placements = {tuple(tuple(row) for row in shot.coverage["placement"]) for shot in shots}
+    assert len(placements) == 1
+
+
+def test_the_placement_fills_the_16_9_canvas(tmp_path, seeded_db):
+    # The measurement Birk asked for: before the layout was framed to the
+    # canvas, the node cloud covered 30% of the width (2026-08-14 baseline).
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=("a",),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=False,
+    )
+
+    assert shots[0].coverage["width_fraction_with_labels"] > 0.8
+
+
+def test_the_camera_views_frame_progressively_less_of_the_net(tmp_path, seeded_db):
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=(),
+        include_testpattern=False,
+        include_camera_views=True,
+        include_density_series=False,
+    )
+
+    assert [s.path.name for s in shots] == [
+        "camera-1-fit-all-reference.png",
+        "camera-2-zoom2x-half-the-net.png",
+        "camera-3-cluster-closeup.png",
+    ]
+    zooms = [s.coverage["zoom"] for s in shots]
+    assert zooms[0] < zooms[1] < zooms[2]
+    # Fit-all is the only view that holds the whole net; both zoomed views
+    # trade coverage for size. Which of the two holds more depends on how
+    # dense the chosen cluster is, so only the fit-all baseline is ordered.
+    in_frame = [s.coverage["nodes_in_frame"] for s in shots]
+    assert in_frame[0] == 1.0
+    assert in_frame[1] < 1.0 and in_frame[2] < 1.0
+
+
+def test_the_density_dial_shows_the_same_graph_at_three_thresholds(tmp_path, seeded_db):
+    # Item 3 of the third brief: the SAME graph at min_mentions 1/2/3,
+    # through the real display-filter path (window.kgView.setMinMentions ->
+    # render() -> graph-model.js visibleGraph), never a second renderer.
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=(),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=True,
+        min_mentions_values=(1, 2, 3),
+    )
+
+    dial_shots = shots[:3]
+    for shot in dial_shots:
+        with Image.open(shot.path) as img:
+            assert img.size == (1920, 1080)
+
+    terms = [s.coverage["term_nodes"] for s in dial_shots]
+    edges = [s.coverage["edges"] for s in dial_shots]
+    persons = [s.coverage["person_nodes"] for s in dial_shots]
+    assert terms[0] > terms[1] > terms[2]
+    assert edges[0] > edges[1] > edges[2]
+    assert persons[0] == persons[1] == persons[2] == PERSONS
+
+
+def test_the_density_shots_share_one_placement(tmp_path, seeded_db):
+    # Raising the dial only hides term nodes — it must never re-run the
+    # layout. min_mentions=3 shows the fewest nodes, so its ids are a subset
+    # of the other two; every id it has must sit at the identical position.
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=(),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=True,
+        min_mentions_values=(1, 2, 3),
+    )
+
+    by_id = [_placement_by_id(s.coverage) for s in shots[:3]]
+    shared_ids = set(by_id[2])
+    assert shared_ids  # the graph must not be filtered down to nothing
+    assert shared_ids <= set(by_id[0])
+    assert shared_ids <= set(by_id[1])
+    for node_id in shared_ids:
+        assert by_id[0][node_id] == by_id[1][node_id] == by_id[2][node_id]
+
+
+def test_the_declutter_off_shot_is_the_same_picture_and_never_the_better_one(
+    tmp_path, seeded_db
+):
+    # Birk has only seen the label-overlap count, never the picture: this
+    # comparison shot puts the pass's own effect on the exact graph the
+    # min_mentions=1 dial shot above it also shows.
+    #
+    # What is asserted here is the direction, not a margin. This module's
+    # seeded db is deliberately small (PERSONS = 6) so the suite stays fast,
+    # and at that size the placement pass alone already clears every overlap
+    # — so both shots read zero and there is nothing left for the declutter
+    # pass to improve. The margin at the density that actually matters (50
+    # persons / 75 distinct long labels: 24 pairs down to 18, 14 labels on
+    # portrait discs down to 4) belongs to the front end and is measured in
+    # tests/test_projection.py against exactly that net.
+    shots = render_series(
+        seeded_db,
+        tmp_path / "prerender",
+        themes=(),
+        include_testpattern=False,
+        include_camera_views=False,
+        include_density_series=True,
+        min_mentions_values=(1,),
+    )
+
+    after_shot, before_shot = shots[0], shots[1]
+    assert before_shot.path.name == "theme-b-min-mentions-1-labels-BEFORE-declutter.png"
+    assert (
+        before_shot.coverage["label_overlaps"]["labelPairs"]
+        >= after_shot.coverage["label_overlaps"]["labelPairs"]
+    )
+    assert (
+        before_shot.coverage["label_overlaps"]["labelsOnPersons"]
+        >= after_shot.coverage["label_overlaps"]["labelsOnPersons"]
+    )
+    # Same graph, same placement — the ids present are identical, and every
+    # id's position matches, so the two shots really are the same picture.
+    before_ids = _placement_by_id(before_shot.coverage)
+    after_ids = _placement_by_id(after_shot.coverage)
+    assert before_ids == after_ids
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -7395,14 +8617,51 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'sim.prerender'`
 - [ ] **Step 3: Implement `sim/prerender.py`**
 
 ```python
-"""Headless 1920x1080 PNGs with the renderer that later runs live (spec 10.4)."""
+"""Headless 1920x1080 PNGs with the renderer that later runs live (spec 10.4).
+
+Adapted from the plan's Task 20 Step 3. Per Birk's 2026-08-14 decision (see
+the Task 20 brief), this no longer depends on a simulation database (Tasks
+18/19 don't exist yet): the CLI seeds the db directly through
+`sim.seed_graph.seed_graph` if it doesn't already exist. `render_series`
+itself stays a pure renderer over an existing db — it does not know or care
+how that db was populated.
+
+Second iteration (Birk's 2026-08-14 pre-render review, binding):
+- the inverted light-ground variant is dropped; all three graph variants are
+  white on black and differ in type size and stroke weight only,
+- the placement fills the 16:9 canvas (see `frameToAspect` in projection.js),
+  and every shot reports how much of the canvas the node cloud covers,
+- a camera series shows what zoomed operation looks like over the SAME graph,
+  since fit-all at 50 persons is settled as illegible.
+
+Third iteration (Birk's 2026-08-14 review of series 2, item 3 of that brief):
+- theme B (32px labels) is Birk's settled choice and is now the default
+  graph theme rendered; A and C stay regenerable behind `--themes` for the
+  final call, which only a real projector on site can make,
+- the minimum-mentions dial (Task 13's display filter — graph-model.js
+  `visibleGraph`, driven here through `window.kgView.setMinMentions`, never
+  a second filtering renderer) gets its own series: the SAME placement shot
+  at min_mentions 1/2/3, so the dial's own effect on crowding is visible
+  before any layout fix is judged,
+- and because that dial's first step (min_mentions=1) hides nothing, it IS
+  the theme-B full-graph shot — so the type-ladder series renders nothing by
+  default. Delivering the identical picture twice under two filenames would
+  read as two findings; `--themes a c` regenerates the other two rungs.
+- one more shot repeats the min_mentions=1 picture with the label-declutter
+  pass switched off, so that improvement is seen against the identical
+  graph, not only reported as a pair count,
+- the camera series and the test pattern stay regenerable but are off by
+  default this round — the question this round is the dial, not the camera.
+"""
 
 from __future__ import annotations
 
 import argparse
+import shutil
 import socket
 import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import uvicorn
@@ -7411,6 +8670,156 @@ from kg.bus import EventBus
 from kg.config import Config
 from kg.server import create_app
 from kg.store import Store
+
+
+@dataclass(frozen=True)
+class Shot:
+    """One delivered PNG: where it is, what it shows, and what it measures."""
+
+    path: Path
+    description: str
+    coverage: dict = field(default_factory=dict)
+
+
+# The legibility ladder. Same graph, same positions, same palette — only type
+# size and stroke weight change, which is the whole question this series asks.
+SERIES = {
+    "a": (
+        "series-a-dark-base-label22",
+        "A (reference): white on black, 22px labels, 5px rings, 2px edges — the concept rendering's weights.",
+    ),
+    "b": (
+        "series-b-dark-larger-label32",
+        "B: 32px labels (1.45x A), 7px rings, 20px term dots, 3px edges, 4px text outline — same ground, same palette.",
+    ),
+    "c": (
+        "series-c-dark-largest-label44",
+        "C: 44px labels (2x A), 10px rings, 28px term dots, 5px edges, 6px text outline — the upper end of the ladder.",
+    ),
+}
+
+TESTPATTERN = (
+    "series-d-testpattern-greyscale-and-font-ladder",
+    "D: test pattern — greyscale wedge and font-size ladder, for the whiteboard's real black level on site.",
+)
+
+# Camera views over the identical graph. They call the live Camera component
+# (window.kgView.camera), never cy.zoom/cy.pan directly: what is shot here is
+# what the wall would actually do.
+CAMERA_VIEWS = [
+    (
+        "camera-1-fit-all-reference",
+        "Camera 1: fit mode, the whole net in frame — the reference, and the view that is settled as illegible at 50 persons.",
+        "() => { const c = window.kgView.camera; c.setZoomFactor(1); c.setMode('fit'); }",
+    ),
+    (
+        "camera-2-zoom2x-half-the-net",
+        "Camera 2: fit mode at zoom factor 2 — half the net's width across the wall, centred.",
+        "() => { const c = window.kgView.camera; c.setMode('fit'); c.setZoomFactor(2); }",
+    ),
+    (
+        "camera-3-cluster-closeup",
+        "Camera 3: the camera on the tightest person-and-terms cluster in the net, plus whoever else falls in that frame — the view an automatic traversal dwells on.",
+        # Deterministic pick: smallest cluster box by area, ties by person id.
+        """() => {
+             const cy = window.kgView.cy;
+             let best = null;
+             cy.nodes('.person').forEach((person) => {
+               const cluster = person.union(person.neighborhood('node.term'));
+               const box = cluster.boundingBox({ includeLabels: true });
+               const area = box.w * box.h;
+               if (!best || area < best.area || (area === best.area && person.id() < best.id)) {
+                 best = { area, id: person.id(), cluster };
+               }
+             });
+             window.kgView.camera.focus(best.cluster);
+           }""",
+    ),
+]
+
+# What the layout fix is judged by: the rendered box of all nodes as a
+# fraction of the 1920x1080 canvas, plus how much of the net is in frame.
+MEASURE = """
+() => {
+  const cy = window.kgView.cy;
+  const nodes = cy.nodes();
+  const bare = nodes.renderedBoundingBox({ includeLabels: false });
+  const withLabels = nodes.renderedBoundingBox({ includeLabels: true });
+  const extent = cy.extent();
+  // Keyed by node id, not summed: the density dial changes which nodes are
+  // even present (term nodes below the threshold drop out), so a sum over a
+  // shorter node set would drift even when every surviving node sits exactly
+  // where it did. Sorted by id so two evaluations are comparable regardless
+  // of cy's own iteration order.
+  const placement = nodes
+    .map((n) => [n.id(), Math.round(n.position('x') * 1000) / 1000, Math.round(n.position('y') * 1000) / 1000])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const inFrame = nodes.filter((n) => {
+    const p = n.position();
+    return p.x >= extent.x1 && p.x <= extent.x2 && p.y >= extent.y1 && p.y <= extent.y2;
+  }).length;
+  return {
+    nodes: nodes.length,
+    // What is actually on the wall at this shot — the density dial's whole
+    // point, so it is reported per shot, not just derived from a filename.
+    term_nodes: cy.nodes('.term').length,
+    person_nodes: cy.nodes('.person').length,
+    edges: cy.edges('.link').length,
+    zoom: cy.zoom(),
+    // Fingerprint of the placement, so a shared one can be asserted.
+    placement,
+    width_fraction: bare.w / cy.width(),
+    height_fraction: bare.h / cy.height(),
+    width_fraction_with_labels: withLabels.w / cy.width(),
+    height_fraction_with_labels: withLabels.h / cy.height(),
+    nodes_in_frame: inFrame / nodes.length,
+    // The front end's own overlap count, not a second one computed here —
+    // this file renders, it does not re-implement label-collision judgement.
+    label_overlaps: window.kgView.labelOverlaps(),
+    label_overlap_stats: window.kgView.labelOverlapStats,
+  };
+}
+"""
+
+# Positions are persisted by the renderer itself (POST /api/positions) and the
+# next variant loads them, so every variant shares one placement — without
+# that, a bigger label size would spread the layout out and the camera's fit
+# would zoom back out by the same factor, leaving the type visually identical
+# and the whole comparison meaningless.
+POSITIONS_PERSISTED = """
+async () => {
+  const graph = await (await fetch('/graph.json')).json();
+  return graph.nodes.every((n) => n.x !== null && n.x !== undefined);
+}
+"""
+
+# Portraits are background-images: Cytoscape paints the ring first and fills
+# it in whenever each file arrives. Without waiting for them a cold-cache run
+# shoots half-drawn person nodes — which is exactly what a first run is.
+PORTRAITS_LOADED = """
+() =>
+  Promise.all(
+    window.kgView.cy
+      .nodes('.person')
+      .map((node) => node.data('portrait'))
+      .filter(Boolean)
+      .map(
+        (url) =>
+          new Promise((resolve) => {
+            const image = new Image();
+            image.onload = resolve;
+            image.onerror = resolve;
+            image.src = url;
+          }),
+      ),
+  ).then(() => {
+    // Cytoscape redraws by itself as each image lands, but say so explicitly
+    // — and return a plain value, never the cy instance: serialising that
+    // back to the driver crashes the page.
+    window.kgView.cy.forceRender();
+    return true;
+  })
+"""
 
 
 def _free_port() -> int:
@@ -7439,12 +8848,112 @@ def serve(store, cfg) -> tuple[str, callable]:
     return f"http://127.0.0.1:{port}", shutdown
 
 
+def _launch_chromium(playwright):
+    # This Debian 11 host cannot `playwright install` the pinned chromium
+    # revision (no network access, OS predates what it needs), but a
+    # compatible build is already cached. Same fallback as tests/conftest.py
+    # — reused here, not reinvented, or this breaks on this exact machine.
+    try:
+        return playwright.chromium.launch()
+    except Exception:
+        candidates = sorted(Path.home().glob(".cache/ms-playwright/chromium-*/chrome-linux64/chrome"))
+        if not candidates:
+            raise
+        return playwright.chromium.launch(executable_path=str(candidates[-1]))
+
+
+def _open_projection(page, base_url: str, theme: str) -> None:
+    page.goto(f"{base_url}/projection?theme={theme}")
+    # The 50-person / ~75-term graph and its animated cose layout take real
+    # wall-clock time — 60s (not the toy-graph 20s the plan used) is the
+    # budget, not a guess to shrink.
+    page.wait_for_function("window.kgReady === true", timeout=60000)
+    # Wait for the real signal, not a guessed duration: the cose layout is
+    # animated and nodes are still moving until layoutstop.
+    page.wait_for_function(
+        "() => window.kgView && window.kgView.layoutPending === false",
+        timeout=60000,
+    )
+    # The renderer POSTs the settled positions back; the next page load must
+    # read them, not lay the net out a second time.
+    page.wait_for_function(POSITIONS_PERSISTED, timeout=60000)
+    page.evaluate(PORTRAITS_LOADED)
+    page.wait_for_timeout(500)  # let the final frame paint
+
+
+# The dial's own series (Task 3 of the third brief). Same graph, same
+# placement, only the threshold moves — through the real display-filter path
+# (window.kgView.setMinMentions -> render() -> graph-model.js visibleGraph),
+# never a second, special-case renderer that filters the graph data itself.
+DENSITY_MIN_MENTIONS = (1, 2, 3)
+DENSITY_THEME = "b"  # Birk's settled choice this round (see module docstring)
+
+
+def _density_shots(page, base_url: str, out_dir: Path, theme: str, min_mentions_values) -> list[Shot]:
+    shots: list[Shot] = []
+    _open_projection(page, base_url, theme)
+    first = min_mentions_values[0]
+    for value in min_mentions_values:
+        page.evaluate(f"() => window.kgView.setMinMentions({value})")
+        # No new nodes arrive when the dial only hides existing ones, so
+        # render() never starts a layout — layoutPending stays false and this
+        # is purely the declutter pass (over fewer, now-visible labels)
+        # settling, not a layout wait.
+        page.wait_for_timeout(200)
+        data = page.evaluate(MEASURE)
+        # The filename carries the REAL remaining count, not the threshold
+        # alone — a filename must tell Birk what he is looking at without
+        # opening the file.
+        qualifier = "all-" if value == first else ""
+        stem = f"theme-{theme}-min-mentions-{value}-{qualifier}{data['term_nodes']}-terms"
+        description = (
+            f"Density dial at min_mentions={value}: {data['term_nodes']} term nodes, "
+            f"{data['person_nodes']} persons, {data['edges']} edges on the wall — same "
+            "placement as the other two steps, only the dial moved."
+        )
+        target = out_dir / f"{stem}.png"
+        page.screenshot(path=str(target))
+        shots.append(Shot(target, description, data))
+
+    # BEFORE/AFTER declutter comparison on the exact picture the min_mentions
+    # equal to `first` shot above already is — so the improvement is seen
+    # against the identical graph, not only reported as a pair count.
+    page.evaluate(f"() => window.kgView.setMinMentions({first})")
+    page.wait_for_timeout(200)
+    page.evaluate("() => window.kgView.resetLabelOffsets()")
+    page.wait_for_timeout(200)
+    before_data = page.evaluate(MEASURE)
+    before_target = out_dir / f"theme-{theme}-min-mentions-{first}-labels-BEFORE-declutter.png"
+    page.screenshot(path=str(before_target))
+    page.evaluate("() => window.kgView.declutterLabels()")
+    page.wait_for_timeout(200)
+    after_overlaps = page.evaluate("() => window.kgView.labelOverlaps()")
+    # Override the generic auto-recorded stats: those describe the LAST
+    # render's own pass, not this manual reset/redeclutter demonstration.
+    before_data["label_overlap_stats"] = {"before": before_data["label_overlaps"], "after": after_overlaps}
+    shots.append(
+        Shot(
+            before_target,
+            f"Same picture as min_mentions={first} above, label declutter pass switched OFF: "
+            f"{before_data['label_overlaps']['labelPairs']} overlapping label pairs "
+            f"(vs {after_overlaps['labelPairs']} once the pass runs).",
+            before_data,
+        )
+    )
+    return shots
+
+
 def render_series(
     db_path: Path,
     out_dir: Path,
-    themes: tuple[str, ...] = ("a", "b", "c"),
-    include_testpattern: bool = True,
-) -> list[Path]:
+    themes: tuple[str, ...] = (),
+    include_testpattern: bool = False,
+    include_camera_views: bool = False,
+    camera_theme: str = "a",
+    include_density_series: bool = True,
+    density_theme: str = DENSITY_THEME,
+    min_mentions_values: tuple[int, ...] = DENSITY_MIN_MENTIONS,
+) -> list[Shot]:
     from playwright.sync_api import sync_playwright
 
     db_path = Path(db_path)
@@ -7454,44 +8963,124 @@ def render_series(
     cfg = Config(data_dir=db_path.parent)
     store = Store.open(db_path)
     base_url, shutdown = serve(store, cfg)
-    written: list[Path] = []
+    shots: list[Shot] = []
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch()
+            browser = _launch_chromium(playwright)
             page = browser.new_page(viewport={"width": 1920, "height": 1080})
             for theme in themes:
-                page.goto(f"{base_url}/projection?theme={theme}")
-                page.wait_for_function("window.kgReady === true", timeout=20000)
-                # Wait for the real signal, not a guessed duration: the cose
-                # layout is animated and nodes are still moving until layoutstop.
-                page.wait_for_function(
-                    "() => window.kgView && window.kgView.layoutPending === false",
-                    timeout=20000,
-                )
-                page.wait_for_timeout(200)  # let the final frame paint
-                target = out_dir / f"{theme}.png"
+                stem, description = SERIES[theme]
+                _open_projection(page, base_url, theme)
+                target = out_dir / f"{stem}.png"
                 page.screenshot(path=str(target))
-                written.append(target)
+                shots.append(Shot(target, description, page.evaluate(MEASURE)))
+            if include_density_series:
+                shots.extend(_density_shots(page, base_url, out_dir, density_theme, min_mentions_values))
+            if include_camera_views:
+                _open_projection(page, base_url, camera_theme)
+                for stem, description, setup in CAMERA_VIEWS:
+                    page.evaluate(setup)
+                    page.wait_for_timeout(200)
+                    target = out_dir / f"{stem}.png"
+                    page.screenshot(path=str(target))
+                    shots.append(
+                        Shot(target, f"{description} [theme {camera_theme}]", page.evaluate(MEASURE))
+                    )
             if include_testpattern:
+                stem, description = TESTPATTERN
                 page.goto(f"{base_url}/testpattern")
                 page.wait_for_selector(".wedge")
-                target = out_dir / "d.png"
+                target = out_dir / f"{stem}.png"
                 page.screenshot(path=str(target))
-                written.append(target)
+                shots.append(Shot(target, description))
             browser.close()
     finally:
         shutdown()
         store.close()
-    return written
+    return shots
 
 
 def main() -> None:
+    from sim.seed_graph import seed_graph
+
     parser = argparse.ArgumentParser(prog="sim.prerender")
-    parser.add_argument("--db", default="out/sim.db")
-    parser.add_argument("--out", default="out/prerender")
+    parser.add_argument("--db", default="out/prerender3-state/kg.db")
+    parser.add_argument("--out", default="out/prerender3")
+    parser.add_argument("--persons", type=int, default=50)
+    parser.add_argument("--seed", type=int, default=20260814)
+    parser.add_argument(
+        "--reseed",
+        action="store_true",
+        help="delete the seeded state first. The renderer persists node positions "
+        "into it, so an existing db pins the placement — required after any "
+        "change to the layout.",
+    )
+    parser.add_argument(
+        "--themes",
+        nargs="+",
+        default=[],
+        choices=sorted(SERIES),
+        help="which type-size variants to render as their own full-graph shot "
+        "(default: none — theme b, Birk's settled choice this round, is already "
+        "the density series' min_mentions=1 shot; pass a and/or c to regenerate "
+        "the other rungs for the on-site projector call)",
+    )
+    parser.add_argument(
+        "--camera-theme",
+        default="a",
+        choices=sorted(SERIES),
+        help="theme for the camera series (default a, so it compares directly with series A)",
+    )
+    parser.add_argument(
+        "--camera-views", action="store_true", help="also render the camera series (off by default this round)"
+    )
+    parser.add_argument(
+        "--testpattern",
+        action="store_true",
+        help="also render the greyscale/font-ladder test pattern (off by default this round)",
+    )
     args = parser.parse_args()
-    for path in render_series(Path(args.db), Path(args.out)):
-        print(path)
+
+    db_path = Path(args.db)
+    if args.reseed and db_path.parent.exists():
+        shutil.rmtree(db_path.parent)
+    if not db_path.exists():
+        seed_graph(db_path.parent, persons=args.persons, seed=args.seed)
+
+    shots = render_series(
+        db_path,
+        Path(args.out),
+        themes=tuple(args.themes),
+        include_testpattern=args.testpattern,
+        include_camera_views=args.camera_views,
+        camera_theme=args.camera_theme,
+    )
+    for shot in shots:
+        print(shot.path.resolve())
+        print(f"    {shot.description}")
+        if shot.coverage:
+            print(
+                "    node cloud: {width_fraction:.0%} of canvas width, "
+                "{height_fraction:.0%} of height (with labels "
+                "{width_fraction_with_labels:.0%} x {height_fraction_with_labels:.0%}); "
+                "zoom {zoom:.3f}; {nodes_in_frame:.0%} of {nodes} nodes in frame".format(
+                    **shot.coverage
+                )
+            )
+            if "term_nodes" in shot.coverage:
+                print(
+                    "    on the wall: {term_nodes} term nodes, {person_nodes} persons, "
+                    "{edges} edges".format(**shot.coverage)
+                )
+            stats = shot.coverage.get("label_overlap_stats")
+            if stats:
+                before, after = stats["before"], stats["after"]
+                print(
+                    f"    labels: {before['labelPairs']} overlapping pairs before -> "
+                    f"{after['labelPairs']} after the declutter pass; "
+                    f"{before['labelsOnPersons']} on person discs before -> "
+                    f"{after['labelsOnPersons']} after"
+                )
 
 
 if __name__ == "__main__":
@@ -7501,15 +9090,25 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/test_prerender.py -v`
-Expected: PASS (2 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Produce the real comparison series and hand it to Birk**
 
 ```bash
-uv run python -m sim.prerender --db out/prerender-state/kg.db --out out/prerender --persons 50
+uv run python -m sim.prerender --reseed
 ```
 
-Show `out/prerender/{a,b,c,d}.png` to Birk and ask which variant the whiteboard gets. The named outcomes to decide between (spec §10.3): (1) everything is displayable at once, (2) the font would have to become too small → zoom is needed, (3) an automatic pan is needed once the graph exceeds the frame. The camera already supports all three; this is a setting, not a rebuild.
+Show `out/prerender3/theme-b-min-mentions-*.png` — the dial at 1, 2 and 3 over one shared
+placement, plus the declutter-off comparison — to Birk. `--reseed` is not optional after any
+change to the layout: the renderer persists node positions into the db, so an existing db
+pins the placement and would hide the change.
+
+Each earlier round's decisions are recorded above: the second review (white on black stays,
+the inverted variant rejected, fit-all at 50 persons illegible — the camera carries that with
+`setZoomFactor` and `focus`) and the third (theme B is the settled choice, one muted smaller
+placeholder disc, the label fixes, and the dial series this step now renders). The camera
+series, the test pattern and themes A and C stay one flag away: `--camera-views`,
+`--testpattern`, `--themes a c`.
 
 - [ ] **Step 6: Commit**
 
