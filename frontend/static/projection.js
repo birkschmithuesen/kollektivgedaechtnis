@@ -55,17 +55,122 @@ function style() {
   ];
 }
 
+// Everything below is sized in MODEL units, never rendered pixels — which is
+// what makes spec 10.3's "always fills the screen" requirement free. Cytoscape
+// scales node width/height AND font-size with the zoom, so a viewport fit is
+// simultaneously the answer to "how big should a node be": three nodes fit at
+// a high zoom and come out large, a hundred fit at a low zoom and come out
+// small. There is no fixed on-screen scale to become unreadable or overcrowded.
+const PADDING = 60;
+
+/** The layout. fcose, from the library, not a hand-rolled force pass.
+ *
+ * Birk 2026-08-14 replaced the "nothing ever moves" rule with "everything
+ * migrates slowly": when the graph changes, the whole net re-distributes to
+ * fill the freed space. The anti-jump requirement is unchanged and is what
+ * these options are chosen for — the enemy was ever only the JUMP, not the
+ * movement (spec 11).
+ *
+ *   quality: 'proof'   — the only mode in which `randomize: false` is
+ *                        supported at all, and the only one in which
+ *                        `nodeDimensionsIncludeLabels` is honoured.
+ *   randomize: false   — THE anti-jump guarantee, and it comes from the
+ *                        library: the layout starts from the CURRENT node
+ *                        positions and improves them. Never a re-roll.
+ *   nodeDimensionsIncludeLabels — the layout knows a term node is its dot PLUS
+ *                        its caption. Measured 2026-08-15 on the seeded
+ *                        50-person / 75-term graph at theme b: without it 156
+ *                        overlapping label pairs and 65 labels on portrait
+ *                        discs, with it 42 and 26.
+ *   packComponents     — early in the festival the net really is disconnected
+ *                        (one component per interview, until two people share
+ *                        a term). Polyomino packing keeps those components off
+ *                        each other; needs cytoscape-layout-utilities, which
+ *                        the pages load and `createGraphView` initialises.
+ *
+ * `animate` is false HERE on purpose: this is the computation, not the
+ * migration. The glide is MIGRATION below, so that the passes that run between
+ * the two (settlePlacement) cannot land as a snap after the animation.
+ *
+ * idealEdgeLength/nodeRepulsion are far above the cose defaults this file
+ * carried before, because fcose measures a term node at its full label extent
+ * (~340px wide at theme b) — an ideal edge shorter than that box guarantees
+ * collisions. Swept 2026-08-15 over idealEdgeLength 160..640 x nodeRepulsion
+ * 12k..120k on the seeded graph; 480 / 120000 is the cheapest pair the passes
+ * below then clear to zero overlaps.
+ */
 export const LAYOUT = {
-  name: 'cose',
+  name: 'fcose',
+  quality: 'proof',
   randomize: false,
-  animate: true,
-  animationDuration: 1200,
+  animate: false,
   fit: false,
-  padding: 60,
-  nodeRepulsion: 12000,
-  idealEdgeLength: 160,
+  padding: PADDING,
   nodeDimensionsIncludeLabels: true,
+  packComponents: true,
+  uniformNodeDimensions: false,
+  nodeRepulsion: 120000,
+  idealEdgeLength: 480,
+  numIter: 2500,
 };
+
+// How long the net takes to migrate to its new arrangement. Slow on purpose:
+// this is the transition a visitor watches when their own node joins the wall,
+// and it must read as a glide, not as a cut. Exported so the pre-render can
+// place its mid-flight frames inside it rather than guessing.
+export const MIGRATION_DURATION_MS = 2500;
+
+// Cytoscape's own `preset` layout does the gliding — positions in, animated
+// interpolation out, viewport fit animated along with it. Nothing hand-built.
+const MIGRATION = {
+  name: 'preset',
+  animate: true,
+  animationDuration: MIGRATION_DURATION_MS,
+  animationEasing: 'ease-in-out-cubic',
+  padding: PADDING,
+};
+
+// How far a fresh node starts from a neighbour it already has, so the
+// incremental layout begins from somewhere sensible instead of the origin.
+// Deliberately much SHORTER than idealEdgeLength: `randomize: false` makes
+// fcose sensitive to its starting state, and a compact start settles
+// measurably better than a pre-spread one. Measured 2026-08-15 on the seeded
+// 50-person graph across five density targets, from-scratch: starting at 140
+// clears every target to zero overlapping label pairs, starting at 480 (one
+// ideal edge) leaves 7-8 pairs and up to 4 labels on portrait discs.
+const SEED_RADIUS = 140;
+
+// cytoscape-layout-utilities also offers `placeNewNodes()` for exactly this,
+// and it is the better heuristic (least-crowded quadrant around the existing
+// neighbour). It is NOT used: it picks that quadrant with Math.random()
+// (src/core/layout-utilities.js:256) and jitters the final spot with another
+// (:313), so two pre-render runs over the same seed would not produce the same
+// picture. Determinism outranks the better seed here; the golden angle below
+// is a pure function of the node's index.
+const GOLDEN_ANGLE = 2.39996;
+
+function runLayout(cy, options) {
+  return new Promise((resolve) => {
+    const layout = cy.layout(options);
+    layout.one('layoutstop', resolve);
+    layout.run();
+  });
+}
+
+/** Hand the browser two clear frames.
+ *
+ * Cytoscape times its animations off the animation loop's frame clock, and the
+ * frame that arrives right after a long synchronous block carries a timestamp
+ * from before it. Measured 2026-08-15 on the 50-person / 75-term net: with the
+ * glide started immediately after settlePlacement returned, a 2500ms animation
+ * ran out in 116ms of real time — the wall froze and then cut, which is
+ * precisely the jump spec 11 forbids. Waiting for a second, genuinely fresh
+ * frame resets that clock, and it also lets the browser paint the arrangement
+ * the migration is about to start from.
+ */
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
 
 // Nodes are always visited in this order, never Cytoscape's own collection
 // order (which is insertion order and so depends on network/API timing) —
@@ -125,20 +230,19 @@ export function countLabelOverlaps(cy) {
   return { labelPairs, labelsOnPersons };
 }
 
-// cose's own nodeDimensionsIncludeLabels sizes each node's repulsion off its
-// OWN measured extent, but never learns that a neighbour's label is wide too
-// — measured 2026-08-14 on the seeded 50-person / 75-term graph at theme b,
-// cose alone settles at 43 overlapping label-box pairs and 30 labels sitting
-// on person discs. This pass pushes the MEASURED dot+label boxes
-// (Cytoscape's own boundingBox, not a guessed constant) apart directly, in
-// node-position space, so the layout finally "knows" a term node is its dot
-// plus its caption.
+// fcose's nodeDimensionsIncludeLabels sizes each node's repulsion off its OWN
+// measured extent, but a force layout is a compromise between forces, not an
+// overlap solver — it never promises a collision-free result and does not
+// deliver one here. Measured 2026-08-15 on the seeded 50-person / 75-term
+// graph at theme b, fcose with every option above settles at 42 overlapping
+// label-box pairs and 26 labels sitting on person discs. This pass pushes the
+// MEASURED dot+label boxes (Cytoscape's own boundingBox, not a guessed
+// constant) apart directly, in node-position space.
 //
-// It is a relaxation with a cap, NOT a solver: on that graph it does not
-// reach a clean state within the cap, and raising the cap to 400 only takes
-// one round's result from 25 pairs to 17 for ~5x the time. Getting to zero
-// is the job of the rounds in settlePlacement() and the declutter pass
-// afterwards, both of which are far cheaper per pair removed.
+// It is a relaxation with a cap, NOT a solver: on that graph it does not reach
+// a clean state within the cap. Getting to zero is the job of the rounds in
+// settlePlacement() and the declutter pass afterwards, both of which are far
+// cheaper per pair removed.
 const SEPARATION_ITERATIONS = 60;
 // Resolve half of every overlap per pass, not all of it: a node colliding
 // with several neighbours at once would otherwise overshoot on each of them
@@ -307,9 +411,10 @@ export function resetLabelOffsets(cy) {
 }
 
 // The projection surface is 16:9. A force layout is isotropic, so its settled
-// cloud is round: on 1920x1080 that leaves the sides empty (measured
-// 2026-08-14: 30% of the canvas width) and the camera cannot recover it —
-// zooming in further only clips the top and bottom.
+// cloud is round: fcose's own output on the seeded graph is 1.18:1, which a
+// viewport fit can only show at 59% of the canvas width (measured 2026-08-15).
+// The camera cannot recover that — zooming in further only clips top and
+// bottom — so the PLACEMENT is shaped like the surface instead.
 const CANVAS_ASPECT = 16 / 9;
 // A label keeps its own width when the nodes around it move apart, so one
 // correction always undershoots the target. Iterate to it instead.
@@ -319,29 +424,22 @@ const FRAME_TOLERANCE = 0.01;
 // beyond this the net is a smear, and something about the layout is wrong.
 const MAX_STRETCH = 3;
 
-/** Shape a from-scratch placement like the canvas it is projected onto.
+/** Shape a placement like the canvas it is projected onto.
  *
  * Deterministic: a pure function of the settled positions, so the same seed
  * still yields the same picture. Exported so it can be exercised on its own.
+ *
+ * This used to begin with a quarter turn, because cose measured repulsion with
+ * each node's width and height swapped and so settled a net of wide labels
+ * PORTRAIT. fcose does not have that bug — its raw output on the seeded graph
+ * comes out at 1.18:1, already landscape (measured 2026-08-15), so the
+ * rotation never fired and is gone. Only the stretch remains.
  */
-export function frameToAspect(cy, target = CANVAS_ASPECT, { rotate = true } = {}) {
+export function frameToAspect(cy, target = CANVAS_ASPECT) {
   const nodes = cy.nodes();
   if (nodes.length < 2) return;
   let box = nodes.boundingBox({ includeLabels: true });
   if (!(box.w > 0) || !(box.h > 0)) return;
-
-  // Cytoscape's cose measures repulsion with each node's width and height
-  // swapped, so a net of wide labels settles PORTRAIT — exactly the wrong way
-  // round for this wall. A quarter turn costs no distortion at all and does
-  // most of the work; only what remains is stretched.
-  if (rotate && (box.w < box.h) === (target > 1)) {
-    const centre = { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
-    nodes.positions((node) => {
-      const at = node.position();
-      return { x: centre.x + (at.y - centre.y), y: centre.y - (at.x - centre.x) };
-    });
-    box = nodes.boundingBox({ includeLabels: true });
-  }
 
   let stretched = 1;
   for (let step = 0; step < FRAME_STEPS; step += 1) {
@@ -366,65 +464,163 @@ export function frameToAspect(cy, target = CANVAS_ASPECT, { rotate = true } = {}
   }
 }
 
+// How much of its own bounding box a settled net fills with ink — the summed
+// area of every node's dot/disc plus its label box, over the area of the cloud
+// they sit in. This is the "fills the screen without overcrowding" number of
+// Birk's fourth brief, and it is a CONSTANT on purpose: hold it fixed and the
+// viewport fit does the rest, because three nodes then claim a small cloud and
+// come out large while a hundred claim a large one and come out small.
+//
+// Without it the picture does not scale at all. A force layout's cloud size is
+// set by its gravity and its ideal edge length, not by how much is in it:
+// measured 2026-08-15 across seeded graphs of 3 / 6 / 20 / 50 persons, fcose's
+// own output put labels on the wall at 17.3 / 20.8 / 14.5 / 15.1 px — flat and
+// non-monotone, which is exactly the "fixed scale that eventually becomes
+// unreadable" the brief rules out.
+//
+// It is an AMBITION, not a promise: settlePlacement() below loosens it step by
+// step until the picture is actually clean, so the delivered density is "as
+// tight as these labels allow" rather than a number tuned against one graph.
+// That matters — the value has a cliff and the cliff moves with the theme.
+// Measured 2026-08-15 on the seeded 5 / 20 / 50-person graphs at theme B,
+// labels on the wall and overlapping pairs at 50 persons, with no loosening:
+//   0.55 -> 30.2 / 20.0 / 15.7 px, 17 pairs and 15 labels on discs
+//   0.45 -> 28.8 / 18.2 / 14.3 px,  8 pairs and 4 on discs
+//   0.40 -> 28.0 / 17.2 / 13.5 px,  0 and 0
+//   0.35 -> 26.5 / 16.2 / 12.6 px,  0 and 0
+// 0.35 is the value theme B needs no loosening at all for, which keeps the
+// common case fast; theme A (22px type on bigger discs) does need it.
+const TARGET_INK_FRACTION = 0.35;
+
+/** Spread or gather a placement uniformly about its own centre.
+ *
+ * Uniform, so it distorts nothing and — this is what the loop in
+ * settlePlacement() relies on — a factor above 1 can only ever REDUCE
+ * overlaps: every gap grows while every box keeps its size.
+ */
+function scaleAbout(cy, factor) {
+  const nodes = cy.nodes();
+  if (nodes.length < 2 || !(factor > 0) || Math.abs(factor - 1) < 0.001) return;
+  const box = nodes.boundingBox({ includeLabels: true });
+  const centre = { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
+  nodes.positions((node) => {
+    const at = node.position();
+    return { x: centre.x + (at.x - centre.x) * factor, y: centre.y + (at.y - centre.y) * factor };
+  });
+}
+
+/** Scale a settled placement until the net claims `target` of its own
+ * bounding box in ink. Deterministic, and a no-op on a net already there.
+ */
+export function normaliseDensity(cy, target = TARGET_INK_FRACTION) {
+  const nodes = cy.nodes();
+  if (nodes.length < 2) return;
+  const box = nodes.boundingBox({ includeLabels: true });
+  const area = box.w * box.h;
+  if (!(area > 0)) return;
+  const ink = nodes.reduce((sum, node) => {
+    const own = node.boundingBox({ includeLabels: true });
+    return sum + own.w * own.h;
+  }, 0);
+  if (!(ink > 0)) return;
+  scaleAbout(cy, Math.sqrt(ink / target / area));
+}
+
 // Separation and framing pull against each other, so one round of each
 // undershoots: separating pushes boxes apart along whichever axis is
 // cheapest, which pulls the cloud back towards square, and re-stretching it
 // to 16:9 opens gaps that let the next separation round resolve collisions
-// it previously had no room for. It takes several rounds to break through —
-// measured 2026-08-14 on the live projection page at theme b with the seeded
-// 50-person / 75-term graph, overlapping label pairs by round: 24, 24, 24,
-// 24, 5, 4, 2, then flat. Stopping at four (which looked like plenty on the
-// offline runs) leaves 18 pairs on the wall; running on to convergence
-// leaves 2.
+// it previously had no room for.
 //
 // So this is a cap, not a target: the loop below stops as soon as the rounds
-// stop paying, and each round costs real time (~1-3s on that graph, all of
-// it inside boundingBox). It runs once, on a from-scratch placement only.
+// stop paying, and each round costs real time (~0.2s per round on the seeded
+// 50-person graph, all of it inside boundingBox).
 const PLACEMENT_ROUNDS = 16;
 // Rounds that buy nothing before giving up. One flat round is not enough
-// evidence — the measurement above sat at 24 for four rounds before it broke
-// through to 5.
+// evidence — an earlier measurement sat at 24 pairs for four rounds before it
+// broke through to 5.
 const PLACEMENT_PATIENCE = 5;
+// If neither the rounds nor the declutter pass can clear the picture, the net
+// is simply packed too tightly for these labels: give it more room and run
+// them again. A uniform spread cannot create an overlap, so this always
+// converges downward — the only question is how many steps it costs, and every
+// step costs a full set of rounds.
+const LOOSEN_STEP = 1.12;
+const LOOSEN_ATTEMPTS = 8;
 
-/** Shape a from-scratch placement for this wall: 16:9, and with the layout
- * finally knowing that a term node is its dot PLUS its label box.
+/** Shape a placement for this wall: 16:9, as tight as the labels allow, and
+ * with the layout finally knowing that a term node is its dot PLUS its label
+ * box.
  *
- * ORDER MATTERS, and it is the opposite of the obvious one. `frameToAspect`
- * may turn the whole net a quarter turn, and a rotation moves the dots while
- * every label stays horizontal — so a net separated first and rotated after
- * comes out overlapping again (measured on the same graph: separation took
- * 43 pairs down to 20, and the rotation put it back to 48). Rotate FIRST, in
- * the orientation the wall will actually show, and only then separate.
+ * This is the hand-built geometry the fcose migration did NOT delete, and it
+ * was kept on the numbers Birk's brief asked for (2026-08-15, seeded 50-person
+ * / 75-term graph, theme b, identical starting state):
+ *
+ *   fcose alone                            42 pairs / 26 on discs / 59% width
+ *   fcose, nodeDimensionsIncludeLabels off 156 / 65 / 43%
+ *   fcose + declutterLabels only           43 / 14 / 59%
+ *   fcose + this (declutter included)       0 /  0 / 89%
+ *
+ * The width number is the part fcose has no option for at all: no fcose or
+ * layout-utilities option shapes a single connected component to an aspect
+ * ratio (`desiredAspectRatio` applies to randomized component PACKING only).
  */
-export function settlePlacement(cy) {
+export function settlePlacement(cy, { inkFraction = TARGET_INK_FRACTION } = {}) {
+  normaliseDensity(cy, inkFraction);
   frameToAspect(cy);
   const nodes = cy.nodes().sort(byId);
   const snapshot = () => nodes.map((node) => ({ ...node.position() }));
-  let best = { score: Infinity, positions: null };
-  let flatRounds = 0;
-
-  for (let round = 0; round < PLACEMENT_ROUNDS; round += 1) {
-    separateOverlappingNodes(cy);
-    // No rotation from here on: the orientation is settled above, and a
-    // separation round that happens to leave the cloud taller than wide must
-    // not be allowed to spin the whole picture a quarter turn.
-    frameToAspect(cy, CANVAS_ASPECT, { rotate: false });
+  const score = () => {
     const { labelPairs, labelsOnPersons } = countLabelOverlaps(cy);
-    const score = labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons;
-    if (score < best.score) {
-      best = { score, positions: snapshot() };
-      flatRounds = 0;
-    } else if ((flatRounds += 1) >= PLACEMENT_PATIENCE) {
+    return labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons;
+  };
+  let best = { score: Infinity, positions: null };
+
+  for (let attempt = 0; attempt < LOOSEN_ATTEMPTS; attempt += 1) {
+    let flatRounds = 0;
+    let clear = false;
+    for (let round = 0; round < PLACEMENT_ROUNDS; round += 1) {
+      separateOverlappingNodes(cy);
+      frameToAspect(cy);
+      const current = score();
+      if (current < best.score) {
+        best = { score: current, positions: snapshot() };
+        flatRounds = 0;
+      } else if ((flatRounds += 1) >= PLACEMENT_PATIENCE) {
+        break;
+      }
+      if (current === 0) {
+        clear = true;
+        break;
+      }
+    }
+    if (clear) break;
+
+    // The two levers are not equal. Moving a label is free; spreading the net
+    // costs type size, because the camera then has more to fit onto the same
+    // wall. So ask the free one first, and only loosen if it is not enough.
+    // The offsets are thrown away again either way — settleLabels() re-derives
+    // them from the final positions — this is purely about whether the net has
+    // to grow. Measured 2026-08-15 on the seeded graph: asking here keeps the
+    // net one loosening step tighter, which is 12.7px of type on the wall
+    // instead of 11.4px, at zero overlaps either way.
+    resetLabelOffsets(cy);
+    declutterLabels(cy);
+    const assisted = score();
+    resetLabelOffsets(cy);
+    if (assisted === 0) {
+      best = { score: 0, positions: snapshot() };
       break;
     }
-    if (labelPairs === 0 && labelsOnPersons === 0) break;
+
+    scaleAbout(cy, LOOSEN_STEP);
+    frameToAspect(cy);
   }
 
   // Pushing node A clear of B can push it into C, so the rounds do not
-  // descend cleanly — measured 2026-08-14 on the seeded graph they wander
-  // (41, 32, 32, 28, 30, 33, 26, 27, ...). Ending on whatever the last round
-  // happened to produce would throw away a better picture the loop had
-  // already found and paid for, so the best one is what gets kept.
+  // descend cleanly — they wander. Ending on whatever the last round happened
+  // to produce would throw away a better picture the loop had already found
+  // and paid for, so the best one is what gets kept.
   if (best.positions) {
     nodes.forEach((node, index) => node.position({ ...best.positions[index] }));
   }
@@ -432,11 +628,7 @@ export function settlePlacement(cy) {
 
 // Reset then declutter, and measure both sides of it. `before` is the
 // layout's own settled state (positions final, labels still at the theme
-// default); `after` is what a viewer actually sees. Run on every render —
-// including a min_mentions change, which adds no new nodes and so runs no
-// layout — because raising the dial only ever removes labels and the pass
-// should take that free win immediately, not carry over stale offsets
-// sized for a denser picture.
+// default); `after` is what a viewer actually sees.
 function settleLabels(cy) {
   resetLabelOffsets(cy);
   const before = countLabelOverlaps(cy);
@@ -445,96 +637,164 @@ function settleLabels(cy) {
   return { before, after };
 }
 
-export function createGraphView(container, { onPositions = () => {} } = {}) {
+/** Compute the net's new arrangement, then GLIDE the whole net into it.
+ *
+ * The order is the point. The arrangement is computed with the animation off
+ * (fcose, then settlePlacement over its result), the nodes are put back where
+ * they started, and only then does Cytoscape's own `preset` layout animate
+ * every node from its old place to its new one. Computing first and animating
+ * once means the passes after the layout cannot land as a snap at the end of
+ * an animation — what a visitor sees is one continuous migration, from the
+ * arrangement that was on the wall to the arrangement that fills it.
+ */
+async function migrate(cy, { fit, duration, onGlideStart = () => {} }) {
+  const nodes = cy.nodes().sort(byId);
+  const from = nodes.map((node) => ({ ...node.position() }));
+
+  // Label offsets are geometry too, and stale ones (sized for the old, denser
+  // arrangement) would measurably mislead the separation pass.
+  resetLabelOffsets(cy);
+  await runLayout(cy, LAYOUT);
+  settlePlacement(cy);
+
+  const to = new Map(nodes.map((node) => [node.id(), { ...node.position() }]));
+  nodes.forEach((node, index) => node.position(from[index]));
+  await nextFrame();
+  onGlideStart();
+  await runLayout(cy, {
+    ...MIGRATION,
+    animationDuration: duration,
+    fit,
+    positions: (node) => to.get(node.id()),
+  });
+}
+
+export function createGraphView(
+  container,
+  { onPositions = () => {}, migrationDuration = MIGRATION_DURATION_MS } = {},
+) {
   const cy = cytoscape({ container, style: style(), wheelSensitivity: 0.2 });
+  // fcose only packs disconnected components when this extension is
+  // initialised on the instance (it calls cy.layoutUtilities('get') and falls
+  // back to constructing one). Doing it here, once, is also the only place the
+  // packing options can be set.
+  if (cy.layoutUtilities) cy.layoutUtilities({ desiredAspectRatio: CANVAS_ASPECT, componentSpacing: 80 });
   const camera = new Camera(cy);
   let lastGraph = { nodes: [], edges: [], min_mentions: 1 };
   let minMentions = 1;
-  // True while an animated layout is running. Tests and the pre-render wait on
-  // this instead of guessing a timeout; positions land only at `layoutstop`.
+  // True while a migration is running (computation AND glide). Tests and the
+  // pre-render wait on this instead of guessing a timeout.
   let layoutPending = false;
+  // True only while the net is actually in flight — layoutPending covers the
+  // computation before it too. Separate flags because they answer different
+  // questions: "are the positions final yet" and "is a viewer watching motion
+  // right now". The pre-render needs the second one to place its frames
+  // inside the glide rather than inside the compute.
+  let gliding = false;
+  // One migration at a time. The operator can spin the density dial faster
+  // than a 2.5s glide, and two overlapping layouts over one cy instance would
+  // interleave their position writes.
+  let migration = null;
+  let rerenderQueued = false;
   const emptyStats = { labelPairs: 0, labelsOnPersons: 0 };
   let labelOverlapStats = { before: emptyStats, after: emptyStats };
   // Where each node was last seen, by id. The dial hides term nodes by
   // REMOVING them from cy, so turning it back down re-adds them — and until
   // the server has round-tripped this session's positions back into
-  // `lastGraph`, those nodes carry x/y null and would read as brand new. Left
-  // to that, lowering the dial would re-run a layout and visibly reshuffle
-  // the returning half of the net (spec 11). They go back exactly where they
-  // were instead.
+  // `lastGraph`, those nodes carry x/y null and would read as brand new.
+  // Starting them from the origin would make the migration a jump for exactly
+  // the half of the net that returned. They start where they left instead,
+  // and migrate from there like everyone else.
   const lastSeen = new Map();
 
+  function persist() {
+    const positions = {};
+    cy.nodes().forEach((n) => {
+      positions[n.id()] = { x: n.position('x'), y: n.position('y') };
+    });
+    onPositions(positions);
+  }
+
   function render() {
+    if (migration) {
+      rerenderQueued = true;
+      return;
+    }
     const view = visibleGraph(lastGraph, minMentions);
     const wanted = new Set(view.nodes.map((n) => n.id).concat(view.edges.map((e) => e.id)));
     const present = cy.elements().map((el) => el.id());
 
     cy.nodes().forEach((n) => lastSeen.set(n.id(), { ...n.position() }));
 
-    // Remove what dropped out of the view. Positions of the rest are untouched.
-    cy.elements()
-      .filter((el) => !wanted.has(el.id()))
-      .remove();
+    const dropped = cy.elements().filter((el) => !wanted.has(el.id()));
+    const removedCount = dropped.length;
+    dropped.remove();
 
-    // A node that arrives with a persisted position is NOT "fresh": it is
-    // already placed and must be locked like any long-standing node (spec 11).
     const placed = new Set(
       view.nodes
         .filter((n) => n.x !== null && n.x !== undefined && n.y !== null && n.y !== undefined)
         .map((n) => n.id),
     );
-    const returning = newNodeIds(present, view).filter((id) => !placed.has(id) && lastSeen.has(id));
-    const fresh = newNodeIds(present, view).filter((id) => !placed.has(id) && !lastSeen.has(id));
+    const arriving = newNodeIds(present, view);
+    const returning = arriving.filter((id) => !placed.has(id) && lastSeen.has(id));
+    const fresh = arriving.filter((id) => !placed.has(id) && !lastSeen.has(id));
     const toAdd = toCytoscape(view).filter((el) => cy.$id(el.data.id).length === 0);
     if (toAdd.length) cy.add(toAdd);
     returning.forEach((id) => cy.$id(id).position({ ...lastSeen.get(id) }));
 
-    if (fresh.length) {
-      // Seed each new node next to a neighbour it already has, so the layout
-      // starts from a sensible place instead of the origin. The offset is
-      // derived from the index (golden angle), not random: two pre-render runs
-      // over the same graph must produce the same picture.
-      fresh.forEach((id, index) => {
-        const node = cy.$id(id);
-        // `fresh` already excludes every id in `placed` (an explicit x/y
-        // null-check against the graph data, not a truthy check on the
-        // rendered position), so every node reached here is genuinely
-        // unseeded and must always be positioned. A `position('x') ||
-        // position('y')` guard here would be confused by a node legitimately
-        // seeded to exactly (0, 0) and skip it.
-        const anchor = node.neighborhood('node').filter((n) => !fresh.includes(n.id()))[0];
-        const base = anchor ? anchor.position() : { x: 0, y: 0 };
-        const angle = index * 2.39996;
-        node.position({ x: base.x + Math.cos(angle) * 140, y: base.y + Math.sin(angle) * 140 });
-      });
-      // Existing nodes are locked: the net must never re-shuffle (spec 11).
-      const existing = cy.nodes().filter((n) => !fresh.includes(n.id()));
-      existing.lock();
-      // Nothing is placed yet, so this layout owns the whole picture and may
-      // shape it to the canvas. Every later layout only adds to a net that is
-      // already on the wall, and must leave that net exactly where it is.
-      const fromScratch = existing.length === 0;
-      const layout = cy.layout(LAYOUT);
-      layoutPending = true;
-      layout.one('layoutstop', () => {
-        existing.unlock();
-        // The layout only ever separated dots; this shapes the placement to
-        // the wall and teaches it about the label boxes it settled without.
-        if (fromScratch) settlePlacement(cy);
-        labelOverlapStats = settleLabels(cy);
-        const positions = {};
-        cy.nodes().forEach((n) => {
-          positions[n.id()] = { x: n.position('x'), y: n.position('y') };
-        });
-        onPositions(positions);
-        camera.onGraphChanged();
-        layoutPending = false;
-      });
-      layout.run();
-    } else {
+    fresh.forEach((id, index) => {
+      const node = cy.$id(id);
+      // `fresh` already excludes every id in `placed` (an explicit x/y
+      // null-check against the graph data, not a truthy check on the rendered
+      // position), so every node reached here is genuinely unseeded and must
+      // always be positioned. A `position('x') || position('y')` guard here
+      // would be confused by a node legitimately seeded to exactly (0, 0).
+      const anchor = node.neighborhood('node').filter((n) => !fresh.includes(n.id()))[0];
+      const base = anchor ? anchor.position() : { x: 0, y: 0 };
+      const angle = index * GOLDEN_ANGLE;
+      node.position({ x: base.x + Math.cos(angle) * SEED_RADIUS, y: base.y + Math.sin(angle) * SEED_RADIUS });
+    });
+
+    // Crash recovery (spec 10.5) is the one case that must NOT migrate: the
+    // first paint of a session whose every node already carries a persisted
+    // position has to reproduce the wall exactly as it stood, not re-arrange
+    // it while nobody is looking. Every other change — a person joining, the
+    // dial hiding or revealing terms — re-distributes the whole net.
+    const restoring = present.length === 0 && view.nodes.length > 0 && placed.size === view.nodes.length;
+    const changed = toAdd.length > 0 || removedCount > 0;
+
+    const settle = () => {
       labelOverlapStats = settleLabels(cy);
       camera.onGraphChanged();
+    };
+
+    if (!changed || restoring) {
+      settle();
+      layoutPending = false;
+      return;
     }
+
+    layoutPending = true;
+    migration = migrate(cy, {
+      fit: camera.mode === 'fit',
+      duration: migrationDuration,
+      onGlideStart: () => {
+        gliding = true;
+      },
+    })
+      .catch((error) => console.warn('layout migration failed', error))
+      .then(() => {
+        migration = null;
+        gliding = false;
+        settle();
+        persist();
+        if (rerenderQueued) {
+          rerenderQueued = false;
+          render();
+        } else {
+          layoutPending = false;
+        }
+      });
   }
 
   let last = performance.now();
@@ -550,6 +810,12 @@ export function createGraphView(container, { onPositions = () => {} } = {}) {
     camera,
     get layoutPending() {
       return layoutPending;
+    },
+    get migrating() {
+      return gliding;
+    },
+    get migrationDuration() {
+      return migrationDuration;
     },
     get labelOverlapStats() {
       return labelOverlapStats;

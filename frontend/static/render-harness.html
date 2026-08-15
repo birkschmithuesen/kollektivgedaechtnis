@@ -5,7 +5,12 @@
 <link rel="stylesheet" href="./theme-a.css">
 <style>#cy { width: 1920px; height: 1080px; }</style>
 <div id="cy"></div>
+<!-- Same load order as projection.html — see ./vendor/README.md. -->
 <script src="./vendor/cytoscape.min.js"></script>
+<script src="./vendor/layout-base.js"></script>
+<script src="./vendor/cose-base.js"></script>
+<script src="./vendor/cytoscape-fcose.js"></script>
+<script src="./vendor/cytoscape-layout-utilities.js"></script>
 <script type="module">
   import { createGraphView } from './projection.js';
   window.kgPositions = [];

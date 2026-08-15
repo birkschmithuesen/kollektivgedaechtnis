@@ -7,7 +7,14 @@
 <link rel="stylesheet" href="static/base.css">
 <link id="theme" rel="stylesheet" href="static/theme-a.css">
 <div id="cy"></div>
+<!-- Order matters: these UMD bundles resolve each other off `window`, and the
+     two extensions self-register against the `cytoscape` global. See
+     static/vendor/README.md. -->
 <script src="static/vendor/cytoscape.min.js"></script>
+<script src="static/vendor/layout-base.js"></script>
+<script src="static/vendor/cose-base.js"></script>
+<script src="static/vendor/cytoscape-fcose.js"></script>
+<script src="static/vendor/cytoscape-layout-utilities.js"></script>
 <script type="module">
   import { createGraphView } from './static/projection.js';
 
@@ -53,8 +60,18 @@
     themeLink.href = themeHref;
   });
 
+  // How slow "slow" is, in ms. The migration is the transition a visitor
+  // watches when their own node joins the wall (spec 10.3), and the right
+  // speed is a projector-and-room judgement Birk makes on site — so it is a
+  // setting of the page, not a constant only a rebuild can change. The
+  // pre-render also uses it to spread its mid-flight frames far enough apart
+  // to be readable as a sequence.
+  const requestedMigration = Number(params.get('migration'));
+  const migrationDuration = requestedMigration > 0 ? requestedMigration : undefined;
+
   themeLoaded.then(() => {
     const view = createGraphView(document.getElementById('cy'), {
+      migrationDuration,
       onPositions: (positions) =>
         fetch('/api/positions', {
           method: 'POST',

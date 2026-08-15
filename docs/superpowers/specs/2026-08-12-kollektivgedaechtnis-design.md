@@ -403,6 +403,29 @@ operator UI.
 it runs permanently — exactly the "non-interactive auto animation" the Konzept
 requires as a fallback. The fallback is a mode, not an extra.
 
+**Outcome (1) is reached by construction, not by luck (revised 2026-08-14,
+Birk).** "Font size would have to become too small" was posed as a property of
+the graph; it is a property of a *fixed scale*, and there is none. Node and
+font sizes are model-unit values, so the camera's fit sets how large they reach
+the wall: fewer nodes → a smaller cloud → a higher zoom → larger type. The
+placement is normalised to a constant ink density before it is framed, so this
+is monotone rather than accidental. Measured 2026-08-15 on the seeded graph at
+theme B, fit-all, 32px model type: **26px on the wall at 5 persons, 16px at 20,
+13px at 50** (person discs 63 / 38 / 30px) — with zero overlapping label pairs
+and zero labels on portrait discs at all three, and 89% × 89% of the canvas
+covered in every case.
+
+So the wall is always full and never crowded. What 50 persons costs is
+absolute size, and that is what the other two levers are for: the `min_mentions`
+dial (§7) raises the type by removing terms (13 → 14 → 18px at 1 → 2 → 3), and
+the camera's zoom/pan reaches the rest. Which of them the wall uses stays an
+on-site decision.
+
+**The migration is part of the camera's job too.** A graph change re-lays the
+whole net out and glides it into place (§11); the fit animates with it, so the
+type grows or shrinks smoothly across the transition rather than snapping at
+the end of it.
+
 ### 10.4 Pre-render (independent of everything else, §7 of the briefing)
 Headless PNGs at exactly 1920×1080, **with the same renderer that later runs
 live** — otherwise a look is tested that must be rebuilt afterwards.
@@ -439,22 +462,23 @@ A, B and C share one background and palette (`--bg #101014`, person fill
 Roman"/serif, `#8A8578` edges) — a variant that also moved the palette would
 not answer the legibility question.
 
-**Layout now fills the 16:9 canvas (found at the same review).** Cytoscape's
-`cose` measures repulsion with each node's width and height swapped, so a
-from-scratch placement settles portrait-shaped — the wrong way round for a
-16:9 wall. `frameToAspect()` (`projection.js`) turns a from-scratch placement
-a quarter turn and then stretches the short axis to the canvas aspect,
-iteratively and capped. It only ever touches a placement with no
-already-placed nodes — an already-placed net is never re-shaped (§11: the
-layout must never re-shuffle a net that is already on the wall). Measured at
-50 persons / 125 nodes: the node cloud went from 30% of the canvas width
-(34% counting the labels) to 83% (88% counting the labels).
+**Layout now fills the 16:9 canvas (found at the same review).** A force layout
+is isotropic, so its settled cloud is round and a 16:9 fit leaves the sides
+empty. `frameToAspect()` (`projection.js`) stretches the short axis to the
+canvas aspect, iteratively and capped. Measured at 50 persons / 125 nodes: the
+node cloud went from 30% of the canvas width (34% counting the labels) to 83%
+(88% counting the labels). *(The quarter turn this pass used to begin with was
+deleted at the fourth review: it existed because Cytoscape's `cose` measures
+repulsion with each node's width and height swapped and so settled portrait,
+and fcose does not have that bug. The "only ever touches a from-scratch
+placement" restriction went with the §11 rule it served — the pass now runs on
+every migration.)*
 
-**Open, deliberately:** live the net grows one person at a time, so the
+~~**Open, deliberately:** live the net grows one person at a time, so the
 from-scratch framing fires on the first person and never again — a live
-evening therefore drifts back towards a round cloud. Deciding what the wall
-does about that (re-frame on a quiet moment, or the camera, §10.3) needs the
-simulation (Tasks 18/19) and is not settled by this series.
+evening therefore drifts back towards a round cloud.~~ **Closed by the fourth
+round (below):** every graph change now re-lays the whole net out and glides it
+into place, so the framing runs on every person who joins, not only the first.
 
 **The camera gained a zoom factor and a focus method.** Fit-all at 50 persons
 is settled as illegible, so this is a setting of the existing camera
@@ -477,26 +501,63 @@ make. Three decisions:
    through the same path.
 2. **A term node is its dot PLUS its label, and the layout now knows it.**
    `settlePlacement()` separates the *measured* dot+label boxes after the
-   16:9 framing (the framing may rotate the net, and a rotation moves the
-   dots while the labels stay horizontal, so separating first is thrown
-   away), and `declutterLabels()` then nudges label offsets — never node
-   positions, §11 is untouchable — apart, treating portrait discs as fixed
-   obstacles. Text on a person bubble is worse than text on text, because
-   that disc becomes a real photograph later. Both passes are deterministic
-   under the same seed and never re-shape an already-placed net. Measured on
-   the seeded 50-person / 75-term graph at theme B: 43 overlapping label
-   pairs and 30 labels on discs from the force layout alone, 24 / 14 after
-   the placement, **18 / 4** after the declutter pass.
+   16:9 framing, and `declutterLabels()` then nudges label offsets — never
+   node positions — apart, treating portrait discs as fixed obstacles. Text
+   on a person bubble is worse than text on text, because that disc becomes
+   a real photograph later. Both passes are deterministic under the same
+   seed. Measured on the seeded 50-person / 75-term graph at theme B: 43
+   overlapping label pairs and 30 labels on discs from the force layout
+   alone, 24 / 14 after the placement, **18 / 4** after the declutter pass.
+   *(The "never re-shape an already-placed net" restriction fell with the §11
+   rule it served at the fourth review; both passes now run on every
+   migration. The numbers here are cose's — see the fourth review for
+   fcose's.)*
 3. **The `min_mentions` dial (§7) gets its own series**, since it may solve
    much of the crowding by itself: the same graph and the same placement at
    1, 2 and 3 — 75, 50 and 31 term nodes, 253, 228 and 190 edges — through
    the real display filter, never a second renderer.
 
-**Still open after this round:** fit-all at 75 terms with 32px type cannot be
-made fully clean by layout alone — 18 overlapping label pairs remain, all in
-the dense middle of the net where the portraits cluster. The dial and the
-camera are the levers that reach the rest, and which of them the wall uses is
-an on-site decision.
+**Fourth pre-render review — spec change by Birk, 2026-08-14 (binding).** §11's
+"existing nodes stay put" is replaced by "the whole net migrates" and §10.3's
+legibility question is answered by construction rather than by tuning (both
+rewritten above). Birk's instruction for the implementation was explicit — *use
+the library, do not hand-build this* — so the layout is now **cytoscape-fcose**
+(`quality: "proof"`, `randomize: false`, `nodeDimensionsIncludeLabels`,
+`packComponents`), vendored offline alongside Cytoscape itself, and the glide is
+Cytoscape's own `preset` layout. Three series in `out/prerender4/`:
+
+1. **Fill the screen** — the same seeded graph at 5 / 20 / 50 persons. Type on
+   the wall: **26px / 16px / 13px**, person discs 63 / 38 / 30px, canvas fill
+   89% × 89% and **zero** overlapping label pairs and zero labels on portrait
+   discs at all three. Nothing in the theme changed between them.
+2. **The density dial** at 1 / 2 / 3 — 75 / 50 / 31 terms — now re-lays the net
+   out at every step. Third round: the survivors stayed in their old holes and
+   the picture shrank (93% → 80% → 73% of the canvas width) at a constant type
+   size, with 6 / 1 / 0 overlapping label pairs left over. Fourth round: **89%
+   at every step, 0 / 0 / 0 pairs**, and the type *grows* as the dial rises —
+   **13 → 14 → 18px** — because the freed space is used.
+3. **The migration** — a numbered four-frame sequence through one transition
+   (the dial going 1 → 2), timestamps measured and carried in the filenames,
+   with the glide slowed to 8s so four frames span it. The wall's own default
+   is 2.5s.
+
+**What the measurement settled, against the brief's expectation.** fcose's
+`nodeDimensionsIncludeLabels` does *not* replace the hand-built label work. On
+the seeded 50-person / 75-term graph at theme B, from an identical start: fcose
+alone leaves **42 overlapping pairs, 26 labels on discs, 59% of the canvas
+width**; with the option off, 156 / 65 / 43%. So the option earns its keep and
+does not finish the job. Both hand-built passes are kept, each on its own
+number: `settlePlacement()` takes that to 8 / 1 / 89%, and `declutterLabels()`
+clears the rest to **0 / 0 / 89%** — and because moving a label is free where
+spreading the net costs type size, asking the declutter pass *before* loosening
+the packing is worth 12.7px of type instead of 11.4px. Only what fcose really
+did make redundant was deleted: the quarter-turn (it existed for a cose bug
+fcose does not have) and the node locking the old §11 rule required.
+
+**Still open after this round:** fit-all at 50 persons is now *clean* but small
+— 13px type on a 1920px wall. The layout has given all it can; the levers that
+remain are the dial (18px at `min_mentions=3`) and the camera, and which of them
+the wall uses is still an on-site decision.
 
 ### 10.5 Kiosk operation
 Browser fullscreen, auto-restart, crash recovery. State is fully reconstructible
@@ -522,9 +583,38 @@ photo, merge decision, node position, hidden flag.
   read-only interface for Tool 2.
 - The frontend learns of changes via **SSE** (same technique the STT server
   already uses).
-- **Node positions are persisted.** Existing nodes stay put; only new nodes are
-  assigned a place. The layout must never re-shuffle — that would destroy
-  exactly the aesthetic the concept rests on (Briefing §4).
+- **Node positions are persisted** — for **crash recovery**. After a restart the
+  wall must come back exactly as it stood (§10.5), so the first paint of a
+  session whose every node already carries a position restores it and lays
+  nothing out. That is the only case that does not re-arrange.
+
+- **Every other graph change makes the whole net MIGRATE** (revised
+  2026-08-14, Birk — this REPLACES the earlier "existing nodes stay put, the
+  layout must never re-shuffle"). When a person joins, or the density dial
+  hides or reveals terms, **all** nodes move slowly to a new,
+  better-distributed arrangement that fills the space the change freed. This
+  is also the transition a visitor watches when their own node joins the wall.
+
+  **The anti-jump requirement is unchanged, and it is the whole point.** What
+  the Obsidian analysis (§4) ruled out was the JUMP — a periodic reload that
+  re-rolled the force layout and teleported every node — not movement. So the
+  re-layout must be:
+  - **incremental** — it starts from the positions currently on the wall and
+    improves them (`randomize: false`, which fCoSE only supports at
+    `quality: "proof"`). Never a re-roll from random, ever.
+  - **animated** — the net glides into the new arrangement over ~2.5s
+    (Cytoscape's own `preset` layout does the interpolation), never cuts to it.
+  - **deterministic** — the same graph and the same starting state settle on
+    the same picture, so the pre-render series stays a fair comparison.
+
+- **Node and font sizes are never fixed to the wall.** Everything is sized in
+  MODEL units and the viewport fit scales it: a handful of nodes come out
+  large, a hundred come out small, and the graph always fills the screen
+  without overcrowding. The settled placement is normalised to a constant ink
+  fraction of its own bounding box so that this holds *monotonically* — a
+  force layout on its own does not scale with how much is in it (measured
+  2026-08-15: labels reached the wall at 17 / 21 / 15 / 15 px across graphs of
+  3 / 6 / 20 / 50 persons, flat and non-monotone).
 - **Second screen** is foreseen as an independent output (organiser-provided;
   type/connector/resolution still to be clarified with the organiser).
 

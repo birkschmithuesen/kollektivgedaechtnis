@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 GRAPH_1 = {
@@ -23,6 +25,18 @@ GRAPH_2 = {
     "quotes": [],
 }
 
+# Every node placed — what the server hands back after a restart (spec 10.5).
+GRAPH_1_PLACED = {
+    "version": 1,
+    "min_mentions": 1,
+    "nodes": [
+        {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 100, "y": 100},
+        {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 1, "hidden": False, "x": 400, "y": 250},
+    ],
+    "edges": [{"id": "e1", "source": "p1", "target": "t1"}],
+    "quotes": [],
+}
+
 
 @pytest.fixture()
 def view(page, static_server):
@@ -32,10 +46,10 @@ def view(page, static_server):
 
 
 def wait_for_layout(page):
-    """The cose layout is animated (LAYOUT.animationDuration) and positions are
-    only reported at `layoutstop`. Wait for the real signal — a fixed timeout
-    shorter than the animation would make these tests flaky."""
-    page.wait_for_function("() => window.kgView.layoutPending === false")
+    """A migration is a computation (fcose + settlePlacement) followed by a
+    2.5s animated glide, and positions are final only when both are done. Wait
+    for the real signal — any fixed timeout would make these tests flaky."""
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
 
 
 def update(page, graph, min_mentions=1):
@@ -50,19 +64,28 @@ def test_nodes_and_edges_are_rendered(view):
     assert view.evaluate("window.kgView.cy.$('#p1').hasClass('person')") is True
 
 
-def test_a_persisted_position_is_honoured_exactly(view):
-    update(view, GRAPH_1)
+def test_a_restored_graph_comes_back_exactly_where_it_was(view):
+    # Crash recovery (spec 10.5 / 11): the first paint of a session whose every
+    # node already carries a persisted position must reproduce the wall as it
+    # stood. This is the ONE case that does not migrate — a restart must not
+    # re-arrange the net while nobody is looking.
+    update(view, GRAPH_1_PLACED)
+
     assert view.evaluate("window.kgView.cy.$('#p1').position()") == {"x": 100, "y": 100}
+    assert view.evaluate("window.kgView.cy.$('#t1').position()") == {"x": 400, "y": 250}
 
 
-def test_existing_nodes_never_move_when_new_nodes_arrive(view):
+def test_the_whole_net_migrates_when_a_new_node_arrives(view):
+    # The spec change of 2026-08-14 (Birk), replacing the old "existing nodes
+    # stay put" rule: a graph change re-distributes EVERY node so the net fills
+    # the freed space. What is forbidden is the jump, not the movement.
     update(view, GRAPH_1)
     before = view.evaluate("window.kgView.cy.$('#t1').position()")
 
     update(view, GRAPH_2)
 
     after = view.evaluate("window.kgView.cy.$('#t1').position()")
-    assert after == before
+    assert after != before
     assert view.evaluate("window.kgView.cy.nodes().length") == 4
 
 
@@ -133,23 +156,70 @@ def test_the_framed_net_covers_the_canvas_width_after_a_fit(view):
     assert covered > 0.8
 
 
-def test_framing_never_reshuffles_an_already_placed_net(view):
-    # Framing is part of placing a net from scratch. Once nodes carry
-    # positions, spec 11 rules: nothing already on the wall may move.
-    update(view, _unplaced_net())
-    before = view.evaluate("window.kgView.cy.$('#p0').position()")
-
-    grown = _unplaced_net()
-    for node in grown["nodes"]:
-        position = view.evaluate("(id) => window.kgView.cy.$id(id).position()", node["id"])
-        node["x"], node["y"] = position["x"], position["y"]
-    grown["nodes"].append(
-        {"id": "pX", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+def positions(page):
+    return page.evaluate(
+        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
     )
-    grown["edges"].append({"id": "eX", "source": "pX", "target": "t0"})
-    update(view, grown)
 
-    assert view.evaluate("window.kgView.cy.$('#p0').position()") == before
+
+def _grow(page, base_graph, new_person="pX", anchor_term="t0"):
+    """`base_graph` as it currently sits on the wall, plus one new person.
+
+    The positions are read back off the live view, which is what the server
+    would have persisted — so the only unplaced node in the result is the one
+    that just joined.
+    """
+    grown = {**base_graph, "nodes": [dict(n) for n in base_graph["nodes"]], "edges": list(base_graph["edges"])}
+    live = positions(page)
+    for node in grown["nodes"]:
+        node["x"], node["y"] = live[node["id"]]["x"], live[node["id"]]["y"]
+    grown["nodes"].append(
+        {"id": new_person, "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+    )
+    grown["edges"].append({"id": f"e{new_person}", "source": new_person, "target": anchor_term})
+    return grown
+
+
+def _pairwise_distances(placement, ids):
+    return [
+        math.dist(
+            (placement[a]["x"], placement[a]["y"]),
+            (placement[b]["x"], placement[b]["y"]),
+        )
+        for i, a in enumerate(ids)
+        for b in ids[i + 1 :]
+    ]
+
+
+def _correlation(xs, ys):
+    n = len(xs)
+    mx, my = sum(xs) / n, sum(ys) / n
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sx = math.sqrt(sum((x - mx) ** 2 for x in xs))
+    sy = math.sqrt(sum((y - my) ** 2 for y in ys))
+    return cov / (sx * sy)
+
+
+def test_the_migration_is_incremental_and_never_a_re_roll(view):
+    # The anti-jump requirement, stated as a measurement rather than as
+    # "nothing moves". fcose runs with randomize:false from the CURRENT
+    # positions, so the new arrangement is a deformation of the old one: the
+    # net keeps its shape while it re-distributes. Correlating the pairwise
+    # distance matrix before and after catches the failure this rules out —
+    # a layout re-rolled from random would score around zero, and no amount
+    # of "every node moved a bit" can fake a high score.
+    update(view, _unplaced_net())
+    before = positions(view)
+
+    update(view, _grow(view, _unplaced_net()))
+
+    after = positions(view)
+    shared = sorted(set(before) & set(after))
+    assert len(shared) > 10
+    correlation = _correlation(
+        _pairwise_distances(before, shared), _pairwise_distances(after, shared)
+    )
+    assert correlation > 0.8
 
 
 THEME_LABEL_SIZE = {
@@ -222,9 +292,8 @@ def test_unknown_theme_falls_back_and_still_renders(page, static_server):
     assert page.evaluate("window.kgView.cy.nodes().length") == len(ONE_PERSON["nodes"])
 
 
-def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
+def test_raising_the_dial_removes_terms_and_lowering_it_brings_them_back(view):
     update(view, GRAPH_2)
-    person_position = view.evaluate("window.kgView.cy.$('#p1').position()")
 
     view.evaluate("window.kgView.setMinMentions(2)")
     wait_for_layout(view)
@@ -234,7 +303,7 @@ def test_raising_the_dial_removes_terms_without_touching_the_rest(view):
     view.evaluate("window.kgView.setMinMentions(1)")
     wait_for_layout(view)
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
-    assert view.evaluate("window.kgView.cy.$('#p1').position()") == person_position
+    assert view.evaluate("window.kgView.cy.$('#p1').length") == 1
 
 
 # --- Label declutter (Birk's third pre-render review, 2026-08-14) ---------
@@ -390,36 +459,30 @@ def test_declutter_and_placement_are_deterministic(page, static_server):
     assert first == second
 
 
-def test_declutter_never_reshuffles_an_already_placed_dense_net(view):
-    # Mirrors test_framing_never_reshuffles_an_already_placed_net at the
-    # density where declutter actually does work: growing an already-placed
-    # net must not move any existing node, even though every render re-runs
-    # the full declutter pass over the whole graph (including those nodes).
+def test_a_grown_dense_net_stays_clear_of_overlaps(view):
+    # Growing an already-placed net runs the whole pipeline again, over a
+    # starting state that is already settled. The picture that comes out the
+    # other side must be at least as clean as the one that went in — a
+    # migration that fills the freed space by piling labels on portraits has
+    # bought nothing.
     update(view, _dense_net())
-    before = view.evaluate("window.kgView.cy.$('#p0').position()")
 
-    grown = _dense_net()
-    for node in grown["nodes"]:
-        position = view.evaluate("(id) => window.kgView.cy.$id(id).position()", node["id"])
-        node["x"], node["y"] = position["x"], position["y"]
-    grown["nodes"].append(
-        {"id": "pX", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
-    )
-    grown["edges"].append({"id": "eX", "source": "pX", "target": "t0"})
-    update(view, grown)
+    update(view, _grow(view, _dense_net()))
 
-    assert view.evaluate("window.kgView.cy.$('#p0').position()") == before
+    assert view.evaluate("() => window.kgView.labelOverlaps()") == {
+        "labelPairs": 0,
+        "labelsOnPersons": 0,
+    }
 
 
-def test_the_net_is_turned_to_landscape_before_it_is_separated(view):
-    # The bug this pins down (found in the 3rd pre-render run, 2026-08-14):
-    # frameToAspect may turn the whole net a quarter turn, and a rotation
-    # moves the dots while every label stays horizontal. Separating first and
-    # rotating after therefore throws the result away — measured on the
-    # seeded graph, separation took 43 overlapping pairs down to 20 and the
-    # rotation put it straight back to 48. So by the time the net is settled,
-    # it must be BOTH landscape and clear; landscape alone or clear alone
-    # would have passed while the picture on the wall was still a pile.
+def test_the_settled_net_is_both_landscape_and_clear(view):
+    # Two requirements at once, because either alone would pass over a picture
+    # that is still wrong. fcose settles an isotropic, near-round cloud (1.18:1
+    # on the seeded graph, measured 2026-08-15) which a 16:9 fit can only show
+    # at 59% of the canvas width, and it leaves 42 overlapping label pairs and
+    # 26 labels on portrait discs behind. settlePlacement plus the declutter
+    # pass answer both — which is the measurement that kept them through the
+    # fcose migration instead of deleting them with the rest.
     update(view, _dense_net())
 
     box = view.evaluate(
@@ -452,32 +515,105 @@ def test_declutter_never_hands_back_a_worse_net_than_it_was_given(view):
     view.evaluate("() => window.kgView.declutterLabels()")
 
     after = view.evaluate("() => window.kgView.labelOverlaps()")
-    assert after["labelPairs"] <= before["labelPairs"]
+    # "Worse" is the pass's OWN score, not either count on its own — rule (c)
+    # outranks rule (b), so a label on a portrait disc is deliberately worth
+    # three label-on-label pairs (PERSON_COLLISION_WEIGHT in projection.js) and
+    # trading the cheaper collision for the dearer one is the pass working, not
+    # regressing. Measured 2026-08-15 on this net from that deliberately bad
+    # start: 7 pairs and 23 labels on discs in, 9 and 15 out.
+    def score(overlaps):
+        return overlaps["labelPairs"] + 3 * overlaps["labelsOnPersons"]
+
+    assert score(after) <= score(before)
     assert after["labelsOnPersons"] <= before["labelsOnPersons"]
 
 
-def test_lowering_the_dial_puts_the_returning_terms_back_where_they_were(view):
+def test_lowering_the_dial_lets_the_returning_terms_rejoin_without_jumping(view):
     # Raising min_mentions REMOVES term nodes from cy, so lowering it again
     # re-adds them. In a session whose positions the server has not yet
-    # persisted back into the graph data, those nodes carry x/y null and would
-    # read as brand new — which would re-run a layout and reshuffle half the
-    # net under the visitor's eyes (spec 11). Found in the 3rd pre-render run:
-    # the min_mentions 3 -> 1 shot came back 117% of the canvas height while
-    # the identical picture on the way up had been 82%.
+    # persisted back into the graph data those nodes carry x/y null, so
+    # without `lastSeen` they would start from the origin — and the migration
+    # that follows would be a jump for exactly the half of the net that
+    # returned. They start where they left instead, so what a visitor sees is
+    # the same glide the rest of the net makes.
     update(view, _dense_net())
-    before = view.evaluate(
-        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
-    )
+    before = positions(view)
 
     view.evaluate("() => window.kgView.setMinMentions(3)")
     wait_for_layout(view)
     view.evaluate("() => window.kgView.setMinMentions(1)")
     wait_for_layout(view)
 
-    after = view.evaluate(
-        "() => Object.fromEntries(window.kgView.cy.nodes().map(n => [n.id(), n.position()]))"
+    after = positions(view)
+    shared = sorted(set(before) & set(after))
+    correlation = _correlation(
+        _pairwise_distances(before, shared), _pairwise_distances(after, shared)
     )
-    assert after == before
+    assert correlation > 0.8
+
+
+def test_raising_the_dial_spreads_the_net_into_the_freed_space(view):
+    # The whole point of the 2026-08-14 spec change. Before it, hiding terms
+    # left the survivors sitting in their old holes and the picture shrank:
+    # measured on the seeded graph, the node cloud went from 93% of the canvas
+    # width at min_mentions=1 to 73% at min_mentions=3. Now the net
+    # re-distributes, so the freed space is used, not left empty.
+    update(view, _dense_net())
+
+    view.evaluate("() => window.kgView.setMinMentions(3)")
+    wait_for_layout(view)
+
+    covered = view.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             const box = cy.nodes().renderedBoundingBox({ includeLabels: true });
+             return box.w / cy.width();
+           }"""
+    )
+    assert covered > 0.8
+
+
+def test_the_net_glides_into_its_new_arrangement_instead_of_cutting_to_it(view):
+    # A PNG cannot show motion and neither can a position assertion taken
+    # after the fact, so this samples the live view every animation frame
+    # while the dial change is in flight. At least one frame must catch the
+    # net strictly between its old arrangement and its new one — that is the
+    # difference between a glide and a cut.
+    update(view, _dense_net())
+
+    view.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             window.kgView.setMinMentions(2);
+             const ids = cy.nodes().map((n) => n.id()).sort();
+             window.__samples = [];
+             const sample = () => {
+               window.__samples.push(ids.map((id) => {
+                 const p = cy.$id(id).position();
+                 return [p.x, p.y];
+               }));
+               if (window.kgView.layoutPending) requestAnimationFrame(sample);
+             };
+             requestAnimationFrame(sample);
+           }"""
+    )
+    wait_for_layout(view)
+
+    samples = view.evaluate("() => window.__samples")
+    first, last = samples[0], samples[-1]
+    in_flight = [s for s in samples if s != first and s != last]
+    assert in_flight, "the net snapped straight to its new arrangement"
+    # And the frames really are interpolating, not a second layout's output:
+    # somewhere in the middle a node sits between where it started and where
+    # it ended, on both axes.
+    def between(a, b, c):
+        return min(a, c) < b < max(a, c)
+
+    assert any(
+        between(first[i][0], sample[i][0], last[i][0]) and between(first[i][1], sample[i][1], last[i][1])
+        for sample in in_flight
+        for i in range(len(first))
+    )
 
 
 def test_raising_min_mentions_redeclutters_and_lowers_overlap_count(view):
@@ -499,17 +635,27 @@ def test_raising_min_mentions_redeclutters_and_lowers_overlap_count(view):
     assert after["labelPairs"] <= before["labelPairs"]
 
 
-def test_layout_separation_beats_coses_own_label_handling_alone(page, static_server):
-    # cose's nodeDimensionsIncludeLabels only sizes a node's OWN repulsion
-    # off its measured extent; it never learns that its neighbours are wide
-    # too. Measured 2026-08-14 on theme-b (32px labels) at 50 persons / 75
-    # terms, same deterministic golden-angle seeding both sides so this
-    # isolates the fix rather than comparing against a differently-seeded
-    # run: cose alone (nodeDimensionsIncludeLabels on, no post-layout
-    # separation, no declutter) reproducibly settles at 9 overlapping
-    # label-box pairs and 3 labels sitting on person discs. The full
-    # from-scratch pipeline (separation pass + declutter) reproducibly
-    # clears both to zero on this net — not just "fewer", gone.
+def test_the_kept_passes_still_beat_fcoses_own_label_handling(page, static_server):
+    # The measurement behind the one decision the fourth pre-render brief left
+    # open: fcose's `nodeDimensionsIncludeLabels` was expected to REPLACE the
+    # hand-built label-aware placement, and on the numbers it does not.
+    #
+    # A force layout is a compromise between forces, not an overlap solver —
+    # it knows how big a term node's label box is and still lets boxes cross.
+    # Measured 2026-08-15 on theme-b (32px labels) at 50 persons / 75 distinct
+    # long labels, from the identical deterministic golden-angle start state
+    # so this isolates the passes rather than comparing two different runs:
+    # fcose alone settles at 42 overlapping label-box pairs and 26 labels on
+    # person discs; settlePlacement plus the declutter pass clear both to zero
+    # — and lift the node cloud from 59% to 89% of the canvas width, which no
+    # fcose option addresses at all.
+    #
+    # The thresholds below are far lower than those numbers on purpose. This
+    # module's net gives every person exactly five terms, where the seeded
+    # graph draws them Zipf-skewed and so builds hubs; the regular net is
+    # measurably the easier one (6 pairs / 3 on discs / 71% width, same date).
+    # What is asserted is therefore the direction and the fact that fcose does
+    # not get there alone — the margin belongs to the seeded graph.
     page.goto(f"{static_server}/frontend/projection.html?theme=b")
     page.wait_for_function("window.kgView !== undefined")
     graph = _dense_net()
@@ -530,20 +676,26 @@ def test_layout_separation_beats_coses_own_label_handling_alone(page, static_ser
                style: window.kgView.cy.style().json(),
                elements: toCytoscape({ nodes: graph.nodes, edges: graph.edges }),
              });
+             if (cy.layoutUtilities) cy.layoutUtilities({ desiredAspectRatio: 16 / 9, componentSpacing: 80 });
              // Mirror projection.js's own from-scratch seeding exactly (golden
-             // angle, radius 140, around the origin), so the only difference
-             // from window.kgView's own run is the separation pass and the
-             // declutter pass that follow layoutstop in production.
+             // angle at one ideal edge length, around the origin), so the only
+             // difference from window.kgView's own run is settlePlacement and
+             // the declutter pass that follow the layout in production.
              graph.nodes.forEach((n, index) => {
                const angle = index * 2.39996;
-               cy.$id(n.id).position({ x: Math.cos(angle) * 140, y: Math.sin(angle) * 140 });
+               cy.$id(n.id).position({
+                 x: Math.cos(angle) * LAYOUT.idealEdgeLength,
+                 y: Math.sin(angle) * LAYOUT.idealEdgeLength,
+               });
              });
              await new Promise((resolve) => {
-               const layout = cy.layout({ ...LAYOUT, animate: false });
+               const layout = cy.layout(LAYOUT);
                layout.one('layoutstop', resolve);
                layout.run();
              });
-             const overlaps = countLabelOverlaps(cy);
+             cy.fit(60);
+             const box = cy.nodes().renderedBoundingBox({ includeLabels: true });
+             const overlaps = { ...countLabelOverlaps(cy), width: box.w / cy.width() };
              cy.destroy();
              el.remove();
              return overlaps;
@@ -551,6 +703,64 @@ def test_layout_separation_beats_coses_own_label_handling_alone(page, static_ser
         graph,
     )
 
-    assert raw["labelPairs"] >= 5
+    assert raw["labelPairs"] >= 3
     assert raw["labelsOnPersons"] >= 1
+    assert raw["width"] < 0.8
     assert after == {"labelPairs": 0, "labelsOnPersons": 0}
+
+
+# --- Fill the screen (Birk's fourth pre-render brief, 2026-08-14) ---------
+#
+# "Node size and font size must adapt so the graph ALWAYS fills the screen
+# without overcrowding. Two or three nodes -> everything large. A hundred
+# nodes -> everything small. Never a fixed scale that eventually becomes
+# unreadable." Nothing in this repo scales type: everything is sized in MODEL
+# units, and the viewport fit does the scaling for free. These tests pin that
+# down, because a stray `min-zoomed-font-size` or a rendered-pixel node size
+# would silently break it and no other test would notice.
+
+
+def _rendered_scale(page):
+    return page.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             const box = cy.nodes().renderedBoundingBox({ includeLabels: true });
+             return {
+               zoom: cy.zoom(),
+               // What a viewer actually measures with a ruler on the wall.
+               font: Number(cy.nodes('.term')[0].numericStyle('font-size')) * cy.zoom(),
+               disc: Number(cy.nodes('.person')[0].numericStyle('width')) * cy.zoom(),
+               width: box.w / cy.width(),
+               height: box.h / cy.height(),
+             };
+           }"""
+    )
+
+
+@pytest.mark.parametrize("persons", [5, 20, 50])
+def test_the_net_fills_the_canvas_at_every_size(page, static_server, persons):
+    page.goto(f"{static_server}/frontend/projection.html?theme=b")
+    page.wait_for_function("window.kgView !== undefined")
+
+    update(page, _dense_net(persons=persons, terms=max(6, persons * 3 // 2)))
+
+    scale = _rendered_scale(page)
+    # One axis is always the binding one after a fit; both must be well used,
+    # or the wall is showing a stamp in the middle of a black field.
+    assert max(scale["width"], scale["height"]) > 0.85
+    assert min(scale["width"], scale["height"]) > 0.6
+
+
+def test_type_grows_as_the_net_shrinks(page, static_server):
+    # The comparison the brief asks for as evidence: the SAME renderer, the
+    # same theme, the same model-unit type token — and a font that reaches the
+    # wall larger when there is less to show.
+    scales = {}
+    for persons in (5, 20, 50):
+        page.goto(f"{static_server}/frontend/projection.html?theme=b")
+        page.wait_for_function("window.kgView !== undefined")
+        update(page, _dense_net(persons=persons, terms=max(6, persons * 3 // 2)))
+        scales[persons] = _rendered_scale(page)
+
+    assert scales[5]["font"] > scales[20]["font"] > scales[50]["font"]
+    assert scales[5]["disc"] > scales[20]["disc"] > scales[50]["disc"]

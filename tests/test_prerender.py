@@ -2,25 +2,30 @@
 
 Adapted from the plan's Task 20 Step 1, but fed by sim.seed_graph through the
 Store instead of fixture edges (Birk's 2026-08-14 decision: no simulation
-dependency), and against a small seeded db so the test stays fast.
+dependency), and against small seeded dbs so the suite stays fast.
 """
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
-from sim.prerender import render_series
-from sim.seed_graph import seed_graph
+from sim.prerender import MIGRATION_FRACTIONS, WALL_MIGRATION_MS, render_series, seed_sizes
 
-PERSONS = 6
 SEED = 20260814
+# Small on purpose: this module checks the wiring of each series, not the
+# density question. The numbers that decide the layout are measured against
+# the real 50-person net in tests/test_projection.py and in the delivered
+# out/prerender4 report.
+SIZES = (3, 6)
 
 
 @pytest.fixture(scope="module")
-def seeded_db(tmp_path_factory):
-    data_dir = tmp_path_factory.mktemp("prerender-state")
-    return seed_graph(data_dir, persons=PERSONS, seed=SEED)
+def seeded(tmp_path_factory):
+    return seed_sizes(tmp_path_factory.mktemp("prerender4-state"), SIZES, SEED)
 
 
 def _placement_by_id(coverage):
@@ -30,84 +35,124 @@ def _placement_by_id(coverage):
     return {row[0]: (row[1], row[2]) for row in coverage["placement"]}
 
 
-def test_the_series_renders_one_png_per_variant_at_1920x1080(tmp_path, seeded_db):
-    out_dir = tmp_path / "prerender"
+def _render(tmp_path, seeded, **kwargs):
+    options = dict(
+        include_fill_series=False,
+        include_density_series=False,
+        include_migration_series=False,
+    )
+    options.update(kwargs)
+    return render_series(seeded, tmp_path / "prerender", **options)
 
-    shots = render_series(seeded_db, out_dir)
 
-    # Third iteration's default: the density dial's four shots on theme B
-    # (Birk's settled choice) and nothing else. No separate theme-B shot —
-    # min_mentions=1 hides nothing, so that IS the full-graph theme-B
-    # picture; a/c, the camera series and the test pattern are all opt-in
-    # this round (see CLI flags).
-    names = [s.path.name for s in shots]
-    assert names[0].startswith("theme-b-min-mentions-1-all-") and names[0].endswith("-terms.png")
-    assert names[1].startswith("theme-b-min-mentions-2-") and names[1].endswith("-terms.png")
-    assert names[2].startswith("theme-b-min-mentions-3-") and names[2].endswith("-terms.png")
-    assert names[3] == "theme-b-min-mentions-1-labels-BEFORE-declutter.png"
-    assert len(names) == 4
+def test_the_wall_and_the_report_agree_on_the_glide_length():
+    # WALL_MIGRATION_MS only exists so the printed report can name the
+    # default. The single source of truth is the front end, so pin them
+    # together here rather than trusting a comment to stay true.
+    source = (Path(__file__).resolve().parent.parent / "frontend/static/projection.js").read_text()
+    declared = re.search(r"MIGRATION_DURATION_MS = (\d+)", source)
+    assert declared and int(declared.group(1)) == WALL_MIGRATION_MS
+
+
+def test_every_shot_is_a_1920x1080_png(tmp_path, seeded):
+    shots = _render(
+        tmp_path,
+        seeded,
+        include_fill_series=True,
+        include_density_series=True,
+        include_migration_series=True,
+    )
+
+    assert shots
     for shot in shots:
         with Image.open(shot.path) as img:
             assert img.size == (1920, 1080)
 
 
-def test_the_variants_differ_from_each_other(tmp_path, seeded_db):
-    out_dir = tmp_path / "prerender"
+def test_the_fill_series_shoots_one_shot_per_size(tmp_path, seeded):
+    shots = _render(tmp_path, seeded, include_fill_series=True)
 
-    shots = render_series(
-        seeded_db,
-        out_dir,
-        themes=("a", "b"),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=False,
-    )
-
-    assert shots[0].path.read_bytes() != shots[1].path.read_bytes()
+    assert [s.path.name for s in shots] == [
+        f"theme-b-fill-{size:02d}-persons-{s.coverage['term_nodes']}-terms.png"
+        for size, s in zip(sorted(SIZES), shots)
+    ]
+    assert [s.coverage["person_nodes"] for s in shots] == list(sorted(SIZES))
 
 
-def test_every_graph_variant_shares_one_placement(tmp_path, seeded_db):
-    # The variants differ in type size. If each got its own layout, the bigger
-    # type would spread the net out and the camera's fit would zoom back out
-    # by the same factor — the labels would reach the wall at the same size
-    # and the series would compare nothing.
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=("a", "b", "c"),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=False,
-    )
+def test_a_smaller_net_reaches_the_wall_larger(tmp_path, seeded):
+    # Birk's fourth brief: "Two or three nodes -> everything large. A hundred
+    # nodes -> everything small. Never a fixed scale." Nothing in the theme
+    # differs between these shots — the viewport fit does all of it, because
+    # type and node sizes are in model units.
+    shots = _render(tmp_path, seeded, include_fill_series=True)
 
-    placements = {tuple(tuple(row) for row in shot.coverage["placement"]) for shot in shots}
-    assert len(placements) == 1
+    small, large = shots[0].coverage, shots[-1].coverage
+    assert small["label_px_on_wall"] > large["label_px_on_wall"]
+    assert small["person_px_on_wall"] > large["person_px_on_wall"]
+    # And both still fill the canvas, which is the other half of the claim.
+    for coverage in (small, large):
+        assert max(coverage["width_fraction_with_labels"], coverage["height_fraction_with_labels"]) > 0.85
 
 
-def test_the_placement_fills_the_16_9_canvas(tmp_path, seeded_db):
-    # The measurement Birk asked for: before the layout was framed to the
-    # canvas, the node cloud covered 30% of the width (2026-08-14 baseline).
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=("a",),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=False,
-    )
+def test_the_density_dial_shows_the_same_graph_at_three_thresholds(tmp_path, seeded):
+    # The SAME graph at min_mentions 1/2/3, through the real display-filter
+    # path (window.kgView.setMinMentions -> render() -> graph-model.js
+    # visibleGraph), never a second renderer.
+    shots = _render(tmp_path, seeded, include_density_series=True, min_mentions_values=(1, 2, 3))
 
-    assert shots[0].coverage["width_fraction_with_labels"] > 0.8
+    terms = [s.coverage["term_nodes"] for s in shots]
+    edges = [s.coverage["edges"] for s in shots]
+    persons = [s.coverage["person_nodes"] for s in shots]
+    assert terms[0] > terms[1] >= terms[2]
+    assert edges[0] > edges[1] >= edges[2]
+    assert persons[0] == persons[1] == persons[2] == max(SIZES)
 
 
-def test_the_camera_views_frame_progressively_less_of_the_net(tmp_path, seeded_db):
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=(),
-        include_testpattern=False,
-        include_camera_views=True,
-        include_density_series=False,
-    )
+def test_raising_the_dial_re_lays_the_net_out_instead_of_leaving_holes(tmp_path, seeded):
+    # The 2026-08-14 spec change, as a delivered measurement. Up to the third
+    # round every dial step shared one placement and the picture shrank as
+    # terms were hidden (93% -> 73% of the canvas width on the seeded
+    # 50-person graph). Now each step migrates: the survivors must have MOVED,
+    # and the canvas must still be full.
+    shots = _render(tmp_path, seeded, include_density_series=True, min_mentions_values=(1, 3))
+
+    loose, tight = (_placement_by_id(s.coverage) for s in shots)
+    shared = set(loose) & set(tight)
+    assert shared
+    assert any(loose[node_id] != tight[node_id] for node_id in shared)
+    assert shots[-1].coverage["width_fraction_with_labels"] > 0.8
+
+
+def test_the_migration_series_is_a_numbered_sequence_through_one_glide(tmp_path, seeded):
+    shots = _render(tmp_path, seeded, include_migration_series=True, migration_ms=4000)
+
+    assert len(shots) == len(MIGRATION_FRACTIONS)
+    names = [s.path.name for s in shots]
+    for index, name in enumerate(names, start=1):
+        assert f"-frame-{index}-of-{len(MIGRATION_FRACTIONS)}-" in name
+    # The timestamps in the filenames are measured, not intended, so they are
+    # what proves the frames really do span the animation rather than bunching
+    # at one end of it.
+    stamps = [float(re.search(r"-t([0-9.]+)s\.png$", name).group(1)) for name in names]
+    assert stamps == sorted(stamps)
+    assert stamps[0] < stamps[-1]
+    # Only the closing frame is the settled picture, and only it is measured.
+    assert not shots[0].coverage
+    assert shots[-1].coverage["label_overlaps"] == {"labelPairs": 0, "labelsOnPersons": 0}
+
+
+def test_the_frames_catch_the_net_in_mid_flight(tmp_path, seeded):
+    # The claim the series exists to support: this is a glide, not a cut. Two
+    # consecutive frames of a cut would be byte-identical (the old picture,
+    # then the new one); frames of a glide are all different pictures.
+    shots = _render(tmp_path, seeded, include_migration_series=True, migration_ms=4000)
+
+    frames = [s.path.read_bytes() for s in shots]
+    assert len(set(frames)) == len(frames)
+
+
+def test_the_camera_views_frame_progressively_less_of_the_net(tmp_path, seeded):
+    shots = _render(tmp_path, seeded, include_camera_views=True)
 
     assert [s.path.name for s in shots] == [
         "camera-1-fit-all-reference.png",
@@ -124,93 +169,20 @@ def test_the_camera_views_frame_progressively_less_of_the_net(tmp_path, seeded_d
     assert in_frame[1] < 1.0 and in_frame[2] < 1.0
 
 
-def test_the_density_dial_shows_the_same_graph_at_three_thresholds(tmp_path, seeded_db):
-    # Item 3 of the third brief: the SAME graph at min_mentions 1/2/3,
-    # through the real display-filter path (window.kgView.setMinMentions ->
-    # render() -> graph-model.js visibleGraph), never a second renderer.
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=(),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=True,
-        min_mentions_values=(1, 2, 3),
-    )
+def test_two_cold_runs_produce_the_same_placement(tmp_path, seeded):
+    # The brief's determinism requirement. fcose runs with randomize:false, so
+    # the layout is a pure function of the starting state — and the starting
+    # state is a pure function of the seed, because render_series serves a
+    # throwaway COPY of each seeded db rather than the db itself. Two runs
+    # that disagreed would mean one of those two claims is false, and the
+    # whole comparison series would stop being a comparison.
+    first = _render(tmp_path / "a", seeded, include_fill_series=True, include_density_series=True)
+    second = _render(tmp_path / "b", seeded, include_fill_series=True, include_density_series=True)
 
-    dial_shots = shots[:3]
-    for shot in dial_shots:
-        with Image.open(shot.path) as img:
-            assert img.size == (1920, 1080)
-
-    terms = [s.coverage["term_nodes"] for s in dial_shots]
-    edges = [s.coverage["edges"] for s in dial_shots]
-    persons = [s.coverage["person_nodes"] for s in dial_shots]
-    assert terms[0] > terms[1] > terms[2]
-    assert edges[0] > edges[1] > edges[2]
-    assert persons[0] == persons[1] == persons[2] == PERSONS
+    assert [s.coverage["placement"] for s in first] == [s.coverage["placement"] for s in second]
 
 
-def test_the_density_shots_share_one_placement(tmp_path, seeded_db):
-    # Raising the dial only hides term nodes — it must never re-run the
-    # layout. min_mentions=3 shows the fewest nodes, so its ids are a subset
-    # of the other two; every id it has must sit at the identical position.
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=(),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=True,
-        min_mentions_values=(1, 2, 3),
-    )
+def test_the_theme_variants_differ_from_each_other(tmp_path, seeded):
+    shots = _render(tmp_path, seeded, themes=("a", "c"))
 
-    by_id = [_placement_by_id(s.coverage) for s in shots[:3]]
-    shared_ids = set(by_id[2])
-    assert shared_ids  # the graph must not be filtered down to nothing
-    assert shared_ids <= set(by_id[0])
-    assert shared_ids <= set(by_id[1])
-    for node_id in shared_ids:
-        assert by_id[0][node_id] == by_id[1][node_id] == by_id[2][node_id]
-
-
-def test_the_declutter_off_shot_is_the_same_picture_and_never_the_better_one(
-    tmp_path, seeded_db
-):
-    # Birk has only seen the label-overlap count, never the picture: this
-    # comparison shot puts the pass's own effect on the exact graph the
-    # min_mentions=1 dial shot above it also shows.
-    #
-    # What is asserted here is the direction, not a margin. This module's
-    # seeded db is deliberately small (PERSONS = 6) so the suite stays fast,
-    # and at that size the placement pass alone already clears every overlap
-    # — so both shots read zero and there is nothing left for the declutter
-    # pass to improve. The margin at the density that actually matters (50
-    # persons / 75 distinct long labels: 24 pairs down to 18, 14 labels on
-    # portrait discs down to 4) belongs to the front end and is measured in
-    # tests/test_projection.py against exactly that net.
-    shots = render_series(
-        seeded_db,
-        tmp_path / "prerender",
-        themes=(),
-        include_testpattern=False,
-        include_camera_views=False,
-        include_density_series=True,
-        min_mentions_values=(1,),
-    )
-
-    after_shot, before_shot = shots[0], shots[1]
-    assert before_shot.path.name == "theme-b-min-mentions-1-labels-BEFORE-declutter.png"
-    assert (
-        before_shot.coverage["label_overlaps"]["labelPairs"]
-        >= after_shot.coverage["label_overlaps"]["labelPairs"]
-    )
-    assert (
-        before_shot.coverage["label_overlaps"]["labelsOnPersons"]
-        >= after_shot.coverage["label_overlaps"]["labelsOnPersons"]
-    )
-    # Same graph, same placement — the ids present are identical, and every
-    # id's position matches, so the two shots really are the same picture.
-    before_ids = _placement_by_id(before_shot.coverage)
-    after_ids = _placement_by_id(after_shot.coverage)
-    assert before_ids == after_ids
+    assert shots[0].path.read_bytes() != shots[1].path.read_bytes()

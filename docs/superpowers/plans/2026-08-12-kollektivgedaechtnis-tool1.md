@@ -26,7 +26,8 @@
 - **Person↔term edges only.** Never build term↔term edges (spec §6.4).
 - Exactly **one runtime dial: minimum mention count**, a pure display filter. No other runtime control may change extraction or merging (spec §7).
 - Curation is a **hide flag only** — no approval gate, no editing, no queue (spec §8).
-- **Node positions are persisted; the layout must never re-shuffle existing nodes** (spec §11).
+- **Node positions are persisted for crash recovery; every other graph change makes the whole net migrate, slowly and incrementally, never by re-rolling it** (spec §11, revised by Birk 2026-08-14 — this replaces the earlier "existing nodes stay put, the layout must never re-shuffle"). The layout is `cytoscape-fcose` at `quality: "proof"` with `randomize: false`, so the new arrangement always starts from the one on the wall; Cytoscape's own `preset` layout glides the net into it.
+- **Node and font sizes are model-unit values, never wall pixels** (spec §10.3, §11): the viewport fit scales them, so the graph always fills the screen — large at three nodes, small at a hundred — and no fixed scale can become unreadable.
 - All persisted state must be reconstructible from SQLite after a crash, including positions (spec §10.5, §11).
 - Language of all user-visible text, prompts and interview content: **German**. Code, identifiers and comments: English.
 - LLM: model id `claude-opus-5` exactly (no date suffix). Adaptive thinking is on by default on this model — do not pass `thinking`. Never pass `temperature`, `top_p`, `top_k`, or `budget_tokens` (they return 400). Depth is controlled by `output_config.effort`.
@@ -66,6 +67,11 @@ frontend/static/projection.js  Task 14
 frontend/static/operator.js    Task 15
 frontend/static/base.css + theme-a..d.css   Task 14/16
 frontend/static/vendor/cytoscape.min.js     Task 13 (vendored, committed)
+frontend/static/vendor/layout-base.js       Task 14 (vendored, committed — fcose dependency chain)
+frontend/static/vendor/cose-base.js         Task 14 (vendored, committed)
+frontend/static/vendor/cytoscape-fcose.js   Task 14 (vendored, committed — the layout)
+frontend/static/vendor/cytoscape-layout-utilities.js  Task 14 (vendored, committed — packComponents)
+frontend/static/vendor/README.md            Task 14 (versions, globals, load order)
 sim/generate_interviews.py     Task 18  synthetic corpus generator
 sim/data/interviews/*.json     Task 18  committed fixtures
 sim/data/expectations.yaml     Task 18  documented expected merges
@@ -4892,11 +4898,59 @@ git commit -m "feat: browser display-filter logic with playwright tests"
 - Test: `tests/test_camera.py`, `tests/test_projection.py`
 
 **Interfaces:**
-- Consumes: `graph-model.js` (Task 13), the vendored Cytoscape build (Task 13), `/events` + `/graph.json` + `POST /api/positions` (Task 12).
+- Consumes: `graph-model.js` (Task 13), the vendored Cytoscape build (Task 13) plus the vendored fcose chain (`layout-base` → `cose-base` → `cytoscape-fcose`, and `cytoscape-layout-utilities`), `/events` + `/graph.json` + `POST /api/positions` (Task 12).
 - Produces:
   - `camera.js`: `class Camera(cy, {panSpeed, padding, zoomFactor})` with `setMode(mode)`, `get mode()`, `setZoomFactor(factor)`, `get zoomFactor()`, `focus(eles, padding)`, `onGraphChanged()`, `step(dtSeconds)`. The zoom factor and `focus()` came with the second pre-render review (2026-08-14): fit-all at 50 persons is illegible, so the zoom level is a setting of this component rather than a second camera.
-  - `projection.js`: `createGraphView(container, {onPositions}) -> {cy, camera, update(graph, minMentions), setMinMentions(value), labelOverlaps(), labelOverlapStats, declutterLabels(), resetLabelOffsets()}`, plus the pieces of the from-scratch placement pipeline, each exported so it can be exercised on its own: `frameToAspect(cy, target, {rotate})`, `separateOverlappingNodes(cy)`, `settlePlacement(cy)`, `declutterLabels(cy)`, `resetLabelOffsets(cy)`, `countLabelOverlaps(cy) -> {labelPairs, labelsOnPersons}`, `LAYOUT`. None of them touches an already-placed net (spec §11).
-  - `projection.html` exposes `window.kgView` (used by Task 20's pre-render and by these tests).
+  - `projection.js`: `createGraphView(container, {onPositions, migrationDuration}) -> {cy, camera, update(graph, minMentions), setMinMentions(value), layoutPending, migrating, migrationDuration, labelOverlaps(), labelOverlapStats, declutterLabels(), resetLabelOffsets()}`, plus the pieces of the placement pipeline, each exported so it can be exercised on its own: `frameToAspect(cy, target)`, `normaliseDensity(cy, target)`, `separateOverlappingNodes(cy)`, `settlePlacement(cy, {inkFraction})`, `declutterLabels(cy)`, `resetLabelOffsets(cy)`, `countLabelOverlaps(cy) -> {labelPairs, labelsOnPersons}`, `LAYOUT`, `MIGRATION_DURATION_MS`.
+  - `projection.html` exposes `window.kgView` (used by Task 20's pre-render and by these tests) and reads `?theme=` and `?migration=` (glide length in ms).
+
+**Fourth pre-render review — spec change by Birk, 2026-08-14 (binding).** The rule "existing
+nodes stay put, the layout must never re-shuffle" is REPLACED: when the graph changes, all
+nodes migrate slowly to a better-distributed arrangement that fills the freed space, and node
+and font sizes follow the viewport fit so the picture always fills the wall. The anti-jump
+requirement is unchanged and is the reason for every option below. **Use the library, do not
+hand-build this** (Birk, explicit): the layout is `cytoscape-fcose`, vendored offline like
+Cytoscape itself.
+
+- `LAYOUT` is fcose at `quality: "proof"` (the only quality that supports the next two
+  options), `randomize: false` (start from the CURRENT positions — the anti-jump guarantee,
+  from the library), `nodeDimensionsIncludeLabels: true`, `packComponents: true` (early in
+  the festival the net really is disconnected), `animate: false`.
+- The glide is Cytoscape's own `preset` layout: `migrate()` computes the new arrangement with
+  the animation off, puts every node back where it started, and animates once. Computing
+  first means the passes after the layout cannot land as a snap at the end of the animation.
+- **Yield a frame between the computation and the glide.** Cytoscape times animations off the
+  animation loop's frame clock, and the frame after a long synchronous block carries a
+  timestamp from before it: measured, a 2500ms glide ran out in **116ms** of real time — the
+  wall froze and then cut. `nextFrame()` (a double `requestAnimationFrame`) fixes it.
+- **`nodeDimensionsIncludeLabels` does NOT replace the hand-built label work**, which is what
+  the brief expected and what the measurement had to settle. On the seeded 50-person /
+  75-term graph at theme B, from an identical starting state: fcose alone leaves **42
+  overlapping label pairs, 26 labels on portrait discs, 59% of the canvas width**; with the
+  option off it is 156 / 65 / 43%, so the option earns its keep but does not finish the job.
+  `settlePlacement()` takes it to 8 / 1 / 89% and `declutterLabels()` to **0 / 0 / 89%**. Both
+  passes are therefore kept, each on its own number, and only the parts fcose really did make
+  redundant were deleted: `frameToAspect`'s quarter-turn (it existed for a cose bug — fcose
+  settles at 1.18:1, already landscape, so it never fired) and the node locking that kept an
+  already-placed net frozen.
+- **Ask the free lever before the expensive one.** Moving a label costs nothing; spreading the
+  net costs type size, because the camera then has more to fit onto the same wall. So
+  `settlePlacement()`'s loosening loop runs `declutterLabels()` first and only loosens if that
+  was not enough — worth 12.7px of type on the wall instead of 11.4px at 50 persons, at zero
+  overlaps either way.
+- **A force layout does not scale with how much is in it.** Labels reached the wall at 17 / 21
+  / 15 / 15 px across seeded graphs of 3 / 6 / 20 / 50 persons — flat and non-monotone, which
+  is the "fixed scale that eventually becomes unreadable" the brief rules out.
+  `normaliseDensity()` scales the settled placement uniformly to a constant ink fraction of
+  its own bounding box, and `settlePlacement()` loosens that target step by step until the
+  picture is clean — so the delivered density is "as tight as these labels allow" rather than
+  a constant tuned against one graph and one theme.
+- `SEED_RADIUS` is deliberately much shorter than `idealEdgeLength`: `randomize: false` makes
+  fcose sensitive to its starting state, and a compact golden-angle start cleared every
+  density target to zero where a pre-spread one left 7–8 pairs.
+- `placeNewNodes()` from cytoscape-layout-utilities would be the better seeding heuristic and
+  is NOT used: it picks its quadrant and its jitter with `Math.random()`, and two pre-render
+  runs over the same seed must produce the same picture.
 
 **Third pre-render review — decision by Birk, 2026-08-14 (binding).** The labels must stop
 piling up: the layout has to know that a term node is its dot PLUS its text block, a
@@ -4908,11 +4962,13 @@ first, `declutterLabels()` the other two.
 Three things that took a measurement to find, all on the seeded 50-person / 75-term graph
 (Task 20) at theme b, and all worth keeping in mind before touching this pipeline:
 
-1. **Rotate before separating, never after.** `frameToAspect()` may turn the whole net a
-   quarter turn, and a rotation moves the dots while every label stays horizontal. Separating
-   first took 43 overlapping label pairs down to 20 and the rotation put it straight back to
-   48. `settlePlacement()` therefore frames first (rotation included) and separates after,
-   with `{rotate: false}` on every later framing call.
+1. ~~**Rotate before separating, never after.**~~ *Retired at the fourth review:*
+   `frameToAspect()` began with a quarter turn because cose measured repulsion with each
+   node's width and height swapped and so settled a net of wide labels PORTRAIT. fcose does
+   not have that bug — its raw output on the same graph is 1.18:1, already landscape — so the
+   rotation never fired and was deleted. What the finding taught still stands as a warning: a
+   rotation moves the dots while every label stays horizontal, so anything that turns the net
+   must run BEFORE the separation, never after it.
 2. **Neither relaxation is monotone.** Pushing box A clear of B pushes it into C, so both
    passes wander rather than descend (placement rounds measured 41, 32, 32, 28, 30, 33, 26,
    27, ...; a declutter run measured 44 pairs in and 49 out). Both therefore score every
@@ -4922,11 +4978,18 @@ Three things that took a measurement to find, all on the seeded 50-person / 75-t
    300 iterations rather than 30, and the placement loop needs to run until the rounds stop
    paying rather than a fixed few.
 
-The dial's own reshuffle bug belongs here too: raising `min_mentions` REMOVES term nodes, so
-lowering it again re-adds them, and until the server has persisted this session's positions
-those nodes carry `x`/`y` null and read as brand new — which re-ran a layout and moved half
-the net. `createGraphView` remembers where each node was last seen and puts returning nodes
-back exactly there.
+The dial's own bug belongs here too: raising `min_mentions` REMOVES term nodes, so lowering it
+again re-adds them, and until the server has persisted this session's positions those nodes
+carry `x`/`y` null and read as brand new. Under the third review's rule that re-ran a layout
+and moved half the net; under the fourth's it would start the returning half from the origin,
+which makes their migration a jump while everyone else glides. Either way the fix is the same:
+`createGraphView` remembers where each node was last seen and puts returning nodes back
+exactly there before the migration begins.
+
+**The Task 14 file listings in Steps 1–4 below predate the fcose migration** (they show the
+`cose` layout, the locked-node rule and the rotation). The shipped
+`frontend/static/projection.js` and `tests/test_projection.py` are authoritative for that
+module; re-pasting them here would only add a second copy to drift.
 
 The camera is its own component **from the start**, even if everything ends up fitting (spec §10.3): `fit` (fit-all), `manual` (zoom/pan by hand or touch), `pan` (slow automatic pan — this mode *is* the touch fallback). Node design: person = portrait circle with a golden ring, no name, no quote; term = its label, the only text in the net (spec §10.2).
 
@@ -8338,8 +8401,9 @@ legibility, stroke weight and black level on a whiteboard, which needs realistic
   - `sim.seed_graph.seed_graph(data_dir, persons=50, seed=20260814) -> Path` — deterministic; returns `Config(data_dir).db_path`.
   - `sim.prerender.serve(store, cfg) -> (base_url, shutdown)` — starts the real app on an ephemeral port in a background thread.
   - `sim.prerender.Shot` — frozen dataclass `(path, description, coverage)`; `coverage` is a measurement dict (fraction of the canvas the node cloud covers, zoom, fraction of nodes in frame, etc.).
-  - `sim.prerender.render_series(db_path, out_dir, themes=(), include_testpattern=False, include_camera_views=False, camera_theme="a", include_density_series=True, density_theme="b", min_mentions_values=(1, 2, 3)) -> list[Shot]` — a pure renderer over an existing db. The density series is what it renders by default (see the third review below); the type-size series, the camera series (fit-all reference, fit at zoom factor 2, and a close-up on the tightest person-and-terms cluster) and the test pattern are all opt-in.
-  - CLI: `uv run python -m sim.prerender --db out/prerender3-state/kg.db --out out/prerender3 --persons 50 --seed 20260814 --reseed --themes {a,b,c} --camera-theme {a,b,c} --camera-views --testpattern` (seeds the db if it does not exist; `--reseed` deletes the seeded state first — the renderer persists node positions into the db, so an existing db pins the placement). Output filenames: `theme-b-min-mentions-{1,2,3}-<n>-terms.png`, `theme-b-min-mentions-1-labels-BEFORE-declutter.png`, and behind the flags `series-a-dark-base-label22.png`, `series-b-dark-larger-label32.png`, `series-c-dark-largest-label44.png`, `camera-1-fit-all-reference.png`, `camera-2-zoom2x-half-the-net.png`, `camera-3-cluster-closeup.png`, `series-d-testpattern-greyscale-and-font-ladder.png`.
+  - `sim.prerender.seed_sizes(state_dir, sizes, seed, reseed=False) -> dict[int, Path]` — one seeded db per person count, all from one seed, so the smaller ones are strict prefixes of the largest (`seed_graph` walks its rng once per person). Read-only masters.
+  - `sim.prerender.render_series(dbs, out_dir, theme="b", themes=(), include_fill_series=True, include_density_series=True, include_migration_series=True, include_testpattern=False, include_camera_views=False, camera_theme="b", min_mentions_values=(1, 2, 3), migration_ms=8000) -> list[Shot]` — a pure renderer over seeded dbs. Every series is served a **throwaway copy** of its db, because the renderer persists the placement it settles on back into the db it reads and the next load restores it (spec §10.5) — without the copy, whichever series ran first would silently pin every series after it.
+  - CLI: `uv run python -m sim.prerender --state out/prerender4-state --out out/prerender4 --sizes 5 20 50 --seed 20260814 --reseed --themes {a,b,c} --migration-ms 8000 --camera-views --testpattern`. Output filenames: `theme-b-fill-{05,20,50}-persons-<n>-terms.png`, `theme-b-min-mentions-{1,2,3}-<n>-terms.png`, `theme-b-migration-dial-1-to-2-frame-<i>-of-4-t<seconds>s.png`, and behind the flags `series-{a,b,c}-*.png`, `camera-{1,2,3}-*.png`, `series-d-testpattern-greyscale-and-font-ladder.png`.
 
 The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4). Variants: **A** dark reference, **B** larger type, **C** much larger type and heaviest strokes — all three share one dark palette and background, differing only in size and stroke weight — **D** the test pattern.
 
@@ -8382,7 +8446,31 @@ discs: 43 / 30 from cose alone, 24 / 14 after the placement pipeline, 18 / 4 aft
 declutter pass. Raising the dial takes the same picture to 16 / 13 -> 12 / 3 at
 `min_mentions=2` (50 terms) and 9 / 12 -> 8 / 2 at 3 (31 terms). Spec §10.4 amended to match.
 
-The Step 1–4 listings below carry the shipped files, all three amendments included.
+**Fourth pre-render review — spec change by Birk, 2026-08-14 (binding).** Spec §11's "existing
+nodes stay put" is replaced by "the whole net migrates, slowly and never by re-rolling", and
+node/font size must follow the fit so the graph always fills the wall (Task 14 carries the
+implementation and the measurements). Three series answer it, all at theme B:
+
+1. **Fill the screen** — the same seeded graph at 5 / 20 / 50 persons. Type on the wall 26 /
+   16 / 13px, discs 63 / 38 / 30px, canvas fill 89% × 89% and zero overlaps at all three:
+   the evidence for "always readable, never overcrowded".
+2. **The density dial** at `min_mentions` 1 / 2 / 3 again, but now each step re-lays the net
+   out. Up to the third round every step shared one placement and the picture shrank as terms
+   were hidden (93% → 80% → 73% of the canvas width, 6 / 1 / 0 overlapping pairs); now the
+   survivors migrate into the freed space — 89% at every step, 0 pairs at every step, and the
+   type grows 13 → 14 → 18px as the dial rises.
+3. **The migration itself** — one transition (the dial going 1 → 2) shot as a numbered
+   sequence of frames through the animation, because a PNG cannot show motion. Each frame's
+   real elapsed time is measured and goes into its filename, and the glide is slowed to 8s for
+   this series only (at the wall's own 2.5s a screenshot round trip eats a fifth of it).
+
+Two structural changes here: `render_series` now takes a **dict of seeded dbs** rather than
+one path, and it serves each series a throwaway **copy** of its db. Both exist for the same
+reason — a series must be reproducible from the seed alone. The declutter-off comparison shot
+of the third round is dropped: the pass's before/after counts are already reported per shot.
+
+The Step 1–4 listings below predate this round for `sim/prerender.py` and
+`tests/test_prerender.py`; the shipped files are authoritative for those two.
 
 The db must sit at `<data_dir>/kg.db`: `render_series` derives `Config(data_dir=db_path.parent)` and the app mounts `cfg.portrait_dir` from it, so a db elsewhere silently breaks the portraits. The `wait_for_function` timeouts are 60000 ms, not the 20000 ms a toy graph needed. `sim/prerender.py` reuses `tests/conftest.py`'s cached-chromium `executable_path` fallback — this host cannot `playwright install`.
 
