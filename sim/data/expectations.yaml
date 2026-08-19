@@ -1,0 +1,57 @@
+note: Erwartete Zusammenfassungen. Ohne diese Datei ist 'gutes Ergebnis' nicht falsifizierbar.
+expected_merges:
+- concept: Bodenversiegelung
+  interviews:
+  - 12
+  - 27
+  - 42
+  - 57
+  phrasings:
+  - dass alles zubetoniert wird, jeder Parkplatz asphaltiert
+  - der Boden kriegt keine Luft mehr, überall Beton drauf
+  - wir pflastern die Landschaft einfach zu
+  - dass alles zubetoniert wird, jeder Parkplatz asphaltiert
+- concept: Genossenschaftliches Wohnen
+  interviews:
+  - 3
+  - 18
+  - 33
+  - 48
+  phrasings:
+  - wenn die Leute das Haus zusammen besitzen, so als Verein
+  - Baugruppen, die gemeinsam bauen und dann gemeinsam drin wohnen
+  - wo nicht ein Investor gehört, sondern denen, die drin wohnen
+  - wenn die Leute das Haus zusammen besitzen, so als Verein
+- concept: Ländlicher Leerstand
+  interviews:
+  - 9
+  - 24
+  - 39
+  - 54
+  phrasings:
+  - die ganzen leeren Häuser in den Dörfern, wo keiner mehr wohnt
+  - auf dem Land stehen ganze Straßen leer
+  - die Ortskerne draußen sterben aus, da ist alles frei
+  - die ganzen leeren Häuser in den Dörfern, wo keiner mehr wohnt
+- concept: Recycling-Beton
+  interviews:
+  - 6
+  - 21
+  - 36
+  - 51
+  phrasings:
+  - den alten Bauschutt einfach wieder neu anmischen
+  - Beton aus Abbruchmaterial, also wirklich aus dem alten Haus
+  - Material aus dem Rückbau nochmal verwenden statt neu zu kaufen
+  - den alten Bauschutt einfach wieder neu anmischen
+- concept: Roboter auf der Baustelle
+  interviews:
+  - 0
+  - 15
+  - 30
+  - 45
+  phrasings:
+  - Maschinen, die den Beton selber aufsprühen, so Drohnen halt
+  - 3D-Drucker, die das Haus direkt auf dem Grundstück ausdrucken
+  - Roboterarme, die auf der Baustelle mauern
+  - Maschinen, die den Beton selber aufsprühen, so Drohnen halt
