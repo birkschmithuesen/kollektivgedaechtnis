@@ -8237,6 +8237,59 @@ def test_score_run_handles_an_interview_without_terms(tmp_path):
     assert report["satisfied"] == 0
     assert report["groups"][0]["merged"] is False
     store.close()
+
+
+def test_score_run_never_credits_a_group_whose_interviews_were_not_all_replayed(tmp_path):
+    """A truncated run (--limit) must not report a merge that could not happen.
+
+    With only interview 0 replayed, the group [0, 5] has exactly one present
+    member; intersecting a single term set would hand back that set and claim a
+    merge — of a concept the group never even names.
+    """
+    cfg = Config(data_dir=tmp_path / "state")
+    store = Store.open(cfg.db_path)
+    persons = [store.create_person(started_at=float(i)) for i in range(2)]
+    term = store.get_or_create_term("Recycling-Beton", created_at=1.0)
+    store.add_edge(persons[0].id, term.id, created_at=2.0)
+    store.add_edge(persons[1].id, term.id, created_at=3.0)
+
+    expectations = {
+        "expected_merges": [
+            {"concept": "Recycling-Beton", "interviews": [0, 1]},
+            {"concept": "Bodenversiegelung", "interviews": [0, 5]},
+        ]
+    }
+
+    report = score_run(store, expectations, [p.id for p in persons])
+
+    by_concept = {g["concept"]: g for g in report["groups"]}
+    assert by_concept["Bodenversiegelung"]["merged"] is False
+    assert by_concept["Bodenversiegelung"]["complete"] is False
+    assert by_concept["Bodenversiegelung"]["missing_interviews"] == [5]
+    assert by_concept["Bodenversiegelung"]["label"] is None
+    assert by_concept["Recycling-Beton"]["complete"] is True
+    # only the fully replayed group is scorable at all
+    assert report["satisfied"] == 1
+    assert report["total"] == 1
+    assert report["score"] == 1.0
+    assert report["complete_corpus"] is False
+    assert report["incomplete"] == ["Bodenversiegelung"]
+    store.close()
+
+
+def test_score_run_marks_a_fully_replayed_corpus_as_complete(tmp_path):
+    cfg = Config(data_dir=tmp_path / "state")
+    store = Store.open(cfg.db_path)
+    persons = [store.create_person(started_at=float(i)) for i in range(2)]
+
+    report = score_run(
+        store, {"expected_merges": [{"concept": "X", "interviews": [0, 1]}]}, [p.id for p in persons]
+    )
+
+    assert report["complete_corpus"] is True
+    assert report["incomplete"] == []
+    assert report["total"] == 1
+    store.close()
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -8316,6 +8369,15 @@ def replay(
 
 
 def score_run(store, expectations: dict, person_ids: list[str]) -> dict:
+    """Score the graph against the documented expectations of Task 18.
+
+    A truncated run (`--limit`) does not contain every interview an expectation
+    group names. Such a group is NOT scorable: it could never have merged, so
+    counting it either way would lie. It is reported with `complete: False`,
+    always `merged: False`, and it is left out of `satisfied`/`total` — which
+    is why `total` differs from `len(groups)` on a partial run, and why
+    `complete_corpus` says so outright.
+    """
     edges = store.list_edges()
     terms_by_person: dict[str, set[str]] = {}
     for edge in edges:
@@ -8324,27 +8386,38 @@ def score_run(store, expectations: dict, person_ids: list[str]) -> dict:
     groups = []
     for expected in expectations.get("expected_merges", []):
         indices = expected["interviews"]
-        term_sets = [
-            terms_by_person.get(person_ids[i], set()) for i in indices if i < len(person_ids)
-        ]
-        shared = set.intersection(*term_sets) if term_sets and all(term_sets) else set()
+        missing = [i for i in indices if i >= len(person_ids)]
+        term_sets = [terms_by_person.get(person_ids[i], set()) for i in indices if i not in missing]
+        # `not missing` first: intersecting a single present set would hand back
+        # that whole set and report a merge for a group of one.
+        shared = (
+            set.intersection(*term_sets)
+            if not missing and term_sets and all(term_sets)
+            else set()
+        )
         term_id = sorted(shared)[0] if shared else None
         groups.append(
             {
                 "concept": expected["concept"],
                 "interviews": indices,
+                "complete": not missing,
+                "missing_interviews": missing,
                 "merged": term_id is not None,
                 "term_id": term_id,
                 "label": store.get_term(term_id).label if term_id else None,
             }
         )
 
-    satisfied = sum(1 for group in groups if group["merged"])
+    scorable = [group for group in groups if group["complete"]]
+    incomplete = [group["concept"] for group in groups if not group["complete"]]
+    satisfied = sum(1 for group in scorable if group["merged"])
     return {
         "groups": groups,
         "satisfied": satisfied,
-        "total": len(groups),
-        "score": round(satisfied / len(groups), 3) if groups else 0.0,
+        "total": len(scorable),
+        "score": round(satisfied / len(scorable), 3) if scorable else 0.0,
+        "complete_corpus": not incomplete,
+        "incomplete": incomplete,
         "term_count": len(store.list_terms()),
         "person_count": len(person_ids),
         "edge_count": len(edges),
@@ -8410,6 +8483,13 @@ def main() -> None:
     expectations = yaml.safe_load((data / "expectations.yaml").read_text(encoding="utf-8"))
     report = score_run(store, expectations, person_ids)
     write_graph_json(store, db_path.parent / "graph.json")
+    if not report["complete_corpus"]:
+        print(
+            f"PARTIAL RUN — {len(report['incomplete'])} of "
+            f"{len(report['groups'])} expectation groups are not fully replayed "
+            f"and are NOT scored: {', '.join(report['incomplete'])}. "
+            "This score is not comparable to a full run."
+        )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     store.close()
 
