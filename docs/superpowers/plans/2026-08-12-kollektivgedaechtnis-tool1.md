@@ -7751,7 +7751,8 @@ git commit -m "feat: core wiring and process entrypoint"
   - `InterviewSpec(index, question_index, speaker_type, planted_concept: str | None, planted_phrasing: str | None)`
   - `build_generation_prompt(spec) -> str`
   - `write_expectations(plan, path) -> dict`
-  - CLI: `uv run python -m sim.generate_interviews --count 60 --out sim/data`
+  - `DEFAULT_GENERATION_MODEL` — the corpus is generated on **Sonnet** (`claude-sonnet-5`), not on `cfg.llm_model`. Birk's decision, 2026-08-19: writing synthetic spoken German does not need Opus-level reasoning, and 60 Opus calls is a large slice of the weekly budget for a fixture set; the extraction and merge-judge calls stay on Opus, where model quality decides the outcome. Exposed as `--model` so the choice is inspectable and overridable, and recorded in each fixture's `model` field.
+  - CLI: `uv run python -m sim.generate_interviews --count 60 --out sim/data [--model claude-sonnet-5]`
 
 The corpus is the prerequisite for judging anything (spec §9). It is generated from the **five real guiding questions**, in spoken language with filler words and broken sentences, across speaker types from terse to rambling, with ~1/3 of the interviews carrying a deliberately different formulation of a concept another interview also touches. Those planted overlaps are the documented expected merges — without them "good result" is unfalsifiable.
 
@@ -7763,6 +7764,7 @@ The corpus is the prerequisite for judging anything (spec §9). It is generated 
 import yaml
 
 from sim.generate_interviews import (
+    DEFAULT_GENERATION_MODEL,
     PLANTED,
     QUESTIONS,
     SPEAKER_TYPES,
@@ -7836,6 +7838,13 @@ def test_expectations_document_every_planted_group(tmp_path):
 
 def _used(plan, concept):
     return any(spec.planted_concept == concept for spec in plan)
+
+
+def test_the_generation_model_defaults_to_sonnet():
+    # Birk's decision (2026-08-19): synthetic-corpus generation runs on Sonnet,
+    # not the Opus default (`cfg.llm_model`) used for real extraction/merge-judge
+    # calls — this constant feeds the CLI's --model default.
+    assert DEFAULT_GENERATION_MODEL == "claude-sonnet-5"
 ```
 
 - [ ] **Step 2: Run the test and confirm it fails**
@@ -7866,6 +7875,12 @@ from kg.extraction import GUIDING_QUESTIONS as QUESTIONS  # noqa: F401  (re-expo
 # NOT redefined here: the corpus must be generated from the SAME five guiding
 # questions the extraction prompt names, otherwise the simulation tests the
 # wrong text genre (spec 9).
+
+# Sonnet, not the Opus default used for real extraction/merge-judge calls:
+# writing synthetic spoken German does not need Opus-level reasoning, and 60
+# calls on Opus is a materially large slice of the weekly budget for a
+# fixture set (Birk's decision, 2026-08-19).
+DEFAULT_GENERATION_MODEL = "claude-sonnet-5"
 
 SPEAKER_TYPES = [
     "sehr knapp, zwei Sätze, fast unwillig",
@@ -7959,7 +7974,7 @@ def build_generation_prompt(spec: InterviewSpec) -> str:
     lines = [
         "Schreibe das Transkript EINER Interviewantwort auf einer Architektur- und "
         "Baukultur-Konferenz, so wie eine automatische Spracherkennung es liefern "
-        "würde: gesprochene Sprache, Füllwörter („also", „ähm", „ne"), abgebrochene "
+        "würde: gesprochene Sprache, Füllwörter („also“, „ähm“, „ne“), abgebrochene "
         "Sätze, Wiederholungen, kleine Abschweifungen, keine Absätze, keine "
         "Anführungszeichen, kein Sprecherlabel.",
         "",
@@ -7970,8 +7985,8 @@ def build_generation_prompt(spec: InterviewSpec) -> str:
         lines += [
             "",
             "Die Person soll dabei — beiläufig, in eigenen Worten, ohne Fachbegriff — "
-            f"genau diesen Gedanken äußern: „{spec.planted_phrasing}". Verwende NICHT "
-            f"den Ausdruck „{spec.planted_concept}".",
+            f"genau diesen Gedanken äußern: „{spec.planted_phrasing}“. Verwende NICHT "
+            f"den Ausdruck „{spec.planted_concept}“.",
         ]
     lines += ["", "Gib nur das Transkript aus, sonst nichts."]
     return "\n".join(lines)
@@ -8009,11 +8024,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="sim.generate_interviews")
     parser.add_argument("--count", type=int, default=60)
     parser.add_argument("--out", default="sim/data")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_GENERATION_MODEL,
+        help="Model used to generate the synthetic corpus (kept separate from "
+        "cfg.llm_model, which stays on Opus for real extraction/merge-judge calls).",
+    )
     args = parser.parse_args()
 
     cfg = load_config()
     llm = LLMClient(
-        model=cfg.llm_model, effort="medium", max_tokens=4000, api_key=cfg.anthropic_api_key
+        model=args.model, effort="medium", max_tokens=4000, api_key=cfg.anthropic_api_key
     )
     out = Path(args.out)
     (out / "interviews").mkdir(parents=True, exist_ok=True)
@@ -8028,7 +8049,7 @@ def main() -> None:
             user=build_generation_prompt(spec),
             output_model=Transcript,
         )
-        payload = asdict(spec) | {"text": result.text}
+        payload = asdict(spec) | {"model": args.model, "text": result.text}
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"wrote {target}")
 
@@ -8045,9 +8066,14 @@ if __name__ == "__main__":
 touch sim/__init__.py
 uv run pytest tests/test_sim_generator.py -v
 ```
-Expected: PASS (7 tests)
+Expected: PASS (8 tests — the plan's 7 plus the `DEFAULT_GENERATION_MODEL` assertion)
 
 - [ ] **Step 5: Generate and commit the corpus**
+
+The repo's `.gitignore` carried a bare `data/` pattern, which git matches at ANY
+depth — so `sim/data/` and the whole corpus were silently ignored. Anchored to
+`/data/` (the live runtime state dir at the repo root); `sim/data/runs/` stays
+ignored. Verify with `git check-ignore -v` before committing.
 
 ```bash
 export ANTHROPIC_API_KEY=...    # LLM key, from the environment
@@ -8056,13 +8082,18 @@ ls sim/data/interviews | wc -l   # 60
 head -20 sim/data/expectations.yaml
 ```
 
+60 sequential calls take far longer than a single command timeout. Generation is
+resumable (it skips fixtures that already exist), so re-running the same command
+continues where it stopped.
+
 Read three of the generated files. They must look like speech, not like an essay — filler words, broken sentences, one digression. If they read as clean prose, tighten `build_generation_prompt` and delete the affected files before regenerating (generation skips files that already exist).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add sim/__init__.py sim/generate_interviews.py sim/data/interviews sim/data/expectations.yaml tests/test_sim_generator.py
+git add .gitignore sim/__init__.py sim/generate_interviews.py sim/data/interviews sim/data/expectations.yaml tests/test_sim_generator.py
 git commit -m "feat: synthetic interview corpus with documented expected merges"
+git show HEAD --stat   # must list all 60 fixtures + expectations.yaml
 ```
 
 ---
