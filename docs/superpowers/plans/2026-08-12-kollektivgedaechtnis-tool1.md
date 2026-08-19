@@ -4901,7 +4901,7 @@ git commit -m "feat: browser display-filter logic with playwright tests"
 - Consumes: `graph-model.js` (Task 13), the vendored Cytoscape build (Task 13) plus the vendored fcose chain (`layout-base` → `cose-base` → `cytoscape-fcose`, and `cytoscape-layout-utilities`), `/events` + `/graph.json` + `POST /api/positions` (Task 12).
 - Produces:
   - `camera.js`: `class Camera(cy, {panSpeed, padding, zoomFactor})` with `setMode(mode)`, `get mode()`, `setZoomFactor(factor)`, `get zoomFactor()`, `focus(eles, padding)`, `onGraphChanged()`, `step(dtSeconds)`. The zoom factor and `focus()` came with the second pre-render review (2026-08-14): fit-all at 50 persons is illegible, so the zoom level is a setting of this component rather than a second camera.
-  - `projection.js`: `createGraphView(container, {onPositions, migrationDuration}) -> {cy, camera, update(graph, minMentions), setMinMentions(value), layoutPending, migrating, migrationDuration, labelOverlaps(), labelOverlapStats, declutterLabels(), resetLabelOffsets()}`, plus the pieces of the placement pipeline, each exported so it can be exercised on its own: `frameToAspect(cy, target)`, `normaliseDensity(cy, target)`, `separateOverlappingNodes(cy)`, `settlePlacement(cy, {inkFraction})`, `declutterLabels(cy)`, `resetLabelOffsets(cy)`, `countLabelOverlaps(cy) -> {labelPairs, labelsOnPersons}`, `LAYOUT`, `MIGRATION_DURATION_MS`.
+  - `projection.js`: `createGraphView(container, {onPositions, migrationDuration}) -> {cy, camera, update(graph, minMentions), setMinMentions(value), layoutPending, migrating, migrationDuration, labelOverlaps(), labelOverlapStats, declutterLabels(), resetLabelOffsets()}`, plus the pieces of the placement pipeline, each exported so it can be exercised on its own: `frameToAspect(cy, target)`, `normaliseDensity(cy, target)`, `separateOverlappingNodes(cy)`, `settlePlacement(cy, {inkFraction})`, `declutterLabels(cy)`, `resetLabelOffsets(cy)`, `countLabelOverlaps(cy) -> {labelPairs, labelsOnPersons, personPairs}`, `LAYOUT`, `MIGRATION_DURATION_MS`. `personPairs` — person discs lying on each other — came with the seventh pre-render review (2026-08-15) and is scored by `settlePlacement`, which is the only pass that can move a disc.
   - `projection.html` exposes `window.kgView` (used by Task 20's pre-render and by these tests) and reads `?theme=` and `?migration=` (glide length in ms).
 
 **Fourth pre-render review — spec change by Birk, 2026-08-14 (binding).** The rule "existing
@@ -5866,7 +5866,7 @@ function style() {
         shape: 'ellipse',
         width: cssVar('--person-size', '96'),
         height: cssVar('--person-size', '96'),
-        'background-color': cssVar('--person-fill', '#222'),
+        'background-color': cssVar('--person-fill', '#242424'),
         'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'border-width': cssVar('--ring-width', '5'),
@@ -5880,9 +5880,9 @@ function style() {
         shape: 'ellipse',
         width: cssVar('--term-dot', '14'),
         height: cssVar('--term-dot', '14'),
-        'background-color': cssVar('--term-dot-color', '#EDE7D8'),
+        'background-color': cssVar('--term-dot-color', '#FFFFFF'),
         label: 'data(label)',
-        color: cssVar('--label-color', '#F5F1E6'),
+        color: cssVar('--label-color', '#FFFFFF'),
         'font-family': cssVar('--label-font', 'Georgia, serif'),
         'font-size': cssVar('--label-size', '22'),
         'text-valign': 'bottom',
@@ -5892,14 +5892,14 @@ function style() {
         'text-wrap': 'wrap',
         'text-max-width': cssVar('--label-max-width', '220px'),
         'text-outline-width': cssVar('--label-outline-width', '3'),
-        'text-outline-color': cssVar('--label-outline-color', '#101014'),
+        'text-outline-color': cssVar('--label-outline-color', '#000000'),
       },
     },
     {
       selector: 'edge.link',
       style: {
         width: cssVar('--edge-width', '2'),
-        'line-color': cssVar('--edge-color', '#8A8578'),
+        'line-color': cssVar('--edge-color', '#858585'),
         'curve-style': 'straight',
         opacity: cssVar('--edge-opacity', '0.75'),
       },
@@ -6556,26 +6556,44 @@ varies only type size and stroke/outline weight; Birk could not read the 22px la
    colour below is therefore identical in all three themes — a variant that
    also moved the palette would not answer the legibility question.
 
-   --person-size shrunk 96 -> 56 (Birk's 3rd review, same date): the fill is
+   PURE black ground and PURE white text (Birk, 2026-08-15, binding, applied
+   to a/b/c alike): the ground was #101014 and the labels #F5F1E6, a
+   blue-tinted near-black under a cream near-white. Projection is additive and
+   the surface is a whiteboard, so on-site black is whatever ambient light
+   sits on it (spec 10.4) — a tint gains nothing there and costs contrast,
+   while pure values hand the projector its full range (16.8:1 before,
+   21:1 now). --label-outline-color follows --bg exactly, or the outline
+   reads as a halo instead of disappearing into the ground. --term-dot-color
+   went to pure white with the labels: the dot and its caption are one node
+   and nothing asks them to differ. --edge-color was restated as the NEUTRAL
+   grey of the same relative luminance (#8A8578 -> #858585, L=0.235 either
+   way), so edges stay exactly as subordinate to the labels as they were
+   tuned to be. --ring-color stays gold: it is the concept's signature and is
+   the one element that is not greyscale.
+
+   --person-size shrunk 96 -> 56 (Birk's 3rd review, 2026-08-14): the fill is
    now a flat placeholder colour with no information in it, so the disc no
    longer needs to be large enough to carry a face-shaped gradient — only the
-   --ring-color ring does, and that stays untouched here. */
+   --ring-color ring does, and that stays untouched here. --person-fill was
+   neutralised with the rest (#23232a -> #242424, same luminance): it is only
+   ever seen when a portrait is missing, and a blue cast there would be the
+   one tint left on the wall. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 56;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 5;
   --term-dot: 14;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 22;
   --label-outline-width: 3;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 220px;
   --label-margin-y: 6;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 2;
   --edge-opacity: 0.75;
 }
@@ -6597,23 +6615,29 @@ varies only type size and stroke/outline weight; Birk could not read the 22px la
    --person-size shrunk 128 -> 76 (Birk's 3rd review, same date), same ratio
    as A and C: the placeholder fill is now uniform and carries no
    information, so the disc can shrink while --ring-width stays as heavy as
-   before — the ring, not the fill, is the concept's carrier. */
+   before — the ring, not the fill, is the concept's carrier.
+
+   The palette went to PURE black / PURE white on 2026-08-15 (Birk, binding,
+   identically in a/b/c). The rationale and the per-token derivation live in
+   theme-a.css, which is this ladder's reference; the values below must stay
+   character-for-character identical to it, since the series answers "is it
+   the size?" and nothing else. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 76;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 7;
   --term-dot: 20;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 32;
   --label-outline-width: 4;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 320px;
   --label-margin-y: 8;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 3;
   --edge-opacity: 0.8;
 }
@@ -6634,23 +6658,29 @@ separate colour treatment):
    --person-size shrunk 168 -> 100 (Birk's 3rd review, same date), keeping
    the A/B/C ladder proportional: the fill is now a flat, information-free
    placeholder, so it no longer needs to dominate the frame — --ring-width
-   stays at its full weight and does that job instead. */
+   stays at its full weight and does that job instead.
+
+   The palette went to PURE black / PURE white on 2026-08-15 (Birk, binding,
+   identically in a/b/c). The rationale and the per-token derivation live in
+   theme-a.css, which is this ladder's reference; the values below must stay
+   character-for-character identical to it, since the series answers "is it
+   the size?" and nothing else. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 100;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 10;
   --term-dot: 28;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 44;
   --label-outline-width: 6;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 440px;
   --label-margin-y: 11;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 5;
   --edge-opacity: 0.85;
 }
@@ -7117,8 +7147,12 @@ Expected: FAIL — 404 / selector `.wedge` never appears
 ```css
 /* Variant D is the test pattern page, not a graph theme: it is rendered from
    /testpattern, not from /projection?theme=d. Its ground matches theme A so
-   the greyscale wedge is read against the reference background. */
-:root { --bg: #101014; }
+   the greyscale wedge is read against the reference background — which went
+   to pure #000000 with the graph themes on 2026-08-15, so the wedge's own 0%
+   step and the page it sits on are now the same value. That is the point of
+   the pattern on site: whatever the whiteboard shows there IS the black
+   level, and the wedge measures it. */
+:root { --bg: #000000; }
 ```
 
 `frontend/testpattern.html` must therefore link `base.css` and `theme-d.css` rather than carrying an inline `<style>` block for the background — otherwise this file is dead weight.
@@ -8399,11 +8433,18 @@ legibility, stroke weight and black level on a whiteboard, which needs realistic
 - Produces:
   - `sim.seed_graph.TERM_LABELS` — 100 realistic long German labels; list order IS the Zipf popularity ranking.
   - `sim.seed_graph.seed_graph(data_dir, persons=50, seed=20260814) -> Path` — deterministic; returns `Config(data_dir).db_path`.
-  - `sim.prerender.serve(store, cfg) -> (base_url, shutdown)` — starts the real app on an ephemeral port in a background thread.
+  - `sim.seed_graph.PersonSpec` / `person_specs(persons, seed) -> list[PersonSpec]` / `write_person(store, cfg, spec)` — the seeded plan split from the writing (fifth review). `person_specs` walks the rng exactly as `seed_graph` does, one throwaway draw plus a term draw per person, so the entry for person N is the same whether 31 or 50 were planned. This is what lets `seq-new-person` drop the (N+1)th interview into a graph that is already settled and on screen.
+  - `sim.prerender.serve(store, cfg, bus=None) -> (base_url, shutdown, publish)` — starts the real app on an ephemeral port in a background thread. `publish` hands an SSE event to the server's OWN event loop (`call_soon_threadsafe`); the bus's `asyncio.Queue`s belong to that loop and must not be poked from the renderer's thread.
+  - `sim.prerender.Served` — frozen dataclass `(base_url, store, cfg, publish)`, what `_served` yields.
+  - `sim.prerender.Sequence` — frozen dataclass `(directory, description, frames, fps, glide_ms, tail_ms, compute_s, mp4, coverage)`; `duration_s` is `frames / fps`.
+  - `sim.prerender.render_sequences(dbs, out_dir, theme="b", names=SEQUENCES, fps=25, ffmpeg=None, encode=True, glide_ms=2500, tail_ms=500, seed=20260814, new_person_base=30) -> list[Sequence]` — films each transition into `out_dir/seq-<name>/` as `frame-0001.png` …, writes `motion.json` beside them (per frame: elapsed time, zoom, pan and every node position — the artefact the determinism claim is made on, since the PNGs are not byte-reproducible) and encodes the whole thing.
+  - `sim.prerender.find_ffmpeg(explicit=None) -> Path | None` and `encode_sequence(sequence, ffmpeg) -> Path` — H.264 / yuv420p / `+faststart`, so the file plays inline rather than only in VLC. Frames are the deliverable when no encoder is found.
   - `sim.prerender.Shot` — frozen dataclass `(path, description, coverage)`; `coverage` is a measurement dict (fraction of the canvas the node cloud covers, zoom, fraction of nodes in frame, etc.).
   - `sim.prerender.seed_sizes(state_dir, sizes, seed, reseed=False) -> dict[int, Path]` — one seeded db per person count, all from one seed, so the smaller ones are strict prefixes of the largest (`seed_graph` walks its rng once per person). Read-only masters.
   - `sim.prerender.render_series(dbs, out_dir, theme="b", themes=(), include_fill_series=True, include_density_series=True, include_migration_series=True, include_testpattern=False, include_camera_views=False, camera_theme="b", min_mentions_values=(1, 2, 3), migration_ms=8000) -> list[Shot]` — a pure renderer over seeded dbs. Every series is served a **throwaway copy** of its db, because the renderer persists the placement it settles on back into the db it reads and the next load restores it (spec §10.5) — without the copy, whichever series ran first would silently pin every series after it.
-  - CLI: `uv run python -m sim.prerender --state out/prerender4-state --out out/prerender4 --sizes 5 20 50 --seed 20260814 --reseed --themes {a,b,c} --migration-ms 8000 --camera-views --testpattern`. Output filenames: `theme-b-fill-{05,20,50}-persons-<n>-terms.png`, `theme-b-min-mentions-{1,2,3}-<n>-terms.png`, `theme-b-migration-dial-1-to-2-frame-<i>-of-4-t<seconds>s.png`, and behind the flags `series-{a,b,c}-*.png`, `camera-{1,2,3}-*.png`, `series-d-testpattern-greyscale-and-font-ladder.png`.
+  - CLI: `uv run python -m sim.prerender --state out/prerender6-state --out out/prerender6 --sizes 5 20 50 --seed 20260814 [--reseed] [--sequences dial-1-to-2 dial-2-to-1 new-person | --no-sequences] [--fps 25] [--glide-ms 2500] [--ffmpeg PATH | --no-mp4] [--stills [--themes {a,b,c}] [--migration-ms 8000] [--no-migration-stills] [--camera-views] [--testpattern]]`.
+    Sequences run by default (fifth round); `--stills` adds the fourth round's PNG series, and `--no-migration-stills` drops the four-frame slowed migration series out of it — the frame sequences replaced it as the evidence for motion, so a stills-only round (the sixth) does not render it. Output: `seq-{dial-1-to-2,dial-2-to-1,new-person}/frame-<0001..>.png` plus a sibling `.mp4` each, and under `--stills` `theme-b-fill-{05,20,50}-persons-<n>-terms.png`, `theme-b-min-mentions-{1,2,3}-<n>-terms.png`, `theme-b-migration-dial-1-to-2-frame-<i>-of-4-t<seconds>s.png`, and behind the flags `series-{a,b,c}-*.png`, `camera-{1,2,3}-*.png`, `series-d-testpattern-greyscale-and-font-ladder.png`.
+    `--sizes` is the fill series' person counts; the 30-person db `seq-new-person` joins is seeded alongside them automatically.
 
 The PNGs are shot at exactly 1920×1080 **with the same renderer that later runs live** (spec §10.4). Variants: **A** dark reference, **B** larger type, **C** much larger type and heaviest strokes — all three share one dark palette and background, differing only in size and stroke weight — **D** the test pattern.
 
@@ -8469,7 +8510,80 @@ one path, and it serves each series a throwaway **copy** of its db. Both exist f
 reason — a series must be reproducible from the seed alone. The declutter-off comparison shot
 of the third round is dropped: the pass's before/after counts are already reported per shot.
 
-The Step 1–4 listings below predate this round for `sim/prerender.py` and
+**Fifth pre-render review — decision by Birk, 2026-08-15 (binding).** Two things.
+
+**(a) Colour correction, applied before anything was rendered.** The ground is now pure
+`#000000` and the label text pure `#FFFFFF`, in ALL THREE graph themes — it was `#101014`
+under `#F5F1E6`, a blue-tinted near-black under a cream near-white. Projection is additive
+and the surface is a whiteboard, so on-site black is whatever ambient light sits on it
+(spec §10.4): a tint gains nothing there and costs contrast. White-on-black goes 16.8:1 →
+21:1. `--label-outline-color` follows `--bg` exactly (a near-black outline over a pure
+black ground shows as a halo); `--term-dot-color` went to pure white with the labels;
+`--edge-color` was restated as the NEUTRAL grey of the same relative luminance
+(`#8A8578` → `#858585`, L = 0.235 either way) so edges stay exactly as subordinate as they
+were tuned to be; `--person-fill` likewise (`#23232a` → `#242424`). **`--ring-color` stays
+gold** — the concept's signature, the one non-greyscale element. `sim/seed_graph.py`'s
+placeholder portrait followed (`#3A3A42` → `#3B3B3B`, same luminance): it is a stand-in for
+a photograph rather than a theme token, but on a pure black ground it would have been the
+only tinted thing on the wall. Theme D follows theme A's ground as always, so the test
+pattern's page and its wedge's own 0% step are now the same value.
+`tests/test_projection.py` pins all of it through Cytoscape's baked style. Spec §10.4
+amended to match.
+
+**(b) Frame sequences, because four stills cannot show a glide.** The fourth round
+delivered the migration as four PNGs, which played back look exactly like the jumping the
+rule exists to disprove. `sim/prerender.py` now also renders **25 fps sequences over the
+wall's own 2500ms glide** plus a 0.5s settled tail — 76 frames, 3.04s — into
+`out/prerender5/seq-<name>/`, each encoded to H.264 / yuv420p. Three of them: `dial-1-to-2`
+(25 terms vanish), `dial-2-to-1` (the harder direction, the one that used to re-shuffle)
+and `new-person` (one interview joining a settled 30-person net, over SSE, exactly as the
+Core pushes it).
+
+The capture is the part that needed designing. A 1920×1080 screenshot costs a fifth of a
+2.5s glide, so sampling a freely running animation would bunch the frames at one end and
+would repeat neither between runs nor between machines — and determinism is a requirement
+of this series. So `_FRAME_CLOCK` replaces `window.requestAnimationFrame` and
+`performance.now()` AFTER the page has loaded and settled, and the driver advances them by
+exactly 40ms per frame. The renderer is not patched and does not know: Cytoscape resolves
+both dynamically off `window`/`performance` at call time (verified against the vendored
+bundle).
+
+**Determinism is of the MODEL, not of the pixels, and that had to be established rather than
+assumed.** Two cold runs of the 50-person graph agree exactly on node positions, label
+offsets, measured label boxes and zoom — and still produce PNGs differing in ~0.5% of
+pixels, always confined to a handful of captions. Chased down: Cytoscape rasterises a label
+into its texture cache at a sub-pixel phase that depends on how that cache was packed
+(cropped and compared, the two renderings of the same caption sit within 0.2px of each
+other's ink centroid — invisible). A seeded `Math.random` was tried first, on the theory
+that `cose-base.js` breaks ties for pruned degree-1 nodes with it; the placement turned out
+to be identical with and without, so that machinery was deleted rather than kept on a
+justification it had not earned. What ships instead is `motion.json` next to each sequence —
+elapsed time, zoom, pan and every node position, per frame — so the claim is checkable on
+the delivered files rather than only by re-rendering, and `tests/test_prerender.py` compares
+that instead of PNG bytes.
+
+Two rejected alternatives for the clock, both measured: CDP `Emulation.setVirtualTimePolicy`
+freezes `performance.now()` perfectly but suppresses rAF, so the canvas stops being redrawn
+(3 distinct frames out of 20) and both `Page.captureScreenshot` and `page.screenshot()`
+hang while it is paused; time-dilated real-time capture is geometrically exact but samples
+within ~1ms of the target and so does not repeat byte for byte.
+
+Measured on the delivered sequences (from their `motion.json`): every frame lands on the
+40ms grid exactly (t = 0 … 3000ms), all 63 glide frames are different pictures, the
+arrangement is reached exactly at the end (frames 64-76 identical), and no single frame
+carries more than **4.4%** of the transition's total travel in any of the three — a cut
+would put 100% in one frame. The landing is not a snap either: the last step (the animation
+ending plus `declutterLabels()` running after it) changes FEWER pixels than the
+second-to-last step of the glide.
+
+**Found, and carried to spec §14 rather than tuned here:** the glide is preceded by a
+freeze. fcose at `quality: "proof"` plus `settlePlacement()` compute the new arrangement
+before anything moves, and on the development machine that was 2.3s (dial 1 → 2), 3.3s (new
+person) and 6.6s (dial 2 → 1, 125 nodes) — real CPU time, and it moves with load (an earlier
+run under a parallel job: 2.6 / 3.4 / 9.9s). `Sequence.compute_s` reports it per sequence so
+it cannot be lost again.
+
+The Step 1–4 listings below predate the fourth and fifth rounds for `sim/prerender.py` and
 `tests/test_prerender.py`; the shipped files are authoritative for those two.
 
 The db must sit at `<data_dir>/kg.db`: `render_series` derives `Config(data_dir=db_path.parent)` and the app mounts `cfg.portrait_dir` from it, so a db elsewhere silently breaks the portraits. The `wait_for_function` timeouts are 60000 ms, not the 20000 ms a toy graph needed. `sim/prerender.py` reuses `tests/conftest.py`'s cached-chromium `executable_path` fallback — this host cannot `playwright install`.

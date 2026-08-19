@@ -14,7 +14,7 @@ function style() {
         shape: 'ellipse',
         width: cssVar('--person-size', '96'),
         height: cssVar('--person-size', '96'),
-        'background-color': cssVar('--person-fill', '#222'),
+        'background-color': cssVar('--person-fill', '#242424'),
         'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'border-width': cssVar('--ring-width', '5'),
@@ -28,9 +28,9 @@ function style() {
         shape: 'ellipse',
         width: cssVar('--term-dot', '14'),
         height: cssVar('--term-dot', '14'),
-        'background-color': cssVar('--term-dot-color', '#EDE7D8'),
+        'background-color': cssVar('--term-dot-color', '#FFFFFF'),
         label: 'data(label)',
-        color: cssVar('--label-color', '#F5F1E6'),
+        color: cssVar('--label-color', '#FFFFFF'),
         'font-family': cssVar('--label-font', 'Georgia, serif'),
         'font-size': cssVar('--label-size', '22'),
         'text-valign': 'bottom',
@@ -40,14 +40,14 @@ function style() {
         'text-wrap': 'wrap',
         'text-max-width': cssVar('--label-max-width', '220px'),
         'text-outline-width': cssVar('--label-outline-width', '3'),
-        'text-outline-color': cssVar('--label-outline-color', '#101014'),
+        'text-outline-color': cssVar('--label-outline-color', '#000000'),
       },
     },
     {
       selector: 'edge.link',
       style: {
         width: cssVar('--edge-width', '2'),
-        'line-color': cssVar('--edge-color', '#8A8578'),
+        'line-color': cssVar('--edge-color', '#858585'),
         'curve-style': 'straight',
         opacity: cssVar('--edge-opacity', '0.75'),
       },
@@ -201,13 +201,20 @@ function overlapVector(a, b) {
   return { x: 0, y: ac.y >= bc.y ? oy : -oy };
 }
 
-/** Count overlapping term-label boxes, and label-on-person collisions.
+/** Count overlapping term-label boxes, label-on-person collisions, and person
+ * discs sitting on each other.
  *
  * `includeNodes: false` on a boundingBox call isolates the LABEL's own box
  * from its dot — Cytoscape's real measured text extent (font metrics, wrap
  * width), not a guess — so this is exactly what a viewer would see collide.
  * Exported so the pre-render CLI and the dev console can both ask "how bad
  * is it right now" without reaching into private state.
+ *
+ * `personPairs` is Birk's seventh brief (2026-08-15): the legibility ladder
+ * came back with portrait discs overlapping each other, and nothing here had
+ * ever measured that. It is the only one of the three the declutter pass
+ * cannot touch — a disc moves only when the placement moves it — so it is
+ * scored in settlePlacement instead.
  */
 export function countLabelOverlaps(cy) {
   const terms = cy.nodes('.term').sort(byId);
@@ -219,7 +226,10 @@ export function countLabelOverlaps(cy) {
     }
   }
 
-  const personBoxes = cy.nodes('.person').map((node) => node.boundingBox({ includeNodes: true, includeLabels: false }));
+  const personBoxes = cy
+    .nodes('.person')
+    .sort(byId)
+    .map((node) => node.boundingBox({ includeNodes: true, includeLabels: false }));
   let labelsOnPersons = 0;
   boxes.forEach((box) => {
     personBoxes.forEach((personBox) => {
@@ -227,7 +237,14 @@ export function countLabelOverlaps(cy) {
     });
   });
 
-  return { labelPairs, labelsOnPersons };
+  let personPairs = 0;
+  for (let i = 0; i < personBoxes.length; i += 1) {
+    for (let j = i + 1; j < personBoxes.length; j += 1) {
+      if (boxesOverlap(personBoxes[i], personBoxes[j])) personPairs += 1;
+    }
+  }
+
+  return { labelPairs, labelsOnPersons, personPairs };
 }
 
 // fcose's nodeDimensionsIncludeLabels sizes each node's repulsion off its OWN
@@ -296,6 +313,11 @@ const MAX_LABEL_DISPLACEMENT_LINES = 2;
 // How many label-on-label pairs one label-on-portrait collision is worth when
 // scoring a candidate state (rule (c) over rule (b), see below).
 const PERSON_COLLISION_WEIGHT = 3;
+// And what one portrait disc lying on another is worth. The heaviest of the
+// three: two discs on each other hide a face behind a face, and no later pass
+// can undo it — the declutter pass moves labels only. Birk's seventh brief,
+// 2026-08-15, after the sixth round's ladder came back with discs on discs.
+const DISC_COLLISION_WEIGHT = 5;
 
 /** Nudge label OFFSETS (never node positions) until no two term-label boxes
  * overlap, and no term-label box overlaps a person disc.
@@ -570,9 +592,17 @@ export function settlePlacement(cy, { inkFraction = TARGET_INK_FRACTION } = {}) 
   frameToAspect(cy);
   const nodes = cy.nodes().sort(byId);
   const snapshot = () => nodes.map((node) => ({ ...node.position() }));
+  // All three collision kinds, because this is the only pass that can move a
+  // person disc. Scoring the labels alone let the loop declare a picture clear
+  // — and stop loosening — while two portraits still lay on each other:
+  // measured 2026-08-15 on 20 persons around 3 short terms (0 label pairs, 0
+  // labels on discs, 7 disc pairs) and on the seeded 50-person net at theme c
+  // (0 / 0 / 2).
   const score = () => {
-    const { labelPairs, labelsOnPersons } = countLabelOverlaps(cy);
-    return labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons;
+    const { labelPairs, labelsOnPersons, personPairs } = countLabelOverlaps(cy);
+    return (
+      labelPairs + PERSON_COLLISION_WEIGHT * labelsOnPersons + DISC_COLLISION_WEIGHT * personPairs
+    );
   };
   let best = { score: Infinity, positions: null };
 

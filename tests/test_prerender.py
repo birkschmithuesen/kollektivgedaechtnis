@@ -7,13 +7,25 @@ dependency), and against small seeded dbs so the suite stays fast.
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from sim.prerender import MIGRATION_FRACTIONS, WALL_MIGRATION_MS, render_series, seed_sizes
+from sim import prerender
+from sim.prerender import (
+    FPS,
+    MIGRATION_FRACTIONS,
+    WALL_MIGRATION_MS,
+    _print_shot,
+    find_ffmpeg,
+    render_sequences,
+    render_series,
+    seed_sizes,
+)
 
 SEED = 20260814
 # Small on purpose: this module checks the wiring of each series, not the
@@ -138,7 +150,11 @@ def test_the_migration_series_is_a_numbered_sequence_through_one_glide(tmp_path,
     assert stamps[0] < stamps[-1]
     # Only the closing frame is the settled picture, and only it is measured.
     assert not shots[0].coverage
-    assert shots[-1].coverage["label_overlaps"] == {"labelPairs": 0, "labelsOnPersons": 0}
+    assert shots[-1].coverage["label_overlaps"] == {
+        "labelPairs": 0,
+        "labelsOnPersons": 0,
+        "personPairs": 0,
+    }
 
 
 def test_the_frames_catch_the_net_in_mid_flight(tmp_path, seeded):
@@ -186,3 +202,182 @@ def test_the_theme_variants_differ_from_each_other(tmp_path, seeded):
     shots = _render(tmp_path, seeded, themes=("a", "c"))
 
     assert shots[0].path.read_bytes() != shots[1].path.read_bytes()
+
+
+def test_each_ladder_variant_is_laid_out_for_its_own_type_and_disc_size(tmp_path, seeded):
+    # Birk's seventh brief, 2026-08-15. Up to the sixth round the ladder shared
+    # ONE placement, so that "only type size would differ" — which cannot work:
+    # 44px labels and 100-unit discs need more room than 22px labels and
+    # 56-unit ones, and laid into a net computed for the small ones they
+    # collide. Each variant now runs its own fcose + settlePlacement +
+    # declutter with its own sizes as the collision extents, so the placements
+    # must genuinely differ.
+    shots = _render(tmp_path, seeded, themes=("a", "c"))
+
+    small, large = (_placement_by_id(s.coverage) for s in shots)
+    assert set(small) == set(large)
+    assert any(small[node_id] != large[node_id] for node_id in small)
+
+
+def test_a_ladder_shot_reports_its_model_sizes_and_all_three_overlap_counts(tmp_path, seeded, capsys):
+    # What Birk's seventh brief asks to be reported per variant. The model
+    # sizes have to come from the rendered theme, not from a table in this
+    # file, or the report could disagree with the picture it describes.
+    (shot,) = _render(tmp_path, seeded, themes=("a",))
+
+    assert shot.coverage["label_size_model"] == 22  # theme-a's --label-size
+    assert shot.coverage["person_size_model"] == 56  # theme-a's --person-size
+    stats = shot.coverage["label_overlap_stats"]
+    for side in ("before", "after"):
+        assert set(stats[side]) == {"labelPairs", "labelsOnPersons", "personPairs"}
+
+    _print_shot(shot)
+
+    printed = capsys.readouterr().out
+    assert "22px model type" in printed
+    assert "discs on discs" in printed
+
+
+def test_the_cli_can_shoot_the_ladder_on_its_own(tmp_path, monkeypatch):
+    # The seventh round delivers three PNGs and nothing else, so the ladder has
+    # to be requestable without the fill and density series it has always been
+    # bundled with. Renders nothing: what is under test is the wiring from the
+    # flags to render_series' own, separately tested, parameters.
+    seen = {}
+
+    def fake_render_series(dbs, out_dir, **kwargs):
+        seen.update(kwargs, out_dir=out_dir, dbs=dbs)
+        return []
+
+    monkeypatch.setattr(prerender, "seed_sizes", lambda *a, **k: {50: tmp_path / "seed.sqlite3"})
+    monkeypatch.setattr(prerender, "render_series", fake_render_series)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["sim.prerender", "--stills", "--themes", "a", "b", "c", "--sizes", "50",
+         "--no-fill-stills", "--no-density-stills", "--no-migration-stills", "--no-sequences"],
+    )
+
+    prerender.main()
+
+    assert seen["themes"] == ("a", "b", "c")
+    assert seen["include_fill_series"] is False
+    assert seen["include_density_series"] is False
+    assert seen["include_migration_series"] is False
+    # And the round's own directory is the default, so the delivered command
+    # line is the short one.
+    assert Path(seen["out_dir"]).name == "prerender7"
+
+
+# --- Frame sequences (Birk's fifth brief, 2026-08-15) ----------------------
+#
+# Short glides on a tiny net, because these check the CAPTURE — the frame
+# grid, the determinism, the two triggers — not the layout. The delivered
+# sequences run the wall's own 2500ms over the 50-person graph.
+SEQUENCE_GLIDE_MS = 400
+SEQUENCE_TAIL_MS = 200
+SEQUENCE_FRAMES = int(round((SEQUENCE_GLIDE_MS + SEQUENCE_TAIL_MS) / (1000 / FPS))) + 1
+
+
+def _sequences(tmp_path, seeded, names, **kwargs):
+    options = dict(
+        names=names,
+        glide_ms=SEQUENCE_GLIDE_MS,
+        tail_ms=SEQUENCE_TAIL_MS,
+        new_person_base=min(SIZES),
+        encode=False,
+    )
+    options.update(kwargs)
+    return render_sequences(seeded, tmp_path / "sequences", **options)
+
+
+def test_a_sequence_is_a_sortable_directory_of_1920x1080_frames(tmp_path, seeded):
+    # Birk's brief: dense enough to become video, zero-padded, sortable, one
+    # directory per sequence so it can be globbed cleanly.
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",))
+
+    frames = sorted(sequence.directory.glob("*.png"))
+    assert sequence.directory.name == "seq-dial-1-to-2"
+    assert [f.name for f in frames] == [f"frame-{i:04d}.png" for i in range(1, SEQUENCE_FRAMES + 1)]
+    assert sequence.frames == SEQUENCE_FRAMES
+    for frame in frames:
+        with Image.open(frame) as img:
+            assert img.size == (1920, 1080)
+
+
+def test_a_sequence_covers_the_whole_glide_and_settles(tmp_path, seeded):
+    # The two halves of "the whole transition plus a settled tail": every
+    # frame of the glide is a different picture (a cut would repeat the old
+    # one and then the new one), and the tail does not move at all.
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",))
+
+    frames = [f.read_bytes() for f in sorted(sequence.directory.glob("*.png"))]
+    glide = int(SEQUENCE_GLIDE_MS / (1000 / FPS)) + 1
+    assert len(set(frames[:glide])) == glide
+    assert len(set(frames[glide:])) == 1
+    # And what plays back is the wall's own speed, not a slowed rehearsal.
+    assert sequence.duration_s == pytest.approx(SEQUENCE_FRAMES / FPS)
+
+
+def test_two_cold_runs_produce_the_same_motion(tmp_path, seeded):
+    # The brief's determinism requirement, extended from placement to motion.
+    # It holds because the frames are taken on a clock the driver owns:
+    # sampling a freely running animation would land them wherever the
+    # screenshot round trips allowed, differently on every run and machine.
+    #
+    # The comparison is over `motion.json` — the elapsed time, zoom, pan and
+    # every node position of each frame — and NOT over the PNG bytes, which
+    # are not byte-reproducible: Cytoscape rasterises a label into its texture
+    # cache at a sub-pixel phase that depends on how the cache was packed.
+    # Measured 2026-08-15 on the 50-person graph, two cold runs: identical
+    # node positions, identical label offsets, identical measured label boxes
+    # and identical zoom, but ~0.5% of pixels differing in a handful of
+    # captions, each within 0.2px of the other's ink centroid.
+    first = _sequences(tmp_path / "a", seeded, ("dial-1-to-2",))
+    second = _sequences(tmp_path / "b", seeded, ("dial-1-to-2",))
+
+    for one, two in zip(first, second):
+        assert json.loads((one.directory / "motion.json").read_text()) == json.loads(
+            (two.directory / "motion.json").read_text()
+        )
+
+
+def test_lowering_the_dial_brings_the_hidden_terms_back(tmp_path, seeded):
+    # The harder direction, and the one that used to re-shuffle: the sequence
+    # has to START at the tighter setting and END with more terms on the wall.
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-2-to-1",))
+
+    before, after = (
+        int(n) for n in re.search(r"(\d+) term nodes before, (\d+) after", sequence.description).groups()
+    )
+    assert after > before
+    assert after == sequence.coverage["term_nodes"]
+
+
+def test_a_new_person_arrives_over_sse_and_is_filmed(tmp_path, seeded):
+    # The transition the audience sees most often. The person is written
+    # through the Store and pushed as a complete graph event, exactly as the
+    # Core does after every change (spec 11) — not injected into the renderer.
+    (sequence,) = _sequences(tmp_path, seeded, ("new-person",))
+
+    assert sequence.coverage["person_nodes"] == min(SIZES) + 1
+    frames = [f.read_bytes() for f in sorted(sequence.directory.glob("*.png"))]
+    assert len(set(frames)) > 1
+
+
+def test_the_sequences_run_the_walls_own_glide_by_default(tmp_path, seeded):
+    # Birk's brief is explicit: the real 2.5s, not the 8s the still series
+    # slowed it to, because the speed is what he is judging.
+    sequences = _sequences(tmp_path, seeded, ("dial-1-to-2",), glide_ms=WALL_MIGRATION_MS)
+
+    assert sequences[0].glide_ms == WALL_MIGRATION_MS
+    assert sequences[0].frames == int(round((WALL_MIGRATION_MS + SEQUENCE_TAIL_MS) / (1000 / FPS))) + 1
+
+
+@pytest.mark.skipif(find_ffmpeg() is None, reason="no ffmpeg on this host")
+def test_a_sequence_encodes_to_a_playable_mp4(tmp_path, seeded):
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",), encode=True)
+
+    assert sequence.mp4 is not None and sequence.mp4.exists()
+    assert sequence.mp4.name == "seq-dial-1-to-2.mp4"
+    assert sequence.mp4.stat().st_size > 0

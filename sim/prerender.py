@@ -27,13 +27,36 @@ library, not a hand-rolled pass. Three series answer that:
 
 The theme series (a/c), the camera series and the test pattern stay
 regenerable behind flags; theme B is Birk's settled choice and the default.
+
+Fifth iteration (Birk, 2026-08-15). Four stills cannot show a glide — played
+back they look exactly like the jumping the migration exists to disprove. So
+this module also renders FRAME SEQUENCES, dense enough to become video: 25 fps
+across the wall's own 2.5s glide plus a settled tail, one directory per
+transition, encoded to H.264 if an ffmpeg binary can be found. Three of them —
+the dial going up, the dial coming back down (the hard direction, the one that
+used to re-shuffle), and a new person joining a settled net, which is the
+transition the audience actually sees most often.
+
+Those frames are captured on a CONTROLLED CLOCK (`_FRAME_CLOCK` below), not by
+screenshotting a running animation: a 1920x1080 screenshot costs a fifth of a
+2.5s glide, so real-time sampling would bunch the frames at one end and would
+not repeat between runs. Determinism is a requirement of every round of this
+series, and it now covers motion as well as placement. It covers the MODEL:
+the PNGs themselves are not byte-reproducible, because Cytoscape rasterises a
+label into its texture cache at a sub-pixel phase that depends on how that
+cache was packed. `motion.json`, written next to each sequence, is what carries
+the claim.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import json
+import os
 import shutil
 import socket
+import subprocess
 import tempfile
 import threading
 import time
@@ -45,6 +68,7 @@ import uvicorn
 
 from kg.bus import EventBus
 from kg.config import Config
+from kg.export import write_graph_json
 from kg.server import create_app
 from kg.store import Store
 
@@ -57,6 +81,28 @@ class Shot:
     description: str
     coverage: dict = field(default_factory=dict)
 
+
+@dataclass(frozen=True)
+class Served:
+    """One app over one database, plus the handles to change it while it runs.
+
+    `publish` hands an SSE event to the server's OWN event loop
+    (`loop.call_soon_threadsafe`): the bus's queues are `asyncio.Queue`s
+    belonging to that loop, and poking them from the renderer's thread is not
+    thread-safe. `store` and `cfg` are safe to use directly — `kg.store.Store`
+    serialises every call behind an RLock over a `check_same_thread=False`
+    connection.
+    """
+
+    base_url: str
+    store: Store
+    cfg: Config
+    publish: callable
+
+
+# The one seed every round of this series has used. Same seed, same graph,
+# same placement, and since the fifth round the same frames.
+SEED = 20260814
 
 # The legibility ladder. Same graph, same palette — only type size and stroke
 # weight change, which is the whole question that series asks.
@@ -157,7 +203,12 @@ MEASURE = """
     nodes_in_frame: inFrame / nodes.length,
     // Model-unit type and disc sizes are constants of the theme; what reaches
     // the wall is that constant times the zoom, and THAT is the number the
-    // fill-the-screen requirement is about.
+    // fill-the-screen requirement is about. Both are reported: the seventh
+    // brief asks for the model size AND the effective size, and since each
+    // ladder variant is now laid out for itself the two no longer differ by a
+    // shared factor.
+    label_size_model: term ? Number(term.numericStyle('font-size')) : null,
+    person_size_model: person ? Number(person.numericStyle('width')) : null,
     label_px_on_wall: term ? Number(term.numericStyle('font-size')) * cy.zoom() : null,
     person_px_on_wall: person ? Number(person.numericStyle('width')) * cy.zoom() : null,
     // The front end's own overlap count, not a second one computed here —
@@ -232,10 +283,25 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-def serve(store, cfg) -> tuple[str, callable]:
+def serve(store, cfg, bus=None) -> tuple[str, callable, callable]:
+    """Start the real app on an ephemeral port in a background thread.
+
+    Returns `(base_url, shutdown, publish)`. `publish` exists for the fifth
+    round's `seq-new-person`, which has to make a person arrive on a graph
+    that is already settled and on screen — the same SSE push the Core sends
+    live, handed to the server's own event loop from this thread.
+    """
+    bus = EventBus() if bus is None else bus
     port = _free_port()
-    server = uvicorn.Server(
-        uvicorn.Config(create_app(store, cfg, EventBus()), host="127.0.0.1", port=port, log_level="warning")
+    loop_box: dict = {}
+
+    class _CaptureLoop(uvicorn.Server):
+        async def startup(self, sockets=None):
+            loop_box["loop"] = asyncio.get_running_loop()
+            await super().startup(sockets)
+
+    server = _CaptureLoop(
+        uvicorn.Config(create_app(store, cfg, bus), host="127.0.0.1", port=port, log_level="warning")
     )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -249,7 +315,10 @@ def serve(store, cfg) -> tuple[str, callable]:
         server.should_exit = True
         thread.join(timeout=10)
 
-    return f"http://127.0.0.1:{port}", shutdown
+    def publish(event: dict) -> None:
+        loop_box["loop"].call_soon_threadsafe(bus.publish, event)
+
+    return f"http://127.0.0.1:{port}", shutdown, publish
 
 
 @contextmanager
@@ -273,9 +342,10 @@ def _served(db_path: Path, scratch: Path | None = None):
         shutil.copytree(db_path.parent, scratch)
         db_path = scratch / db_path.name
     store = Store.open(db_path)
-    base_url, shutdown = serve(store, Config(data_dir=db_path.parent))
+    cfg = Config(data_dir=db_path.parent)
+    base_url, shutdown, publish = serve(store, cfg)
     try:
-        yield base_url
+        yield Served(base_url=base_url, store=store, cfg=cfg, publish=publish)
     finally:
         shutdown()
         store.close()
@@ -332,10 +402,256 @@ MIGRATION_FRACTIONS = (0.0, 0.35, 0.7, 1.0)
 # the printed report can say what the default is, and tests/test_prerender.py
 # asserts the two agree rather than trusting a comment.
 WALL_MIGRATION_MS = 2500
-# The glide is slowed down for the frame sequence only, and the filenames say
-# so. At the wall's own 2.5s a screenshot round trip eats a fifth of the
-# animation, and four frames would bunch at the end instead of spanning it.
+# The glide is slowed down for the four-frame STILL series only, and the
+# filenames say so. At the wall's own 2.5s a screenshot round trip eats a
+# fifth of the animation, and four frames would bunch at the end instead of
+# spanning it. The frame SEQUENCES below do not need this — they run the glide
+# at its real 2.5s on a controlled clock.
 MIGRATION_SHOT_MS = 8000
+
+# ---------------------------------------------------------------------------
+# Frame sequences (Birk's fifth brief, 2026-08-15)
+# ---------------------------------------------------------------------------
+
+FPS = 25
+FRAME_MS = 1000 / FPS
+# How much settled picture follows the glide, so the sequence ends on the
+# arrangement rather than on the last moving frame.
+SEQUENCE_TAIL_MS = 500
+# The person count seq-new-person joins. Birk asked for "a settled ~30-person
+# graph"; the joiner is then person 31 of the same seed, which is exactly the
+# 31st entry of `sim.seed_graph.person_specs`.
+NEW_PERSON_BASE = 30
+
+#: A frame clock the driver owns, so a sequence is a function of the seed and
+#: nothing else.
+#:
+#: The problem it solves: a 1920x1080 screenshot costs 150-250ms, and the
+#: glide being filmed is 2500ms long. Sampling a freely running animation at
+#: 25 fps is therefore impossible — the frames would land wherever the round
+#: trips allowed, differently on every run and differently on every machine.
+#:
+#: What it does: replaces `window.requestAnimationFrame` and
+#: `performance.now()` with a queue and a counter the driver advances by
+#: exactly 40ms per frame. The renderer is not patched and does not know:
+#: Cytoscape resolves both dynamically off `window`/`performance` at call time
+#: (verified against the vendored bundle — `function(e){u.requestAnimationFrame(e)}`
+#: and `function(){return ye.now()}`), so installing these after the page has
+#: loaded really does take over its animation loop. Every frame then lands on
+#: the exact 40ms grid, and two runs agree on every node position in every
+#: frame — see `_FRAME_STATE` for why that, and not the PNG bytes, is the
+#: form the determinism claim takes.
+#:
+#: Rejected on measurement (2026-08-15): CDP `Emulation.setVirtualTimePolicy`
+#: freezes `performance.now()` perfectly but suppresses requestAnimationFrame,
+#: so the canvas stops being redrawn (3 distinct frames out of 20) and both
+#: `Page.captureScreenshot` and `page.screenshot()` hang while it is paused.
+#:
+#: It is installed AFTER the page has settled and released afterwards, so the
+#: load, the layout and the measurement all still happen on the real clock.
+_FRAME_CLOCK = """
+() => {
+  if (window.__frameClock) return;
+  const realRaf = window.requestAnimationFrame.bind(window);
+  const realNow = performance.now.bind(performance);
+  let controlled = false;
+  let t = 0;
+  let queue = [];
+  window.requestAnimationFrame = (fn) => (controlled ? queue.push(fn) : realRaf(fn));
+  window.cancelAnimationFrame = () => {};
+  performance.now = () => (controlled ? t : realNow());
+  window.__frameClock = {
+    // Take over at the current real time, so nothing in the page sees the
+    // clock jump — projection.js's camera loop keeps differencing timestamps
+    // across the handover.
+    take() { t = realNow(); controlled = true; },
+    release() {
+      controlled = false;
+      const due = queue;
+      queue = [];
+      due.forEach((fn) => realRaf(fn));
+    },
+    tick(dt) {
+      t += dt;
+      const due = queue;
+      queue = [];
+      due.forEach((fn) => fn(t));
+      return due.length;
+    },
+    now: () => (controlled ? t : realNow()),
+  };
+}
+"""
+
+# Watch for the moment the net actually starts MOVING. `layoutPending` covers
+# the fcose run and the placement passes as well, and those are a freeze, not
+# the animation being filmed. Re-registers unconditionally (unlike the still
+# series' version, which could rely on the dial having been turned in the same
+# evaluation) because a person arrives over SSE, some frames after the trigger.
+_ARM_GLIDE = """
+() => {
+  window.__glide = null;
+  const watch = () => {
+    if (window.kgView.migrating) {
+      window.__glide = performance.now();
+      return;
+    }
+    requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
+}
+"""
+
+# One round trip instead of two while waiting for the glide to start.
+_PUMP = "() => { window.__frameClock.tick(0); return window.__glide; }"
+# A second pump at the SAME timestamp, after the one that advanced the clock.
+# It costs nothing and removes an ordering question: Cytoscape steps its
+# animations and redraws from the same callback list, and a frame that happened
+# to draw before it stepped would show the previous position.
+_TICK_HOLD = "() => window.__frameClock.tick(0)"
+
+# What the frame SHOWS, in model terms: the elapsed time it stands for and the
+# position of every node in it, keyed and sorted by id. Written next to the
+# frames as `motion.json`, which is what makes "same seed, same sequence"
+# checkable on the delivered files instead of only by re-rendering — and
+# checkable at all, since the PNGs themselves are not byte-reproducible
+# (Cytoscape rasterises a label into its texture cache at a sub-pixel phase
+# that depends on cache packing; measured 2026-08-15, ~0.5% of pixels in a
+# handful of captions, centroids within 0.2px, invisible).
+_FRAME_STATE = """
+(glideAt) => {
+  const cy = window.kgView.cy;
+  return {
+    t: Math.round((performance.now() - glideAt) * 1000) / 1000,
+    zoom: cy.zoom(),
+    pan: cy.pan(),
+    positions: cy
+      .nodes()
+      .map((n) => [n.id(), Math.round(n.position('x') * 1000) / 1000, Math.round(n.position('y') * 1000) / 1000])
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  };
+}
+"""
+
+# The pre-glide freeze can be long on the 50-person net (fcose at quality
+# "proof" plus the placement rounds), and it is real CPU work, so the cap is
+# generous. It exists only so a renderer that never migrates fails instead of
+# hanging the run.
+_GLIDE_PUMP_CAP = 20000
+
+
+@dataclass(frozen=True)
+class Sequence:
+    """One rendered transition: a directory of frames, and what they mean."""
+
+    directory: Path
+    description: str
+    frames: int
+    fps: int
+    glide_ms: int
+    tail_ms: int
+    compute_s: float
+    mp4: Path | None = None
+    coverage: dict = field(default_factory=dict)
+
+    @property
+    def duration_s(self) -> float:
+        """Wall-clock the sequence represents, played at its own frame rate."""
+        return self.frames / self.fps
+
+
+def _capture_sequence(
+    page,
+    out_dir: Path,
+    name: str,
+    trigger,
+    glide_ms: int = WALL_MIGRATION_MS,
+    tail_ms: int = SEQUENCE_TAIL_MS,
+    fps: int = FPS,
+) -> Sequence:
+    """Film one transition at `fps` and return where the frames landed.
+
+    `trigger` is called once, with the frame clock already taken and the glide
+    watcher armed; whatever it does — turn the dial, push a new person over
+    SSE — must end in a graph change. The returned `Sequence` carries no
+    description: only the caller knows what the transition was, and it only
+    knows the numbers to say it with once the net has settled.
+    """
+    directory = out_dir / f"seq-{name}"
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True)
+    frame_ms = 1000 / fps
+
+    page.evaluate(_FRAME_CLOCK)
+    page.evaluate("() => window.__frameClock.take()")
+    page.evaluate(_ARM_GLIDE)
+
+    started = time.time()
+    trigger()
+    pumps = 0
+    while page.evaluate(_PUMP) is None:
+        pumps += 1
+        if pumps > _GLIDE_PUMP_CAP:
+            raise RuntimeError(f"{name}: the graph change never started a glide")
+    # Real seconds, deliberately: this is the freeze a visitor sees between
+    # the change and the movement, and it is CPU time on this machine — the
+    # controlled clock says nothing about it.
+    compute_s = time.time() - started
+    glide_at = page.evaluate("window.__glide")
+
+    frames = int(round((glide_ms + tail_ms) / frame_ms)) + 1
+    motion = []
+    for index in range(frames):
+        if index:
+            page.evaluate(f"() => window.__frameClock.tick({frame_ms})")
+        page.evaluate(_TICK_HOLD)
+        page.screenshot(path=str(directory / f"frame-{index + 1:04d}.png"))
+        motion.append(page.evaluate(_FRAME_STATE, glide_at))
+
+    # The grid is the claim this whole mechanism exists to make, so it is
+    # measured rather than assumed.
+    drift = motion[-1]["t"] - (frames - 1) * frame_ms
+    if abs(drift) > 0.5:
+        raise RuntimeError(f"{name}: frame clock drifted {drift:.2f}ms off the {fps} fps grid")
+
+    page.evaluate("() => window.__frameClock.release()")
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+    page.wait_for_timeout(200)
+    coverage = page.evaluate(MEASURE)
+
+    (directory / "motion.json").write_text(
+        json.dumps({"fps": fps, "glide_ms": glide_ms, "tail_ms": tail_ms, "frames": motion}),
+        encoding="utf-8",
+    )
+    return Sequence(
+        directory=directory,
+        description="",
+        frames=frames,
+        fps=fps,
+        glide_ms=glide_ms,
+        tail_ms=tail_ms,
+        compute_s=compute_s,
+        coverage=coverage,
+    )
+
+
+def _set_dial(page, value: int) -> None:
+    page.evaluate(f"() => window.kgView.setMinMentions({value})")
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+
+
+def _join_person(served: Served, spec) -> None:
+    """Make one more person arrive on a graph that is already on the wall.
+
+    Writes the interview through the Store exactly as `seed_graph` does, then
+    pushes the complete graph over SSE — the same event the Core sends after
+    every change (spec 11), on the server's own event loop.
+    """
+    from sim.seed_graph import write_person
+
+    with served.store.transaction():
+        write_person(served.store, served.cfg, spec)
+    served.publish({"type": "graph", "graph": write_graph_json(served.store, served.cfg.graph_json_path)})
 
 
 def _fill_shots(page, dbs: dict[int, Path], out_dir: Path, theme: str, scratch: Path) -> list[Shot]:
@@ -347,8 +663,8 @@ def _fill_shots(page, dbs: dict[int, Path], out_dir: Path, theme: str, scratch: 
     """
     shots: list[Shot] = []
     for persons in sorted(dbs):
-        with _served(dbs[persons], scratch / f"fill-{persons:02d}") as base_url:
-            _open_projection(page, base_url, theme)
+        with _served(dbs[persons], scratch / f"fill-{persons:02d}") as served:
+            _open_projection(page, served.base_url, theme)
             data = page.evaluate(MEASURE)
             stem = f"theme-{theme}-fill-{persons:02d}-persons-{data['term_nodes']}-terms"
             target = out_dir / f"{stem}.png"
@@ -459,6 +775,183 @@ def _migration_shots(page, base_url: str, out_dir: Path, theme: str, duration_ms
     return shots
 
 
+SEQUENCES = ("dial-1-to-2", "dial-2-to-1", "new-person")
+
+# A working ffmpeg on this host, named by Birk in the fifth brief. It is the
+# LAST candidate `find_ffmpeg` tries, after $KG_FFMPEG, $PATH and the
+# imageio-ffmpeg package that ships it — an absolute path into one user's home
+# directory is a fallback, never the interface.
+FFMPEG_FALLBACK = Path(
+    "/home/birk/.local/lib/python3.9/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2"
+)
+
+
+def find_ffmpeg(explicit: str | Path | None = None) -> Path | None:
+    """The first usable encoder, or None — frames are the deliverable either way."""
+    candidates = [explicit, os.environ.get("KG_FFMPEG"), shutil.which("ffmpeg")]
+    try:
+        import imageio_ffmpeg
+
+        candidates.append(imageio_ffmpeg.get_ffmpeg_exe())
+    except Exception:
+        pass
+    candidates.append(FFMPEG_FALLBACK)
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return Path(candidate)
+    return None
+
+
+def encode_sequence(sequence: Sequence, ffmpeg: Path) -> Path:
+    """H.264 / yuv420p at the sequence's own frame rate, so it plays inline.
+
+    yuv420p and `+faststart` are not decoration: they are what makes the file
+    play in Telegram and in QuickTime rather than only in VLC.
+    """
+    target = sequence.directory.with_suffix(".mp4")
+    subprocess.run(
+        [
+            str(ffmpeg),
+            "-y",
+            "-loglevel", "error",
+            "-framerate", str(sequence.fps),
+            "-i", str(sequence.directory / "frame-%04d.png"),
+            "-c:v", "libx264",
+            "-preset", "slow",
+            "-crf", "18",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(target),
+        ],
+        check=True,
+    )
+    return target
+
+
+def _dial_sequence(page, served, out_dir, theme, frm, to, fps, glide_ms, tail_ms) -> Sequence:
+    from dataclasses import replace
+
+    _open_projection(page, served.base_url, theme, migration_ms=glide_ms)
+    if frm != 1:
+        # Getting TO the starting state is setup, not the transition being
+        # filmed, so it runs before the clock is taken and is not captured.
+        _set_dial(page, frm)
+    before = page.evaluate(MEASURE)
+    sequence = _capture_sequence(
+        page,
+        out_dir,
+        f"dial-{frm}-to-{to}",
+        trigger=lambda: page.evaluate(f"() => window.kgView.setMinMentions({to})"),
+        fps=fps,
+        glide_ms=glide_ms,
+        tail_ms=tail_ms,
+    )
+    after = sequence.coverage
+    moved = abs(before["term_nodes"] - after["term_nodes"])
+    verb = "vanish and the survivors migrate outward into the freed space" if to > frm else (
+        "come back, and everyone already on the wall makes room for them"
+    )
+    return replace(
+        sequence,
+        description=(
+            f"The density dial moving min_mentions {frm} -> {to} on the seeded "
+            f"{before['person_nodes']}-person net: {before['term_nodes']} term nodes before, "
+            f"{after['term_nodes']} after — {moved} {verb}. Every node moves, none jumps."
+        ),
+    )
+
+
+def _new_person_sequence(page, served, out_dir, theme, spec, fps, glide_ms, tail_ms) -> Sequence:
+    from dataclasses import replace
+
+    _open_projection(page, served.base_url, theme, migration_ms=glide_ms)
+    before = page.evaluate(MEASURE)
+    sequence = _capture_sequence(
+        page,
+        out_dir,
+        "new-person",
+        trigger=lambda: _join_person(served, spec),
+        fps=fps,
+        glide_ms=glide_ms,
+        tail_ms=tail_ms,
+    )
+    after = sequence.coverage
+    return replace(
+        sequence,
+        description=(
+            f"One new person joining a settled {before['person_nodes']}-person net, with the "
+            f"{len(spec.terms)} terms of their interview: {before['nodes']} nodes before, "
+            f"{after['nodes']} after. The graph arrives over SSE exactly as it does live, and "
+            "the whole net re-distributes to take them in. This is the transition the audience "
+            "sees most often."
+        ),
+    )
+
+
+def render_sequences(
+    dbs: dict[int, Path],
+    out_dir: Path,
+    theme: str = THEME,
+    names: tuple[str, ...] = SEQUENCES,
+    fps: int = FPS,
+    ffmpeg: str | Path | None = None,
+    encode: bool = True,
+    glide_ms: int = WALL_MIGRATION_MS,
+    tail_ms: int = SEQUENCE_TAIL_MS,
+    seed: int = SEED,
+    new_person_base: int = NEW_PERSON_BASE,
+) -> list[Sequence]:
+    """Film each requested transition at `fps` into its own subdirectory.
+
+    Every sequence runs the wall's OWN glide length — the point of the round is
+    for Birk to judge the real speed — and gets a throwaway copy of its
+    database, for the same reason the still series does: a series must be
+    reproducible from the seed alone.
+    """
+    from playwright.sync_api import sync_playwright
+
+    from sim.seed_graph import person_specs
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    full = dbs[max(dbs)]
+    encoder = find_ffmpeg(ffmpeg) if encode else None
+
+    sequences: list[Sequence] = []
+    with tempfile.TemporaryDirectory(prefix="prerender-seq-") as tmp, sync_playwright() as playwright:
+        scratch = Path(tmp)
+        browser = _launch_chromium(playwright)
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        for name in names:
+            if name == "new-person":
+                base = dbs.get(new_person_base)
+                if base is None:
+                    raise KeyError(
+                        f"seq-new-person needs a {new_person_base}-person seeded db in `dbs`"
+                    )
+                # The joiner is the NEXT person of the same seed, so the net it
+                # joins and the interview that joins it come from one graph.
+                spec = person_specs(new_person_base + 1, seed)[new_person_base]
+                with _served(base, scratch / name) as served:
+                    sequences.append(
+                        _new_person_sequence(page, served, out_dir, theme, spec, fps, glide_ms, tail_ms)
+                    )
+            else:
+                frm, to = (int(part) for part in name.replace("dial-", "").split("-to-"))
+                with _served(full, scratch / name) as served:
+                    sequences.append(
+                        _dial_sequence(page, served, out_dir, theme, frm, to, fps, glide_ms, tail_ms)
+                    )
+        browser.close()
+
+    if encoder is None:
+        return sequences
+
+    from dataclasses import replace
+
+    return [replace(s, mp4=encode_sequence(s, encoder)) for s in sequences]
+
+
 def render_series(
     dbs: dict[int, Path],
     out_dir: Path,
@@ -493,28 +986,41 @@ def render_series(
         if include_fill_series:
             shots.extend(_fill_shots(page, dbs, out_dir, theme, scratch))
         if include_density_series:
-            with _served(full, scratch / "density") as base_url:
-                shots.extend(_density_shots(page, base_url, out_dir, theme, min_mentions_values))
+            with _served(full, scratch / "density") as served:
+                shots.extend(_density_shots(page, served.base_url, out_dir, theme, min_mentions_values))
         if include_migration_series:
-            with _served(full, scratch / "migration") as base_url:
-                shots.extend(_migration_shots(page, base_url, out_dir, theme, migration_ms))
+            with _served(full, scratch / "migration") as served:
+                shots.extend(_migration_shots(page, served.base_url, out_dir, theme, migration_ms))
         if themes:
-            # One served copy for the whole ladder on purpose: the first theme
-            # lays the net out and persists it, the rest restore it. Without
-            # that shared placement, bigger type would spread the layout and
-            # the camera's fit would zoom back out by the same factor —
-            # the labels would reach the wall at the same size and the
-            # comparison would compare nothing.
-            with _served(full, scratch / "themes") as base_url:
-                for extra in themes:
-                    stem, description = SERIES[extra]
-                    _open_projection(page, base_url, extra)
+            # ONE COPY PER VARIANT, so each one lays the net out for ITSELF.
+            #
+            # Up to the sixth round the whole ladder shared a single served
+            # copy: the first theme laid the net out, persisted it, and the
+            # rest restored that placement — "same placement, only the type
+            # size differs". Birk's seventh brief retracts that instruction as
+            # self-contradictory, and the sixth round's own output is the
+            # proof: at 32px and 44px the labels overlapped each other AND the
+            # 63px person discs overlapped, because the arrangement they were
+            # dropped into had been computed for 22px labels on 30px discs.
+            #
+            # A variant's type and disc sizes are theme CSS variables, and both
+            # the layout (fcose's nodeDimensionsIncludeLabels) and the
+            # placement passes measure nodes through them — so a fresh copy is
+            # all it takes for each variant to be laid out at its own extents.
+            # The price is the one the old comment named: a bigger net is
+            # fitted from further away, so the type does NOT reach the wall
+            # proportionally larger. That is the real trade and it is what the
+            # per-variant numbers in the report now show.
+            for extra in themes:
+                stem, description = SERIES[extra]
+                with _served(full, scratch / f"theme-{extra}") as served:
+                    _open_projection(page, served.base_url, extra)
                     target = out_dir / f"{stem}.png"
                     page.screenshot(path=str(target))
                     shots.append(Shot(target, description, page.evaluate(MEASURE)))
         if include_camera_views:
-            with _served(full, scratch / "camera") as base_url:
-                _open_projection(page, base_url, camera_theme)
+            with _served(full, scratch / "camera") as served:
+                _open_projection(page, served.base_url, camera_theme)
                 for stem, description, setup in CAMERA_VIEWS:
                     page.evaluate(setup)
                     page.wait_for_timeout(200)
@@ -524,9 +1030,9 @@ def render_series(
                         Shot(target, f"{description} [theme {camera_theme}]", page.evaluate(MEASURE))
                     )
         if include_testpattern:
-            with _served(full, scratch / "testpattern") as base_url:
+            with _served(full, scratch / "testpattern") as served:
                 stem, description = TESTPATTERN
-                page.goto(f"{base_url}/testpattern")
+                page.goto(f"{served.base_url}/testpattern")
                 page.wait_for_selector(".wedge")
                 target = out_dir / f"{stem}.png"
                 page.screenshot(path=str(target))
@@ -559,11 +1065,66 @@ def seed_sizes(state_dir: Path, sizes, seed: int, reseed: bool = False) -> dict[
     return dbs
 
 
+def _print_shot(shot: Shot) -> None:
+    print(shot.path.resolve())
+    print(f"    {shot.description}")
+    if not shot.coverage:
+        return
+    print(
+        "    node cloud: {width_fraction:.0%} of canvas width, "
+        "{height_fraction:.0%} of height (with labels "
+        "{width_fraction_with_labels:.0%} x {height_fraction_with_labels:.0%}, "
+        "{area_fraction_with_labels:.0%} of the canvas area); "
+        "zoom {zoom:.3f}; {nodes_in_frame:.0%} of {nodes} nodes in frame".format(**shot.coverage)
+    )
+    print(
+        "    on the wall: {term_nodes} term nodes, {person_nodes} persons, "
+        "{edges} edges; labels {label_px_on_wall:.0f}px ({label_size_model:.0f}px model type), "
+        "discs {person_px_on_wall:.0f}px ({person_size_model:.0f}px model)".format(**shot.coverage)
+    )
+    stats = shot.coverage.get("label_overlap_stats")
+    if stats:
+        before, after = stats["before"], stats["after"]
+        # All three counts, before and after the declutter pass (Birk's
+        # seventh brief). The disc-on-disc pair count cannot move across that
+        # pass — declutter only ever changes label offsets — so it is printed
+        # once, as the placement's own number.
+        print(
+            f"    labels: {before['labelPairs']} overlapping pairs before -> "
+            f"{after['labelPairs']} after the declutter pass; "
+            f"{before['labelsOnPersons']} on person discs before -> "
+            f"{after['labelsOnPersons']} after; "
+            f"{after['personPairs']} discs on discs (placement only, declutter cannot move a disc)"
+        )
+
+
+def _print_sequence(sequence: Sequence) -> None:
+    print(sequence.directory.resolve())
+    print(f"    {sequence.description}")
+    print(
+        f"    {sequence.frames} frames at {sequence.fps} fps = "
+        f"{sequence.duration_s:.2f}s of wall-clock: a {sequence.glide_ms / 1000:.1f}s glide "
+        f"(the wall's own default, not slowed) plus a {sequence.tail_ms / 1000:.1f}s settled tail. "
+        f"frame-0001.png is the first moving frame."
+    )
+    print(
+        f"    the fcose run and the placement passes freeze the picture for "
+        f"{sequence.compute_s:.1f}s before the glide starts; that freeze is NOT in the frames."
+    )
+    if sequence.mp4:
+        print(f"    {sequence.mp4.resolve()}  (H.264 / yuv420p / {sequence.fps} fps)")
+    else:
+        print("    no encoder found — frames only")
+    print(f"    {(sequence.directory / 'motion.json').resolve()}  (per frame: t, zoom, pan, every node position)")
+    if sequence.coverage:
+        _print_shot(Shot(sequence.directory / f"frame-{sequence.frames:04d}.png", "the settled arrangement it lands on:", sequence.coverage))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="sim.prerender")
-    parser.add_argument("--state", default="out/prerender4-state")
-    parser.add_argument("--out", default="out/prerender4")
-    parser.add_argument("--seed", type=int, default=20260814)
+    parser.add_argument("--state", default="out/prerender7-state")
+    parser.add_argument("--out", default="out/prerender7")
+    parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument(
         "--sizes",
         type=int,
@@ -597,45 +1158,82 @@ def main() -> None:
     )
     parser.add_argument("--camera-views", action="store_true", help="also render the camera series")
     parser.add_argument("--testpattern", action="store_true", help="also render the greyscale/font-ladder test pattern")
+    parser.add_argument(
+        "--sequences",
+        nargs="+",
+        default=list(SEQUENCES),
+        choices=sorted(SEQUENCES),
+        help="which transitions to film into seq-<name>/ at --fps, over the "
+        "wall's own 2.5s glide (default: all three)",
+    )
+    parser.add_argument("--no-sequences", action="store_true", help="skip the frame sequences")
+    parser.add_argument("--fps", type=int, default=FPS, help=f"sequence frame rate (default {FPS})")
+    parser.add_argument(
+        "--glide-ms",
+        type=int,
+        default=WALL_MIGRATION_MS,
+        help=f"glide length to film (default {WALL_MIGRATION_MS}, the wall's own). "
+        "A sequence is captured on a controlled clock, so this does not need "
+        "slowing down to be sampled — change it only to judge a different speed.",
+    )
+    parser.add_argument("--stills", action="store_true", help="also render the fourth round's PNG series")
+    parser.add_argument(
+        "--no-migration-stills",
+        action="store_true",
+        help="skip the four-frame slowed migration series inside --stills. The "
+        "frame sequences replaced it as the evidence for motion (fifth round), "
+        "so a stills-only round like the sixth does not need it.",
+    )
+    parser.add_argument(
+        "--no-fill-stills",
+        action="store_true",
+        help="skip the fill-the-screen series inside --stills",
+    )
+    parser.add_argument(
+        "--no-density-stills",
+        action="store_true",
+        help="skip the density-dial series inside --stills. With "
+        "--no-fill-stills and --no-migration-stills this leaves the --themes "
+        "ladder alone, which is the seventh round's whole delivery.",
+    )
+    parser.add_argument("--ffmpeg", default=None, help="encoder to use; default: $KG_FFMPEG, PATH, imageio-ffmpeg")
+    parser.add_argument("--no-mp4", action="store_true", help="deliver frames only, do not encode")
     args = parser.parse_args()
 
-    dbs = seed_sizes(Path(args.state), tuple(args.sizes), args.seed, reseed=args.reseed)
+    sequences_wanted = () if args.no_sequences else tuple(args.sequences)
+    sizes = set(args.sizes)
+    if sequences_wanted:
+        # seq-new-person joins a settled NEW_PERSON_BASE-person net; the dial
+        # sequences run against the largest, which is the hard case.
+        sizes |= {NEW_PERSON_BASE}
+    dbs = seed_sizes(Path(args.state), tuple(sorted(sizes)), args.seed, reseed=args.reseed)
 
-    shots = render_series(
-        dbs,
-        Path(args.out),
-        themes=tuple(args.themes),
-        include_testpattern=args.testpattern,
-        include_camera_views=args.camera_views,
-        migration_ms=args.migration_ms,
-    )
-    for shot in shots:
-        print(shot.path.resolve())
-        print(f"    {shot.description}")
-        if shot.coverage:
-            print(
-                "    node cloud: {width_fraction:.0%} of canvas width, "
-                "{height_fraction:.0%} of height (with labels "
-                "{width_fraction_with_labels:.0%} x {height_fraction_with_labels:.0%}, "
-                "{area_fraction_with_labels:.0%} of the canvas area); "
-                "zoom {zoom:.3f}; {nodes_in_frame:.0%} of {nodes} nodes in frame".format(
-                    **shot.coverage
-                )
-            )
-            print(
-                "    on the wall: {term_nodes} term nodes, {person_nodes} persons, "
-                "{edges} edges; labels {label_px_on_wall:.0f}px, discs "
-                "{person_px_on_wall:.0f}px".format(**shot.coverage)
-            )
-            stats = shot.coverage.get("label_overlap_stats")
-            if stats:
-                before, after = stats["before"], stats["after"]
-                print(
-                    f"    labels: {before['labelPairs']} overlapping pairs before -> "
-                    f"{after['labelPairs']} after the declutter pass; "
-                    f"{before['labelsOnPersons']} on person discs before -> "
-                    f"{after['labelsOnPersons']} after"
-                )
+    if args.stills:
+        for shot in render_series(
+            {size: dbs[size] for size in sorted(args.sizes)},
+            Path(args.out),
+            themes=tuple(args.themes),
+            include_testpattern=args.testpattern,
+            include_camera_views=args.camera_views,
+            include_fill_series=not args.no_fill_stills,
+            include_density_series=not args.no_density_stills,
+            include_migration_series=not args.no_migration_stills,
+            migration_ms=args.migration_ms,
+        ):
+            _print_shot(shot)
+
+    if sequences_wanted:
+        for sequence in render_sequences(
+            dbs,
+            Path(args.out),
+            names=sequences_wanted,
+            fps=args.fps,
+            glide_ms=args.glide_ms,
+            ffmpeg=args.ffmpeg,
+            encode=not args.no_mp4,
+            seed=args.seed,
+        ):
+            _print_sequence(sequence)
 
 
 if __name__ == "__main__":

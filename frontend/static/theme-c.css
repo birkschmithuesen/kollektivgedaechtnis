@@ -8,23 +8,29 @@
    --person-size shrunk 168 -> 100 (Birk's 3rd review, same date), keeping
    the A/B/C ladder proportional: the fill is now a flat, information-free
    placeholder, so it no longer needs to dominate the frame — --ring-width
-   stays at its full weight and does that job instead. */
+   stays at its full weight and does that job instead.
+
+   The palette went to PURE black / PURE white on 2026-08-15 (Birk, binding,
+   identically in a/b/c). The rationale and the per-token derivation live in
+   theme-a.css, which is this ladder's reference; the values below must stay
+   character-for-character identical to it, since the series answers "is it
+   the size?" and nothing else. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 100;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 10;
   --term-dot: 28;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 44;
   --label-outline-width: 6;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 440px;
   --label-margin-y: 11;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 5;
   --edge-opacity: 0.85;
 }

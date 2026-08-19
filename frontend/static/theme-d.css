@@ -1,4 +1,8 @@
 /* Variant D is the test pattern page, not a graph theme: it is rendered from
    /testpattern, not from /projection?theme=d. Its ground matches theme A so
-   the greyscale wedge is read against the reference background. */
-:root { --bg: #101014; }
+   the greyscale wedge is read against the reference background — which went
+   to pure #000000 with the graph themes on 2026-08-15, so the wedge's own 0%
+   step and the page it sits on are now the same value. That is the point of
+   the pattern on site: whatever the whiteboard shows there IS the black
+   level, and the wedge measures it. */
+:root { --bg: #000000; }

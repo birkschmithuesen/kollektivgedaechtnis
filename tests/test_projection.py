@@ -277,6 +277,45 @@ def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server
     assert rings == THEME_RING_WIDTH
 
 
+def test_every_graph_theme_paints_pure_black_and_pure_white(page, static_server):
+    # Birk's 2026-08-15 colour correction, binding: the ground is #000000 and
+    # the label text #FFFFFF, in ALL THREE graph themes, with the label
+    # outline following the ground exactly (a near-black outline over a pure
+    # black ground shows as a halo). Projection is additive onto a whiteboard,
+    # so on-site black is whatever ambient light sits on the surface (spec
+    # 10.4): a tint gains nothing there and costs contrast.
+    #
+    # Read through Cytoscape's baked style and the live CSS, not by parsing
+    # the .css files — what matters is what reaches the wall, and the theme
+    # swap is asynchronous (see the test above it).
+    for theme in ("a", "b", "c"):
+        page.goto(f"{static_server}/frontend/projection.html?theme={theme}")
+        page.wait_for_function("window.kgView !== undefined")
+        page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
+        wait_for_layout(page)
+
+        assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 0, 0)"
+        baked = page.evaluate(
+            """() => {
+                 const term = window.kgView.cy.$('#t1');
+                 const person = window.kgView.cy.$('#p1');
+                 return {
+                   label: term.style('color'),
+                   outline: term.style('text-outline-color'),
+                   dot: term.style('background-color'),
+                   ring: person.style('border-color'),
+                 };
+               }"""
+        )
+        assert baked["label"] == "rgb(255,255,255)"
+        assert baked["outline"] == "rgb(0,0,0)"
+        # The dot is the label's own node; nothing asks it to differ from it.
+        assert baked["dot"] == "rgb(255,255,255)"
+        # The one element that is NOT greyscale: the golden ring is the
+        # concept's signature and survives the correction untouched.
+        assert baked["ring"] == "rgb(201,162,39)"
+
+
 def test_unknown_theme_falls_back_and_still_renders(page, static_server):
     # Regression test: a `?theme=` value that does not resolve to an existing
     # stylesheet must never leave the theme-load promise unresolved forever.
@@ -379,6 +418,29 @@ def test_count_label_overlaps_detects_overlapping_labels_and_person_collisions(p
     assert result["labelsOnPersons"] == 1
 
 
+def test_count_label_overlaps_also_counts_person_discs_sitting_on_each_other(page, static_server):
+    # Birk's seventh brief, 2026-08-15: two portrait discs overlapping is a
+    # defect in its own right and had never been measured. Same hand-placed
+    # geometry as above: two discs half a diameter apart must count as one
+    # pair, a third far away must not.
+    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.wait_for_function("window.kgView !== undefined")
+    result = page.evaluate(
+        """async () => {
+             const { countLabelOverlaps } = await import('/frontend/static/projection.js');
+             const cy = window.kgView.cy;
+             cy.add([
+               { data: { id: 'pa', type: 'person' }, classes: 'person', position: { x: 0, y: 0 } },
+               { data: { id: 'pb', type: 'person' }, classes: 'person', position: { x: 28, y: 0 } },
+               { data: { id: 'pc', type: 'person' }, classes: 'person', position: { x: 900, y: 900 } },
+             ]);
+             return countLabelOverlaps(cy);
+           }"""
+    )
+    # render-harness.html is pinned to theme-a: --person-size: 56.
+    assert result["personPairs"] == 1
+
+
 def test_reset_label_offsets_returns_to_the_theme_default(view):
     update(view, GRAPH_1)
     result = view.evaluate(
@@ -472,6 +534,7 @@ def test_a_grown_dense_net_stays_clear_of_overlaps(view):
     assert view.evaluate("() => window.kgView.labelOverlaps()") == {
         "labelPairs": 0,
         "labelsOnPersons": 0,
+        "personPairs": 0,
     }
 
 
@@ -492,7 +555,43 @@ def test_the_settled_net_is_both_landscape_and_clear(view):
     assert view.evaluate("() => window.kgView.labelOverlaps()") == {
         "labelPairs": 0,
         "labelsOnPersons": 0,
+        "personPairs": 0,
     }
+
+
+def _crowded_persons_net(persons=20, terms=3, edges_per_person=3):
+    """Many persons around very few, very short terms.
+
+    The shape that exposes what settlePlacement used to be blind to: the
+    labels are short enough to clear each other on their own, so the pass
+    scored the picture as perfect while the portrait discs those persons carry
+    were still lying on top of each other (measured 2026-08-15: 0 label pairs,
+    0 labels on discs, 7 disc pairs).
+    """
+    nodes = [
+        {"id": f"p{i}", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
+        for i in range(persons)
+    ] + [
+        {"id": f"t{i}", "type": "term", "label": f"Ort {i}", "mentions": 2, "hidden": False, "x": None, "y": None}
+        for i in range(terms)
+    ]
+    edges = [
+        {"id": f"e{i}-{j}", "source": f"p{i}", "target": f"t{(i * 3 + j) % terms}"}
+        for i in range(persons)
+        for j in range(edges_per_person)
+    ]
+    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+
+
+def test_the_settled_net_leaves_no_person_disc_lying_on_another(view):
+    # Birk's seventh brief, 2026-08-15: overlapping portrait discs are a defect
+    # of their own, and the placement is the only pass that can fix them —
+    # declutter moves labels, never nodes. So the disc pairs have to be part of
+    # what settlePlacement scores, or it stops working the moment the labels
+    # happen to be clear.
+    update(view, _crowded_persons_net())
+
+    assert view.evaluate("() => window.kgView.labelOverlaps()")["personPairs"] == 0
 
 
 def test_declutter_never_hands_back_a_worse_net_than_it_was_given(view):
@@ -706,7 +805,7 @@ def test_the_kept_passes_still_beat_fcoses_own_label_handling(page, static_serve
     assert raw["labelPairs"] >= 3
     assert raw["labelsOnPersons"] >= 1
     assert raw["width"] < 0.8
-    assert after == {"labelPairs": 0, "labelsOnPersons": 0}
+    assert after == {"labelPairs": 0, "labelsOnPersons": 0, "personPairs": 0}
 
 
 # --- Fill the screen (Birk's fourth pre-render brief, 2026-08-14) ---------

@@ -9,23 +9,29 @@
    --person-size shrunk 128 -> 76 (Birk's 3rd review, same date), same ratio
    as A and C: the placeholder fill is now uniform and carries no
    information, so the disc can shrink while --ring-width stays as heavy as
-   before — the ring, not the fill, is the concept's carrier. */
+   before — the ring, not the fill, is the concept's carrier.
+
+   The palette went to PURE black / PURE white on 2026-08-15 (Birk, binding,
+   identically in a/b/c). The rationale and the per-token derivation live in
+   theme-a.css, which is this ladder's reference; the values below must stay
+   character-for-character identical to it, since the series answers "is it
+   the size?" and nothing else. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 76;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 7;
   --term-dot: 20;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 32;
   --label-outline-width: 4;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 320px;
   --label-margin-y: 8;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 3;
   --edge-opacity: 0.8;
 }

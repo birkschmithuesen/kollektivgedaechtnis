@@ -457,10 +457,38 @@ across all three, so the series answers "is it the size?", nothing else:
 - **D:** test pattern with greyscale wedge + font-size ladder (measures the
   legibility limit and the real black level on site) — unchanged
 
-A, B and C share one background and palette (`--bg #101014`, person fill
-`#23232a`, golden ring `#C9A227`, warm label `#F5F1E6` on Georgia/"Times New
-Roman"/serif, `#8A8578` edges) — a variant that also moved the palette would
+A, B and C share one background and palette (`--bg #000000`, person fill
+`#242424`, golden ring `#C9A227`, label `#FFFFFF` on Georgia/"Times New
+Roman"/serif, `#858585` edges) — a variant that also moved the palette would
 not answer the legibility question.
+
+**Colour correction — decision by Birk, 2026-08-15 (binding).** The palette
+above is **pure black and pure white**, in all three graph themes. It used to
+be `--bg #101014` (a blue-tinted near-black) under `--label-color #F5F1E6` (a
+cream near-white). *Projection is additive and the surface is a whiteboard, so
+on-site black is whatever ambient light sits on it* — a tint gains nothing
+there and costs contrast, while pure values give the projector its whole
+range. White-on-black goes from 16.8:1 to 21:1.
+
+Every other token was re-checked against the new extremes rather than left
+where an old ground had put it:
+
+| token | was | is | why |
+|---|---|---|---|
+| `--bg` | `#101014` | `#000000` | the decision |
+| `--label-color` | `#F5F1E6` | `#FFFFFF` | the decision |
+| `--label-outline-color` | `#101014` | `#000000` | must equal `--bg`, or the outline reads as a halo |
+| `--term-dot-color` | `#EDE7D8` | `#FFFFFF` | the dot and its caption are one node; nothing asks them to differ |
+| `--edge-color` | `#8A8578` | `#858585` | the neutral grey of the *same relative luminance* (L = 0.235 either way), so edges stay exactly as subordinate to the labels as they were tuned to be |
+| `--person-fill` | `#23232a` | `#242424` | same luminance, no cast; only ever seen when a portrait is missing |
+| `--ring-color` | `#C9A227` | `#C9A227` | **stays gold.** The concept's signature, and the one element that is not greyscale |
+
+The seeded placeholder portrait went the same way (`#3A3A42` → `#3B3B3B`, same
+luminance): it is a stand-in for a photograph, not a theme token, but on a pure
+black ground it would otherwise have been the only tinted thing on the wall.
+Theme D (the test pattern) follows theme A's ground as it always has, so its
+page and its wedge's own 0% step are now the same value — which is the point of
+the pattern on site: whatever the whiteboard shows there *is* the black level.
 
 **Layout now fills the 16:9 canvas (found at the same review).** A force layout
 is isotropic, so its settled cloud is round and a 16:9 fit leaves the sides
@@ -559,6 +587,59 @@ fcose does not have) and the node locking the old §11 rule required.
 remain are the dial (18px at `min_mentions=3`) and the camera, and which of them
 the wall uses is still an on-site decision.
 
+**Fifth pre-render review — Birk, 2026-08-15 (binding).** The migration was
+delivered as four stills, and four stills cannot show a glide: played back they
+look exactly like the jumping the whole rule exists to disprove. The deliverable
+for a *motion* claim is **motion**, so the series now also renders frame
+sequences at **25 fps over the wall's own 2.5s glide** plus a 0.5s settled tail
+— 76 frames, 3.04s, one directory per transition, each also encoded to H.264 /
+yuv420p so it plays inline. Three of them, all at theme B over the seeded graph:
+the dial going 1 → 2 (25 terms vanish), the dial coming back 2 → 1 (the harder
+direction — the one that used to re-shuffle), and one new person with their
+terms joining a settled 30-person net, which is the transition the audience
+actually sees most often.
+
+Two things this required, and one it found:
+
+- **The frames are captured on a clock the driver owns**, not by screenshotting
+  a running animation. A 1920×1080 screenshot costs a fifth of a 2.5s glide, so
+  real-time sampling would bunch the frames at one end and would land them
+  differently on every run. `sim/prerender.py` replaces `requestAnimationFrame`
+  and `performance.now()` *after* the page has settled and advances them by
+  exactly 40ms per frame; the renderer is not patched and does not know.
+  Determinism, which every round of this series has required of the placement,
+  now covers the motion as well — **of the model, not of the pixels**. Measured
+  on two cold runs of the 50-person graph: identical node positions, identical
+  label offsets, identical measured label boxes, identical zoom — and PNGs that
+  still differ in ~0.5% of pixels, confined to a handful of captions, each
+  within 0.2px of the other's ink centroid. Cytoscape rasterises a label into
+  its texture cache at a sub-pixel phase that depends on how that cache was
+  packed, and that packing follows the redraw timing. The difference is
+  invisible and it is not the layout, so each sequence ships a `motion.json`
+  (per frame: elapsed time, zoom, pan, every node position) and *that* is what
+  carries the determinism claim.
+- **A person arrives the way a person arrives**: written through the Store and
+  pushed as a complete `graph` event over SSE (§11), not injected into the
+  renderer. `sim.seed_graph.person_specs`/`write_person` exist for that — the
+  joiner is the next person of the same seed.
+- **Found: the glide is preceded by a freeze, and it is not short.** The fcose
+  run plus `settlePlacement()` hold the picture still before anything moves —
+  on the development machine **2.3s** (dial 1 → 2), **3.3s** (new person) and
+  **6.6s** (dial 2 → 1, 125 nodes to place); it is real CPU time and it moves
+  with load (an earlier run under a parallel job: 2.6 / 3.4 / 9.9s). On the wall
+  that is a stall, then a glide. It is a *computation* cost, not an animation
+  setting, so it is carried to §14 rather than fixed here. `Sequence.compute_s`
+  reports it per sequence so it cannot be lost again.
+
+What the sequences show, measured from their `motion.json`: every frame lands on
+the 40ms grid exactly (t = 0 … 3000ms), every one of the 63 glide frames is a
+different picture, the arrangement is reached exactly at the end (frames 64-76
+identical), and **no single frame carries more than 4.4% of the transition's
+total travel** in any of the three — a cut would put 100% in one frame. The
+landing is not a snap either: the last step (the animation ending plus the
+`declutterLabels()` pass that runs after it) changes *fewer* pixels than the
+second-to-last step of the glide, in all three sequences.
+
 ### 10.5 Kiosk operation
 Browser fullscreen, auto-restart, crash recovery. State is fully reconstructible
 from SQLite after a crash, including node positions.
@@ -656,3 +737,13 @@ photo, merge decision, node position, hidden flag.
 3. **Touch hardware decision** (IR frame vs. interactive UST beamer) — Konzept,
    procurement track, does not block this build.
 4. **Density calibration values** — produced BY the simulation, not before it.
+5. **The freeze before the glide** (found at the fifth pre-render review,
+   2026-08-15). Every graph change computes its new arrangement before anything
+   moves — fcose at `quality: "proof"` plus `settlePlacement()`'s rounds — and
+   on the development machine that took 2.6s / 3.4s / 9.9s for the three filmed
+   transitions. A visitor watching their own node join therefore sees a stall
+   and then a glide. It is CPU time on the exhibition laptop, so the honest
+   levers are measurement on that machine first, then either cheaper settings
+   (`numIter`, `PLACEMENT_ROUNDS`) or moving the computation off the frame the
+   change lands on. Not a §10.3 legibility question and not an animation
+   setting; deliberately not tuned against one machine's numbers here.

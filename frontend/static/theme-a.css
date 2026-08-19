@@ -4,26 +4,44 @@
    colour below is therefore identical in all three themes — a variant that
    also moved the palette would not answer the legibility question.
 
-   --person-size shrunk 96 -> 56 (Birk's 3rd review, same date): the fill is
+   PURE black ground and PURE white text (Birk, 2026-08-15, binding, applied
+   to a/b/c alike): the ground was #101014 and the labels #F5F1E6, a
+   blue-tinted near-black under a cream near-white. Projection is additive and
+   the surface is a whiteboard, so on-site black is whatever ambient light
+   sits on it (spec 10.4) — a tint gains nothing there and costs contrast,
+   while pure values hand the projector its full range (16.8:1 before,
+   21:1 now). --label-outline-color follows --bg exactly, or the outline
+   reads as a halo instead of disappearing into the ground. --term-dot-color
+   went to pure white with the labels: the dot and its caption are one node
+   and nothing asks them to differ. --edge-color was restated as the NEUTRAL
+   grey of the same relative luminance (#8A8578 -> #858585, L=0.235 either
+   way), so edges stay exactly as subordinate to the labels as they were
+   tuned to be. --ring-color stays gold: it is the concept's signature and is
+   the one element that is not greyscale.
+
+   --person-size shrunk 96 -> 56 (Birk's 3rd review, 2026-08-14): the fill is
    now a flat placeholder colour with no information in it, so the disc no
    longer needs to be large enough to carry a face-shaped gradient — only the
-   --ring-color ring does, and that stays untouched here. */
+   --ring-color ring does, and that stays untouched here. --person-fill was
+   neutralised with the rest (#23232a -> #242424, same luminance): it is only
+   ever seen when a portrait is missing, and a blue cast there would be the
+   one tint left on the wall. */
 :root {
-  --bg: #101014;
+  --bg: #000000;
   --person-size: 56;
-  --person-fill: #23232a;
+  --person-fill: #242424;
   --ring-color: #C9A227;
   --ring-width: 5;
   --term-dot: 14;
-  --term-dot-color: #EDE7D8;
-  --label-color: #F5F1E6;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
   --label-font: Georgia, "Times New Roman", serif;
   --label-size: 22;
   --label-outline-width: 3;
-  --label-outline-color: #101014;
+  --label-outline-color: #000000;
   --label-max-width: 220px;
   --label-margin-y: 6;
-  --edge-color: #8A8578;
+  --edge-color: #858585;
   --edge-width: 2;
   --edge-opacity: 0.75;
 }
