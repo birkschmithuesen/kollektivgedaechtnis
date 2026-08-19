@@ -65,28 +65,64 @@ But two things are NOT yet true and must not be assumed:
   venue's network situation is known** — it decides between "pull over tailnet"
   and "the two boxes need their own local link".
 
-## Open questions for Birk (do not guess these)
+## Answers from Birk (2026-08-19) — these close the open questions
 
-1. Does "anders dargestellt" mean only a different theme/zoom/animation, or a
-   genuinely different visual (e.g. a different layout, only terms, no portraits)?
-   The former is a settings split; the latter is a second renderer.
-2. Should the second screen show the SAME live graph, or is it allowed to lag /
-   show a curated subset?
-3. Who operates the second machine — is there a second operator UI, or is it set
-   once at the start of the day and left alone?
-4. Venue network: is there internet at the second machine's position, and are the
-   two machines on the same local network?
+1. **Same graph.** Real-time is the ideal, but **lag is explicitly acceptable**.
+   No curated subset, no different content — the same net.
+2. **Completely separate room.** So the two screens are never seen side by side.
+   Nobody can compare them, which means "anders dargestellt" is about suiting
+   that room, not about a deliberate contrast between the two.
+3. **No operator UI on the second machine.** It is **set once in the morning and
+   left alone** for the rest of the day.
+4. **Internet is available** at the second machine's position.
 
-## Sequencing recommendation
+## What those answers change — the design gets much smaller
 
-Do **not** interleave this with Tasks 18/19/21. Those close out the approved Tool
-1 plan and are nearly done. This is a scope addition with real architectural
-consequences (per-client view state, a read-only client role, a network-reachable
-bind) and deserves its own brainstorm → spec → plan cycle, exactly as Tool 2 got.
-Finish Tool 1, then run CR-1 as its own cycle with the venue's network facts and
-the touchscreen model in hand.
+Taken together these remove most of the architecture risk identified above:
+
+- **Lag is acceptable + no operator UI ⇒ the player does not need the SSE state
+  channel at all.** It can simply **poll `GET /graph.json`** on an interval
+  (say every 5–15 s). That endpoint already exists, is already complete-state
+  (no delta mechanism, spec §11), and is already documented as the read-only
+  interface for Tool 2. Nothing server-side has to be invented.
+- **Set-once-in-the-morning ⇒ per-client view state needs no plumbing.** Zoom,
+  theme and animation can be **URL parameters** on the player page, exactly like
+  the existing `?theme=` and `?migration=` parameters `projection.html` already
+  supports. No settings table, no broadcast split, no second operator API. The
+  global `camera_mode` push is simply not subscribed to by the player.
+- **The second-writer hazard disappears by construction** if the player never
+  POSTs positions. `createGraphView` already takes `onPositions` as an injected
+  callback defaulting to a no-op (`projection.js:704`), so a player page that
+  omits it is read-only with no code change to the renderer.
+- **Separate room ⇒ the two screens' arrangements need not match**, which is
+  what makes the polling approach viable: the player lays out the graph itself
+  from `graph.json` (which carries persisted x/y), and small divergence from the
+  wall is invisible to everyone.
+
+**Remaining real work, now modest:** a `/player` page (a trimmed
+`projection.html` — poll instead of SSE, no position POST, view settings from
+URL params), and making the server reachable from the second machine (bind
+address + tailnet). That is plausibly a single task rather than a spec cycle.
+
+**Still to verify, not assume:** whether the venue's uplink is good enough that
+polling over the tailnet is reliable all day, and whether the two machines can
+reach each other directly or fall back to a DERP relay (the tailscale skill
+notes DERP adds ~150–250 ms — irrelevant at a 5–15 s poll interval, worth
+knowing anyway).
+
+## Sequencing recommendation (revised after Birk's answers)
+
+The answers above shrink this from a spec cycle to a **single implementable
+task**, because nothing server-side has to be redesigned: the player polls an
+endpoint that already exists, and configures itself from URL parameters the page
+already knows how to read.
+
+Recommendation: finish Tool 1's remaining plan tasks (18, 19, 21) plus the
+zoom-control update (21b), then add CR-1 as **Task 22 — player client and
+network-reachable bind**. No brainstorm cycle needed; a short brief suffices.
 
 The one thing worth doing EARLY, because it is cheap and de-risks the rest:
 bring both machines onto the tailnet and prove a plain HTTP GET of `/graph.json`
 from the second box. That single test answers the networking half before any
-design work starts.
+implementation starts, and it is also the exact thing the player will do in
+production.
