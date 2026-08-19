@@ -38,6 +38,29 @@ Antworte ausschließlich im geforderten JSON-Schema.
 """
 
 
+#: Quote characters the model may wrap a label in — the German pair the merge
+#: prompt itself uses, plus the ASCII and English forms it sometimes swaps in.
+_QUOTE_CHARS = "„“”\"'"
+
+
+def unquote_label(label: str) -> str:
+    """Strip a surrounding quote pair from a label the model produced.
+
+    `build_merge_prompt` renders every label as „Label“, and the model answers
+    in the notation it was shown: members come back with the quote characters
+    attached. Looked up verbatim they match nothing, so the group resolves to
+    no existing term and the merge silently does nothing (Task 19).
+
+    Every model-produced label passes through here BEFORE it is used — for the
+    lookup and for the alias that is written. One notion, one function:
+    detection and storage cannot diverge.
+    """
+    text = label.strip()
+    while len(text) >= 2 and text[0] in _QUOTE_CHARS and text[-1] in _QUOTE_CHARS:
+        text = text[1:-1].strip()
+    return text
+
+
 class MergeGroup(BaseModel):
     canonical_label: str
     members: list[str]
@@ -115,7 +138,12 @@ def apply_merges(
 
     with store.transaction():
         for group in result.groups:
-            members = list(dict.fromkeys(m for m in group.members if m))
+            # The model echoes the prompt's „…“ notation back at us. Normalise
+            # once, here, and use the result for the lookup AND the alias write
+            # below — a quoted surface form matches no stored label and would
+            # turn every merge into a silent no-op (Task 19).
+            canonical_label = unquote_label(group.canonical_label)
+            members = list(dict.fromkeys(filter(None, map(unquote_label, group.members))))
             # Group 1's aliases are visible to group 2 within the same call.
             # A member an earlier group already claimed must not silently
             # drag this group's *other* members along with it — drop it here
@@ -123,6 +151,9 @@ def apply_merges(
             members = [m for m in members if m not in claimed]
             if len(members) < 2:
                 continue
+            # A label of nothing but quotes strips to "" — keep the judgement,
+            # drop the unusable name and let the group be called after a member.
+            canonical_label = canonical_label or members[0]
 
             existing_ids: list[str] = []
             for member in members:
@@ -134,7 +165,7 @@ def apply_merges(
             # canonical label itself may already belong to some OTHER term
             # (`term.label` is UNIQUE). Treat that as a merge with that term
             # too, rather than letting the rename below raise.
-            collision = store.get_term_by_label(group.canonical_label)
+            collision = store.get_term_by_label(canonical_label)
             if collision is not None and collision.id not in existing_ids:
                 existing_ids.append(collision.id)
 
@@ -146,10 +177,10 @@ def apply_merges(
                 for loser_id in loser_ids:
                     store.fold_term(loser_id, winner_id)
                 winner = store.get_term(winner_id)
-                if winner.label != group.canonical_label:
-                    store.rename_term(winner_id, group.canonical_label)
+                if winner.label != canonical_label:
+                    store.rename_term(winner_id, canonical_label)
             else:
-                winner_id = store.get_or_create_term(group.canonical_label, created_at=at).id
+                winner_id = store.get_or_create_term(canonical_label, created_at=at).id
 
             for member in members:
                 store.add_alias(winner_id, member)

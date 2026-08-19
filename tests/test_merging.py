@@ -10,6 +10,7 @@ from kg.merging import (
     build_merge_prompt,
     decide_merges,
     split_known,
+    unquote_label,
 )
 from kg.store import Store
 
@@ -264,6 +265,96 @@ def test_apply_merges_is_all_or_nothing_on_a_crash_before_the_decision_is_logged
 
     assert store.list_terms() == []
     assert store.list_merge_decisions() == []
+
+
+def test_apply_merges_folds_members_the_model_echoed_back_in_typographic_quotes(store):
+    # Task 19: build_merge_prompt renders every label as „Label“, and the model
+    # answers in the same notation — it echoes the quote characters as part of
+    # the member string. Looked up verbatim, „Zugepflasterte Landschaft“ never
+    # matches the stored term Zugepflasterte Landschaft, so the group resolved
+    # to nothing, a duplicate term was created for the canonical label, and the
+    # two real terms stayed unmerged. This is the exact p43 case from the first
+    # full calibration run (out/sim19/sim.db), which scored 0 of 5.
+    a = store.get_or_create_term("Zugepflasterte Landschaft", created_at=1.0)
+    b = store.get_or_create_term("Zugebaute Freiflächen", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, a.id, created_at=1.0)
+    store.add_edge(p2.id, b.id, created_at=2.0)
+
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Zugebaute Freiflächen",
+                members=["„Zugepflasterte Landschaft“", "„Zugebaute Freiflächen“"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=3.0)
+
+    term_ids = apply_merges(store, person.id, ["Zugepflasterte Landschaft"], result, at=4.0)
+
+    terms = store.list_terms()
+    assert len(terms) == 1  # no duplicate term for the canonical label
+    winner = terms[0]
+    assert winner.label == "Zugebaute Freiflächen"
+    assert term_ids == [winner.id]  # the input label resolves to the merged node
+    assert store.mention_count(winner.id) == 2  # the loser's edge moved over
+    # Detection and storage must not diverge: the alias written is the plain
+    # surface form, so a later interview saying the same thing resolves here.
+    assert store.find_term_by_alias("Zugepflasterte Landschaft").id == winner.id
+    assert store.find_term_by_alias("„Zugepflasterte Landschaft“") is None
+
+
+def test_apply_merges_strips_quotes_from_a_canonical_label_too(store):
+    # The model quotes the name it invents just as readily as the members; a
+    # quoted canonical label would put „…“ on the wall and collide with nothing.
+    person = store.create_person(started_at=1.0)
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="„Ländlicher Leerstand“",
+                members=["„leere Dörfer“", "„Leerstand auf dem Land“"],
+            )
+        ]
+    )
+
+    term_ids = apply_merges(
+        store, person.id, ["leere Dörfer", "Leerstand auf dem Land"], result, at=2.0
+    )
+
+    assert len(store.list_terms()) == 1
+    assert store.list_terms()[0].label == "Ländlicher Leerstand"
+    assert term_ids[0] == term_ids[1] == store.list_terms()[0].id
+
+
+def test_apply_merges_falls_back_to_a_member_when_the_canonical_label_is_all_quotes(store):
+    # Stripping can empty a canonical label out („“ -> ""). A term named "" must
+    # never reach the wall — but the merge judgement itself is still worth
+    # keeping, so the group falls back to naming itself after its first member.
+    person = store.create_person(started_at=1.0)
+    result = MergeResult(
+        groups=[MergeGroup(canonical_label="„“", members=["„leere Dörfer“", "„Leerstand auf dem Land“"])]
+    )
+
+    term_ids = apply_merges(
+        store, person.id, ["leere Dörfer", "Leerstand auf dem Land"], result, at=2.0
+    )
+
+    assert len(store.list_terms()) == 1
+    assert store.list_terms()[0].label == "leere Dörfer"
+    assert term_ids[0] == term_ids[1]
+
+
+def test_unquote_label_strips_typographic_and_ascii_pairs_but_not_inner_marks():
+    assert unquote_label("„Zugebaute Freiflächen“") == "Zugebaute Freiflächen"
+    assert unquote_label(" “Recycling-Beton” ") == "Recycling-Beton"
+    assert unquote_label('"Holzbau"') == "Holzbau"
+    assert unquote_label("'Holzbau'") == "Holzbau"
+    assert unquote_label("Holzbau") == "Holzbau"
+    # An apostrophe inside the label is part of the word, not a wrapper.
+    assert unquote_label("Bauen fürs Übermorgen") == "Bauen fürs Übermorgen"
+    assert unquote_label("„“") == ""
 
 
 def test_a_label_repeated_across_two_groups_does_not_conflate_them(store):
