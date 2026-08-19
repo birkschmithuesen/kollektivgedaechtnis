@@ -494,6 +494,14 @@ Task 18: synthetic interview corpus and expectations — BLOCKED, partial.
   deprecated; install httpx2") — dependency pin, not a code defect, but the output is not pristine.
 - T12a: frontend/static/vendor/ is an empty UNTRACKED dir — git does not track empty dirs, so the
   vendored Cytoscape drop (Tasks 13-15) must create it.
+- T19: the canonical label always renames the winner, so a later group can rename an established
+  node into something that no longer describes it (p38 renamed the recycling node to `Vorzeitiger
+  Gebäudeabriss`, hiding it from the embedder and costing Recycling-Beton its fourth interview).
+- T19: `merge_neighbours=5` is the dominant remaining cause of missed merges (7 of 8 near-misses at
+  rank 7-56). Raising it to ~12 needs one more full run to confirm — awaiting Birk's go-ahead.
+- T19: extraction labels (kg/pipeline.py:54) are not passed through unquote_label, and
+  EXTRACTION_SYSTEM quotes its examples the same way the merge prompt does. Measured 0 occurrences
+  in 382 labels across runs 19 and 19b, so prophylaxis rather than a defect.
 
 Task 18: IN PROGRESS — BLOCKED ON CREDENTIALS (commit 3dbc0df, 250 tests passing).
   Code half is DONE and committed: sim/generate_interviews.py, tests/test_sim_generator.py
@@ -551,3 +559,46 @@ Task 18: complete (commits 3dbc0df + d8c1f33) — sim/generate_interviews.py, te
   CORPUS SHAPE VERIFIED beyond the tests: 20 of 60 fixtures carry a planted overlap (1/3, as designed),
   5 concepts x 4 interviews each, 3 distinct phrasings per concept, and NO fixture contains its own
   concept term verbatim — so Task 19's merge scoring cannot be passed by naive string matching.
+
+Task 19: replay harness + the quote fix + calibration run 19b — DONE (commits 83b3008, 1016421;
+  261 tests passing, full suite 18m39s). Harness committed as written: `sim/replay.py`,
+  `tests/test_replay.py` (7 tests), plan synced.
+  THE BUG (diagnosed in `.superpowers/sdd/task-19-rootcause.md` from run 19's own db, not re-derived):
+  `build_merge_prompt` renders labels as „Label“, the model echoes the quote characters back inside
+  `group.members`, `apply_merges` looked them up verbatim, matched nothing, created a duplicate term
+  for the canonical label and left every real term unmerged. Every merge was logged and none applied.
+  FIX: `kg.merging.unquote_label` — one normalisation used for BOTH the lookup and the alias write, so
+  detection and storage cannot diverge (same lesson as Task 4's stop-phrase bug). Not "stop quoting in
+  the prompt": the quotes disambiguate multi-word labels and the model may quote regardless.
+  TDD ORDER VERIFIED EXPLICITLY: the two regression tests were run against the unmodified
+  `apply_merges` first and failed with the bug's exact signature (`assert 2 == 1`, two terms surviving
+  where one was decided; `assert 3 == 1` with a literal `„Ländlicher Leerstand“` term created), then
+  passed after the fix. Edge case found while fixing: a canonical label of only quotes strips to "" —
+  the group now falls back to naming itself after its first member instead of creating a term named "".
+  RUN 19b (out/sim19b/sim.db, defaults, 60/60 interviews `done`, no failures): score 0.2 (1 of 5), NOT
+  the "high" the root-cause doc predicted. The fix is verifiably live — **0 of 269 aliases carry „…“
+  where run 19 had 100 of 368**, and 170 terms instead of 212 from the same corpus (42 folds that
+  previously did nothing). Singletons 126/170 (74%), was 183/212 (86%). 4.35 terms/interview, 261
+  edges, 88 groups decided across 60 merge calls.
+  THE REMAINING CAUSE IS PRESELECTION RECALL, NOT THE JUDGE. In 7 of the 8 near-misses the concept's
+  own node was in the pool but at rank 7, 10, 11, 14, 20, 31, 56 — outside `merge_neighbours=5`, so
+  the judge never saw it. Exactly one miss (`Mauerroboter` → `Betonsprühende Drohnen`, rank 1) was the
+  judge declining under the current merge_style, where a bricklaying robot arguably IS a different
+  thing from a spraying drone. One further miss is not a merge failure at all: p34's planted phrasing
+  came out of extraction as `Investorenmacht am Planungstisch`, the inverted framing — the concept was
+  gone before merging ran.
+  NEW DEFECT FOUND, NOT FIXED (needs a design decision, not a dial): the canonical label always
+  renames the winner, so a later group can rename an established node into something that no longer
+  describes it. p38 merged the new `Vorzeitiger Gebäudeabriss` into the recycling node
+  `Abbruchschutt als Wandmaterial` and renamed it — stripping the node of its recycling identity for
+  both the wall and the embedder. p52 then found `Bauteilrecycling` (rank 1) instead of the old node
+  (rank 14), and Recycling-Beton lost its fourth interview.
+  CALIBRATION written into `config.example.toml` naming run 19b: `default_min_mentions` 1 → **2** (the
+  one value this run determines outright: 44 shared terms on the wall instead of 170 with 126
+  singletons; the `Config` dataclass default stays 1, which test_config.py pins);
+  `terms_per_interview` stays 5 (the model self-limits to 4.35, so the cap is not the density lever);
+  `merge_style` unchanged (only 1 of 8 misses was the judge's call — loosening it would also loosen
+  the 49 of 60 interviews it currently gets right). `merge_neighbours` left at 5 with the rank
+  evidence written in as a comment: raising it to ~12 is the change with the clearest evidence and is
+  nearly free (embeddings cached), but it is a THIRD full run — asked Birk rather than spending it.
+  Full evidence, quoted decisions and alias rows per failed concept: `.superpowers/sdd/task-19-report.md`.

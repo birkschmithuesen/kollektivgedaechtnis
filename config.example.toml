@@ -25,8 +25,21 @@ stop_phrases = [
 ]
 
 # Calibrated in simulation (spec 6.3), NOT runtime-adjustable.
+# Run 19b (60 interviews, out/sim19b/sim.db, .superpowers/sdd/task-19-report.md):
+#   the model self-limits to 4.35 terms per interview against this cap of 5, so
+#   lowering it trims good terms rather than the singleton tail. Left at 5.
 terms_per_interview = 5
+# Run 19b: in 7 of 8 near-misses the concept's own node sat at rank 7-56 in the
+# candidate pool, i.e. outside this window — the judge was never shown it.
+# Raising this to ~12 is the change with the clearest evidence behind it and is
+# nearly free (embeddings are cached; only merge-prompt tokens grow). NOT yet
+# verified by a run — awaiting Birk's go-ahead for run 19c.
 merge_neighbours = 5
+
+# merge_style (see kg.config.DEFAULT_MERGE_STYLE) is left unchanged by run 19b:
+# only 1 of the 8 near-misses was the judge's decision, the other 7 never
+# reached it. Loosening the dial would also loosen the 49 of 60 interviews where
+# the judge is currently deciding well.
 
 llm_model = "claude-opus-5"
 llm_effort = "high"
@@ -37,7 +50,11 @@ embedding_model = "openai/text-embedding-3-small"
 embedding_url = "https://openrouter.ai/api/v1/embeddings"
 
 # Display filter start value; the operator dial changes it at runtime (spec 7).
-default_min_mentions = 1
+# Run 19b: after 60 interviews the graph holds 170 terms, 126 of them said by
+# exactly one person — at 1 the wall drowns the shared concepts in singletons.
+# At 2 it shows 44 terms, every one of them genuinely shared, and the operator
+# can still open it up live.
+default_min_mentions = 2
 
 server_host = "127.0.0.1"
 server_port = 8800
