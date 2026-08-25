@@ -433,9 +433,7 @@ def test_the_example_config_carries_no_credentials():
     """Same rule as Tool 1 (spec §2): keys come from the environment only."""
     text = Path("config2.example.toml").read_text(encoding="utf-8")
 
-    for forbidden in ("sk-", "sk-or-", "api_key", "token"):
-        assert forbidden not in text.replace("# ", "").split("ANTHROPIC")[0] or True
-    # The real assertion: no assignment of a key-shaped field at all.
+    # No assignment of a key-shaped field, and no key-shaped literal anywhere.
     assignments = [
         line.split("=")[0].strip()
         for line in text.splitlines()
@@ -443,6 +441,8 @@ def test_the_example_config_carries_no_credentials():
     ]
     assert "anthropic_api_key" not in assignments
     assert "openrouter_api_key" not in assignments
+    for forbidden in ("sk-ant-", "sk-or-v1-"):
+        assert forbidden not in text
 
 
 def test_the_example_config_loads(tmp_path, monkeypatch):
