@@ -235,6 +235,109 @@ def test_apply_merges_folds_a_canonical_label_collision_instead_of_raising(store
     assert store.mention_count(winner.id) == 1  # the earlier person's mention survived the fold
 
 
+def test_apply_merges_does_not_rename_a_node_two_people_already_share(store):
+    # D5 (Birk, 2026-08-19), Task 19c. Run 19b: p7 and p22 had grown
+    # „Baustoff mit Geschichte"; interview 037 then correctly merged a fourth
+    # phrasing into it and renamed the node to „Vorzeitiger Gebäudeabriss" —
+    # the opposite meaning, and the label is the embedder's text for the node,
+    # so the next recycling interview no longer found it. From the second
+    # distinct person on, the name stays put. The merge itself still happens.
+    established = store.get_or_create_term("Baustoff mit Geschichte", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, established.id, created_at=1.0)
+    store.add_edge(p2.id, established.id, created_at=2.0)
+
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Vorzeitiger Gebäudeabriss",
+                members=["Baustoff mit Geschichte", "Abbruchschutt als Wandmaterial"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=3.0)
+
+    term_ids = apply_merges(
+        store, person.id, ["Abbruchschutt als Wandmaterial"], result, at=4.0
+    )
+
+    terms = store.list_terms()
+    assert len(terms) == 1
+    assert terms[0].id == established.id
+    assert terms[0].label == "Baustoff mit Geschichte"  # the visible label stays put
+    assert term_ids == [established.id]  # the fold happened regardless
+    assert store.find_term_by_alias("Abbruchschutt als Wandmaterial").id == established.id
+    # The refused name is still the judge's finding: it stays reachable as a
+    # synonym, so a later interview using that phrasing lands on this node.
+    assert store.find_term_by_alias("Vorzeitiger Gebäudeabriss").id == established.id
+    assert store.mention_count(established.id) == 2
+
+
+def test_a_group_merging_two_one_mention_nodes_may_still_name_itself(store):
+    # The lock is judged against the winner's mention count BEFORE the fold:
+    # the merge and its naming are ONE decision. Two nodes of one person each
+    # are both still private, so the group they form may carry a new name —
+    # even though the winner counts two people the instant the fold is done.
+    a = store.get_or_create_term("Photovoltaik am Haus", created_at=1.0)
+    b = store.get_or_create_term("Solarzellen aufs Dach", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, a.id, created_at=1.0)
+    store.add_edge(p2.id, b.id, created_at=2.0)
+
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Sonnenenergie am Haus",
+                members=["Photovoltaik am Haus", "Solarzellen aufs Dach"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=3.0)
+
+    apply_merges(store, person.id, ["Photovoltaik am Haus"], result, at=4.0)
+
+    winner = store.list_terms()[0]
+    assert winner.label == "Sonnenenergie am Haus"
+    assert store.mention_count(winner.id) == 2
+
+
+def test_a_refused_rename_still_folds_and_still_writes_the_aliases(store):
+    # The other half of the same rule: the winner is already shared by two
+    # people AND the group's chosen name belongs to a second existing node
+    # that is being folded in. The fold must go through — nothing may be left
+    # stranded on an unreachable node — and only the visible label stays put.
+    established = store.get_or_create_term("Gemeinsamer Hausbesitz", created_at=1.0)
+    other = store.get_or_create_term("Baugruppen", created_at=2.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    p3 = store.create_person(started_at=3.0)
+    store.add_edge(p1.id, established.id, created_at=1.0)
+    store.add_edge(p2.id, established.id, created_at=2.0)
+    store.add_edge(p3.id, other.id, created_at=3.0)
+
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Baugruppen",
+                members=["Gemeinsamer Hausbesitz", "Baugruppen"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=4.0)
+
+    term_ids = apply_merges(store, person.id, ["Baugruppen"], result, at=5.0)
+
+    terms = store.list_terms()
+    assert len(terms) == 1  # the loser is gone, not stranded
+    assert terms[0].id == established.id
+    assert terms[0].label == "Gemeinsamer Hausbesitz"
+    assert term_ids == [established.id]
+    assert store.find_term_by_alias("Baugruppen").id == established.id
+    assert store.mention_count(established.id) == 3  # p3's mention moved over
+
+
 def test_apply_merges_is_all_or_nothing_on_a_crash_before_the_decision_is_logged(
     store, monkeypatch
 ):

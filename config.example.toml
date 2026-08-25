@@ -30,11 +30,12 @@ stop_phrases = [
 #   lowering it trims good terms rather than the singleton tail. Left at 5.
 terms_per_interview = 5
 # Run 19b: in 7 of 8 near-misses the concept's own node sat at rank 7-56 in the
-# candidate pool, i.e. outside this window — the judge was never shown it.
-# Raising this to ~12 is the change with the clearest evidence behind it and is
-# nearly free (embeddings are cached; only merge-prompt tokens grow). NOT yet
-# verified by a run — awaiting Birk's go-ahead for run 19c.
-merge_neighbours = 5
+# candidate pool, i.e. outside a window of 5 — the judge was never shown it.
+# Run 19c raised this to 12, which is nearly free (embeddings are cached; only
+# merge-prompt tokens grow). It is not a cure-all and must not be widened
+# further to chase a score: some near-misses are genuine semantic distance
+# („Zugebaute Baulücken" sat at rank 56).
+merge_neighbours = 12
 
 # merge_style (see kg.config.DEFAULT_MERGE_STYLE) is left unchanged by run 19b:
 # only 1 of the 8 near-misses was the judge's decision, the other 7 never
@@ -50,10 +51,9 @@ embedding_model = "openai/text-embedding-3-small"
 embedding_url = "https://openrouter.ai/api/v1/embeddings"
 
 # Display filter start value; the operator dial changes it at runtime (spec 7).
-# Run 19b: after 60 interviews the graph holds 170 terms, 126 of them said by
-# exactly one person — at 1 the wall drowns the shared concepts in singletons.
-# At 2 it shows 44 terms, every one of them genuinely shared, and the operator
-# can still open it up live.
+# Run 19c (60 interviews, name lock D5 + merge_neighbours 12): 163 terms, 114 of
+# them said by exactly one person. At 1 the wall drowns the shared concepts in
+# singletons; at 2 it shows 49 terms, every one genuinely shared; at 3, 26.
 default_min_mentions = 2
 
 server_host = "127.0.0.1"

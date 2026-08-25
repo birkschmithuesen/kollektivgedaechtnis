@@ -174,11 +174,25 @@ def apply_merges(
                 # winner — the loser's edges and aliases move over, nothing
                 # is left stranded on an unreachable second node.
                 winner_id, *loser_ids = existing_ids
+                # D5 (Task 19c): `store.rename_term` refuses to rename a node
+                # two people already share. The merge and its naming are ONE
+                # decision, so the lock is judged against the winner's mention
+                # count from BEFORE the fold — two nodes of one person each may
+                # still name the group they form, while a node that was already
+                # shared keeps its name no matter what the group adds to it.
+                # The rename itself has to come after the fold: the group is
+                # told to prefer an existing formulation, so the chosen name is
+                # often a loser's label, and `term.label` is UNIQUE.
+                mentions_before_merge = store.mention_count(winner_id)
                 for loser_id in loser_ids:
                     store.fold_term(loser_id, winner_id)
-                winner = store.get_term(winner_id)
-                if winner.label != canonical_label:
-                    store.rename_term(winner_id, canonical_label)
+                store.rename_term(
+                    winner_id, canonical_label, mentions_before_merge=mentions_before_merge
+                )
+                # A refused rename costs the visible label only: the fold above
+                # happened, and the name the judge chose stays reachable as a
+                # synonym, so the next interview phrasing it that way lands here.
+                store.add_alias(winner_id, canonical_label)
             else:
                 winner_id = store.get_or_create_term(canonical_label, created_at=at).id
 

@@ -6,7 +6,7 @@ from kg.config import Config
 from kg.embeddings import HashEmbedder
 from kg.pipeline import ProcessResult
 from kg.store import Store
-from sim.replay import load_corpus, replay, score_run
+from sim.replay import find_late_renames, load_corpus, replay, score_run, snapshot_labels
 
 
 @pytest.fixture()
@@ -71,6 +71,54 @@ def test_on_step_is_called_after_every_interview(tmp_path, corpus_dir):
 
     assert steps == [(0, "p1"), (1, "p2"), (2, "p3")]
     store.close()
+
+
+def test_snapshot_labels_records_every_nodes_label_and_how_many_people_said_it(tmp_path):
+    # The database keeps no rename history, so D5 ("a node two people share
+    # never changes its name") cannot be checked after the fact from a finished
+    # run. The run has to write the history down as it goes.
+    cfg = Config(data_dir=tmp_path / "state")
+    store = Store.open(cfg.db_path)
+    term = store.get_or_create_term("Baustoff mit Geschichte", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, term.id, created_at=1.0)
+    store.add_edge(p2.id, term.id, created_at=2.0)
+
+    snapshot = snapshot_labels(store, 7, p2.id)
+
+    assert snapshot["index"] == 7
+    assert snapshot["person_id"] == p2.id
+    assert snapshot["terms"] == {term.id: ["Baustoff mit Geschichte", 2]}
+    store.close()
+
+
+def test_find_late_renames_reports_a_rename_of_a_node_two_people_already_shared():
+    snapshots = [
+        {"index": 0, "person_id": "p1", "terms": {"t1": ["Baustoff mit Geschichte", 2]}},
+        {"index": 1, "person_id": "p2", "terms": {"t1": ["Vorzeitiger Gebäudeabriss", 3]}},
+    ]
+
+    assert find_late_renames(snapshots) == [
+        {
+            "index": 1,
+            "term_id": "t1",
+            "from": "Baustoff mit Geschichte",
+            "to": "Vorzeitiger Gebäudeabriss",
+            "mentions_before": 2,
+        }
+    ]
+
+
+def test_find_late_renames_leaves_the_still_private_and_the_unchanged_alone():
+    # A node one person has mentioned may still be renamed (D5 allows exactly
+    # that), and a node that keeps its name is not a rename at all.
+    snapshots = [
+        {"index": 0, "person_id": "p1", "terms": {"t1": ["Erster Name", 1], "t2": ["Fest", 4]}},
+        {"index": 1, "person_id": "p2", "terms": {"t1": ["Besserer Name", 2], "t2": ["Fest", 5]}},
+    ]
+
+    assert find_late_renames(snapshots) == []
 
 
 def test_score_run_reports_satisfied_and_missed_expectations(tmp_path):

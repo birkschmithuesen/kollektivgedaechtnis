@@ -30,7 +30,11 @@ class Config:
     interview_timeout_s: int = 900
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
     terms_per_interview: int = 5
-    merge_neighbours: int = 5
+    # Run 19c: 5 was too narrow — in 7 of 8 near-misses of run 19b the
+    # concept's own node sat at rank 7-56 in the candidate pool and was never
+    # shown to the judge. Embeddings are cached, so the widening costs
+    # merge-prompt tokens only.
+    merge_neighbours: int = 12
     merge_style: str = DEFAULT_MERGE_STYLE
     llm_model: str = "claude-opus-5"
     llm_effort: str = "high"

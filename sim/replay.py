@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from kg.pipeline import process_interview
@@ -64,6 +65,45 @@ def replay(
             time.sleep(spacing / speed)
 
     return person_ids
+
+
+def snapshot_labels(store, index: int, person_id: str) -> dict:
+    """Every node's visible label and how many people said it, after one interview.
+
+    The database keeps no rename history — a finished run only shows the labels
+    that survived. D5 ("a node two people share never changes its name",
+    Task 19c) is a statement about the run's *course*, so the run writes one of
+    these lines per interview as it goes and `find_late_renames` reads the
+    answer back off them.
+    """
+    return {
+        "index": index,
+        "person_id": person_id,
+        "terms": {t.id: [t.label, store.mention_count(t.id)] for t in store.list_terms()},
+    }
+
+
+def find_late_renames(snapshots: Sequence[dict]) -> list[dict]:
+    """Every D5 violation in a label audit: a node renamed after two people
+    had already mentioned it. An empty list is the claim the run has to prove."""
+    violations: list[dict] = []
+    previous: dict[str, list] = {}
+    for snapshot in snapshots:
+        for term_id, (label, mentions) in snapshot["terms"].items():
+            before = previous.get(term_id)
+            if before is None or before[0] == label or before[1] < 2:
+                continue
+            violations.append(
+                {
+                    "index": snapshot["index"],
+                    "term_id": term_id,
+                    "from": before[0],
+                    "to": label,
+                    "mentions_before": before[1],
+                }
+            )
+        previous = dict(snapshot["terms"])
+    return violations
 
 
 def score_run(store, expectations: dict, person_ids: list[str]) -> dict:
@@ -152,6 +192,8 @@ def main() -> None:
     run_cfg = type(cfg)(**{**cfg.__dict__, "data_dir": db_path.parent})
     if run_cfg.transcript_log_path.exists():
         run_cfg.transcript_log_path.unlink()
+    audit_path = db_path.parent / "labels.jsonl"
+    audit_path.unlink(missing_ok=True)
 
     store = Store.open(db_path)
     llm = LLMClient(
@@ -168,18 +210,23 @@ def main() -> None:
     if args.limit:
         corpus = corpus[: args.limit]
 
-    person_ids = replay(
-        corpus,
-        store,
-        run_cfg,
-        llm,
-        embedder,
-        speed=args.speed,
-        on_step=lambda index, person_id: print(f"interview {index:03d} -> {person_id}"),
-    )
+    def step(index: int, person_id: str) -> None:
+        print(f"interview {index:03d} -> {person_id}")
+        with audit_path.open("a", encoding="utf-8") as handle:
+            line = json.dumps(snapshot_labels(store, index, person_id), ensure_ascii=False)
+            handle.write(line + "\n")
 
+    person_ids = replay(corpus, store, run_cfg, llm, embedder, speed=args.speed, on_step=step)
+
+    snapshots = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     expectations = yaml.safe_load((data / "expectations.yaml").read_text(encoding="utf-8"))
     report = score_run(store, expectations, person_ids)
+    # D5 (Task 19c): must be empty. Read off the audit the run itself wrote.
+    report["late_renames"] = find_late_renames(snapshots)
     write_graph_json(store, db_path.parent / "graph.json")
     if not report["complete_corpus"]:
         print(

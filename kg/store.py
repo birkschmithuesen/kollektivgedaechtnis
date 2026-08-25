@@ -234,10 +234,42 @@ class Store:
         return _term(row) if row else None
 
     @_locked
-    def rename_term(self, term_id: str, new_label: str) -> None:
+    def rename_term(
+        self, term_id: str, new_label: str, *, mentions_before_merge: int | None = None
+    ) -> bool:
+        """Rename a term, unless two people already share it. Returns whether
+        the label changed.
+
+        D5 (Birk, 2026-08-19): **a term's label is frozen from the moment a
+        second distinct person has mentioned it.** While a term belongs to one
+        person an unlucky first name may still be corrected; after that the
+        name is public property — it is on the wall, and it is also the text
+        the embedder sees for this node, so a bad rename both misrepresents
+        the node and stops it attracting the very concept it was built from
+        (run 19b, `.superpowers/sdd/task-19-report.md`).
+
+        The gate sits here, next to the write, so no caller can bypass it; a
+        refusal is silent and writes nothing at all — not even an alias for
+        the rejected name, or the node would start answering to it.
+        `mention_count` counts DISTINCT persons, which is exactly the notion
+        the rule is stated in: how many people have said this.
+
+        `mentions_before_merge` selects WHICH count the rule is judged
+        against, never whether it is judged: `kg.merging.apply_merges` passes
+        the winner's count from before it folded the group's losers in,
+        because the merge and the naming of its result are one decision. It is
+        the only legitimate caller; everyone else gets the live count.
+        """
         old = self.get_term(term_id)
         if old is None or old.label == new_label:
-            return
+            return False
+        mentions = (
+            self.mention_count(term_id)
+            if mentions_before_merge is None
+            else mentions_before_merge
+        )
+        if mentions >= 2:
+            return False
         self.conn.execute("UPDATE term SET label=? WHERE id=?", (new_label, term_id))
         # Keep the old label reachable: a decision once made is never re-derived.
         for surface in (old.label, new_label):
@@ -246,6 +278,7 @@ class Store:
                 (surface, term_id),
             )
         self._commit()
+        return True
 
     @_locked
     def add_alias(self, term_id: str, surface: str) -> None:

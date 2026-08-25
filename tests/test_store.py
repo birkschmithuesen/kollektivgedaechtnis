@@ -186,6 +186,38 @@ def test_terms_are_unique_by_label_and_aliases_resolve(store):
     assert store.find_term_by_alias("Recycling-Beton").id == t1.id
 
 
+def test_a_term_one_person_has_mentioned_can_still_be_renamed(store):
+    # D5 leaves the early correction of an unlucky first name open: while a term
+    # belongs to exactly one person, its label is not yet public property.
+    term = store.get_or_create_term("Baustoff mit Geschichte", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    store.add_edge(p1.id, term.id, created_at=1.0)
+
+    assert store.rename_term(term.id, "Beton aus Abbruchmaterial") is True
+    assert store.get_term(term.id).label == "Beton aus Abbruchmaterial"
+    assert store.find_term_by_alias("Baustoff mit Geschichte").id == term.id
+
+
+def test_renaming_a_term_two_people_share_is_refused(store):
+    # D5 (Birk, 2026-08-19), from the damage in run 19b: t25 had grown to four
+    # people as a recycling node and a later merge renamed it to „Vorzeitiger
+    # Gebäudeabriss" — nearly the opposite meaning, on the wall, and the label
+    # is also the embedder's text for the node, so it stopped attracting the
+    # concept it was built from. From the second distinct person on, the name
+    # is public property: rename_term refuses, silently, and changes nothing.
+    term = store.get_or_create_term("Baustoff mit Geschichte", created_at=1.0)
+    p1 = store.create_person(started_at=1.0)
+    p2 = store.create_person(started_at=2.0)
+    store.add_edge(p1.id, term.id, created_at=1.0)
+    store.add_edge(p2.id, term.id, created_at=2.0)
+
+    assert store.rename_term(term.id, "Vorzeitiger Gebäudeabriss") is False
+    assert store.get_term(term.id).label == "Baustoff mit Geschichte"
+    # A refused rename writes nothing at all — no alias for the rejected name,
+    # or the node would start answering to it in the next interview's lookup.
+    assert store.find_term_by_alias("Vorzeitiger Gebäudeabriss") is None
+
+
 def test_edges_are_idempotent_and_drive_mention_count(store):
     p1 = store.create_person(started_at=1.0)
     p2 = store.create_person(started_at=2.0)

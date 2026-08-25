@@ -602,3 +602,65 @@ Task 19: replay harness + the quote fix + calibration run 19b — DONE (commits 
   evidence written in as a comment: raising it to ~12 is the change with the clearest evidence and is
   nearly free (embeddings cached), but it is a THIRD full run — asked Birk rather than spending it.
   Full evidence, quoted decisions and alias rows per failed concept: `.superpowers/sdd/task-19-report.md`.
+
+Task 19: complete (commits 83b3008, 1016421, 09b8b6b + this one) — sim/replay.py, tests/test_replay.py,
+  kg/merging.py, kg/store.py, kg/config.py, config.example.toml. Three full 60-interview runs.
+
+  RUN 19a (defaults): score 0/5, 212 terms. NOT a model problem — a string bug.
+    build_merge_prompt renders labels as „Label“; the LLM echoes members back WITH the quote
+    characters; apply_merges looked them up verbatim against unquoted stored labels, never matched,
+    and created a duplicate term instead of folding. The decision was logged and changed nothing.
+    Proof from out/sim19/sim.db: alias „Zugepflasterte Landschaft“ -> t50 while the real term
+    Zugepflasterte Landschaft lived on as t170. Embedding preselection was measured separately and
+    was fine (target at rank 1 in 5 of 7 probes, e.g. Gemeinschaftlicher Hausbesitz -> Gemeinsamer
+    Hausbesitz cos 0.934); the judge decided correctly in 51 of 60 interviews. Fixed in 1016421 by
+    normalising the model's strings ONCE, for both lookup and alias write, so detection and storage
+    cannot diverge (same failure class as Task 4's stop-phrase bug).
+
+  RUN 19b (after the quote fix): score 1/5, 170 terms. Exposed a REAL design defect:
+    the canonical label ALWAYS renamed the winner, so one mediocre naming choice could hijack a grown
+    node. Observed: p7+p22 had built „Baustoff mit Geschichte“; interview 037 correctly merged
+    „Wiedereinbau von Abrissmaterial“ into it and renamed the node to „Vorzeitiger Gebäudeabriss“ —
+    close to the opposite meaning, on the wall, at 4 mentions. Because the label is also the
+    embedder's text for that node, p52 then matched Bauteilrecycling (rank 1) instead of the
+    established node (rank 14): a bad rename both misrepresents a node AND blocks further
+    consolidation.
+
+  DECISION BY BIRK (2026-08-19), binding — D5: A TERM'S LABEL IS FROZEN once a SECOND distinct person
+    has mentioned it. While a term belongs to one person an unlucky first name may still be corrected;
+    after that the name is public property. Chosen over "freeze always" and "leave as is" because it
+    fixes exactly the observed damage while still allowing an early correction.
+    Implementation: the gate sits in Store.rename_term, next to the write, so no caller can bypass it.
+    ORDER MATTERS and is pinned by a test: apply_merges measures mention_count BEFORE folding the
+    losers and passes it in as mentions_before_merge — after the fold the winner's count already
+    includes the losers' persons, which would refuse a rename that was legitimate when the judge made
+    it. Merge and naming are ONE decision, not two. A refused rename never aborts the merge: the fold
+    happens, and the rejected canonical label is still written as an alias, so a future interview
+    phrasing it that way still lands on the node.
+
+  RUN 19c (D5 + merge_neighbours 5 -> 12): score 2/5, 163 terms, 267 edges, 0 failed interviews.
+    D5 VERIFIED IN THE RUN DATA, not just in tests: no node carries a name from a merge decided after
+    it reached 2 mentions. The Recycling node kept a sane identity this time — „Wiederverwendeter
+    Abbruchschutt“ at 5 mentions, aliases [Beton aus Abbruchmaterial, Recycelter Beton,
+    Wiederverwendung von Abbruchmaterial, Bauschutt neu anmischen]. Ländlicher Leerstand and
+    Genossenschaftliches Wohnen now score; Roboter/Recycling/Bodenversiegelung consolidated
+    substantially without reaching a single node.
+    5/5 was explicitly NOT the target: run 19b's probes showed genuine semantic distance in the
+    residue (3D-Drucker vs Betonsprühende Drohnen cos 0.389; one candidate at rank 56), which a wider
+    window cannot fix and which inflating merge_neighbours further would only paper over with noise.
+
+  CALIBRATED VALUES (config.example.toml, naming run 19c):
+    terms_per_interview = 5   (the model self-limits to ~4.4 against this cap; lowering trims good terms)
+    merge_neighbours    = 12  (19b: in 7 of 8 near-misses the right node sat at rank 7-56, unseen)
+    merge_style         unchanged (only 1 of 8 near-misses was the judge's decision; loosening it would
+                                   also loosen the ~50 of 60 interviews where it currently decides well)
+    default_min_mentions = 2  (19c: 163 terms, 114 singletons; at 2 the wall shows 49, all shared; at 3, 26)
+
+  INFRASTRUCTURE NOTE: run 19c died once mid-run with sqlite3.OperationalError "database or disk is
+    full" — / was at 99%. Not a code fault. Freed 2.3GB (npm + uv caches) and re-ran. /var/log holds
+    3.0GB and is root-owned: an admin step, already in docs/root-cause-backlog.md (2026-08-10).
+
+  CARRIED TO FINAL REVIEW: kg/pipeline.py extraction labels carry the same latent quote-echo risk
+    (EXTRACTION_SYSTEM quotes its examples too), but 0 of 382 labels across the runs contained a quote
+    character, so it was left unfixed rather than widening the change. Run 19a produced one label
+    literally called ".text" (a field name leaked into a label); it did not recur in 19b/19c.
