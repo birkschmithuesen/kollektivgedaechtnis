@@ -91,6 +91,11 @@
       } else if (payload.type === 'state') {
         view.setMinMentions(payload.state.min_mentions);
         view.camera.setMode(payload.state.camera_mode);
+        // D4: the zoom level is an on-site setting, carried in the same state
+        // push as the mode. Guard the value — setZoomFactor throws below 1,
+        // and an exhibition wall must degrade rather than stop rendering.
+        const zoom = Number(payload.state.camera_zoom);
+        if (zoom >= 1) view.camera.setZoomFactor(zoom);
       }
     };
   });

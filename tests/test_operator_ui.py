@@ -10,7 +10,13 @@ GRAPH = {
     "edges": [],
     "quotes": [{"id": "q1", "person_id": "p1", "text": "Wir bauen zu viel."}],
 }
-STATE = {"min_mentions": 2, "camera_mode": "pan", "stt_connected": True, "interview": None}
+STATE = {
+    "min_mentions": 2,
+    "camera_mode": "pan",
+    "camera_zoom": 2,
+    "stt_connected": True,
+    "interview": None,
+}
 
 
 @pytest.fixture()
@@ -60,6 +66,14 @@ def test_the_camera_switch_reflects_state_and_posts_changes(ui):
     assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
     ui.select_option("#camera", "fit")
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera", {"mode": "fit"}]
+
+
+def test_the_zoom_select_reflects_state_and_posts_changes(ui):
+    """21b: without this control an operator with no touchscreen reach cannot
+    zoom at all — Camera.setZoomFactor is otherwise constructor-only."""
+    assert ui.eval_on_selector("#camera-zoom", "el => el.value") == "2"
+    ui.select_option("#camera-zoom", "1.5")
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera_zoom", {"factor": 1.5}]
 
 
 def test_the_transcript_area_shows_partials(ui):

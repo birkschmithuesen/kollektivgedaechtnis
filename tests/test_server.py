@@ -60,6 +60,22 @@ def test_camera_mode_round_trips(client):
     assert client.post("/api/camera", json={"mode": "warp"}).status_code == 422
 
 
+def test_camera_zoom_round_trips_and_defaults_to_the_whole_net(client):
+    # D4: the wall opens on the whole net, so an untouched station reports 1.
+    assert client.get("/api/state").json()["camera_zoom"] == 1.0
+
+    assert client.post("/api/camera_zoom", json={"factor": 2}).status_code == 200
+    assert client.get("/api/state").json()["camera_zoom"] == 2.0
+
+    # Below 1 the camera would show LESS than the net without filling the wall,
+    # and Camera.setZoomFactor raises on it; above 4 a stray value would zoom
+    # the unattended wall into a single node.
+    assert client.post("/api/camera_zoom", json={"factor": 0.5}).status_code == 422
+    assert client.post("/api/camera_zoom", json={"factor": 99}).status_code == 422
+    # The rejected writes must not have moved the stored value.
+    assert client.get("/api/state").json()["camera_zoom"] == 2.0
+
+
 def test_positions_are_persisted_so_the_layout_never_reshuffles(client):
     term_id = client.store.list_terms()[0].id
 

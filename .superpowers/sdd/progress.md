@@ -664,3 +664,60 @@ Task 19: complete (commits 83b3008, 1016421, 09b8b6b + this one) — sim/replay.
     (EXTRACTION_SYSTEM quotes its examples too), but 0 of 382 labels across the runs contained a quote
     character, so it was left unfixed rather than widening the change. Run 19a produced one label
     literally called ".text" (a field name leaked into a label); it did not recur in 19b/19c.
+
+Task 21 + 21b: complete — tests/test_resilience.py, scripts/start.sh, docs/operations.md,
+  kg/server.py, frontend/operator.html, frontend/static/operator.js, frontend/projection.html,
+  tests/test_server.py, tests/test_operator_ui.py. 277 tests passing (was 269).
+  RUN BY THE CONTROLLER DIRECTLY, not delegated: the delegated Claude Code run died on the very
+  first step with "You've hit your monthly spend limit" (session f0a18fa8), producing no commit and
+  no file. Cost $1.63 for nothing.
+
+  PLAN CORRECTION — SessionTracker.adopt() and Core.recover() were NOT built, deliberately.
+    The plan's Task 21 Steps 3 prescribes both plus a call in __main__.py. They are redundant: Task
+    17's implementer already found the same defect in the plan's Core.__init__ (a crash mid-interview
+    plus restart left TWO interviews open) and fixed it AT CONSTRUCTION TIME — Core.__init__ reads
+    store.open_person() and seeds SessionTracker(open_since=...). Five of the six resilience tests
+    passed on first run against unmodified code, which is the evidence. Building recover() anyway
+    would have created a SECOND path for one notion — the exact shape of Task 4's stop-phrase bug,
+    where a duplicated notion of "separator" diverged and leaked a command into the LLM call.
+    The test therefore asserts the BEHAVIOUR (tracker.open_since is adopted; the interview can still
+    be closed and processed after a restart), not the prescribed method name.
+    The sixth test failed only because the test's own processor stub lacked the keyword-only
+    `cut_end` parameter that process_interview grew in Task 17b. Test fixed, not production code.
+
+  Task 21b — camera zoom exposed in the operator UI (Birk asked for it after D4).
+    Motivation: D4 says zoom is set on site, but Camera.setZoomFactor was reachable ONLY through the
+    constructor — not in the state payload, not in projection.html's state branch, not in the
+    operator UI. Without a touchscreen at the projection machine an operator could not zoom AT ALL.
+    Shape: a `camera_zoom` setting in the Store, carried in current_state(); POST /api/camera_zoom
+    bounded to [1, 4]; a select in operator.html (1x / 1.5x / 2x); projection.html applies it in the
+    same state branch as setMode, guarded (`if (zoom >= 1)`) because setZoomFactor throws below 1 and
+    an exhibition wall must degrade rather than stop rendering.
+    Bounds are not arbitrary: below 1 the camera shows LESS than the net without filling the wall
+    (and Camera throws); above 4 a stray value would zoom the unattended wall into a single node.
+    Tests pin the rejections AND that a rejected write does not move the stored value.
+    Against spec §7 ("exactly one runtime dial"): §7 governs controls that change EXTRACTION or
+    MERGING. The camera mode select was already a display-only control alongside the density dial;
+    the zoom select is the same class, not a second dial.
+
+  scripts/start.sh — two deliberate deviations from the plan's template:
+    (a) the fixed `sleep 8` before launching the browsers is replaced by a real readiness poll against
+        /api/state (60x1s). A slow first start would otherwise open BOTH windows on a connection error
+        — on the exhibition day, in front of visitors.
+    (b) added a cleanup trap killing the process group: without it the restart loops survive Ctrl-C
+        and keep respawning chromium.
+    Also parameterised the beamer position (KG_PROJECTION_POS) — 1920,0 only holds if the beamer sits
+    to the right of a 1920-wide laptop panel.
+
+  docs/operations.md — carries the REAL calibrated values from run 19c, no placeholders. Every claim
+    was checked against the code before writing it: --no-telegram/--no-stt exist in __main__.py, and
+    the documented "zoom does not re-frame in manual mode" is what camera.js actually does (manual is
+    the visitor's mode; re-framing would fight their hand). The touchscreen is documented as CONFIRMED
+    (spec §14.3 closed as YES) but the verification commands are KEPT — confirmed-on-paper is not
+    working-on-the-day. The merge score is presented as a state of affairs, not a defect: the wall
+    shows two related nodes instead of one for three of five planted concepts, which is the honest
+    outcome at genuine semantic distance.
+
+  BRIEF CHECK ANSWERED: docs/operations.md documents nothing that cannot be reached from the operator
+  UI. That check is exactly why 21b exists — before it, the runbook would have had to describe zoom as
+  "touch the projection machine".

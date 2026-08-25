@@ -6,7 +6,13 @@
 // confirmed (see the catch below): no toast/banner, just the control
 // snapping back to the truth.
 let lastGraph = { nodes: [], edges: [], quotes: [] };
-let lastState = { min_mentions: 1, camera_mode: 'fit', stt_connected: false, interview: null };
+let lastState = {
+  min_mentions: 1,
+  camera_mode: 'fit',
+  camera_zoom: 1,
+  stt_connected: false,
+  interview: null,
+};
 
 function post(url, body) {
   return fetch(url, {
@@ -60,6 +66,9 @@ function render(graph, state) {
 
   document.getElementById('min-mentions').value = String(state.min_mentions);
   document.getElementById('camera').value = state.camera_mode;
+  // String(): the <option> values are strings, so a numeric 1 from the server
+  // would match no option and silently blank the select.
+  document.getElementById('camera-zoom').value = String(state.camera_zoom ?? 1);
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
   document.getElementById('interview').textContent = state.interview
     ? 'Interview läuft'
@@ -84,11 +93,20 @@ document.getElementById('min-mentions').addEventListener('change', (event) =>
 document.getElementById('camera').addEventListener('change', (event) =>
   post('/api/camera', { mode: event.target.value }),
 );
+document.getElementById('camera-zoom').addEventListener('change', (event) =>
+  post('/api/camera_zoom', { factor: Number(event.target.value) }),
+);
 
 window.kgOperator = { render, showTranscript };
 
 let graph = { nodes: [], edges: [], quotes: [] };
-let state = { min_mentions: 1, camera_mode: 'fit', stt_connected: false, interview: null };
+let state = {
+  min_mentions: 1,
+  camera_mode: 'fit',
+  camera_zoom: 1,
+  stt_connected: false,
+  interview: null,
+};
 const events = new EventSource('/events');
 events.onmessage = (message) => {
   const payload = JSON.parse(message.data);

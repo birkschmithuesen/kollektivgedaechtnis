@@ -30,6 +30,13 @@ class CameraMode(BaseModel):
     mode: Literal["fit", "manual", "pan"]
 
 
+class CameraZoom(BaseModel):
+    # >= 1 by construction: 1 = the whole net in frame, 2 = half its width
+    # across the wall. The upper bound keeps a stray value from zooming the
+    # wall into a single node at an unattended exhibition.
+    factor: float = Field(ge=1.0, le=4.0)
+
+
 class Point(BaseModel):
     x: float
     y: float
@@ -44,6 +51,11 @@ def current_state(store) -> dict:
     return {
         "min_mentions": int(store.get_setting("min_mentions", "1")),
         "camera_mode": store.get_setting("camera_mode", "fit"),
+        # D4 (Birk, 2026-08-19): the wall opens on the whole net; zoom is set
+        # on site. The Camera component has always supported a zoom factor,
+        # but until 21b it was reachable only through its constructor — so an
+        # operator with no touchscreen access could not zoom at all.
+        "camera_zoom": float(store.get_setting("camera_zoom", "1")),
         "stt_connected": store.get_setting("stt_connected", "0") == "1",
         "interview": None
         if person is None
@@ -107,6 +119,15 @@ def create_app(store, cfg, bus) -> FastAPI:
     @app.post("/api/camera")
     def api_camera(payload: CameraMode) -> dict:
         store.set_setting("camera_mode", payload.mode)
+        broadcast_state(store, bus)
+        return {"ok": True}
+
+    @app.post("/api/camera_zoom")
+    def api_camera_zoom(payload: CameraZoom) -> dict:
+        # A display-only control, like the camera mode next to it. Spec §7's
+        # "exactly one runtime dial" governs controls that change EXTRACTION
+        # or MERGING; this changes neither.
+        store.set_setting("camera_zoom", str(payload.factor))
         broadcast_state(store, bus)
         return {"ok": True}
 
