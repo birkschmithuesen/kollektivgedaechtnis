@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import re
 import socket
+import subprocess
 from pathlib import Path
 
 import uvicorn
@@ -30,24 +32,40 @@ def resolved_host(host: str) -> str:
     what makes Tool 1 reachable from the dream machine (spec §3.1 of the
     Kollektivtraum spec). Printing it is a trap: `http://0.0.0.0:8800` opens
     nothing from another box, and `docs/operations.md` tells the operator to
-    open what this line prints. So the wildcard is resolved to the interface
-    the default route actually leaves through.
+    open what this line prints. So the wildcard is resolved through up to
+    three attempts, each one a fallback for the last one's blind spot, before
+    honestly giving up to localhost.
 
-    No packet is sent: `connect()` on a UDP socket only selects a route, and
-    192.0.2.1 is TEST-NET-1, reserved and guaranteed unroutable.
+    (1) Route probe: connect a UDP socket to 192.0.2.1 (TEST-NET-1, reserved
+    and guaranteed unroutable) and read back the interface address the
+    kernel picked. No packet is sent — `connect()` on a UDP socket only
+    selects a route. This needs a default route (`0.0.0.0/0`), and the
+    exhibition spec (§3.1) runs on an isolated one-day LAN — a direct cable
+    between two boxes or a switch with static IPs and no configured gateway
+    is entirely plausible there. Such a machine has a perfectly good LAN
+    address but no default route, so the probe raises even though the box is
+    reachable. "No default route" is not "no reachable address."
 
-    That probe needs a default route (`0.0.0.0/0`), and the exhibition spec
-    (§3.1) runs on an isolated one-day LAN — a direct cable between two boxes
-    or a switch with static IPs and no configured gateway is entirely
-    plausible there. Such a machine has a perfectly good LAN address but no
-    default route, so the probe raises even though the box is reachable. "No
-    default route" is not "no reachable address" — falling straight back to
-    localhost in that case would silently reintroduce the exact bug this
-    function exists to fix. So a second attempt asks the OS to resolve the
-    machine's own hostname and takes the first non-loopback IPv4 address that
-    comes back. Only if that also finds nothing is there truly no LAN address
-    to offer, and 127.0.0.1 is printed — at that point honestly, not as a
-    disguised failure.
+    (2) `ip -4 -o addr show scope global`: the same command
+    `docs/operations.md` already tells the operator to run by hand, now run
+    for them. `scope global` excludes loopback and link-local at the source,
+    which is what makes a simple parse safe. This is the step that actually
+    covers the gateway-less-LAN case from (1) on any Linux box, which is
+    every machine this ships on. The subprocess gets a 2-second timeout: this
+    runs on the startup path of an unattended exhibition process, and a
+    wedged or missing `ip` binary must not be able to stall it.
+
+    (3) `socket.gethostbyname_ex(socket.gethostname())`, first non-loopback
+    IPv4 address returned: a non-Linux fallback for when (2) can't run at
+    all. On the Debian-family hosts this project actually deploys to, expect
+    this step to find nothing: `/etc/hosts` ships a stock
+    `127.0.1.1 <hostname>` line, assigning a static LAN IP does not update
+    it, and that loopback address is correctly rejected here — leaving (2)
+    as the step actually doing the work on this deployment.
+
+    Only when all three find nothing is there truly no LAN address to offer,
+    and 127.0.0.1 is printed — at that point honestly, not as a disguised
+    failure.
     """
     if host not in ("0.0.0.0", "::"):
         return host
@@ -59,14 +77,50 @@ def resolved_host(host: str) -> str:
         pass
     finally:
         sock.close()
-    return _first_non_loopback_ipv4() or "127.0.0.1"
+    return (
+        _first_global_ipv4_via_ip_command()
+        or _first_non_loopback_ipv4()
+        or "127.0.0.1"
+    )
+
+
+def _first_global_ipv4_via_ip_command() -> str | None:
+    """Second-chance lookup for `resolved_host` when there is no default
+    route to probe. Runs the same `ip -4 addr show scope global` the
+    operator runbook (docs/operations.md) already tells a human to run by
+    hand when the printed address looks wrong — the exhibition LAN's static
+    address is exactly what `scope global` reports. The 2-second timeout
+    exists because this runs unattended at process startup: a wedged or
+    absent `ip` binary must fall through to the next attempt, not hang it.
+    Never raises: any failure here just means there is nothing to offer.
+    """
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", "scope", "global"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for match in re.finditer(r"inet (\d+\.\d+\.\d+\.\d+)/", result.stdout):
+        addr = match.group(1)
+        # `scope global` already excludes loopback and link-local at the
+        # source; this re-checks rather than trusting output parsing alone.
+        if not addr.startswith("127.") and not addr.startswith("169.254."):
+            return addr
+    return None
 
 
 def _first_non_loopback_ipv4() -> str | None:
-    """Second-chance lookup for `resolved_host` when there is no default
-    route to probe. Resolving the machine's own hostname still surfaces a
-    statically-assigned LAN address on a gateway-less exhibition network.
-    Never raises: any resolver failure just means there is nothing to offer.
+    """Third-chance lookup for `resolved_host`, after the route probe and the
+    `ip` command both found nothing. `gethostbyname_ex` is a non-Linux
+    fallback in practice: on the Debian-family hosts this project deploys to,
+    `/etc/hosts` ships a stock `127.0.1.1 <hostname>` line that a statically
+    assigned LAN IP does not update, so this call typically resolves to
+    loopback only and this loop correctly finds nothing — the `ip` command
+    above is what actually carries that case. Never raises: any resolver
+    failure just means there is nothing to offer.
     """
     try:
         _, _, addrs = socket.gethostbyname_ex(socket.gethostname())
