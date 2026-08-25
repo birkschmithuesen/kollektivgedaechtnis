@@ -702,11 +702,23 @@ photo, merge decision, node position, hidden flag.
 ## 12. Explicitly out of scope (named, so it is not re-proposed as new)
 
 - **Tool 2 „Kollektivtraum"** — graph→prompt→image on its own screen beside the
-  wall. Own brainstorm + spec + plan cycle, after Tool 1. **The brainstorm is
-  DONE (2026-08-25): `specs/2026-08-25-kollektivtraum-brainstorm.md` — all
-  structural axes decided, spec still to be written.** Two facts from it reach
-  back into Tool 1: the trigger is a completed interview (not a timer), and the
-  server must bind network-reachable, which is the same change CR-1 needs.
+  wall. **Brainstorm DONE (`specs/2026-08-25-kollektivtraum-brainstorm.md`) and
+  SPEC WRITTEN (`specs/2026-08-25-kollektivtraum-design.md`); plan cycle
+  pending.** It is a separate process on a separate machine, reading this tool's
+  `graph.json` over HTTP.
+
+  **Five properties of THIS tool are now load-bearing for it — do not refactor
+  them away** (Tool 2 spec §13): (1) `graph.json` stays complete state, no delta
+  mechanism; (2) `quotes[]` stays in the payload though the wall never renders
+  it; (3) `mentions` per term stays — it is Tool 2's weighting input;
+  (4) `hidden` stays — it is Tool 2's exclusion input; (5) **`broadcast_graph()`
+  keeps firing AFTER the pipeline, not at the stop (`kg/core.py:198`)** — moving
+  it to `_close()` would silently make every dream one interview stale, because
+  at stop time the new person has no terms yet.
+
+  One change lands *in* this tool: `server_host` must become LAN-bindable
+  (§3.1 there). That is the same change CR-1 needs for the second-room mirror —
+  built once, serving both.
 - **Quote on touch** — tapping a person node reveals a summarising quote. Birk
   finds this attractive; kept as nice-to-have for later. Data is already stored,
   so this is a pure frontend feature later.
