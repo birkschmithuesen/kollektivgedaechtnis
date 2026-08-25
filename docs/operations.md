@@ -94,6 +94,11 @@ Schlägt es fehl: Bind prüfen (`ss -ltnp | grep 8800` muss `0.0.0.0:8800`
 zeigen, nicht `127.0.0.1:8800`), dann die Firewall, dann ob beide Maschinen
 wirklich im selben Netz hängen.
 
+Sieht die gedruckte Adresse selbst nach `127.0.0.1` aus: Dann haben beide
+Auflösungsversuche keine LAN-Adresse gefunden (z. B. direktes Kabel oder
+Switch ohne konfiguriertes Gateway). Die echte Adresse mit `ip -4 addr show
+scope global` (oder `ip addr`) nachsehen und von Hand einsetzen.
+
 ## Ein Interview
 
 1. Foto per Telegram → Personenknoten mit Portrait erscheint sofort.

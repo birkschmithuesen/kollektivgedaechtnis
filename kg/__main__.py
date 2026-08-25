@@ -34,9 +34,20 @@ def resolved_host(host: str) -> str:
     the default route actually leaves through.
 
     No packet is sent: `connect()` on a UDP socket only selects a route, and
-    192.0.2.1 is TEST-NET-1, reserved and guaranteed unroutable. With no
-    default route at all (a laptop with every interface down) this falls back
-    to localhost, which is honest — that machine is not reachable either.
+    192.0.2.1 is TEST-NET-1, reserved and guaranteed unroutable.
+
+    That probe needs a default route (`0.0.0.0/0`), and the exhibition spec
+    (§3.1) runs on an isolated one-day LAN — a direct cable between two boxes
+    or a switch with static IPs and no configured gateway is entirely
+    plausible there. Such a machine has a perfectly good LAN address but no
+    default route, so the probe raises even though the box is reachable. "No
+    default route" is not "no reachable address" — falling straight back to
+    localhost in that case would silently reintroduce the exact bug this
+    function exists to fix. So a second attempt asks the OS to resolve the
+    machine's own hostname and takes the first non-loopback IPv4 address that
+    comes back. Only if that also finds nothing is there truly no LAN address
+    to offer, and 127.0.0.1 is printed — at that point honestly, not as a
+    disguised failure.
     """
     if host not in ("0.0.0.0", "::"):
         return host
@@ -45,9 +56,26 @@ def resolved_host(host: str) -> str:
         sock.connect(("192.0.2.1", 1))
         return sock.getsockname()[0]
     except OSError:
-        return "127.0.0.1"
+        pass
     finally:
         sock.close()
+    return _first_non_loopback_ipv4() or "127.0.0.1"
+
+
+def _first_non_loopback_ipv4() -> str | None:
+    """Second-chance lookup for `resolved_host` when there is no default
+    route to probe. Resolving the machine's own hostname still surfaces a
+    statically-assigned LAN address on a gateway-less exhibition network.
+    Never raises: any resolver failure just means there is nothing to offer.
+    """
+    try:
+        _, _, addrs = socket.gethostbyname_ex(socket.gethostname())
+    except OSError:
+        return None
+    for addr in addrs:
+        if not addr.startswith("127."):
+            return addr
+    return None
 
 
 async def main_async(args) -> None:
