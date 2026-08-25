@@ -99,6 +99,10 @@ def _first_global_ipv4_via_ip_command() -> str | None:
             ["ip", "-4", "-o", "addr", "show", "scope", "global"],
             capture_output=True,
             text=True,
+            errors="replace",  # Strict UTF-8 decoding (default) crashes on non-UTF-8 bytes
+                                # from locale-specific interface names. Replacement of bad
+                                # bytes as U+FFFD is safe: a mangled char cannot occur in
+                                # ASCII dotted quads.
             timeout=2,
         )
     except (OSError, subprocess.SubprocessError):

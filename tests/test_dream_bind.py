@@ -208,3 +208,35 @@ def test_resolved_host_survives_a_hanging_or_failing_ip_command(monkeypatch):
     )
 
     assert resolved_host("0.0.0.0") == "127.0.0.1"
+
+
+def test_resolved_host_handles_non_utf8_ip_output(monkeypatch):
+    """When the `ip` command outputs non-UTF-8 bytes (e.g., from a non-UTF-8
+    locale interface name), the default strict UTF-8 decoding would raise
+    UnicodeDecodeError, crashing the unattended startup path. Using
+    `errors="replace"` prevents this crash while still allowing valid address
+    parsing, since mangled bytes cannot occur in ASCII dotted-quad patterns."""
+    monkeypatch.setattr(socket, "socket", _RoutelessSocket)
+    monkeypatch.setattr(
+        socket,
+        "gethostbyname_ex",
+        lambda name: (_ for _ in ()).throw(OSError("unknown host (simulated)")),
+    )
+
+    # Simulate output with invalid UTF-8 sequences replaced by U+FFFD (the
+    # Unicode replacement character). The valid inet line is still present
+    # and parseable by the regex.
+    fake_stdout = (
+        "2: eth0    inet 192.168.7.50/24 brd 192.168.7.255 scope global eth0\n"
+        + chr(0xfffd)  # What errors="replace" produces for bad bytes
+        + "\n"
+    )
+
+    def fake_run(cmd, **kwargs):
+        assert cmd[:2] == ["ip", "-4"]
+        return subprocess.CompletedProcess(cmd, 0, stdout=fake_stdout, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    # Must not raise, and must parse the valid address line correctly
+    assert resolved_host("0.0.0.0") == "192.168.7.50"
