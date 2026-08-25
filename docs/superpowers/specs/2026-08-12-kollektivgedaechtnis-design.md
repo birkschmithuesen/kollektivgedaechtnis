@@ -716,9 +716,13 @@ photo, merge decision, node position, hidden flag.
   it to `_close()` would silently make every dream one interview stale, because
   at stop time the new person has no terms yet.
 
-  One change lands *in* this tool: `server_host` must become LAN-bindable
-  (§3.1 there). That is the same change CR-1 needs for the second-room mirror —
-  built once, serving both.
+  One change lands *in* this tool, and it is smaller than Tool 2's spec first
+  claimed: `server_host` was **already** LAN-bindable (`kg/config.py:48`,
+  `config.example.toml:59`) — corrected 2026-08-25, see Tool 2 spec §3.1. All
+  that lands here is `kg/__main__.py` printing the *resolved* interface address
+  instead of the literal `0.0.0.0`, so the URL the runbook tells the operator to
+  open is one the dream machine can actually open. Nothing else in `kg/` is
+  touched by the Tool 2 build.
 - **Quote on touch** — tapping a person node reveals a summarising quote. Birk
   finds this attractive; kept as nice-to-have for later. Data is already stored,
   so this is a pure frontend feature later.

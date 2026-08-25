@@ -61,6 +61,39 @@ Liegt der Beamer nicht rechts neben dem Laptop-Panel, Position anpassen:
 `xrandr --listmonitors` zeigt den Offset, dann
 `KG_PROJECTION_POS=<x>,<y> ./scripts/start.sh`.
 
+## Netzwerk für Screen B und Screen C
+
+Tool 1 hört im Normalfall nur auf `127.0.0.1` — dann erreicht **keine** andere
+Maschine die Station. Für den Ausstellungstag in `config.toml`:
+
+```toml
+server_host = "0.0.0.0"
+```
+
+Bewusste Entscheidung: **keine Authentifizierung** (Tool-2-Spec §3.1). Die
+Station läuft einen Tag lang in einem isolierten lokalen Netz; ein Login wäre
+hier zusätzliche Komplexität und eine zusätzliche Fehlerquelle um 9 Uhr
+morgens.
+
+Nach dem Start druckt der Core drei URLs — mit der **aufgelösten** Adresse,
+nicht mit `0.0.0.0`. Die dritte ist die, die die Traum-Maschine braucht.
+
+**Die Prüfung wird von der ANDEREN Maschine aus gefahren, niemals per
+localhost auf dem Ausstellungsrechner.** Ein `curl` auf dem Server selbst
+gelingt auch dann, wenn der Bind falsch ist, und beweist deshalb nichts:
+
+```bash
+# auf der Traum-Maschine, nicht auf dem Ausstellungsrechner:
+curl -s http://<adresse-vom-core-ausgegeben>:8800/graph.json | head -c 200
+```
+
+Kommt hier JSON mit `"version": 1` zurück, ist die Netzwerkhälfte beantwortet
+— und zwar genau mit dem Aufruf, den der Watcher im Betrieb macht.
+
+Schlägt es fehl: Bind prüfen (`ss -ltnp | grep 8800` muss `0.0.0.0:8800`
+zeigen, nicht `127.0.0.1:8800`), dann die Firewall, dann ob beide Maschinen
+wirklich im selben Netz hängen.
+
 ## Ein Interview
 
 1. Foto per Telegram → Personenknoten mit Portrait erscheint sofort.

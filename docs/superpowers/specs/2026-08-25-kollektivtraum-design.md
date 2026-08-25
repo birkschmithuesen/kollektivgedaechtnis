@@ -92,15 +92,30 @@ shapes, the SSE encoder) but never `kg.store`, `kg.core` or `kg.server`.
 
 ### 3.1 The one change inside Tool 1
 
-`server_host = "127.0.0.1"` (`config.example.toml:59`, `kg/config.py`) is
-localhost-only, so no other machine can reach it at all. It must become
-bindable to the LAN interface.
+> **Correction, 2026-08-25 (plan cycle, Task 1).** This section originally
+> claimed `server_host = "127.0.0.1"` was hard-coded and "must become bindable
+> to the LAN interface". **That was wrong.** Verified against the code:
+> `server_host` is already a `Config` field (`kg/config.py:48`), already in
+> `_FIELD_NAMES` (`kg/config.py:102`), already documented in
+> `config.example.toml:59`, and already passed to uvicorn in `kg/__main__.py`.
+> The mechanism has existed since Task 1 of Tool 1. The original claim is left
+> here rather than deleted, because this spec is a decision record and a wrong
+> claim that quietly disappears teaches nobody anything.
 
-**This is the same change CR-1 needs for screen C.** Build it once, for both
-consumers. Scope strictly:
+What is actually missing is **configuration, documentation and verification**,
+plus one real defect: `kg/__main__.py` printed `http://{server_host}:{port}`,
+so with the exhibition value `0.0.0.0` it printed a URL that cannot be opened
+from the dream machine — while `docs/operations.md` tells the operator to open
+exactly what is printed.
 
-- `server_host` configurable, documented default stays `127.0.0.1`; the
-  exhibition value goes into `config.toml` on site.
+**This is the same requirement CR-1 has for screen C.** Scope strictly:
+
+- `server_host` stays configurable with the documented default `127.0.0.1`; the
+  exhibition value `0.0.0.0` goes into `config.toml` on site, never into the
+  repo.
+- `kg/__main__.py` resolves the wildcard to the routable interface address for
+  the three URLs it prints, and names `/graph.json` as Tool 2's entry point.
+  **This is the only code change inside `kg/` in the entire Tool 2 build.**
 - **No authentication.** The station runs on an isolated local network for one
   day; adding auth here is complexity that buys nothing and adds a failure mode
   at 9 a.m. Documented as a deliberate choice, not an oversight.

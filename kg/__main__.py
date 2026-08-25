@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import socket
 from pathlib import Path
 
 import uvicorn
@@ -20,6 +21,33 @@ from kg.store import Store
 from kg.stt_client import STTClient
 from kg.telegram_bot import TelegramSource
 from kg.transcript import TranscriptLog
+
+
+def resolved_host(host: str) -> str:
+    """The address to PRINT. Never the address to bind.
+
+    Binding to `0.0.0.0` is correct and stays exactly as configured — that is
+    what makes Tool 1 reachable from the dream machine (spec §3.1 of the
+    Kollektivtraum spec). Printing it is a trap: `http://0.0.0.0:8800` opens
+    nothing from another box, and `docs/operations.md` tells the operator to
+    open what this line prints. So the wildcard is resolved to the interface
+    the default route actually leaves through.
+
+    No packet is sent: `connect()` on a UDP socket only selects a route, and
+    192.0.2.1 is TEST-NET-1, reserved and guaranteed unroutable. With no
+    default route at all (a laptop with every interface down) this falls back
+    to localhost, which is honest — that machine is not reachable either.
+    """
+    if host not in ("0.0.0.0", "::"):
+        return host
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("192.0.2.1", 1))
+        return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        sock.close()
 
 
 async def main_async(args) -> None:
@@ -81,8 +109,12 @@ async def main_async(args) -> None:
         await application.updater.start_polling()
         await application.start()
 
-    print(f"projection:  http://{cfg.server_host}:{cfg.server_port}/projection")
-    print(f"operator:    http://{cfg.server_host}:{cfg.server_port}/operator")
+    shown = resolved_host(cfg.server_host)
+    print(f"projection:  http://{shown}:{cfg.server_port}/projection")
+    print(f"operator:    http://{shown}:{cfg.server_port}/operator")
+    # Named explicitly: this is the one URL the dream machine needs, and the
+    # cross-machine check in docs/operations.md is run against exactly it.
+    print(f"graph.json:  http://{shown}:{cfg.server_port}/graph.json   (Tool 2 liest das)")
     await asyncio.gather(*tasks)
 
 
