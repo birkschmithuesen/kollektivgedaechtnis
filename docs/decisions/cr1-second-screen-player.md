@@ -1,4 +1,13 @@
-# Change request CR-1 — second screen as an independent player client (Birk, 2026-08-19)
+# Change request CR-1 — graph mirror in the separate room, as an independent player client (Birk, 2026-08-19)
+
+> **Scope clarified 2026-08-25 (Birk).** This document describes the **graph
+> mirror in the separate room** — surface **C**. It is NOT the Kollektivtraum.
+> The station has three surfaces: **A** touchscreen with the graph, **B** the
+> Kollektivtraum directly beside A (own machine, Tool 2), **C** this mirror.
+> Everything below stays correct as written. One shared consequence: B and C
+> both fetch `graph.json` over the network, so the bind-address change is built
+> once and serves both.
+> See `../superpowers/specs/2026-08-25-kollektivtraum-brainstorm.md` §0 and §9.
 
 Status: **REQUIREMENT CAPTURED, NOT YET SPECIFIED.** This is deliberately not a
 plan task yet — it needs its own brainstorm/spec cycle. Written down so it is not

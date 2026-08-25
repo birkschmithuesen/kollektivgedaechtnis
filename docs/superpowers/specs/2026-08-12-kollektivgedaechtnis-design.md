@@ -701,8 +701,12 @@ photo, merge decision, node position, hidden flag.
 
 ## 12. Explicitly out of scope (named, so it is not re-proposed as new)
 
-- **Tool 2 „Kollektivtraum"** — periodic graph→prompt→image on the second
-  screen. Own brainstorm + spec + plan cycle, after Tool 1.
+- **Tool 2 „Kollektivtraum"** — graph→prompt→image on its own screen beside the
+  wall. Own brainstorm + spec + plan cycle, after Tool 1. **The brainstorm is
+  DONE (2026-08-25): `specs/2026-08-25-kollektivtraum-brainstorm.md` — all
+  structural axes decided, spec still to be written.** Two facts from it reach
+  back into Tool 1: the trigger is a completed interview (not a timer), and the
+  server must bind network-reachable, which is the same change CR-1 needs.
 - **Quote on touch** — tapping a person node reveals a summarising quote. Birk
   finds this attractive; kept as nice-to-have for later. Data is already stored,
   so this is a pure frontend feature later.
