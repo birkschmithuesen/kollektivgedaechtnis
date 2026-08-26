@@ -1004,3 +1004,32 @@ Task 10: complete (commits 982c365 + this one, review clean after 1 fix round).
   bus._subscribers really does go 1 -> 0 on aclose); and a stale comment claimed
   the question_seconds ceiling of 36000 was "a whole exhibition day"/"30 hours"
   when it is ten hours.
+
+Task 11: complete (commits 5e9c9e4, dc17c45, review clean after 1 fix round).
+  kg2/watcher.py, kg2/__main__.py, tests/test_dream_watcher.py.
+  Whole Tool 2 suite: 205 passing. Smoke test `python -m kg2 --no-watch` starts
+  with NO credentials and prints its three URLs — anthropic.Anthropic() defers
+  auth to the first call, so a keyless smoke test works.
+  Reviewer VERIFIED by an independent probe (real asyncio.to_thread worker):
+  announce() captures the loop on the loop thread, is invoked from a genuine
+  worker thread, and the event lands on the subscribed bus queue. Also confirmed
+  tick() is never concurrent with itself — /api/dream_now only flips a store
+  flag, and run() awaits each tick before sleeping — and that asyncio.sleep()
+  sits OUTSIDE the try deliberately, so CancelledError can still propagate for a
+  clean shutdown rather than being swallowed.
+  Both ordering constraints confirmed correct and tested: fetch happens before
+  the dream_requested flag is consumed (so an outage on the tick of a press
+  cannot swallow it), and the floor stamp is adopted before the cycle while the
+  seen set is adopted only after success.
+  ONE Important fixed: the on_sentence / loop.call_soon_threadsafe path — the
+  one mechanism the plan calls out by name, citing sim/prerender.py's precedent
+  — had ZERO test coverage, because the harness's cycle stub took **kwargs and
+  never called the callback. Now tested from a real worker thread, with the stub
+  asserting it is NOT on the loop thread before calling back, so swapping
+  call_soon_threadsafe for a direct bus.publish would fail the test.
+  TWO Minor fixed: dream_requested was read-then-cleared as two separate store
+  calls, so a press landing between them was silently overwritten and lost —
+  now a fused DreamStore.consume_flag() under one lock acquisition; and the
+  crash-path test never checked that a cycle raising a RAW exception (rather
+  than returning None) still moved the floor stamp — now pinned by a poll
+  landing inside the floor.
