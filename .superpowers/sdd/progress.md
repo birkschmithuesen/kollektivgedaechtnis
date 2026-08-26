@@ -908,3 +908,33 @@ Task 7: complete (commits 807e0dd + this one, review clean after 1 fix).
   containing TWO unrelated internal quotations, leaving a stray „ stranded
   mid-sentence — worse than doing nothing, and on the wall rather than in a log.
   Now guarded by requiring no quote character in between; test added.
+
+Task 8: complete (commits 88c56ec + this one, review clean after 1 fix).
+  kg2/imagegen.py, docs/dream-image-contract.md, tests/test_dream_imagegen.py:
+  19 passing, all offline (post is injected; no test touches the network).
+  >>> OPEN ACTION FOR BIRK — THE ONE THING NOT DONE IN THIS BUILD <<<
+  No OPENROUTER_API_KEY exists in this environment, so the probe that Tool 1's
+  docs/stt-contract.md discipline calls for was NOT run. The contract document
+  is titled "NOCH NICHT VERIFIZIERT", carries a German warning box, and holds
+  the probe script under „Aktion für einen Menschen mit Schlüssel". It must be
+  run once before the exhibition. If the live shape differs, the DOCUMENT is
+  corrected first and the client follows it.
+  The implementer's first commit message claimed "the endpoint was called once
+  for real" — copied verbatim from the plan. Amended: a false claim in the git
+  history is exactly the kind of thing nobody re-checks later.
+  PLAN DEFECT found and fixed: the plan's save_image validated the PNG magic
+  number BEFORE the exclusive create, so the plan's own overwrite test (which
+  retries with non-PNG bytes) got ImageError instead of FileExistsError.
+  Reordered to create-first-then-validate. Reviewer scrutinised the reordering
+  hard and VERIFIED by probe:
+   - garbage bytes cannot sneak past the collision guard (pre-populated file +
+     non-PNG payload -> FileExistsError, original bytes untouched);
+   - the unlink on rejection can only ever remove the empty placeholder THIS
+     call created, because it is reachable only after O_EXCL already succeeded;
+   - two threads racing on one path, 5 runs: exactly one winner every time,
+     loser gets FileExistsError, winner's bytes always intact.
+  ONE Minor found and fixed: a full disk mid-write raised a bare OSError,
+  escaping the module's "one exception type for kg2.cycle to catch" contract
+  and leaving a half-written file where the strip expects a picture. Now
+  converted to ImageError with the file removed; test added. The dead
+  module-level logger flagged as the other Minor is now used by that handler.

@@ -216,3 +216,32 @@ def test_save_image_leaves_no_partial_file_when_it_rejects(tmp_path):
         save_image(b"not a png", tmp_path / "d1.png")
 
     assert not (tmp_path / "d1.png").exists()
+
+
+def test_save_image_reports_a_full_disk_as_an_image_error(tmp_path, monkeypatch):
+    """`kg2.cycle` catches ONE exception type from this module. A bare OSError
+    would escape that contract, and the half-written file would sit exactly
+    where the history strip expects a picture."""
+    import io
+
+    real_open = Path.open
+
+    def failing_open(self, *args, **kwargs):
+        handle = real_open(self, *args, **kwargs)
+
+        class _FullDisk(io.RawIOBase):
+            def write(self, _data):
+                raise OSError(28, "No space left on device")
+
+            def close(self):
+                handle.close()
+
+        return _FullDisk()
+
+    monkeypatch.setattr(Path, "open", failing_open)
+
+    with pytest.raises(ImageError, match="No space left on device"):
+        save_image(png_bytes(), tmp_path / "d1.png")
+
+    monkeypatch.undo()
+    assert not (tmp_path / "d1.png").exists()

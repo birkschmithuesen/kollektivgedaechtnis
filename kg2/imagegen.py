@@ -150,6 +150,14 @@ def save_image(data: bytes, path: Path) -> Path:
         handle.close()
         path.unlink()  # no partial/garbage file left behind
         raise
+    except OSError as exc:
+        # A full disk mid-write. Rare, but `kg2.cycle` is written to catch ONE
+        # exception type from this module, and a bare OSError would also leave
+        # the half-written file sitting where the strip expects a picture.
+        handle.close()
+        path.unlink(missing_ok=True)
+        log.error("could not write %s: %s", path, exc)
+        raise ImageError(f"could not write {path.name}: {exc}") from exc
     else:
         handle.close()
     return path
