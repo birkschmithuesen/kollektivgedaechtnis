@@ -1,0 +1,61 @@
+/* Tool 2's operator window. A laptop UI, not a wall — pixels are fine here. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: #16181c;
+  color: #e8e6e1;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55; margin: 20px 0 8px; }
+
+#the-question {
+  padding: 10px 12px;
+  border-left: 3px solid #4a5568;
+  background: #1d2026;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+#the-question .note { display: block; margin-top: 6px; font-size: 12px; opacity: 0.5; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.controls label { display: flex; gap: 7px; align-items: center; }
+.controls input[type="number"] { width: 84px; }
+
+button {
+  font: inherit;
+  padding: 7px 14px;
+  border: 1px solid #3d434d;
+  border-radius: 4px;
+  background: #22262d;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: #2c313a; }
+button:disabled { opacity: 0.35; cursor: default; }
+#discard-current { border-color: #7a3b3b; }
+
+#dreams { list-style: none; margin: 0; padding: 0; }
+
+#dreams li {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid #262a31;
+}
+
+#dreams li.discarded { opacity: 0.45; }
+#dreams li.failed { border-left: 3px solid #7a3b3b; padding-left: 9px; }
+#dreams img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
+#dreams .sentence { font-size: 14px; line-height: 1.4; }
+#dreams .meta { font-size: 12px; opacity: 0.5; margin-top: 4px; }
+#dreams .prompt { font-size: 11px; opacity: 0.42; margin-top: 5px; white-space: pre-wrap; word-break: break-word; }
+#dreams .error { font-size: 12px; color: #d98a8a; margin-top: 4px; }
