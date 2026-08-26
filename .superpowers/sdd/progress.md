@@ -1282,3 +1282,64 @@ Task 18: complete (commit 79db838). docs/operations.md (Tool 2 section),
   frontend/static/operator.js, tests/test_operator_ui.py and
   sim/export_interviews_md.py were mid-edit by Birk in the same tree
   throughout this task — left untouched and unstaged.
+
+Task 18: complete (commits 79db838, a841a1e). docs/operations.md gains the Tool 2
+  runbook, config2.example.toml, tests/test_dream_runbook.py: 24 passing.
+  PLAN ADAPTATION, deliberate: the plan assumed Tasks 15-17 had produced final
+  calibrated values. They could not — no API keys in this environment. Writing a
+  confident-looking number for a decision nobody has made would be the worst
+  thing this document could do, because an operator would trust it on the
+  festival morning. So the runbook separates what IS calibrated (min_interval_s
+  = 240 with its floor run and the finding that it never binds at the expected
+  cadence; poll_interval_s = 5) from what is NOT (guiding question, register,
+  contradiction threshold, strip mode, the image contract probe), and gives each
+  open item the exact command that resolves it. Tests enforce both halves: no
+  template artefact may survive, AND no open decision may go unlisted.
+  Also fixed a stale false claim in config2.example.toml ("Vertrag verifiziert")
+  that contradicted docs/dream-image-contract.md's own NOCH NICHT VERIFIZIERT.
+
+===== FINAL WHOLE-BRANCH REVIEW (43 commits, d8ec241..a841a1e) =====
+  Verdict: sound and works end to end. The reviewer stood up a fake Tool 1
+  serving the REAL graph-19c artefact, ran the real kg2 server under uvicorn
+  with a live SSE client, and drove the real watcher -> cycle -> store ->
+  broadcast chain with stubbed model calls: 43 of 44 end-to-end assertions
+  passed first run. Verified across all 43 commits: only kg/__main__.py ever
+  changed under kg/; no write verbs in kg2 outside the image endpoint; no
+  credentials committed; NOTHING from spec §12's out-of-scope list got built.
+  FIVE findings, all fixed in 25b30d5:
+   1. (Important, a true cross-task seam no per-task review could see) A FAILED
+      DREAM LEFT A PHANTOM SENTENCE PASTED OVER THE WALL, INDEFINITELY. cycle
+      announces stage 1's sentence over the bus before stage 2 runs, so the page
+      can type it out; on a stage-2 failure the watcher returned before
+      broadcast_dream_state, so nothing ever cleared the overlay. At 14:00 with
+      the uplink down and the typewriter on, the wall would show an ABANDONED
+      dream's sentence over a DIFFERENT dream's image until the next success.
+      Note the obvious fix does not work: applyState only stops the typewriter
+      when the dream id changes, and on a failure it has not. Fixed with an
+      explicit {"type":"dream_failed"} event. It survived every earlier review
+      because every typewriter test drives showDreaming then a SUCCESSFUL state.
+   2. (Important) "DREAM NOW" ON AN EMPTY GRAPH INVENTED A DREAM FROM NOTHING
+      and put it in position 1 of the day's strip — permanently. The spec names
+      09:00 as this button's exact use case, so this was reachable on purpose.
+      The model received "Der Graph umfasst 0 Menschen, 0 Begriffe" and was
+      still told to answer the Leitfrage as a dream. A visitor comparing an
+      empty wall with a confident image sees precisely the random generator the
+      spec warns about. Fixed with an empty-material guard before the row is
+      created, forced and automatic alike.
+   3. (Minor) A BACKWARD CLOCK CORRECTION WEDGED THE TRIGGER AND SURVIVED
+      RESTART. The floor uses wall-clock time; a stamp 150 days in the future
+      returns fire=False for 150 days, and because created_at is persisted, the
+      one thing the runbook tells the operator to do did not help. Now a
+      future stamp is treated as a clock jump (logged, dream fires), plus a
+      runbook row for the symptom.
+   4. (Minor) python -m kg2 transitively imported kg.store, kg.core, kg.server
+      and PIL via `from kg.__main__ import resolved_host` — no live fault path,
+      but the spec §3 guarantee read stronger than it was. kg2 now has its own
+      copy; a subprocess test asserts the three forbidden modules never load.
+      kg/__main__.py gained only a comment explaining the deliberate duplication
+      so nobody "fixes" it back into coupling.
+   5. (Minor) No documented way to start a new festival day empty, though the
+      spec says the strip tells the story of ONE day. Runbook section added.
+  Ledger's unfixed Minors were triaged; the reviewer judged all of them able to
+  stand, most because they are unreachable in this codebase today.
+  Tool 2 suite after the fixes: 334 passing. Full repo suite before them: 607.
