@@ -18,7 +18,6 @@ from __future__ import annotations
 import struct
 import zlib
 
-import pytest
 from fastapi.testclient import TestClient
 
 from kg.bus import EventBus
@@ -268,11 +267,26 @@ async def test_a_dead_tool_1_leaves_the_display_completely_untouched(tmp_path):
     seed_one_good_dream(store, cfg, sentence="das gute Bild")
     before = dream_state(store, cfg)
 
+    # The cycle is counted, not just the return value. Checking only the
+    # visible state would pass even if the watcher attempted — and failed — a
+    # dream on every single poll: `visible_dreams()` filters `status='done'`,
+    # so those rows never reach the screen, and the display would look
+    # identical while the station burned an attempt every five seconds. Spec §8
+    # says no new dreams, not merely no new PICTURES.
+    attempts = []
+
+    def counting_cycle(*args, **kwargs):
+        attempts.append(1)
+        raise AssertionError("no cycle may run while Tool 1 is unreachable")
+
     watcher = DreamWatcher(cfg, store, EventBus(), llm=object(),
-                           fetch=lambda url, timeout: None, clock=lambda: 99999.0)
+                           fetch=lambda url, timeout: None, cycle=counting_cycle,
+                           clock=lambda: 99999.0)
     for _ in range(10):
         assert await watcher.tick() is None
 
+    assert attempts == []
+    assert len(store.all_dreams()) == 1  # the one seeded dream, no phantom rows
     assert dream_state(store, cfg) == before
     store.close()
 

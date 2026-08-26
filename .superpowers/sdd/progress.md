@@ -1101,3 +1101,37 @@ Task 13: complete (commits 5dd031f + this one, review clean — Minor only).
    - The plan's "Produces" line names window.kgDreamOperator = {render,
      renderDreams} while both the plan's own code and the shipped module also
      export refreshDreams. Documentation drift only.
+
+Task 14: complete (commits 6cd40b7 + this one, review clean — 1 Important fixed).
+  tests/test_dream_resilience.py: 13 passing. Whole Tool 2 suite: 261 passing.
+  NO PRODUCTION CODE CHANGED — the ideal outcome for this task. It verifies what
+  Tasks 4-13 already built rather than adding anything.
+  One test-only fix carried in: the plan's restart test POSTed strip_ratio 0.3,
+  which Task 12's lowered ceiling (le=0.25) would have 422'd — silently dropping
+  fade_ms and typewriter from the same request body and testing nothing about
+  crash recovery. Now 0.2, the value test_dream_server.py already uses as its
+  valid non-default.
+  The reviewer MUTATION-TESTED the safety net rather than reading it, breaking
+  production behaviour and checking the right test went red (all reverted; tree
+  verified clean byte-for-byte afterwards):
+   - visible_dreams() not filtering status='done'  -> 7 of 13 tests fail
+   - visible_dreams() not filtering discarded      -> both discard tests fail
+   - run_dream swallowing a failure as 'done'      -> 4 tests fail, incl. the
+     dead-cloud-across-5-cycles and whole-day-of-20-cycles ones, which confirms
+     "cloud dead" is genuinely tested across REPEATED cycles, not one call
+   - dropping commit() from set_discarded (the LAST write) -> restart test fails
+  The restart test's `after == before` really does compare the full state dict —
+  current dream, whole strip, every setting — not a subset that could hide a loss.
+  ONE Important fixed: test_a_dead_tool_1_leaves_the_display_completely_untouched
+  asserted only the VISIBLE state. Mutating the watcher's `if graph is None`
+  guard to fabricate a graph made it attempt a dream on every poll, creating a
+  failed row each time — and the test stayed green, because visible_dreams()
+  filters those rows out. Spec §8 says no new DREAMS, not merely no new
+  pictures. Now counts cycle attempts and asserts no phantom rows. (The same
+  regression was already caught by test_dream_watcher.py, so the invariant was
+  never unguarded suite-wide — but the file people read as the safety net had
+  a hole in it.)
+  ONE Minor recorded, not fixed: the restart test cannot detect a missing
+  commit() in a NON-LAST DreamStore setter, because a later write on the same
+  sqlite connection flushes the earlier uncommitted one. Order-dependent, narrow
+  (needs a hard kill between two specific writes), and predates this task.
