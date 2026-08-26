@@ -721,3 +721,56 @@ Task 21 + 21b: complete — tests/test_resilience.py, scripts/start.sh, docs/ope
   BRIEF CHECK ANSWERED: docs/operations.md documents nothing that cannot be reached from the operator
   UI. That check is exactly why 21b exists — before it, the runbook would have had to describe zoom as
   "touch the projection machine".
+
+
+===== TOOL 2 (Kollektivtraum) =====
+Plan: docs/superpowers/plans/2026-08-25-kollektivtraum-tool2.md (18 tasks)
+Branch: tool1-implementation (same branch as Tool 1; not master)
+NOTE: no ANTHROPIC_API_KEY / OPENROUTER_API_KEY in this environment. Every task
+  builds and tests offline; the real-API steps (Task 8 probe, 15, 16, 17 --generate)
+  are flagged for Birk to run.
+
+Task 1: complete (commits 1673e2e..d2d4e34, review clean after 3 fix rounds).
+  Spec §3.1 corrected with a dated note in BOTH specs — server_host was already
+  LAN-bindable; the spec's claim that it "must become" so was wrong.
+  Only kg/__main__.py touched under kg/, as the plan's Global Constraints require.
+  THREE REAL DEFECTS in the plan's own prescribed code, all found by review:
+   1. resolved_host fell back to 127.0.0.1 when the UDP route probe failed,
+      justified by the false claim that "no default route means unreachable".
+      An isolated exhibition LAN with static IPs and no gateway has a fine
+      address and no default route — the fallback reproduced the exact
+      unopenable URL the function exists to prevent.
+   2. The first fix (gethostbyname_ex) was a NO-OP on Debian-family hosts:
+      /etc/hosts ships `127.0.1.1 <hostname>` and assigning a static IP never
+      updates it, so it returns only loopback. Reviewer verified this
+      empirically on this very box. Real fix: `ip -4 -o addr show scope global`
+      as a subprocess (2 s timeout), which is what the runbook already tells the
+      operator to type by hand.
+   3. subprocess.run(text=True) decodes strict; UnicodeDecodeError is a
+      ValueError and was caught by neither `OSError` nor `SubprocessError`, so a
+      non-UTF-8 locale would crash an unattended startup. Fixed with
+      errors="replace".
+  Chain is now: UDP route probe -> `ip ... scope global` -> gethostbyname_ex ->
+  127.0.0.1, total, never raises. Verified by hand end to end.
+  Minor findings NOT fixed, carried to the final review: `::` takes the IPv4
+  path (never produced by this codebase); the new console line mixes an English
+  label with a German parenthetical (matches the two lines beside it).
+  tests/test_dream_bind.py: 11 passing. Tool 1 regression: 251 passing.
+
+Task 2: complete (commit 835560f, review clean first pass).
+  kg2/__init__.py, kg2/config.py, config2.example.toml, tests/test_dream_config.py;
+  pyproject.toml gains packages=["kg","kg2"], .gitignore gains dream-data/.
+  Separate config file, NOT a section in Tool 1's config.toml — Tool 2 runs on
+  its own machine, so a shared file would describe a sharing that does not exist.
+  Reviewer verified by probe that a config2.toml containing anthropic_api_key
+  cannot override the environment: _FIELD_NAMES filters it out before the
+  constructor, so file-based credential injection is impossible. _FIELD_NAMES was
+  also diffed programmatically against dataclasses.fields(DreamConfig) — the only
+  omissions are data_dir (handled specially) and the two key fields (deliberate).
+  server_port=8810 deliberately, so both tools can run on one box during dev.
+  DEFAULT_GUIDING_QUESTION / DEFAULT_VISUAL_REGISTER are intentional placeholders
+  Birk replaces from the artefacts built in Tasks 15/16 — not unfinished work.
+  Minor NOT fixed, carried to the final review: unused `import pytest` in
+  tests/test_dream_config.py (came from the plan's own test code).
+  Note: frontend2/static deliberately not created here — Task 10 creates it.
+  tests/test_dream_config.py: 6 passing. Tool 1 spot check test_config.py: 4 passing.
