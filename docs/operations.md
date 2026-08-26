@@ -25,6 +25,26 @@ die es im UI nicht gibt.
    set -a; . ~/.hermes/.env; set +a
    ```
 
+   > **Achtung, 2026-08-26 beobachtet:** `~/.hermes/.env` enthält zwar eine
+   > Zeile `ANTHROPIC_API_KEY=`, aber **ohne Wert** — Birks Hermes fährt Claude
+   > über das Abo (`anthropic_plan`) und einen lokalen Proxy, nicht über einen
+   > API-Schlüssel. Ein Vorbereitungslauf, der Stufe 1 braucht
+   > (`sim.dream_calibrate questions` / `contradiction`), scheitert deshalb an
+   > `set -a; . ~/.hermes/.env; set +a` allein mit „Could not resolve
+   > authentication method" — und zwar in **jedem** Teilschritt, sodass der
+   > Lauf durchläuft und nur FEHLER druckt. Für Stufe-1-Läufe auf dem vServer
+   > zusätzlich auf den Proxy zeigen (verifiziert):
+   >
+   > ```bash
+   > export ANTHROPIC_BASE_URL=http://127.0.0.1:28764
+   > export ANTHROPIC_API_KEY=proxy      # Platzhalter; der Proxy authentifiziert
+   > ```
+   >
+   > Nur für Vorbereitungsläufe auf dem vServer. **Vor Ort gilt das nicht** —
+   > der Ausstellungsrechner hat weder Hermes noch den Proxy und braucht einen
+   > echten `ANTHROPIC_API_KEY` in der Umgebung. `OPENROUTER_API_KEY` ist
+   > davon nicht betroffen, der liegt mit echtem Wert in der Datei.
+
    Die Schlüssel leben dann nur in der Prozess-Umgebung des Kommandos. Der Code
    liest sie ausschließlich über `os.environ` (`kg/config.py`, `kg2/config.py`) —
    eine Projekt-`.env` gibt es nicht und soll es nicht geben.
@@ -337,14 +357,11 @@ Traum und den vollen Verlaufsstreifen weiter.
 
    Danach `http://<traum-maschine>:8810/dream` und `/operator` öffnen.
 
-5. **Vor der ersten echten Ausstellung, einmalig:** den Bild-Endpunkt
-   sondieren. `docs/dream-image-contract.md` ist als „NOCH NICHT VERIFIZIERT"
-   markiert — die Request-/Response-Form, gegen die `kg2/imagegen.py`
-   geschrieben wurde, stammt aus der Modell-Dokumentation, nicht aus einem
-   echten Aufruf. Das Sondierungsskript steht in diesem Dokument unter
-   „Aktion für einen Menschen mit Schlüssel"; es kostet einen Aufruf (ein paar
-   Cent) und druckt nur die Form der Antwort. Ergebnis dort eintragen, bevor
-   der erste echte Traum am Ausstellungstag entsteht.
+5. **Vor der ersten echten Ausstellung, einmalig:** ~~den Bild-Endpunkt
+   sondieren~~ — **erledigt am 2026-08-26.** `docs/dream-image-contract.md`
+   ist jetzt verifiziert (drei echte Aufrufe): Request-Form bestätigt, zwei
+   Abweichungen in der Response gefunden und dort dokumentiert, `kg2` folgt.
+   Nicht erneut nötig.
 
 ### Der Rhythmus
 
@@ -460,56 +477,74 @@ ist ein Startwert aus der Spec, der noch nicht am generierten Material
 
 ### Offene Entscheidungen
 
-Die folgenden vier Werte sind **nicht** entschieden. `config2.example.toml`
-trägt für die ersten beiden vorläufige Startwerte (dieselben, die
-`kg2/config.py` als Ausgangspunkt für Task 16 nennt) — das sind KEINE
-gewählten Werte, nur das, womit `kg2` offline läuft, solange niemand
-gewählt hat. Jede Zeile hier nennt den exakten Befehl, der die Entscheidung
-möglich macht. Kein Wert aus dieser Liste darf ungeprüft in den
-Ausstellungsbetrieb gehen.
+**Stand 2026-08-26:** Die Läufe für 1.–4. und 6. sind **gefahren**, die
+Ergebnisse liegen als Dateien vor. Was jetzt noch offen ist, sind Birks
+Entscheidungen an diesem Material — nicht mehr die Beschaffung des Materials.
+Punkt 5 (40-Bilder-Serie) hängt unverändert an 3. und 4.
 
-1. **Wortlaut der Leitfrage** (`guiding_question`). Vier Kandidaten, alle breit
-   genug für alle drei Interviewthemen (Zukunft des Bauens, KI im Bauen, neue
-   Formen des Zusammenlebens), werden bei 3/10/30/60 Personen als Sätze
-   ausgegeben — Birk liest die Sätze kalt und wählt, ohne dass eine
-   Empfehlung im Output steht:
+Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
+`config2.example.toml` trägt weiterhin nur vorläufige Startwerte.
+
+> **Kostenkorrektur (gemessen, nicht geschätzt):** Ein Bildaufruf kostet
+> **≈ 0,139 USD**, nicht „ein paar Cent". Damit: Registermuster ≈ 0,56 USD
+> (bezahlt), 40-Bilder-Serie **≈ 5,55 USD**, Ausstellungstag ≈ 5,55 USD.
+> Beleg: `usage.cost`, siehe `docs/dream-image-contract.md`.
+
+1. **Wortlaut der Leitfrage** (`guiding_question`) — **Lauf erledigt**,
+   Entscheidung offen. Ergebnis: `out/calibrate-questions.txt`, 16 Sätze
+   (4 Formulierungen × 3/10/30/60 Personen), ohne Empfehlung.
+
+   Der aktuelle Wert in `config2.example.toml` ("Wie leben und bauen wir in zehn Jahren?")
+   ist der Vorschlag, mit dem die Kandidaten anfangen — nicht das Ergebnis der Wahl.
 
    ```bash
+   # gefahren am 2026-08-26; Wiederholung nur nötig, wenn die Kandidaten sich ändern:
+   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
    uv run python -m sim.dream_calibrate questions   | tee out/calibrate-questions.txt
    ```
 
-   Braucht `ANTHROPIC_API_KEY`, ca. 16 Stufe-1-Aufrufe. Der aktuelle Wert in
-   `config2.example.toml` (`"Wie leben und bauen wir in zehn Jahren?"`) ist der
-   Vorschlag, mit dem die Kandidaten anfangen — nicht das Ergebnis der Wahl.
+   **Eine Beobachtung aus dem Lauf, ohne Wertung:** Kandidat *„Was soll in zehn
+   Jahren anders sein an dem Ort, an dem Sie leben?"* hat als einziger die
+   Längenvorgabe gerissen — zweimal 50 Wörter bei einem Ziel von 20–40 (bei
+   30 und 60 Personen). Die anderen drei Formulierungen blieben durchgehend im
+   Rahmen. Das ist keine Empfehlung, aber es ist ein messbarer Unterschied und
+   gehört neben die Sätze.
 
-2. **Bestätigung der Widerspruchsschwelle** (`contradiction_min_persons`).
-   Jede Kandidatengröße wird mit und ohne die Widerspruchs-Klausel
-   nebeneinandergestellt, damit sichtbar wird, ob der Widerspruch im Material
-   wirklich vorhanden war oder vom Modell erfunden wurde:
-
-   ```bash
-   uv run python -m sim.dream_calibrate contradiction   | tee out/calibrate-contradiction.txt
-   ```
-
-   Braucht `ANTHROPIC_API_KEY`, ca. 8 Stufe-1-Aufrufe.
-
-3. **Bildregister** (`visual_register`). Vier Register — Aquarell, malerisch-
-   atmosphärisch, Radierung, Siebdruck — werden auf demselben erfundenen Satz
-   gerendert, alphabetisch aufgelistet, keine Reihenfolge, keine Empfehlung im
-   Output:
+2. **Bestätigung der Widerspruchsschwelle** (`contradiction_min_persons`) —
+   **Lauf erledigt**, Entscheidung offen. Ergebnis:
+   `out/calibrate-contradiction.txt`, vier Größen je mit und ohne Klausel.
 
    ```bash
-   uv run python -m sim.dream_register --out out/register1
+   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
+   uv run python -m sim.dream_calibrate contradiction | tee out/calibrate-contradiction.txt
    ```
 
-   Braucht `OPENROUTER_API_KEY`, 4 Bildaufrufe. Birk wählt an den Bildern,
-   nicht am Text. Der gewählte Registertext kommt danach als
-   `visual_register` in `config2.toml`.
+   **Befund:** Bei allen vier Größen (3, 10, 30, 60) unterscheidet sich der
+   Satz mit Klausel vom Satz ohne — die Klausel ist also nirgends wirkungslos.
+   Ob der Gegensatz bei kleinen Größen im Material **war** oder erfunden
+   wurde, entscheidet nur das Lesen; das ist genau die Frage, die der
+   Startwert 6 offengelassen hat.
 
-4. **Modus des Verlaufsstreifens.** Drei Modi wurden bei 20 und 40 Träumen in
-   `out/dream-strip-comparison/` gerendert und mit inhaltstragenden
-   Platzhalterbildern gemessen (nicht mit einfarbigen Flächen, an denen ein
-   Zuschnitt unsichtbar bliebe):
+3. **Bildregister** (`visual_register`) — **gerendert**, Wahl offen.
+   Vier Bilder in `out/register1/`, plus eine 2×2-Kontaktkarte
+   `out/register1/UEBERSICHT-4-register.png`. Alle PNG 1376 × 768 (16:9).
+
+   ```bash
+   uv run python -m sim.dream_register --out out/register1     # gefahren, 4 Aufrufe ≈ 0,56 USD
+   ```
+
+   **Ein maschineller Vorbehalt, keine ästhetische Wertung:** Der Prompt
+   verlangt für jedes Register „keine Schrift im Bild". Eine OCR-Prüfung über
+   die vier Muster findet bei **Siebdruck** schriftähnliche Zeichen (`三上`,
+   Konfidenz 0,67); Aquarell, malerisch-atmosphärisch und Radierung sind
+   sauber. Wer Siebdruck wählt, wählt ein Register, dessen Muster die eigene
+   Regel einmal gebrochen hat — das kann Zufall eines Laufs sein, sollte aber
+   vor der 40-Bilder-Serie bewusst sein.
+
+4. **Modus des Verlaufsstreifens** — **gerendert**, Wahl offen. Sechs Dateien
+   in `out/dream-strip-comparison/` (Dateinamen tragen den Modus), dazu zwei
+   gestapelte Vergleichskarten `UEBERSICHT-20-traeume.png` und
+   `UEBERSICHT-40-traeume.png` — drei Modi übereinander, gleiche Breite.
 
    | Modus | 20 Träume | 40 Träume | Beobachtung |
    |---|---|---|---|
@@ -517,29 +552,25 @@ Ausstellungsbetrieb gehen.
    | `aspect` | 80×45 px | 31×18 px | Kein Zuschnitt, aber beide Maße schrumpfen bis zur Unleserlichkeit; das reservierte Streifenband bleibt bei 40 größtenteils leer. |
    | `wrap` | 372×210 px | 372×210 px (pro Bild) | Kein Zuschnitt einzelner Bilder, aber die Zeilenhöhe ist fest mit `overflow: hidden` — nur ein Teil der Träume ist sichtbar, der Rest wird stillschweigend abgeschnitten. |
 
-   Keiner der drei Modi ist hier empfohlen. Birk wählt anhand der gerenderten
-   Dateien in `out/dream-strip-comparison/` (Dateinamen tragen den Modus).
-   Gewählt wird per `--strip-mode` beim Pre-Rendering und per
-   `data-strip-mode` auf der Seite.
+   Keiner der drei Modi ist hier empfohlen. Gewählt wird per `--strip-mode`
+   beim Pre-Rendering und per `data-strip-mode` auf der Seite.
 
-5. **Die 40-Bilder-Vorab-Serie**, für die Beurteilung des vollen Tages statt
-   eines leeren Streifens — braucht Register **und** Streifenmodus aus 3. und
-   4., damit die 40 echten Bilder nicht an einer noch unfertigen Anzeige
-   verschwendet werden:
+5. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
+   Register **und** Streifenmodus aus 3. und 4., damit die 40 echten Bilder
+   nicht an einer noch unfertigen Anzeige verschwendet werden.
 
    ```bash
    uv run python -m sim.dream_prerender --out out/dream-prerender2 --generate
    ```
 
-   Braucht `OPENROUTER_API_KEY`, 40 Bildaufrufe — ein sichtbarer, bewusster
-   Kostenposten, kein Nebeneffekt.
+   Braucht `OPENROUTER_API_KEY`, 40 Bildaufrufe — **≈ 5,55 USD** (gemessen,
+   siehe Kostenkorrektur oben), ein sichtbarer, bewusster Kostenposten.
 
-6. **Vertrag des Bild-Endpunkts.** Siehe Schritt 5 unter „Vor dem Festival"
-   oben: `docs/dream-image-contract.md` ist als „NOCH NICHT VERIFIZIERT"
-   markiert, weil beim Bau kein `OPENROUTER_API_KEY` zur Verfügung stand. Das
-   eingebettete Sondierungsskript muss einmal mit echtem Schlüssel laufen,
-   bevor der erste echte Traum am Ausstellungstag entsteht; Ergebnis wird in
-   diesem Dokument nachgetragen.
+6. **Vertrag des Bild-Endpunkts** — **erledigt am 2026-08-26.**
+   `docs/dream-image-contract.md` ist verifiziert: Request-Form bestätigt,
+   zwei Abweichungen dokumentiert (`images` hat zwei pixelidentische Einträge;
+   `message.content` ist `None`). `kg2/imagegen.py` wurde entsprechend
+   nachgezogen, der Erfolgspfad war nicht betroffen.
 
 **Vorab-Renderings, sobald 3.–5. entschieden sind:** `out/dream-prerender2/`
 zeigt die Seite bei 1, 5, 20 und 40 Träumen. Der Streifen wird voll beurteilt,

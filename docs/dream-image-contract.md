@@ -1,37 +1,30 @@
-# Bild-Endpunkt — Vertrag (NOCH NICHT VERIFIZIERT)
+# Bild-Endpunkt — Vertrag (VERIFIZIERT 2026-08-26)
 
-> ⚠️ **WARNUNG — vor der Ausstellung zu erledigen.**
-> Die Request- und Response-Formen in diesem Dokument sind **ANGENOMMEN**,
-> nicht am echten Endpunkt geprüft. Sie stammen aus der Modell-Dokumentation
-> bzw. aus der Task-8-Planungsvorlage, nicht aus einem tatsächlichen Aufruf
-> von `POST https://openrouter.ai/api/v1/chat/completions`. Grund: zum
-> Zeitpunkt der Implementierung stand kein `OPENROUTER_API_KEY` zur Verfügung.
+> ✅ **Sondierung durchgeführt am 2026-08-26** (Birks vServer, Schlüssel aus
+> `~/.hermes/.env` per `set -a; . ~/.hermes/.env; set +a`). Drei echte Aufrufe
+> gegen `POST https://openrouter.ai/api/v1/chat/completions`. Die
+> Request-Form der Annahme hat sich bestätigt, die Response-Form **nicht
+> vollständig** — siehe „Abweichungen" unten.
 >
-> Das Sondierungsskript, das die echte Form liefert, steht unten in
-> **„Aktion für einen Menschen mit Schlüssel"**. Es muss **vor der
-> Ausstellung** einmal mit einem echten Schlüssel ausgeführt werden.
->
-> Weichen Code und Realität voneinander ab, gilt dieselbe Regel wie bei
-> `docs/stt-contract.md`: **dieses Dokument ist die Autorität.** Zeigt die
-> Sondierung eine andere Form, wird zuerst dieses Dokument korrigiert
-> (Geprüft-am-Datum, Response-Abschnitt, Abweichungen-Zeile) und danach
-> `kg2/imagegen.py` angepasst — nicht umgekehrt.
+> Es gilt weiterhin dieselbe Regel wie bei `docs/stt-contract.md`: **dieses
+> Dokument ist die Autorität.** Der Code folgt ihm, nicht umgekehrt.
 
 Wie `docs/stt-contract.md` für Tool 1: **erst am echten Endpunkt prüfen, dann
-dagegen programmieren.** Ein Bildclient gegen eine vermutete Request-Form ist
-genau die Sorte Fehler, die man vor Ort entdeckt. Für dieses Dokument wurde
-dieser Schritt aus den oben genannten Gründen noch nicht durchgeführt — der
-Code ist fertig und getestet, aber der Vertrag selbst ist offen.
+dagegen programmieren.** Dieser Schritt ist jetzt erfolgt.
 
 | | |
 |---|---|
-| Geprüft am | — NOCH NICHT GEPRÜFT |
-| Endpunkt | `POST https://openrouter.ai/api/v1/chat/completions` *(angenommen)* |
-| Modell | `google/gemini-3-pro-image` *(angenommen)* |
-| Auth | `Authorization: Bearer $OPENROUTER_API_KEY` *(angenommen)* |
-| Abweichungen von Spec §5.2 | *(kann erst nach der Sondierung ausgefüllt werden)* |
+| Geprüft am | **2026-08-26**, drei Aufrufe, alle HTTP 200 |
+| Endpunkt | `POST https://openrouter.ai/api/v1/chat/completions` — bestätigt |
+| Modell | `google/gemini-3-pro-image` — bestätigt |
+| Auth | `Authorization: Bearer $OPENR...KEY` — bestätigt |
+| Abweichungen von Spec §5.2 | **Zwei, beide unkritisch für `kg2/imagegen.py`** — (1) `images` enthält **zwei** Einträge, nicht einen; (2) `message.content` ist `None`, nicht Text. Details unten. |
+| Kosten | **≈ 0,139 USD pro Bild** (gemessen: 0,138882 / 0,138146). Das ist **nicht** „ein paar Cent" — siehe „Kosten" unten. |
 
-## Request *(angenommene Form)*
+## Request — bestätigte Form
+
+Die angenommene Request-Form war korrekt und wurde unverändert übernommen.
+`modalities` ist tatsächlich erforderlich.
 
 ```json
 {
@@ -42,36 +35,87 @@ Code ist fertig und getestet, aber der Vertrag selbst ist offen.
 ```
 
 `modalities` ist laut Modell-Dokumentation nicht optional: ohne den Eintrag
-antwortet das Modell mit Text über das Bild statt mit dem Bild. Auch dies ist
-Annahme, nicht Beobachtung — siehe Warnung oben.
+antwortet das Modell mit Text über das Bild statt mit dem Bild. **Nicht
+gegengeprüft** — die Sondierung hat nur den Erfolgsfall MIT `modalities`
+gefahren; ein Aufruf ohne den Eintrag wurde nicht gemacht (er hätte einen
+weiteren Bildaufruf gekostet, ohne eine offene Entscheidung zu beantworten).
+Der Eintrag bleibt drin.
 
-## Response — ANGENOMMENE Form (nicht beobachtet)
+## Response — BEOBACHTETE Form (2026-08-26)
 
-Die folgende Struktur ist **nicht** mit dem Sondierungsskript geprüft worden.
-Sie ist die Form, die Task 8 als Ausgangspunkt vorgibt und gegen die
-`kg2/imagegen.py` geschrieben wurde:
+Tatsächlich beobachtet, dreimal reproduziert:
 
 ```
 choices: [1 items]
   message:
     role: 'assistant'
-    content: ...
-    images: [1 items]
+    content: None                      # <-- NICHT Text, sondern None
+    refusal: None
+    reasoning: <str len≈1400>          # Denkspur des Modells, im Vertrag nicht vorgesehen
+    reasoning_details: [1 items]
+      signature: <str len≈2,5 Mio>     # sehr groß, wird nicht gelesen
+    images: [2 items]                  # <-- ZWEI, nicht eines
       type: 'image_url'
       image_url:
-        url: <str len=…> starts: 'data:image/png;base64,iVBORw0KGgo…'
+        url: <str len≈2,2 Mio> starts: 'data:image/png;base64,iVBORw0KGgo…'
+usage:
+  cost: 0.138882                       # USD, pro Aufruf
 ```
 
-Angenommen wird: Das Bild kommt als **Data-URL im Body**, nicht als Link, den
-man nachladen müsste. Der Client dekodiert Base64 und schreibt PNG-Bytes
-(`kg2.imagegen.decode_image`, `kg2.imagegen.save_image`). **Diese Annahme ist
-nicht bestätigt.**
+Bestätigt: Das Bild kommt als **Data-URL im Body**, nicht als nachzuladender
+Link. Der Client dekodiert Base64 und schreibt PNG-Bytes. PNG, RGB,
+**1376 × 768 px** (Seitenverhältnis 16:9 wird also geliefert).
 
-## Aktion für einen Menschen mit Schlüssel — vor der Ausstellung ausführen
+### Abweichung 1: `images` enthält ZWEI Einträge
 
-Dieses Skript ist unverändert aus der Task-8-Vorgabe übernommen. Es braucht
-`OPENROUTER_API_KEY` in der Umgebung und kostet einen Aufruf (ein paar Cent).
-Es druckt nur die **Form** der Antwort, nicht die Bilddaten selbst.
+Die Annahme war „1 items". Real sind es zwei. Untersucht statt vermutet:
+
+- Beide Data-URLs sind **exakt gleich lang** (2 352 598 Zeichen), beide
+  dekodieren zu 1 764 430 Bytes, beide sind PNG 1376 × 768 RGB.
+- **Pixelweise identisch**: maximale Abweichung über alle Kanäle = `0.0`,
+  0,000 % der Pixel unterscheiden sich (Vergleich per Pillow/NumPy).
+- Unterschiedlich sind nur **1196 Bytes Metadaten** ab Offset 1042: ein GUID
+  im eingebetteten IPTC-/XMP-Block (`Made with Google AI`,
+  `trainedAlgorithmicMedia`). Zwei Ausfertigungen desselben Bildes mit
+  verschiedener Kennung.
+
+**Folge für den Code: keine.** `images[0]` zu nehmen ist korrekt — es gibt
+kein zweites, besseres Bild, das dabei verloren ginge. `kg2/imagegen.py`
+bleibt an dieser Stelle unverändert.
+
+### Abweichung 2: `message.content` ist `None`
+
+`decode_image` liest `content` nur im **Fehlerfall**, um die Textantwort des
+Modells in die Fehlermeldung zu setzen (`str(message.get("content", ""))`).
+Bei `content: None` liefert `.get` nicht den Default, sondern `None`, und die
+Meldung enthält dann `'None'` statt der Prosa. Das ist kosmetisch und betrifft
+ausschließlich die Fehlermeldung — der Erfolgspfad ist nicht berührt.
+
+### Kosten — die eigentliche Überraschung
+
+Gemessen **0,138882 USD** bzw. **0,138146 USD** pro Bild. Sowohl dieses
+Dokument als auch `docs/operations.md` beschrieben den Sondierungslauf als
+„kostet einen Aufruf (ein paar Cent)". Das ist um gut das Fünffache daneben.
+Hochgerechnet auf die geplanten Läufe:
+
+| Lauf | Bilder | Kosten |
+|---|---|---|
+| Sondierung (dieses Dokument) | 1 | ≈ 0,14 USD |
+| `sim.dream_register` (Registermuster) | 4 | ≈ 0,56 USD |
+| `sim.dream_prerender --generate` (40-Bilder-Serie) | 40 | **≈ 5,55 USD** |
+| Ausstellungstag, ~40 Träume | ~40 | **≈ 5,55 USD** |
+
+Das ist immer noch klein, aber es ist eine **andere Größenordnung als
+angekündigt** und gehört vor die Entscheidung über die 40-Bilder-Serie, nicht
+danach. Der Betrag ist gemessen, nicht geschätzt: `usage.cost` aus der
+Antwort.
+
+## Sondierungsskript (erledigt am 2026-08-26 — nicht erneut nötig)
+
+Dieses Skript hat die oben dokumentierte Form geliefert. Es steht hier als
+Beleg und für den Fall, dass sich das Modell ändert. **Ein erneuter Lauf ist
+nicht nötig** und kostet ≈ 0,14 USD. Es druckt nur die **Form** der Antwort,
+nicht die Bilddaten selbst.
 
 ```bash
 uv run python - <<'PY'
@@ -112,11 +156,10 @@ shape(payload)
 PY
 ```
 
-**Nach dem Lauf:** die tatsächliche Ausgabe hier oben eintragen (Geprüft-am-
-Datum setzen, Response-Abschnitt mit der echten Struktur ersetzen,
-Abweichungen-Zeile ausfüllen oder „keine" eintragen). Weicht die Form ab, ist
-`kg2/imagegen.py` — insbesondere `decode_image` — entsprechend anzupassen,
-nicht dieses Dokument der Bequemlichkeit halber der Annahme anzugleichen.
+**Nach dem Lauf:** die tatsächliche Ausgabe oben eintragen (erledigt
+2026-08-26). Weicht die Form künftig ab, ist `kg2/imagegen.py` — insbesondere
+`decode_image` — entsprechend anzupassen, nicht dieses Dokument der
+Bequemlichkeit halber der Annahme anzugleichen.
 
 ## Was schiefgehen kann
 

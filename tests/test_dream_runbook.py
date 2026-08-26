@@ -131,10 +131,28 @@ def test_the_history_strip_modes_are_reported_without_a_recommendation():
         assert word not in strip_block, "the strip-mode comparison must not recommend one"
 
 
-def test_the_image_contract_probe_is_named_as_an_open_action():
+def test_the_image_contract_verification_status_is_always_stated():
+    """The runbook must reference docs/dream-image-contract.md AND state its
+    verification status plainly next to that reference — either as an open
+    action still to run, or as done with the date it was verified. What must
+    never happen is the reference surviving while the status silently drops
+    out; that would let the runbook go stale without failing this test. This
+    must keep passing whichever state is current, including after the next
+    re-verification of the contract."""
     section = tool2_section()
     assert "docs/dream-image-contract.md" in section
-    assert "NOCH NICHT VERIFIZIERT" in section
+
+    for match in re.finditer(r"docs/dream-image-contract\.md", section):
+        nearby = section[max(0, match.start() - 400) : match.start() + 400]
+        open_marker = "NOCH NICHT VERIFIZIERT" in nearby
+        done_marker = re.search(r"erledigt am \d{4}-\d{2}-\d{2}", nearby)
+        if open_marker or done_marker:
+            break
+    else:
+        pytest.fail(
+            "no mention of docs/dream-image-contract.md is paired with a "
+            "verification status (open marker or 'erledigt am <date>')"
+        )
 
 
 def test_the_guiding_question_default_in_the_runbook_matches_the_config():

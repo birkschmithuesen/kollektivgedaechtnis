@@ -106,6 +106,33 @@ def test_decode_image_rejects_an_empty_image_list():
         decode_image(payload)
 
 
+def test_decode_image_takes_the_first_of_several_images():
+    """The live endpoint returns TWO entries, pixel-identical, differing only
+    in embedded metadata (contract document, verified 2026-08-26). Taking the
+    first is the documented behaviour, not an accident of indexing."""
+    first, second = png_bytes(), png_bytes() + b"\x00"
+    payload = response_with(first)
+    payload["choices"][0]["message"]["images"].append(
+        {"type": "image_url",
+         "image_url": {"url": "data:image/png;base64,"
+                              + base64.b64encode(second).decode("ascii")}}
+    )
+
+    assert decode_image(payload) == first
+
+
+def test_decode_image_error_does_not_say_none_when_content_is_null():
+    """The live endpoint sends `content: None` on the SUCCESS path, so a dict
+    default never fires (it only fires on a missing key). Without the `or ""`
+    the operator's error message reads "it said: 'None'" instead of naming the
+    real problem."""
+    payload = {"choices": [{"message": {"role": "assistant", "content": None}}]}
+
+    with pytest.raises(ImageError) as excinfo:
+        decode_image(payload)
+    assert "None" not in str(excinfo.value)
+
+
 def test_decode_image_rejects_a_url_that_is_not_inline_data():
     payload = {
         "choices": [{"message": {"images": [{"image_url": {"url": "https://example/x.png"}}]}}]

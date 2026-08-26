@@ -1,13 +1,16 @@
 """Stage 2: the sentence becomes an image (spec §5.2).
 
-Built against `docs/dream-image-contract.md`. That document is currently
-marked NOT YET VERIFIED: the request/response shapes below are assumed from
-the model's documentation, exactly as the brief for this task assumed them,
-and have not yet been confirmed by an actual call to the OpenRouter endpoint
-(no `OPENROUTER_API_KEY` was available while this module was written). The
-probe command that must be run before the exhibition lives in that document.
-If the real response differs, the document is what gets corrected first, and
-this module follows.
+Built against `docs/dream-image-contract.md`, which was **verified against the
+live endpoint on 2026-08-26** (three real calls, all HTTP 200). The request
+shape held; two response details differed from the assumption and are recorded
+there:
+
+* `images` carries **two** entries, not one. They were compared and are
+  pixel-identical (max channel difference 0.0) — they differ only in ~1.2 kB of
+  embedded IPTC/XMP metadata (a per-copy GUID). Taking `images[0]` is therefore
+  correct and loses nothing.
+* `message.content` is `None`, not prose. That only touches the error path
+  below, which is why `decode_image` no longer relies on a dict default.
 
 Two rules that look like details and are not:
 
@@ -68,6 +71,10 @@ def decode_image(payload: dict) -> bytes:
 
     Every failure below is a real one seen from image endpoints: an answer in
     prose about the picture, an empty list, or a link instead of inline data.
+
+    `images` legitimately carries more than one entry (observed: two,
+    pixel-identical, differing only in embedded metadata — contract document,
+    „Abweichung 1"). The first is taken deliberately, not by oversight.
     """
     try:
         message = payload["choices"][0]["message"]
@@ -77,7 +84,10 @@ def decode_image(payload: dict) -> bytes:
     images = message.get("images") or []
     if not images:
         # The commonest real failure: the model answers ABOUT the image.
-        preview = str(message.get("content", ""))[:120]
+        # `or ""` rather than a `.get` default: on the success path the live
+        # endpoint sends `content: None`, and a default only fires on a MISSING
+        # key, so a plain default would put the string 'None' in the message.
+        preview = str(message.get("content") or "")[:120]
         raise ImageError(f"the model returned no image; it said: {preview!r}")
 
     url = images[0].get("image_url", {}).get("url", "")
