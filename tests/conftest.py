@@ -55,3 +55,18 @@ def page(browser):
     page = browser.new_page(viewport={"width": 1920, "height": 1080})
     yield page
     page.close()
+
+
+@pytest.fixture(scope="session")
+def real_graph():
+    """The real `graph.json` of replay run 19c (spec §11).
+
+    Session-scoped and returned as a fresh deep copy per use is deliberately
+    NOT done: every consumer treats the graph as read-only input, and a copy
+    per test of a 92 KB document 20 times over is waste. A test that needs to
+    mutate it must `copy.deepcopy` it itself and say why.
+    """
+    import json
+
+    path = REPO_ROOT / "sim" / "data" / "graph-19c.json"
+    return json.loads(path.read_text(encoding="utf-8"))
