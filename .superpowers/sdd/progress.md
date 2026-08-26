@@ -1239,3 +1239,46 @@ Task 17: complete (commits 074b39e, c830686 + this one, review found 1 Critical)
   >>> then run the real series once a register is set:
   >>>   uv run python -m sim.dream_prerender --out out/dream-prerender2 --generate
   >>> That is 40 real image-model calls.
+
+Task 18: complete (commit 79db838). docs/operations.md (Tool 2 section),
+  config2.example.toml, tests/test_dream_runbook.py: 24 passing. Tool 2 suite:
+  327 passing.
+  ADAPTED FROM THE PLAN, not filled in as written: the plan's Step 4 assumed
+  Tasks 15-17 had produced final values for ALL FOUR calibrated fields. They
+  could not — no ANTHROPIC_API_KEY or OPENROUTER_API_KEY in this environment —
+  so writing confident numbers for guiding_question and visual_register would
+  have been the worst thing the runbook could do: an operator trusts it on the
+  festival morning.
+  What IS recorded as genuinely calibrated: `min_interval_s` = 240 (the floor
+  run is arithmetic, needs no model — Task 16's table reproduced in full, with
+  the finding stated plainly: at the day's real cadence, 120/240/360/480 all
+  give 60 dreams/0 collapsed, so 240 is insurance against a burst, not a
+  routine limiter, and nobody should "tune" it upward later believing
+  otherwise) and `poll_interval_s` = 5.
+  What is recorded as an OPEN DECISION, each with the exact resolving command,
+  under a new "### Offene Entscheidungen" heading: the guiding question's
+  wording (`sim.dream_calibrate questions`), the contradiction threshold's
+  confirmation (`sim.dream_calibrate contradiction` — 6 is the spec's start
+  value, not yet validated against generated sentences), the visual register
+  (`sim.dream_register --out out/register1`), the 40-image pre-render series
+  (`sim.dream_prerender --out out/dream-prerender2 --generate`), and the image
+  endpoint contract probe (docs/dream-image-contract.md, marked NOCH NICHT
+  VERIFIZIERT). The Task 17 strip-mode measurements (cover/aspect/wrap at 20
+  and 40 dreams) are summarised factually with no mode recommended, per the
+  standing rule.
+  config2.example.toml also fixed: the `image_model` comment falsely claimed
+  the contract was "verified" — corrected to NOCH NICHT VERIFIZIERT, and
+  guiding_question/visual_register/contradiction_min_persons now carry
+  comments marking them as provisional starting values, not Birk's choices,
+  with the resolving command inline.
+  tests/test_dream_runbook.py rewritten from the plan's version: kept the
+  no-placeholder guard (now also catching `‹`/`›`), the operator-UI existence
+  checks, the command-existence checks and the restart/cross-machine checks;
+  replaced the plan's "every calibrated value" test (which would have forced
+  a fabricated guiding_question/visual_register) with one that only asserts
+  the two REAL calibrated values, plus new tests asserting every open
+  decision is listed together with its resolving command and that the
+  strip-mode comparison names no favourite.
+  frontend/static/operator.js, tests/test_operator_ui.py and
+  sim/export_interviews_md.py were mid-edit by Birk in the same tree
+  throughout this task — left untouched and unstaged.
