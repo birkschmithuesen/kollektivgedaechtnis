@@ -51,14 +51,27 @@ def absorbed_persons(graph: dict | None) -> set[str]:
     # `.get("id")` rather than `node["id"]`: a person-typed dict with no `id`
     # is exactly the malformed shape this function promises to survive, and a
     # KeyError here would crash the watcher on a payload the client waved
-    # through. `None` is then dropped, so it can never intersect an edge.
+    # through. The `isinstance(..., str)` check does double duty: a Tool 1
+    # node id is always a string, so anything else is not a real id AND is
+    # dropped before it ever reaches a set — an unhashable id (a list, say)
+    # would otherwise blow up the set/comprehension below, and a hashable but
+    # non-string one (an int) would make `sorted()` in kg2.cycle crash by
+    # mixing types.
     persons = {
         node.get("id")
         for node in nodes
-        if isinstance(node, dict) and node.get("type") == "person" and not node.get("hidden")
-    } - {None}
+        if isinstance(node, dict)
+        and node.get("type") == "person"
+        and not node.get("hidden")
+        and isinstance(node.get("id"), str)
+    }
+    # Same reasoning for the edge's `source`: `edge.get("source")` rather than
+    # `edge["source"]` avoids a KeyError on a missing key, and the isinstance
+    # check keeps a non-string (unhashable or not) out of the set on the same
+    # grounds as `persons` above.
     with_edges = {
-        edge["source"] for edge in edges if isinstance(edge, dict) and "source" in edge
+        edge.get("source") for edge in edges if isinstance(edge, dict)
+        and isinstance(edge.get("source"), str)
     }
     return persons & with_edges
 

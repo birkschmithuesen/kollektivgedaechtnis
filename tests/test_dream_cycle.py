@@ -199,17 +199,122 @@ def test_a_failure_with_no_previous_dream_leaves_the_screen_empty_not_broken(tmp
     store.close()
 
 
-def test_run_dream_never_raises_whatever_goes_wrong(tmp_path):
+def test_run_dream_never_raises_for_an_ordinary_failure(tmp_path):
     """The watcher must not be one exception away from a dead poll loop."""
     cfg, store = setup(tmp_path)
 
     for breaker in (
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
         lambda *a, **k: (_ for _ in ()).throw(ValueError("empty sentence")),
-        lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()),
     ):
         assert run_dream(store, cfg, object(), graph(), 1.0,
                          condense_fn=breaker, render_fn=good_render()) is None
+    store.close()
+
+
+def test_a_keyboard_interrupt_propagates_after_closing_the_row(tmp_path):
+    """Absorbing the operator's shutdown signal as an ordinary failed dream
+    would leave the process running with no way to stop it. The row must
+    still be closed honestly, but the interrupt itself has to escape."""
+    cfg, store = setup(tmp_path)
+
+    def interrupt(llm, material, question, contradiction):
+        raise KeyboardInterrupt()
+
+    try:
+        run_dream(store, cfg, object(), graph(), 1.0,
+                  condense_fn=interrupt, render_fn=good_render())
+        raised = False
+    except KeyboardInterrupt:
+        raised = True
+
+    assert raised is True
+    assert store.get_dream("d1").status == "failed"
+    store.close()
+
+
+# -- adversarial graphs (spec §4.1 boundary, Finding 1) ---------------------
+
+
+def test_a_person_with_a_list_id_does_not_crash_the_cycle(tmp_path):
+    """`kg2.graph_client.fetch_graph` never checks value types. An unhashable
+    id used to blow up `absorbed_persons`'s set comprehension before the row
+    could even be created, leaving no record at all — the worse failure mode
+    Finding 1 called out. Hardened, the bad id is just dropped: the cycle
+    degrades to an (almost) empty dream rather than crashing OR skipping."""
+    cfg, store = setup(tmp_path)
+    bad = {
+        "version": 1, "generated_at": 1.0, "min_mentions": 1,
+        "nodes": [
+            {"id": ["weird"], "type": "person", "hidden": False},
+            {"id": "t1", "type": "term", "label": "x", "mentions": 1, "hidden": False},
+        ],
+        "edges": [{"id": "e1", "source": ["weird"], "target": "t1"}],
+        "quotes": [],
+    }
+
+    result = run_dream(store, cfg, object(), bad, 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is not None
+    assert result.status == "done"
+    assert result.person_count == 0
+    assert result.absorbed_persons == []
+    store.close()
+
+
+def test_mixed_type_person_ids_do_not_crash_the_sort(tmp_path):
+    """Two person ids of different types, both with edges: `sorted({2, 'p1'})`
+    raised before ids were filtered to strings. The hardened trigger simply
+    drops the non-string id rather than treating the whole graph as broken."""
+    cfg, store = setup(tmp_path)
+    bad = {
+        "version": 1, "generated_at": 1.0, "min_mentions": 1,
+        "nodes": [
+            {"id": "p1", "type": "person", "hidden": False},
+            {"id": 2, "type": "person", "hidden": False},
+            {"id": "t1", "type": "term", "label": "x", "mentions": 2, "hidden": False},
+        ],
+        "edges": [
+            {"id": "e1", "source": "p1", "target": "t1"},
+            {"id": "e2", "source": 2, "target": "t1"},
+        ],
+        "quotes": [],
+    }
+
+    result = run_dream(store, cfg, object(), bad, 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is not None
+    assert result.status == "done"
+    assert result.absorbed_persons == ["p1"]
+    store.close()
+
+
+def test_non_comparable_term_labels_do_not_crash_the_sort(tmp_path):
+    """Two terms tied on mention count, one with a string label and one with
+    a non-string label: `weights.sort(key=lambda w: (-w.mentions, w.label))`
+    raised before labels were filtered to strings."""
+    cfg, store = setup(tmp_path)
+    bad = {
+        "version": 1, "generated_at": 1.0, "min_mentions": 1,
+        "nodes": [
+            {"id": "p1", "type": "person", "hidden": False},
+            {"id": "t1", "type": "term", "label": "x", "mentions": 1, "hidden": False},
+            {"id": "t2", "type": "term", "label": 42, "mentions": 1, "hidden": False},
+        ],
+        "edges": [
+            {"id": "e1", "source": "p1", "target": "t1"},
+            {"id": "e2", "source": "p1", "target": "t2"},
+        ],
+        "quotes": [],
+    }
+
+    result = run_dream(store, cfg, object(), bad, 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is not None
+    assert result.status == "done"
     store.close()
 
 

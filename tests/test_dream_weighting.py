@@ -295,6 +295,64 @@ def test_a_none_graph_degrades_to_empty_material():
     assert build_material(None) == Material(0, 0, 0, None, [], [], [])
 
 
+def test_an_unhashable_person_id_does_not_crash_the_set_comprehension():
+    """`node.get("id")` used to go straight into a set comprehension. A list
+    id is unhashable and raised `TypeError` before ids were filtered to
+    strings — the same landmine as `kg2.trigger.absorbed_persons`."""
+    bad = graph(
+        [person(["weird"]), term("t1", "x", 1)],
+        [(["weird"], "t1")],
+    )
+
+    material = build_material(bad)
+
+    assert material == Material(0, 0, 0, 1000.0, [], [], [])
+
+
+def test_non_comparable_term_labels_tied_on_mentions_do_not_crash_the_sort():
+    """Two terms tied on mention count, one with a string label and one with
+    a non-string label: `weights.sort(key=lambda w: (-w.mentions, w.label))`
+    raised comparing str to int before labels were filtered to strings."""
+    bad = graph(
+        [person("p1"), term("t1", "x", 1), term("t2", 42, 1)],
+        [("p1", "t1"), ("p1", "t2")],
+    )
+
+    material = build_material(bad)
+
+    # t2's non-string label is dropped, so only t1 survives as marginal.
+    assert [w.label for w in material.marginal] == ["x"]
+
+
+def test_an_unhashable_edge_source_does_not_crash_the_membership_check():
+    """`source in persons` hashes `source`. A list source is unhashable and
+    would raise even though `persons` itself only ever contains strings."""
+    bad = graph(
+        [person("p1"), term("t1", "x", 1)],
+        [],
+    )
+    bad["edges"] = [{"id": "e1", "source": ["weird"], "target": "t1"}]
+
+    material = build_material(bad)
+
+    assert material.edge_count == 0
+    assert material.marginal == []
+
+
+def test_an_unhashable_quote_person_id_does_not_crash_the_membership_check():
+    """`quote.get("person_id") in persons` has the same hashability landmine
+    as the edge loop above."""
+    bad = graph(
+        [person("p1"), term("t1", "x", 1)],
+        [("p1", "t1")],
+    )
+    bad["quotes"] = [{"id": "q1", "person_id": ["weird"], "text": "hi"}]
+
+    material = build_material(bad)
+
+    assert material.quotes == []
+
+
 # -- against the real thing -------------------------------------------------
 
 

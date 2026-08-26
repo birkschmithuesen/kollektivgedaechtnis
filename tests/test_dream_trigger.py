@@ -135,6 +135,42 @@ def test_a_well_shaped_list_of_ill_shaped_nodes_yields_no_absorbed_persons():
     assert absorbed_persons(graph) == set()
 
 
+def test_an_unhashable_person_id_does_not_crash_the_set_comprehension():
+    """`node.get("id")` used to go straight into a set comprehension. A list id
+    (never produced by Tool 1, but never ruled out by `fetch_graph` either) is
+    unhashable and raised `TypeError` before ids were filtered to strings."""
+    bad = {
+        "version": 1,
+        "nodes": [{"id": ["weird"], "type": "person", "hidden": False}],
+        "edges": [{"id": "e1", "source": ["weird"]}],
+    }
+
+    assert absorbed_persons(bad) == set()
+
+
+def test_mixed_type_person_ids_do_not_crash_a_later_sort():
+    """Not a bug in this function directly, but the property it must uphold
+    for its caller: two ids of different types must never both survive into
+    the returned set, or `sorted()` downstream in kg2.cycle raises trying to
+    compare a str to an int."""
+    mixed = {
+        "version": 1,
+        "nodes": [
+            {"id": "p1", "type": "person", "hidden": False},
+            {"id": 2, "type": "person", "hidden": False},
+        ],
+        "edges": [
+            {"id": "e1", "source": "p1"},
+            {"id": "e2", "source": 2},
+        ],
+    }
+
+    result = absorbed_persons(mixed)
+
+    assert result == {"p1"}
+    assert sorted(result) == ["p1"]  # would raise if the int id survived
+
+
 # -- the floor --------------------------------------------------------------
 
 

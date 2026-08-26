@@ -12,10 +12,22 @@ The order below is the design, not an implementation detail:
    leaves the prompt that failed. That is the one worth reading.
 4. Only then does the row become `done` and reach the screen.
 
-This function NEVER raises. The watcher must not be one exception away from a
+This function NEVER raises for an ordinary failure — a bad LLM call, a broken
+render, a malformed graph. The watcher must not be one exception away from a
 dead poll loop, and the display is protected for free: `visible_dreams()` only
 ever returns `done` rows, so a failure needs nothing undone — the current image
-simply stays up (§8).
+simply stays up (§8). The one deliberate exception to "never raises" is
+`KeyboardInterrupt`/`SystemExit`: those still close the row (honesty first)
+but are then re-raised, because absorbing the operator's own shutdown signal
+would be a worse failure than a poll loop that occasionally dies loudly on
+purpose.
+
+Building the material (`build_material`, `contradiction_enabled`,
+`absorbed_persons`) happens before any row exists. Those functions are
+hardened to degrade rather than raise on the malformed shapes
+`kg2.graph_client.fetch_graph` lets through, so a guard around that step is
+belt-and-braces, not the primary defence — see the comment at its `except` for
+why it deliberately writes no row when it fires.
 """
 
 from __future__ import annotations
@@ -43,8 +55,23 @@ def run_dream(
     on_sentence=None,
 ) -> Dream | None:
     """Run one full cycle. Returns the finished Dream, or None if it failed."""
-    material = build_material(graph)
-    contradiction = contradiction_enabled(material, cfg.contradiction_min_persons)
+    try:
+        material = build_material(graph)
+        contradiction = contradiction_enabled(material, cfg.contradiction_min_persons)
+        absorbed = sorted(absorbed_persons(graph))
+    except Exception as exc:
+        # Belt-and-braces, not the primary defence: build_material and
+        # absorbed_persons are themselves hardened to degrade on every
+        # malformed shape kg2.graph_client.fetch_graph lets through (wrong
+        # types, unhashable ids, non-comparable labels), so this should never
+        # fire. If it does anyway — a shape neither of them anticipated —
+        # there is nothing yet worth a row: create_dream has not run, and a
+        # graph too malformed for the hardened functions is not a dream worth
+        # recording. So, unlike the handler below, this path deliberately
+        # writes NO row at all. The watcher must still survive the poll, so
+        # log and skip the cycle rather than let the exception escape.
+        log.error("dream skipped: could not process graph: %s", exc)
+        return None
 
     dream = store.create_dream(
         created_at=now,
@@ -54,7 +81,7 @@ def run_dream(
         edge_count=material.edge_count,
         contradiction=contradiction,
         guiding_question=cfg.guiding_question,
-        absorbed_persons=sorted(absorbed_persons(graph)),
+        absorbed_persons=absorbed,
     )
 
     try:
@@ -82,13 +109,34 @@ def run_dream(
         filename = f"{dream.id}.png"
         save_image(data, cfg.image_dir / filename)
         store.finish_dream(dream.id, image_path=filename)
-    except BaseException as exc:
-        # BaseException, not Exception: a KeyboardInterrupt during the shutdown
-        # of an exhibition day must still close the row honestly rather than
-        # leave it stuck at `running` forever. The dream is abandoned either
-        # way — spec §8 — and the current image stays up.
+    except (KeyboardInterrupt, SystemExit):
+        # A KeyboardInterrupt during the shutdown of an exhibition day must
+        # still close the row honestly rather than leave it stuck at
+        # `running` forever — but unlike an ordinary Exception, it must NOT
+        # be absorbed: it is the operator's (or the OS's) signal to stop the
+        # process, and swallowing it here would leave the watcher running
+        # with no way to shut down. So: mark the row failed, then let it keep
+        # propagating.
+        log.error("dream %s interrupted", dream.id)
+        try:
+            store.fail_dream(dream.id, "interrupted")
+        except Exception as cleanup_exc:
+            # Even a broken cleanup must not swallow the interrupt — that
+            # would defeat the entire point of this branch.
+            log.error(
+                "dream %s: could not mark failed during interrupt: %s",
+                dream.id, cleanup_exc,
+            )
+        raise
+    except Exception as exc:
         log.error("dream %s failed: %s", dream.id, exc)
-        store.fail_dream(dream.id, f"{type(exc).__name__}: {exc}")
+        try:
+            store.fail_dream(dream.id, f"{type(exc).__name__}: {exc}")
+        except Exception as cleanup_exc:
+            # The never-raises guarantee has to hold even when closing the
+            # row itself fails (a locked DB, a full disk): losing the
+            # failure reason is better than taking the watcher down over it.
+            log.error("dream %s: could not mark failed: %s", dream.id, cleanup_exc)
         return None
 
     return store.get_dream(dream.id)

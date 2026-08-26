@@ -72,20 +72,28 @@ def build_material(graph: dict | None) -> Material:
     nodes = _as_list(graph.get("nodes", ()))
     # `.get("id")` rather than `node["id"]`: a person/term dict with no `id`
     # (or no `label`) is exactly the malformed shape this function promises to
-    # survive. `None` ids are dropped below so they can never match an edge.
+    # survive. The `isinstance(..., str)` checks do double duty, same as in
+    # `kg2.trigger.absorbed_persons`: a Tool 1 id/label is always a string, so
+    # anything else is dropped before it can reach a set or dict key — an
+    # unhashable value (a list) would otherwise crash the comprehension below,
+    # and a hashable-but-wrong-type one (an int label) would later make
+    # `weights.sort()` crash by comparing a str to it.
     persons = {
         node.get("id")
         for node in nodes
-        if isinstance(node, dict) and node.get("type") == "person" and not node.get("hidden")
-    } - {None}
+        if isinstance(node, dict)
+        and node.get("type") == "person"
+        and not node.get("hidden")
+        and isinstance(node.get("id"), str)
+    }
     terms = {
-        node.get("id"): node.get("label", "")
+        node.get("id"): node.get("label")
         for node in nodes
         if isinstance(node, dict)
         and node.get("type") == "term"
         and not node.get("hidden")
-        and node.get("id") is not None
-        and node.get("label") is not None
+        and isinstance(node.get("id"), str)
+        and isinstance(node.get("label"), str)
     }
 
     counts: dict[str, int] = {}
@@ -94,6 +102,12 @@ def build_material(graph: dict | None) -> Material:
         if not isinstance(edge, dict):
             continue
         source, target = edge.get("source"), edge.get("target")
+        # `source`/`target` must themselves be checked before the `in` test
+        # below: set/dict membership hashes its argument, so an unhashable
+        # source (e.g. a list) would raise here even though `persons`/`terms`
+        # are already guaranteed to contain only strings.
+        if not isinstance(source, str) or not isinstance(target, str):
+            continue
         if source in persons and target in terms:
             counts[target] = counts.get(target, 0) + 1
             edge_count += 1
@@ -106,7 +120,12 @@ def build_material(graph: dict | None) -> Material:
     quotes = [
         quote["text"]
         for quote in _as_list(graph.get("quotes", ()))
-        if isinstance(quote, dict) and quote.get("person_id") in persons and "text" in quote
+        if isinstance(quote, dict)
+        # Same hashability landmine as the edge loop above: `in persons` hashes
+        # `person_id`, so an unhashable value (a list) must be filtered first.
+        and isinstance(quote.get("person_id"), str)
+        and quote.get("person_id") in persons
+        and "text" in quote
     ]
 
     generated_at = graph.get("generated_at")
