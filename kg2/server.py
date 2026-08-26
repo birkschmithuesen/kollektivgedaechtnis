@@ -34,6 +34,9 @@ class DisplaySettings(BaseModel):
     question_visible: bool | None = None
     # 0 = permanent. The upper bound is a whole exhibition day: anything larger
     # is a typo, and a question that hides after 30 hours never hides.
+    # 0 = permanent. The ceiling is ten hours — longer than any exhibition day,
+    # so a value above it is a typo, and a question that hides after ten hours
+    # has in practice never hidden.
     question_seconds: int | None = Field(default=None, ge=0, le=36000)
     # Never 0: a 0 ms "cross-fade" is a cut, and Birk ruled out anything but a
     # fade (spec §6). The upper bound keeps a stray value from leaving the wall

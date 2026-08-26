@@ -972,3 +972,35 @@ Task 9: complete (commits 48b9712, 5b8c435, review clean after 1 fix round).
   guarantee by a second route); and no test fed run_dream an adversarial graph,
   which is precisely why defect 1 shipped. Adversarial tests added at all three
   levels — cycle, trigger and weighting.
+
+Task 10: complete (commits 982c365 + this one, review clean after 1 fix round).
+  kg2/server.py, tests/test_dream_server.py: 28 passing. frontend2/dream.html
+  and operator.html are PLACEHOLDERS here — Tasks 12/13 replace them.
+  Flow control (pause, dream_now) goes through the STORE, not an object handed
+  to the app: one mechanism, survives a restart free, and a wedged watcher
+  cannot take the operator UI down with it.
+  PLAN DEFECT found: the plan's SSE test used client.stream("GET","/events") +
+  iter_lines(), which HANGS FOREVER. The implementer diagnosed it and the
+  reviewer independently reproduced it: httpx's ASGITransport (both starlette's
+  TestClient and a raw httpx.AsyncClient) fully drains an ASGI response body
+  before returning anything, so it can never observe a StreamingResponse whose
+  generator does not terminate — which /events must not, by design. A bounded
+  two-chunk generator returns fine; an unbounded one never yields even a status
+  code. Tool 1's suite has no such test either, consistent with this being a
+  known limitation that was previously sidestepped rather than something new.
+  Replaced by driving the registered route coroutine directly and reading
+  response.body_iterator — same production closure, same object StreamingResponse
+  would feed to ASGI send, and it still proves the property that matters: a
+  newly connecting client is painted with current state immediately, rather than
+  staying blank until the next dream.
+  ONE Important fixed: test_no_route_can_change_the_guiding_question was a grep
+  for the literal string "guiding_question=". A future route storing a
+  `question_override` setting would slip past it while breaking the constraint
+  outright. Added a BEHAVIOURAL companion that POSTs five spellings of the
+  question and the register at all four routes and asserts the displayed
+  question never moves and nothing lands in the store under a neighbouring key.
+  TWO Minor fixed: /events keep-alive-on-timeout and unsubscribe-on-close were
+  exercised by nothing (both now tested — the reviewer had verified by hand that
+  bus._subscribers really does go 1 -> 0 on aclose); and a stale comment claimed
+  the question_seconds ceiling of 36000 was "a whole exhibition day"/"30 hours"
+  when it is ten hours.

@@ -212,6 +212,35 @@ def test_no_route_can_change_the_guiding_question_or_the_register():
     assert "visual_register" not in source
 
 
+def test_no_request_can_move_the_guiding_question_however_it_is_spelled(app):
+    """The behavioural half of the same guarantee.
+
+    The source check above only catches the literal spelling `guiding_question=`.
+    A future route storing a `question_override` setting would slip past it
+    while breaking the constraint outright — so this one ignores how the code
+    is written and asserts the property: whatever you POST, the question the
+    screen is told to display does not move.
+    """
+    client, store, cfg, _ = app
+    before = client.get("/api/state").json()["question"]
+
+    for path in ("/api/display", "/api/pause", "/api/discard", "/api/dream_now"):
+        for payload in (
+            {"question": "Wem gehört die Stadt?"},
+            {"guiding_question": "Wem gehört die Stadt?"},
+            {"question_override": "Wem gehört die Stadt?"},
+            {"visual_register": "Radierung, harte Linien"},
+            {"register": "Radierung"},
+        ):
+            client.post(path, json=payload)
+
+    assert client.get("/api/state").json()["question"] == before == cfg.guiding_question
+    # And nothing smuggled itself into the store under a neighbouring key.
+    for key in ("question", "guiding_question", "question_override",
+                "visual_register", "register"):
+        assert store.get_setting(key, "<unset>") == "<unset>"
+
+
 def test_the_state_payload_never_exposes_the_image_prompt(app):
     """Spec §5.2: showing stage 2's prompt would put lighting instructions on
     the wall. It belongs in the operator UI, and reaches it through /api/dreams."""
@@ -339,3 +368,47 @@ def test_every_setting_and_the_whole_strip_come_back_after_a_restart(tmp_path):
 
     assert after == before
     reopened.close()
+
+
+async def test_a_slow_tick_sends_a_keep_alive_rather_than_closing(app):
+    """15 s of silence is the normal state of this stream — dreams are minutes
+    apart. Without the heartbeat an idle proxy closes the connection and the
+    screen stops receiving state it never knows it missed."""
+    import asyncio
+
+    client, store, cfg, _ = app
+    route = next(r for r in client.app.routes if r.path == "/events")
+    response = await route.endpoint()
+
+    await response.body_iterator.__anext__()  # the opening state
+
+    real_wait_for = asyncio.wait_for
+
+    async def instant_timeout(awaitable, timeout):
+        awaitable.close()
+        raise TimeoutError
+
+    asyncio.wait_for = instant_timeout
+    try:
+        chunk = await response.body_iterator.__anext__()
+    finally:
+        asyncio.wait_for = real_wait_for
+        await response.body_iterator.aclose()
+
+    assert chunk == ": keep-alive\n\n"
+
+
+async def test_closing_the_stream_unsubscribes_from_the_bus(app):
+    """A screen that reloads all day must not leave a queue behind on every
+    reload — the bus would fan out to a growing list of dead subscribers."""
+    client, store, cfg, bus = app
+    route = next(r for r in client.app.routes if r.path == "/events")
+
+    before = len(bus._subscribers)
+    response = await route.endpoint()
+    await response.body_iterator.__anext__()
+    assert len(bus._subscribers) == before + 1
+
+    await response.body_iterator.aclose()
+
+    assert len(bus._subscribers) == before
