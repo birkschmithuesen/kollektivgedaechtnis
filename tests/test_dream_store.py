@@ -250,6 +250,26 @@ def test_set_setting_default_never_overwrites_the_operator(tmp_path):
     store.close()
 
 
+def test_consume_flag_reads_and_clears_as_one_fused_operation(tmp_path):
+    """The watcher's dream_requested flag used to be a get_setting + a
+    set_setting: two individually-locked calls, but not fused into one. An
+    operator press landing between them would be overwritten back to "0" and
+    lost, with the operator's only feedback being that nothing happened.
+    consume_flag closes that window by doing both under a single lock
+    acquisition (see kg2/store.py's rationale)."""
+    store = open_store(tmp_path)
+
+    assert store.consume_flag("dream_requested") is False  # never set
+
+    store.set_setting("dream_requested", "1")
+    assert store.consume_flag("dream_requested") is True
+    # The clear is part of the same operation: a second consume right after
+    # must see it already gone, not still "1".
+    assert store.consume_flag("dream_requested") is False
+    assert store.get_setting("dream_requested", "0") == "0"
+    store.close()
+
+
 def test_ids_never_repeat_even_after_a_discard(tmp_path):
     """Image files are named after the dream id and are never overwritten
     (spec §5.2), so a reused id would be a silent overwrite."""

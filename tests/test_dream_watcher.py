@@ -3,6 +3,8 @@ floor respected, and nothing at all during silence."""
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from kg.bus import EventBus
@@ -271,6 +273,13 @@ async def test_a_failed_dream_retries_at_the_next_trigger_not_immediately(harnes
 
 
 async def test_a_crashing_cycle_does_not_kill_the_poll_loop(harness):
+    """`with_dream_started` runs unconditionally before the try (spec §8: a
+    failure must still space out its retry) — but a raw exception is a
+    different outcome from `run_dream` returning None, and the suite only
+    ever exercised the latter. Pin that the floor stamp moved here too: a
+    poll still inside the floor right after the crash must fire nothing,
+    same shape as test_a_failed_dream_retries_at_the_next_trigger_not_immediately.
+    """
     def boom(*args, **kwargs):
         raise RuntimeError("unexpected")
 
@@ -280,8 +289,13 @@ async def test_a_crashing_cycle_does_not_kill_the_poll_loop(harness):
     assert await harness.watcher.tick() is None
 
     harness.watcher.cycle = harness._cycle
+    harness.now += 10.0
+    assert await harness.watcher.tick() is None  # inside the floor
+    assert harness.cycles == []
+
     harness.now += 300.0
     assert await harness.watcher.tick() is not None
+    assert len(harness.cycles) == 1
 
 
 # -- restart ----------------------------------------------------------------
@@ -331,6 +345,53 @@ async def test_a_finished_dream_is_pushed_to_the_display(harness):
     event = queue.get_nowait()
     assert event["type"] == "state"
     assert event["state"]["current"]["sentence"] == "Traum d1"
+
+
+async def test_the_sentence_push_survives_the_worker_thread_hop(harness):
+    """The design calls this out by name: `announce` runs inside the cycle's
+    worker thread (the production path is `asyncio.to_thread`), and the
+    bus's queues belong to the server's event loop, so getting the sentence
+    onto the queue at all depends on `call_soon_threadsafe` actually being
+    used rather than a direct `bus.publish` (same hazard, same fix as
+    sim/prerender.py's `publish`).
+
+    A stub that fired `on_sentence` from the loop's own thread would pass
+    even with that swapped for a direct call — from the loop's own thread
+    the two are indistinguishable. Two things close that hole: the stub
+    itself asserts it is NOT the loop thread before calling back, and this
+    test spies on `bus.publish` to record which thread actually executes it.
+    `call_soon_threadsafe` schedules its callback to run back on the loop's
+    thread, no matter which thread called it — a direct call from `announce`
+    would instead run `publish` on the worker thread. That is the exact,
+    deterministic distinction the mechanism exists to make; checking only
+    that the right event ends up on the queue would not catch a regression,
+    since a direct call can still land it there with no concurrent reader.
+    """
+    loop_thread = threading.current_thread()
+    queue = harness.bus.subscribe()
+    publish_threads: list[threading.Thread] = []
+    real_publish = harness.bus.publish
+
+    def spying_publish(event):
+        publish_threads.append(threading.current_thread())
+        return real_publish(event)
+
+    harness.bus.publish = spying_publish
+
+    def cycle_with_sentence(store, cfg, llm, graph, now, *, on_sentence, **kwargs):
+        assert threading.current_thread() is not loop_thread
+        on_sentence("Ein Satz im Werden.")
+        return harness._cycle(store, cfg, llm, graph, now, on_sentence=on_sentence, **kwargs)
+
+    harness.watcher.cycle = cycle_with_sentence
+    harness.graph = graph(["p1"])
+
+    await harness.watcher.tick()
+
+    assert publish_threads and all(t is loop_thread for t in publish_threads)
+
+    event = queue.get_nowait()
+    assert event == {"type": "dreaming", "sentence": "Ein Satz im Werden."}
 
 
 async def test_a_failed_dream_pushes_nothing_new_to_the_display(harness):

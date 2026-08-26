@@ -48,10 +48,11 @@ class DreamWatcher:
             # say so (spec §8).
             return None
 
-        forced = self.store.get_setting("dream_requested", "0") == "1"
-        if forced:
-            self.store.set_setting("dream_requested", "0")
-        elif self.store.get_setting("paused", "0") == "1":
+        # consume_flag reads and clears under one lock acquisition, not two:
+        # an operator press landing between an unfused read and clear would
+        # be silently overwritten back to "0" and lost (kg2/store.py).
+        forced = self.store.consume_flag("dream_requested")
+        if not forced and self.store.get_setting("paused", "0") == "1":
             # Paused blocks the automatic cycle only. „Dream now" was pressed
             # deliberately and works regardless (spec §7).
             return None

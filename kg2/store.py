@@ -256,6 +256,23 @@ class DreamStore:
         self.conn.commit()
 
     @_locked
+    def consume_flag(self, key: str) -> bool:
+        """Read a boolean setting and clear it back to "0", as one operation
+        under the single lock rather than two separately-locked calls.
+
+        Each of get_setting/set_setting is individually safe, but the pair is
+        not fused: an operator press landing in the gap between the read and
+        the clear would be silently overwritten back to "0" and lost — with
+        the operator's only feedback being that nothing happened. `_lock` is
+        an RLock (see __init__), so calling the two locked methods from here
+        is safely re-entrant.
+        """
+        was_set = self.get_setting(key, "0") == "1"
+        if was_set:
+            self.set_setting(key, "0")
+        return was_set
+
+    @_locked
     def set_setting_default(self, key: str, value: str) -> None:
         """Seed a setting only if it has never been set — so a restart restores
         the operator's value, not config2.toml's start value."""
