@@ -102,6 +102,17 @@ Gateway, und kein `ip`-Kommando verfügbar). Die echte Adresse mit
 `ip -4 addr show scope global` (oder `ip addr`) nachsehen und von Hand
 einsetzen.
 
+## Browser
+
+Die Station startet Chromium (`scripts/start.sh`), und dabei bleibt es. Zum
+Draufschauen von einem anderen Rechner tut es jeder Chromium-Abkömmling
+(Brave, Chrome, Edge).
+
+**Firefox nicht zum Prüfen benutzen.** Beobachtet 2026-08-26: Zitate erscheinen
+dort nicht. Nicht untersucht und bewusst nicht behoben (Birk) — die Wand läuft
+auf Chromium, und ein zweiter Renderer wäre eine Fehlerquelle mehr ohne
+Gegenwert. Wer die Station über Firefox kontrolliert, prüft nicht die Station.
+
 ## Ein Interview
 
 1. Foto per Telegram → Personenknoten mit Portrait erscheint sofort.
@@ -115,24 +126,75 @@ zwei offene Interviews geben.
 
 ## Die Live-Regler
 
-Alle drei sitzen im Operator-Fenster und wirken sofort auf den gesamten Bestand.
+Alle sitzen im Operator-Fenster und wirken sofort auf den gesamten Bestand.
 
 **Dichte** — 1 = alles, 2 = nur Geteiltes, 3 = nur Häufiges. Reiner
 Anzeigefilter: verwirft nichts, jederzeit umkehrbar. Startwert 2, siehe unten.
+„Geteilt" heißt **von mindestens N verschiedenen Menschen genannt**, nicht
+N-mal gesagt (`COUNT(DISTINCT person_id)`, `kg/store.py`). Sagt eine Person
+denselben Begriff fünfmal, bleibt der Zähler bei 1.
 
-**Kamera** — „alles zeigen" (Voreinstellung, ganzes Netz im Bild), „manuell"
-(Besucher darf per Touch zoomen und schieben), „automatisch schwenken" (die
-Kamera wandert von selbst; der Fallback ohne funktionierenden Touch).
+**Kamera** — „alles zeigen" (ganzes Netz im Bild, steht still), „manuell"
+(Besucher zoomt und schiebt per Touch), „automatisch schwenken" (die Kamera
+wandert von selbst von Begriff zu Begriff). **Voreinstellung ist
+„automatisch schwenken"** (`default_camera_mode` in `config.toml`) — eine
+Station, die bewegungslos hochkommt, wirkt defekt.
 
-**Zoom** — 1× ganzes Netz, 1,5×, 2× halbes Netz. Wirkt in „alles zeigen" und
-„automatisch schwenken"; in „manuell" nicht, weil dort die Hand des Besuchers
-führt und ein Nachrahmen dagegen arbeiten würde.
+**Zoom** — stufenloser Regler 1,00× bis 4,00×. 1× = ganzes Netz, 2× = halbe
+Netzbreite auf der Wand. Wirkt in „alles zeigen" und „automatisch schwenken";
+in „manuell" nicht, weil dort die Hand des Besuchers führt.
 
-> **Kamera und Zoom werden vor Ort am echten Screen eingestellt** (Entscheidung
-> D4). Die Vorab-Renderings beantworten die Lesbarkeitsfrage, nicht die Frage
-> nach Beamer, Wand und Raumtiefe. Richtwerte aus der Serie bei 50 Personen:
-> 1× ergibt ~13 px Schrift auf 1920 Pixel Wandbreite, 2× ergibt ~25 px bei noch
-> 71 % der Knoten im Bild.
+> **Bei 1,00× läuft die automatische Fahrt ins Leere.** Dann sind per
+> Definition alle Knoten im Bild, die Kamera fährt zu Zielen, die schon zu
+> sehen sind, und die Wand wirkt bewegungslos. Der Regler schreibt das selbst
+> dazu. Für eine sichtbare Fahrt mindestens ~1,5× (gemessen: bei 1,5× sind
+> 66 % der Knoten im Bild, bei 2× noch 37 %).
+
+**Tempo** — Geschwindigkeit der automatischen Fahrt, 1/1 bis 1/4. Rechter
+Anschlag ist das Tempo, auf das die Bewegung abgestimmt wurde; nach links wird
+sie bis auf ein Viertel gedehnt (gemessen: 5,2 s → 20,9 s pro Etappe). Es gibt
+bewusst keine Einstellung, die schneller läuft. Ein Reglerzug wirkt ab der
+**nächsten** Etappe — eine laufende neu zu skalieren würde die Kamera springen
+lassen.
+
+> **Kamera, Zoom und Tempo werden vor Ort am echten Screen eingestellt**
+> (Entscheidung D4). Die Vorab-Renderings beantworten die Lesbarkeitsfrage,
+> nicht die Frage nach Beamer, Wand und Raumtiefe. Richtwerte aus der Serie bei
+> 50 Personen: 1× ergibt ~13 px Schrift auf 1920 Pixel Wandbreite, 2× ergibt
+> ~25 px bei noch 71 % der Knoten im Bild.
+
+## Der Touchscreen (Fläche A)
+
+Aufruf mit `?touch=1` — also `http://<adresse>:8800/projection?touch=1`. Ohne
+das Flag ist die Seite reine Anzeige; genau so läuft Fläche C im Plenumssaal.
+
+**Gerät:** iiyama ProLite TE6568MIS-B1AG, 65", `IR Touch 20points`, USB-HID
+(Handbuch, Specs-Tabelle). Kein Treiber nötig, HID-Multitouch ist im Kernel.
+
+| Geste | Wirkung |
+|---|---|
+| Ein Finger ziehen | Ausschnitt verschieben |
+| Zwei Finger auf/zu | Zoom |
+| Portrait antippen | Zitat der Person erscheint; nochmal = nächstes Zitat |
+| Hintergrund antippen | Zitat weg (sonst nach 12 s von selbst) |
+| „Übersicht" | ganzes Netz, Zoom 1×, zurück zur Automatik |
+| Dichte-Knöpfe | alle / geteilt (ab 2) / häufig (ab 3), mit Anzahl |
+
+**Berührung schaltet lokal auf „manuell", 30 s ohne Kontakt schaltet zurück.**
+Lokal heißt: Der Wechsel wird **nicht** an den Server gemeldet. `camera_mode`
+ist globaler Zustand — ein POST würde Fläche C im Plenumssaal mit auf
+„manuell" ziehen, wo niemand etwas anfassen kann. Die Dichte-Knöpfe posten
+dagegen sehr wohl: *wohin die Kamera schaut* ist lokal, *was die Wand zeigt*
+gilt überall.
+
+Zwei Warnungen aus dem Handbuch, die den Aufbau betreffen:
+
+- *„Permanent damage can occur if Sharp Edged, Pointed or Metal items are used
+  to activate Touch."* — keine Stifte, keine Ringe.
+- IR-Touch ist **lichtempfindlich**: „incident light that contains large
+  quantities of infrared light may affect touch screen operation". Direkte
+  Sonne oder Halogenspots auf der Scheibe erzeugen Geisterkontakte. Position
+  gegen die Beleuchtung prüfen, bevor die Wand steht.
 
 ## Notausgang
 
