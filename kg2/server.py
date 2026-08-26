@@ -32,8 +32,6 @@ class DisplaySettings(BaseModel):
     one control at a time, and a partial update must not reset its neighbours."""
 
     question_visible: bool | None = None
-    # 0 = permanent. The upper bound is a whole exhibition day: anything larger
-    # is a typo, and a question that hides after 30 hours never hides.
     # 0 = permanent. The ceiling is ten hours — longer than any exhibition day,
     # so a value above it is a typo, and a question that hides after ten hours
     # has in practice never hidden.

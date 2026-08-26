@@ -1033,3 +1033,42 @@ Task 11: complete (commits 5e9c9e4, dc17c45, review clean after 1 fix round).
   crash-path test never checked that a cycle raising a RAW exception (rather
   than returning None) still moved the floor stamp — now pinned by a poll
   landing inside the floor.
+
+Task 12: complete (commits aaf2d98, 29361e9 + this one, review clean after 1 fix).
+  frontend2/dream.html, static/dream.js, static/dream.css, static/dream-harness.html,
+  tests/test_dream_page.py. Tool 2 suite: 229 passing.
+  Harness and real page keep BYTE-IDENTICAL markup, so the Playwright tests
+  drive the real renderer rather than a copy.
+  TWO CRITICAL defects found by review, both empirically measured, neither
+  caught by the plan's own 20 tests:
+   1. AN OPERATOR SLIDER COULD INVERT THE DESIGN. strip_ratio was bounded
+      0.05-0.5, but measured stage-vs-thumbnail dominance holds only to ~0.23:
+        0.05 -> 33.0x   0.22 (default) -> 3.20x   0.25 -> 2.64x
+        0.30 -> 1.98x   0.40 -> 1.18x   0.50 -> 0.72x (THUMBNAIL TALLER THAN
+        THE STAGE — a complete inversion of "the strip may never rival the
+        dream it is evidence for", reachable by a mid-day nudge and then left
+        running unattended).
+      The 2.6vh CSS subtraction had been tuned until the default-ratio test
+      passed; it was never a structural guarantee. Fixed by BOUNDING THE
+      CONTROL so it cannot express a layout that breaks the design: ceiling now
+      0.25, chosen over the exact ~0.23 crossover to leave real operator range
+      above the 0.22 default and to keep off a float-precision test edge. A new
+      test walks minimum/middle/maximum and asserts dominance at every one.
+   2. DISCARD-TO-EMPTY THEN A NEW DREAM PRODUCED A CUT, NOT A CROSS-FADE.
+      showImage's `isFirstReveal = currentId === null` conflated "nothing has
+      ever been shown this session" with "nothing is currently selected", so
+      after discarding the only dream the stale frame stayed on screen and the
+      next dream snapped in over it. Fixed with a separate `everRevealed` flag
+      (set once, never reset) plus a clearStage() that fades to blank on
+      current:null — blank is correct there, since a discarded dream is replaced
+      by the previous one and at 09:00 there is none.
+  ONE Important fixed: test_re_applying_the_same_state_does_not_re_fade was
+  VACUOUS — it passed with the idempotency guard deleted, because its `current`
+  assertion is trivially true and its `fading` assertion is guaranteed false by
+  the test helper, which polls fading===false before returning. Rewritten to
+  assert on frame identity; the implementer verified it now fails with the guard
+  removed, then restored the guard.
+  ONE Minor fixed: flipping typewriter true->false mid-animation let the
+  word-by-word build run to completion, against "turning it off is a switch,
+  not a rebuild".
+  Also removed a duplicated comment block left on question_seconds.
