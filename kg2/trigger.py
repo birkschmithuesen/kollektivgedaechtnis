@@ -48,11 +48,15 @@ def absorbed_persons(graph: dict | None) -> set[str]:
         nodes = ()
     if not isinstance(edges, Iterable) or isinstance(edges, (str, bytes, dict)):
         edges = ()
+    # `.get("id")` rather than `node["id"]`: a person-typed dict with no `id`
+    # is exactly the malformed shape this function promises to survive, and a
+    # KeyError here would crash the watcher on a payload the client waved
+    # through. `None` is then dropped, so it can never intersect an edge.
     persons = {
-        node["id"]
+        node.get("id")
         for node in nodes
         if isinstance(node, dict) and node.get("type") == "person" and not node.get("hidden")
-    }
+    } - {None}
     with_edges = {
         edge["source"] for edge in edges if isinstance(edge, dict) and "source" in edge
     }

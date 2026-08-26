@@ -826,3 +826,30 @@ Task 4: complete (commits f946f89..90656f4, review clean after 1 fix round).
    4. (Minor) _next_id now takes the RLock explicitly, matching Tool 1's
       defense-in-depth precedent rather than relying on its one caller.
   Tool 1 spot check test_store.py: 21 passing.
+
+Task 5: complete (commits 9ffa9f7 + this one, review clean after 1 fix).
+  kg2/trigger.py (PURE — no I/O, no store), tests/test_dream_trigger.py: 30 passing.
+  THE §4.1 RACE, which is the defect most likely to ship. Implementer READ
+  kg/core.py and confirmed the timing first-hand: broadcast_graph fires at
+  kg/core.py:156 (photo, person node with NO edges) and again at kg/core.py:198
+  (after the pipeline, person now has edges). Only the second means "absorbed".
+  Reviewer probed the whole state space and found NO sequence that permanently
+  loses an interview or dreams twice on the same material. Confirmed correct:
+   - the floor is a delay not a drop (seen set returned unchanged when blocked);
+   - the seen set is monotone, so hide-then-unhide cannot re-fire;
+   - Decision.started_at is adopted always, Decision.absorbed only on success;
+   - force returns the FULL absorbed set, which is safe because with_absorbed
+     is a union — re-adopting seen ids is a no-op;
+   - graph=None (what a failed poll returns) reads as "nothing new", not a crash;
+   - resume_state: running/failed rows hold the floor but stay unconsumed;
+     a discarded+done row still counts as seen (discard is a DISPLAY concern);
+     `last` spans all rows regardless of status, and input order is not assumed.
+  ONE Important bug found and fixed: the implementer's defensive hardening of
+  absorbed_persons guarded `nodes`/`edges` containers and `edge["source"]`, but
+  still used a raw `node["id"]` subscript — so a person-typed dict with no `id`
+  raised KeyError, which is precisely the malformed shape the hardening exists
+  to survive (fetch_graph validates key PRESENCE only, never value types).
+  Now `.get("id")` with None filtered out; added a test covering a well-shaped
+  list of ill-shaped nodes, which the original test missed by only exercising a
+  wrong-type container. Verified by probe.
+  Minor NOT fixed: the implementer's report miscounts its own tests (27+1=29).

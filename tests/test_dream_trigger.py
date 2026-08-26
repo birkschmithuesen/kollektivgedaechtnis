@@ -117,6 +117,24 @@ def test_a_malformed_payload_yields_no_absorbed_persons():
     assert absorbed_persons(malformed) == set()
 
 
+def test_a_well_shaped_list_of_ill_shaped_nodes_yields_no_absorbed_persons():
+    """The harder half of the same gap: `nodes` IS a list, but an entry is a
+    person dict with no `id`. Subscripting it would raise on a payload the
+    client waved through, so the watcher would die on the poll instead of
+    reading it as silence."""
+    for nodes in (
+        [{"type": "person"}],  # person, no id
+        [{"type": "person", "id": None}],  # person, null id
+        [{"type": "person"}, {"type": "person", "id": "p1"}],  # one of each
+    ):
+        graph = {"version": 1, "nodes": nodes, "edges": [{"id": "e1", "source": "p1"}]}
+        assert absorbed_persons(graph) <= {"p1"}
+
+    # And an edge with no `source` must not resurrect a person with no id.
+    graph = {"version": 1, "nodes": [{"type": "person"}], "edges": [{"id": "e1"}]}
+    assert absorbed_persons(graph) == set()
+
+
 # -- the floor --------------------------------------------------------------
 
 
