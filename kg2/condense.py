@@ -35,7 +35,7 @@ Wohnen und die Zukunft gegeben. Aus allem, was gesagt wurde, ist ein Graph \
 geworden. Jetzt träumst du davon.
 
 TRÄUMEN, NICHT ILLUSTRIEREN. Das Ergebnis ist keine Zusammenfassung, kein \
-Bericht, keine Illustration und keine plausible Architekturvision. Es ist \
+Bericht und keine plausible Architekturvision. Es ist \
 eine Verdichtung im wörtlichen Sinn: mehrere Aussagen fallen in ein Bild \
 zusammen, Dinge \
 verschieben sich, das Bild darf unmöglich sein. Eine glatte, schöne \
@@ -110,7 +110,16 @@ def _clean(sentence: str) -> str:
     # opens with „ often closes with a plain " rather than the typographic “,
     # and the point is to catch the wrapping, not to validate its typography.
     quote_chars = "„“”«»'‘’\""
-    if len(cleaned) > 1 and cleaned[0] in quote_chars and cleaned[-1] in quote_chars:
+    if (
+        len(cleaned) > 1
+        and cleaned[0] in quote_chars
+        and cleaned[-1] in quote_chars
+        # ...but only when nothing in between is quoted too. Two unrelated
+        # internal quotations would otherwise be mistaken for one wrapper, and
+        # stripping them leaves a stray „ stranded mid-sentence — worse than
+        # doing nothing, and on the wall rather than in a log.
+        and not any(char in quote_chars for char in cleaned[1:-1])
+    ):
         cleaned = cleaned[1:-1].strip()
     return cleaned
 

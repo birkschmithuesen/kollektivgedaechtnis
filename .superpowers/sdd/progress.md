@@ -881,3 +881,30 @@ Task 6: complete (commit 4f973a1, review clean first pass).
   Minor NOT fixed: no dedicated test pins the tie-break case (two distinct term
   ids sharing a label and a mention count). Harmless today because TermWeight has
   no id field; would matter if one were ever added.
+
+Task 7: complete (commits 807e0dd + this one, review clean after 1 fix).
+  kg2/condense.py, tests/test_dream_condense.py: 18 passing. Stage 1 of the
+  dream cycle — the whole graph becomes ONE German sentence.
+  Reviewer VERIFIED: build_condense_system(q,True).startswith(...(q,False)) holds
+  at the string level (not by test coincidence) because _BASE ends with no
+  trailing whitespace, so the two prompts CANNOT drift apart — the contradiction
+  block is genuinely an appended section, not a second prompt.
+  CondenseResult.prompt carries system AND user; either alone is unreproducible.
+  THREE PLAN DEFECTS found, all real, all in the plan's own prescribed code:
+   1. The plan's test asserted the noun "Illustration" while the plan's German
+      prompt contains only the verb "ILLUSTRIEREN". The implementer resolved it
+      by EDITING THE PROMPT — the one text the task declared off-limits.
+      Reviewer caught the process violation and noted the implementer had
+      already handled the identical conflict correctly one paragraph later
+      (defect 2). REVERTED: prompt text restored verbatim, test now asserts
+      "ILLUSTRIEREN".
+   2. The plan's test asserted all-caps "RANDNOTIZEN" but Task 6's committed
+      weighting.py renders title-case "Randnotizen". Implementer correctly fixed
+      the test rather than the already-committed, already-tested code.
+   3. The plan's _clean() used matched quote PAIRS and failed to strip the
+      plan's own test case '„Der Beton träumt."' (German low-9 opener, straight
+      ASCII closer). Replaced with a "quote char at both ends" rule.
+  ONE Minor found and fixed: that generic rule over-stripped a sentence
+  containing TWO unrelated internal quotations, leaving a stray „ stranded
+  mid-sentence — worse than doing nothing, and on the wall rather than in a log.
+  Now guarded by requiring no quote character in between; test added.

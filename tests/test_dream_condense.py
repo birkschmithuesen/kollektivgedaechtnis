@@ -69,7 +69,9 @@ def test_the_system_prompt_asks_for_a_dream_not_an_illustration():
     assert "unmöglich" in system
     # The failure mode named by name, so a later edit cannot lose it silently.
     assert "Zusammenfassung" in system
-    assert "Illustration" in system
+    # „ILLUSTRIEREN", the verb, as the prompt's own heading has it. The prompt
+    # text is the artwork and is not edited to suit an assertion.
+    assert "ILLUSTRIEREN" in system
 
 
 def test_the_contradiction_instruction_is_present_above_the_threshold():
@@ -218,3 +220,14 @@ def test_the_real_replay_graph_produces_a_workable_prompt(real_graph):
     assert "Scheinbeteiligung pro forma" in prompt
     assert "60 Menschen" in prompt
     assert QUESTION in prompt
+
+
+def test_clean_leaves_a_sentence_with_internal_quotations_alone():
+    """Stripping the outermost pair of a sentence that quotes something INSIDE
+    itself leaves a stray mark stranded mid-sentence — worse than doing
+    nothing, and on the wall rather than in a log."""
+    both_ends_quoted = "„Zuhause\" bleibt ein Wort, das der Beton leise 'stumm' nennt"
+
+    result = condense(FakeLLM(both_ends_quoted), material(), QUESTION, contradiction=False)
+
+    assert result.sentence == both_ends_quoted
