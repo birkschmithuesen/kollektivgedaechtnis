@@ -774,3 +774,29 @@ Task 2: complete (commit 835560f, review clean first pass).
   tests/test_dream_config.py (came from the plan's own test code).
   Note: frontend2/static deliberately not created here — Task 10 creates it.
   tests/test_dream_config.py: 6 passing. Tool 1 spot check test_config.py: 4 passing.
+
+Task 3: complete (commit 8b521f8, review clean first pass).
+  sim/data/graph-19c.json (REAL sim/replay.py run-19c artefact, counts verified
+  60/163/267/117 before copying), its provenance doc, kg2/graph_client.py, and
+  tests/test_dream_contract.py; tests/conftest.py gains the `real_graph` fixture.
+  Reviewer confirmed the drift guard is NOT vacuous: type_map collapses 223 nodes
+  /267 edges/117 quotes to 18 path entries, and the fixture-vs-live comparison
+  uses set(type_map(...)) — PATH NAMES only — so the legitimate difference
+  between the fixture (every x/y null, nothing hidden) and live_graph (placed
+  nodes, a hidden term) cannot produce a false positive. Type-level protection
+  comes from the two REQUIRED-vs-{fixture,live} tests instead.
+  Spec §13 properties 1-4 pinned here; property 5 (broadcast_graph fires AFTER
+  the pipeline) is a timing property and belongs to Task 5's trigger tests.
+  THREE Minor limitations recorded, none fixed, all carried to the final review:
+   1. type_map has a blind spot for a field that is sometimes an object and
+      sometimes null — it would emit two disjoint paths. kg.export.build_graph
+      emits only flat scalars today (verified), so it cannot misfire yet.
+   2. fetch_graph's _REQUIRED_KEYS guard checks key PRESENCE, not value types:
+      {"version":1,"nodes":"corrupted","edges":[]} passes and is handed on.
+      >>> RELEVANT TO TASKS 5/6: make absorbed_persons and build_material
+      >>> defensive about node/edge shape rather than trusting the guard.
+   3. test_the_graph_client_has_no_way_to_write_to_tool_1 is a substring check:
+      httpx.request("POST", ...) or getattr(httpx,"post") would evade it, and a
+      docstring merely mentioning ".post(" would false-positive it. It catches
+      the casual case, which is what its own docstring claims.
+  tests/test_dream_contract.py: 11 passing. Tool 1 spot check: 26 passing.
