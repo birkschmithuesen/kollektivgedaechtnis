@@ -259,6 +259,44 @@ obwohl beide „Roboter auf der Baustelle" meinen. Ein größeres Kandidatenfens
 würde dem Judge nur mehr Rauschen zeigen. Das ist der erwartete Zustand, kein
 Defekt: die Wand zeigt dann zwei verwandte Knoten statt einem.
 
+## Ende-zu-Ende-Tests (Tool 1)
+
+Zwei Tests laufen durch die echten Ketten statt durch Attrappen — `tests/e2e/`:
+
+- `test_telegram_photo.py` — Telegram-Update → Download → Portraitzuschnitt →
+  Personenknoten, und die Textnachricht, die das Interview wieder schließt. Der
+  echte `TelegramSource` redet dabei mit einem lokalen Bot-API-Server statt mit
+  Telegram: kein Token, kein Netz, kostenlos.
+- `test_stt_to_wall.py` — SSE-Zeilen nach `docs/stt-contract.md` → Transkript →
+  gesprochenes Interviewende → **echter Anthropic-Aufruf** (Extraktion und
+  Merge) → Begriffe, Zitate, `graph.json`, Live-Ereignis an den Browser.
+
+```bash
+pytest -m e2e tests/e2e
+```
+
+Beide sind aus der Standardsuite **deselektiert** (`addopts = "-m 'not e2e'"` in
+`pyproject.toml`), damit kein gewöhnlicher Testlauf Geld kostet; `-m e2e` ist der
+bewusste Weg hinein. Kostenbremse im Test selbst: **ein** Interview, ein kurzes
+Transkript, genau **zwei** Modellaufrufe (`claude-opus-5`, Effort `high`). Der
+ganze Lauf dauert rund 20 Sekunden. Eine USD-Zahl steht hier absichtlich nicht —
+sie wäre geschätzt, und geschätzte Kosten sind in diesem Dokument schon einmal um
+den Faktor fünf danebengelegen (siehe Kostenkorrektur bei Tool 2).
+
+Der Schlüssel kommt wie überall nur aus der Prozess-Umgebung. Zwei Wege hinein:
+
+```bash
+export ANTHROPIC_API_KEY=...                        # vor Ort: echter Schlüssel
+export ANTHROPIC_BASE_URL=http://127.0.0.1:28764    # vServer: Abo über den Proxy
+```
+
+Das Anthropic-SDK liest `ANTHROPIC_BASE_URL` selbst aus der Umgebung, solange
+niemand ein `base_url=` übergibt — `kg/llm.py` braucht dafür also nichts, und der
+Test geht durch denselben Konstruktionsweg wie der Betrieb. Über den Proxy reicht
+ein Platzhalter-Schlüssel; er authentifiziert die lokale Sitzung, nicht einen
+Schlüssel. Ist **keins** von beiden gesetzt, überspringt `test_stt_to_wall.py`
+sich selbst, statt mit einem Authentifizierungsfehler zu scheitern.
+
 ## Kollektivtraum — Screen B (Tool 2)
 
 Läuft auf einer **eigenen kleinen Maschine** neben dem Ausstellungsrechner

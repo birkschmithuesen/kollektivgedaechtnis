@@ -14,6 +14,11 @@ from kg.photos import make_portrait
 
 log = logging.getLogger(__name__)
 
+#: python-telegram-bot's own defaults. The token is appended to both by
+#: `telegram._bot._parse_base_url`, so these end in `/bot` without a slash.
+TELEGRAM_API_URL = "https://api.telegram.org/bot"
+TELEGRAM_FILE_URL = "https://api.telegram.org/file/bot"
+
 
 class TelegramSource:
     def __init__(
@@ -26,9 +31,18 @@ class TelegramSource:
         on_photo: Callable[[Path, Path, float], None],
         on_text: Callable[[str, float], None],
         downloader: Callable[[str, Path], None] | None = None,
+        api_base_url: str = TELEGRAM_API_URL,
+        api_base_file_url: str = TELEGRAM_FILE_URL,
     ) -> None:
         self.token = token
         self.chat_id = chat_id
+        # The two API roots are arguments, not constants, for exactly one
+        # reason: the end-to-end test (tests/e2e) points the REAL poller and
+        # the REAL downloader at a local stand-in of Telegram's HTTP API, so
+        # `getUpdates` -> `getFile` -> file download runs as shipped, without a
+        # token and without the network. Live operation never passes them.
+        self.api_base_url = api_base_url
+        self.api_base_file_url = api_base_file_url
         self.photo_dir = Path(photo_dir)
         self.portrait_dir = Path(portrait_dir)
         self.portrait_size = portrait_size
@@ -74,9 +88,14 @@ class TelegramSource:
         from telegram import Bot  # imported lazily so tests need no network stack
 
         async def _run() -> None:
-            bot = Bot(self.token)
-            file = await bot.get_file(file_id)
-            await file.download_to_drive(custom_path=str(dest))
+            bot = Bot(
+                self.token,
+                base_url=self.api_base_url,
+                base_file_url=self.api_base_file_url,
+            )
+            async with bot:
+                file = await bot.get_file(file_id)
+                await file.download_to_drive(custom_path=str(dest))
 
         asyncio.run(_run())
 
@@ -84,7 +103,13 @@ class TelegramSource:
         """Wire python-telegram-bot to dispatch(). Called only by kg.core."""
         from telegram.ext import Application, MessageHandler, filters
 
-        application = Application.builder().token(self.token).build()
+        application = (
+            Application.builder()
+            .token(self.token)
+            .base_url(self.api_base_url)
+            .base_file_url(self.api_base_file_url)
+            .build()
+        )
 
         async def handler(update, context) -> None:
             await self.dispatch(update.to_dict())

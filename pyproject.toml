@@ -24,6 +24,13 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The e2e tests talk to real servers and, in one case, spend real Anthropic
+# tokens. They must never run by accident: `pytest` deselects them, and
+# `pytest -m e2e tests/e2e` is the deliberate way in (docs/operations.md).
+addopts = "-m 'not e2e'"
+markers = [
+    "e2e: end-to-end test against real adapters; may cost money. Opt in with -m e2e.",
+]
 
 [build-system]
 requires = ["hatchling"]
