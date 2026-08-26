@@ -3,8 +3,57 @@
 
 const MODES = ['fit', 'manual', 'pan'];
 
+// How the automatic mode moves. These are the aesthetic decisions, gathered in
+// one place so they can be tuned without reading the traversal logic.
+//
+// The shape being avoided: a camera that slides left, hits the edge, and
+// reverses in a single frame reads as a screensaver — the reversal is the
+// moment the machine shows. So the automatic mode does not bounce off walls.
+// It picks a term node, travels to it, rests, and picks another. Motion then
+// carries meaning (it is going somewhere) and every direction change happens
+// while the camera is standing still at a target, never mid-glide.
+const ROAM = {
+  // The FASTEST the tour ever goes (speed factor 1.0). Everything slower is
+  // derived by dividing by the factor, so this pair stays the reference the
+  // motion was tuned against and the operator only ever slows it down —
+  // there is no setting that outruns what was judged on the wall.
+  travelMs: 5200, // one leg, long enough to read as drifting rather than cutting
+  dwellMs: 4200, // rest on the target — the beat that makes it feel deliberate
+  // Zoom breathes around the calibrated level across a whole leg-plus-dwell.
+  // Small on purpose: enough that the image is never frozen, not so much that
+  // the visitor notices a zoom happening.
+  breathAmplitude: 0.06,
+  breathPeriodMs: 42000,
+  // Prefer well-connected terms: the wall is about what people share, so the
+  // traversal should dwell where sharing actually happened. Degree 1 nodes are
+  // still reachable, just far less often.
+  degreeBias: 2.0,
+};
+
+/** Ease in and out — no abrupt starts, no arrivals that slam to a halt.
+ *
+ * cosine rather than a cubic: its derivative is zero at BOTH ends, so a leg
+ * begins and ends at literally zero speed. That is what removes the visible
+ * "start" of each leg; with a cubic ease the residual velocity at t=0 is small
+ * but perceptible on a 65" screen at close range. */
+function easeInOut(t) {
+  return 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
+}
+
+/** Keep a speed inside [0.25, 1], treating anything unusable as full speed.
+ *
+ * `Number(x) || 1` is the obvious spelling and is WRONG here: 0 is falsy, so a
+ * zero would fall through to 1 — full speed — when it plainly means "as slow
+ * as possible". Only NaN deserves the fallback.
+ */
+function clampRoamSpeed(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1, Math.max(0.25, n));
+}
+
 export class Camera {
-  constructor(cy, { panSpeed = 18, padding = 60, zoomFactor = 1 } = {}) {
+  constructor(cy, { panSpeed = 18, padding = 60, zoomFactor = 1, roamSpeed = 1, random = Math.random } = {}) {
     this.cy = cy;
     this.panSpeed = panSpeed;
     this.padding = padding;
@@ -15,6 +64,14 @@ export class Camera {
     this._zoomFactor = 1;
     this._mode = 'fit';
     this._direction = -1;
+    // Injected so a test can drive the traversal deterministically; production
+    // passes nothing and gets Math.random.
+    this._random = random;
+    this._roam = null;
+    // 1 = the tuned speed (ROAM.travelMs/dwellMs), 0.25 = a quarter of it, i.e.
+    // four times as long per leg. Clamped rather than validated-and-thrown: a
+    // bad value must slow the wall down, never stop it rendering.
+    this._roamSpeed = clampRoamSpeed(roamSpeed);
     // At an unattended exhibition a stray touch/mouse must never be able to
     // pan the viewport off-frame or drag a node off its persisted position.
     // `manual` is the only mode where a visitor is meant to move anything;
@@ -31,11 +88,50 @@ export class Camera {
     return this._zoomFactor;
   }
 
+  get roamSpeed() {
+    return this._roamSpeed;
+  }
+
+  /** How fast the automatic tour travels, as a fraction of the tuned speed.
+   *
+   * Applied to the DURATIONS, not to a velocity: a leg always covers the
+   * whole distance to its target with the same cosine ease, it just takes
+   * longer. Changing a velocity instead would leave the camera short of its
+   * target when the phase ends, and the arrival — the moment the motion is
+   * built around — would land somewhere arbitrary.
+   *
+   * Takes effect on the NEXT phase. Rescaling a leg already in flight would
+   * make the camera visibly jump, which is the one thing the easing exists to
+   * prevent. */
+  setRoamSpeed(speed) {
+    this._roamSpeed = clampRoamSpeed(speed);
+  }
+
+  /** This leg's duration at the current speed. */
+  _travelDuration() {
+    return ROAM.travelMs / this._roamSpeed;
+  }
+
+  /** This rest's duration at the current speed. */
+  _dwellDuration() {
+    return ROAM.dwellMs / this._roamSpeed;
+  }
+
+  /** What the automatic traversal is doing right now — for tests and the
+   * pre-render, which need to place frames inside a leg rather than guess. */
+  get roamState() {
+    if (!this._roam) return null;
+    return { phase: this._roam.phase, targetId: this._roam.targetId, elapsed: this._roam.elapsed };
+  }
+
   setMode(mode) {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
     this._mode = mode;
     this._applyInteractivity(mode);
     if (mode === 'fit') this._frame();
+    // Entering pan starts a fresh traversal; leaving it drops the state so a
+    // later return does not resume a leg whose target may no longer exist.
+    this._roam = mode === 'pan' ? { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 } : null;
   }
 
   setZoomFactor(factor) {
@@ -76,18 +172,109 @@ export class Camera {
 
   onGraphChanged() {
     if (this._mode === 'fit') this._frame();
+    // A target that just left the graph (density raised, term hidden) must not
+    // strand the traversal mid-leg pointing at nothing.
+    if (this._roam && this._roam.targetId && this.cy.getElementById(this._roam.targetId).empty()) {
+      this._roam = { phase: 'dwell', elapsed: 0, targetId: null, clock: this._roam.clock };
+    }
+  }
+
+  /** The level the roaming camera travels at: the operator's calibrated zoom,
+   * breathing gently so the image is never completely static. */
+  _breathingZoom(baseLevel, clockMs) {
+    const wave = Math.sin((2 * Math.PI * clockMs) / ROAM.breathPeriodMs);
+    return baseLevel * (1 + ROAM.breathAmplitude * wave);
+  }
+
+  /** Pick the next term to travel to.
+   *
+   * Weighted by degree so the traversal favours shared concepts, and never
+   * returns the node it is already sitting on — revisiting immediately would
+   * look like the camera got stuck. */
+  _pickTarget() {
+    const candidates = this.cy.nodes('.term').filter((n) => n.id() !== this._roam?.targetId);
+    if (candidates.empty()) return null;
+    const weights = candidates.map((n) => Math.pow(n.degree(false) || 1, ROAM.degreeBias));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let roll = this._random() * total;
+    for (let i = 0; i < weights.length; i += 1) {
+      roll -= weights[i];
+      if (roll <= 0) return candidates[i];
+    }
+    return candidates[candidates.length - 1];
   }
 
   step(dtSeconds) {
     if (this._mode !== 'pan') return;
-    const extent = this.cy.extent();
-    const graphWidth = extent.x2 - extent.x1;
-    if (graphWidth <= 0) return;
-    const pan = this.cy.pan();
-    const dx = this._direction * this.panSpeed * dtSeconds;
-    const next = pan.x + dx;
-    const limit = Math.max(graphWidth, this.cy.width());
-    if (next < -limit || next > limit) this._direction *= -1;
-    this.cy.pan({ x: pan.x + this._direction * this.panSpeed * dtSeconds, y: pan.y });
+    if (!this._roam) this._roam = { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 };
+    const dtMs = dtSeconds * 1000;
+    const roam = this._roam;
+    roam.clock += dtMs;
+    roam.elapsed += dtMs;
+
+    if (roam.phase === 'dwell') {
+      // Hold still (bar the breathing) until the beat is over, then choose.
+      this._applyZoom(this._breathingZoom(this._travelLevel(), roam.clock));
+      if (roam.elapsed < (roam.duration ?? this._dwellDuration())) return;
+      const target = this._pickTarget();
+      if (!target) return; // empty wall: keep waiting rather than throwing
+      roam.phase = 'travel';
+      roam.elapsed = 0;
+      // Frozen for the whole leg: reading the live speed every frame would
+      // rescale a glide already in progress, and the eased position would
+      // jump the moment the operator touched the slider.
+      roam.duration = this._travelDuration();
+      roam.targetId = target.id();
+      roam.from = { ...this.cy.pan() };
+      roam.to = this._panForCentering(target);
+      return;
+    }
+
+    // travel
+    const t = Math.min(1, roam.elapsed / (roam.duration ?? this._travelDuration()));
+    const eased = easeInOut(t);
+    this._applyZoom(this._breathingZoom(this._travelLevel(), roam.clock));
+    this.cy.pan({
+      x: roam.from.x + (roam.to.x - roam.from.x) * eased,
+      y: roam.from.y + (roam.to.y - roam.from.y) * eased,
+    });
+    if (t >= 1) {
+      roam.phase = 'dwell';
+      roam.elapsed = 0;
+      roam.duration = this._dwellDuration();
+    }
+  }
+
+  /** The zoom level the traversal travels at, derived from the calibrated
+   * factor the same way `_frame` derives it — so "1.8×" means the same thing
+   * whether the operator is in fit or in pan. */
+  _travelLevel() {
+    if (this._roamBaseLevel === undefined || this._roamBaseFactor !== this._zoomFactor) {
+      const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
+      this.cy.fit(this.padding);
+      this._roamBaseLevel = this.cy.zoom() * this._zoomFactor;
+      this._roamBaseFactor = this._zoomFactor;
+      this.cy.zoom(before.zoom);
+      this.cy.pan(before.pan);
+    }
+    return this._roamBaseLevel;
+  }
+
+  _applyZoom(level) {
+    // Around the viewport centre, so breathing does not also drift the frame.
+    this.cy.zoom({
+      level,
+      renderedPosition: { x: this.cy.width() / 2, y: this.cy.height() / 2 },
+    });
+  }
+
+  /** The pan that puts `node` in the middle of the viewport at current zoom. */
+  _panForCentering(node) {
+    const zoom = this.cy.zoom();
+    const pos = node.position();
+    return {
+      x: this.cy.width() / 2 - pos.x * zoom,
+      y: this.cy.height() / 2 - pos.y * zoom,
+    };
   }
 }

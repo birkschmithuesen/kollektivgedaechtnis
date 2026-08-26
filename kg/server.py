@@ -30,6 +30,15 @@ class CameraMode(BaseModel):
     mode: Literal["fit", "manual", "pan"]
 
 
+class CameraSpeed(BaseModel):
+    # A fraction of the tuned traversal speed: 1.0 is as fast as the tour ever
+    # goes (the pace the motion was judged at), 0.25 is a quarter of that —
+    # four times as long per leg. Bounded on both sides: above 1.0 the wall
+    # would outrun what was ever looked at, below 0.25 a leg takes most of a
+    # minute and reads as a stuck screen.
+    factor: float = Field(ge=0.25, le=1.0)
+
+
 class CameraZoom(BaseModel):
     # >= 1 by construction: 1 = the whole net in frame, 2 = half its width
     # across the wall. The upper bound keeps a stray value from zooming the
@@ -56,6 +65,10 @@ def current_state(store) -> dict:
         # but until 21b it was reachable only through its constructor — so an
         # operator with no touchscreen access could not zoom at all.
         "camera_zoom": float(store.get_setting("camera_zoom", "1")),
+        # 1.0 = the traversal's tuned pace, 0.25 = a quarter of it. Slowing the
+        # tour down is a room-and-audience judgement, like the zoom next to it,
+        # so it belongs to the operator rather than to a constant.
+        "camera_speed": float(store.get_setting("camera_speed", "1")),
         "stt_connected": store.get_setting("stt_connected", "0") == "1",
         "interview": None
         if person is None
@@ -128,6 +141,14 @@ def create_app(store, cfg, bus) -> FastAPI:
         # "exactly one runtime dial" governs controls that change EXTRACTION
         # or MERGING; this changes neither.
         store.set_setting("camera_zoom", str(payload.factor))
+        broadcast_state(store, bus)
+        return {"ok": True}
+
+    @app.post("/api/camera_speed")
+    def api_camera_speed(payload: CameraSpeed) -> dict:
+        # Display-only, exactly like camera_zoom: it changes how long the tour
+        # dwells and travels, never what is extracted or merged.
+        store.set_setting("camera_speed", str(payload.factor))
         broadcast_state(store, bus)
         return {"ok": True}
 

@@ -10,3 +10,20 @@ select { font: inherit; padding: 0.2rem; }
 .entry .meta { color: #8b8b96; }
 .entry.hidden .label { text-decoration: line-through; color: #7a7a85; }
 button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
+
+/* Continuous zoom. Wide enough that 1.00-4.00 can be hit precisely with a
+   mouse on the operator laptop — a short slider makes 0.05 steps a lottery. */
+#camera-zoom { width: 200px; vertical-align: middle; }
+#camera-zoom-value {
+  display: inline-block;
+  min-width: 4.2em;          /* reserves room so the row never reflows mid-drag */
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+#camera-speed { width: 140px; vertical-align: middle; }
+#camera-speed-value {
+  display: inline-block;
+  min-width: 3.4em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}

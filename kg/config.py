@@ -44,6 +44,14 @@ class Config:
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_url: str = "https://openrouter.ai/api/v1/embeddings"
     default_min_mentions: int = 1
+    # The mode the wall opens in on a FRESH database. D4 (2026-08-19) opened on
+    # the whole net; revised 2026-08-26 (Birk) once the automatic traversal
+    # stopped being a sideways slide and became a tour from term to term —
+    # surfaces A and C should both be roaming by default, and a station that
+    # comes up motionless reads as broken rather than as "fit to screen".
+    # Only a default: the operator's live setting is persisted and wins on
+    # every restart (spec 7, 10.5).
+    default_camera_mode: str = "pan"
     portrait_size: int = 512
     server_host: str = "127.0.0.1"
     server_port: int = 8800
@@ -98,6 +106,7 @@ _FIELD_NAMES = {
     "embedding_model",
     "embedding_url",
     "default_min_mentions",
+    "default_camera_mode",
     "portrait_size",
     "server_host",
     "server_port",

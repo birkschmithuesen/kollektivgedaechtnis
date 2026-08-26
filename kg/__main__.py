@@ -153,6 +153,9 @@ async def main_async(args) -> None:
     # Apply the calibrated start density on a fresh database. On a restart the
     # operator's live setting is already stored and must win (spec 7, 10.5).
     store.set_setting_default("min_mentions", str(cfg.default_min_mentions))
+    # Same contract for the camera: a fresh station opens roaming (2026-08-26),
+    # a restarted one comes back exactly as the operator left it.
+    store.set_setting_default("camera_mode", cfg.default_camera_mode)
     bus = EventBus()
     transcript_log = TranscriptLog(cfg.transcript_log_path)
     llm = LLMClient(

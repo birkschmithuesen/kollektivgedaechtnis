@@ -49,6 +49,35 @@ window.cyStub = {
     this._autoungrabify = v;
     this.interactivity.push(['autoungrabify', v]);
   },
+  // The roaming camera picks term nodes to travel to, so the stub has to
+  // provide a small graph. Positions are spread far apart on purpose: a leg
+  // between them produces a pan delta big enough to assert on.
+  _terms: [
+    {id: 't1', degree: 5, x: 500, y: 300},
+    {id: 't2', degree: 1, x: 3000, y: 800},
+    {id: 't3', degree: 3, x: 1500, y: 100},
+  ],
+  nodes(selector) {
+    const stub = this;
+    const list = selector === '.term' ? this._terms : this._terms;
+    const wrap = (items) => {
+      const collection = items.map((t) => ({
+        id: () => t.id,
+        degree: () => t.degree,
+        position: () => ({x: t.x, y: t.y}),
+      }));
+      collection.empty = () => collection.length === 0;
+      collection.filter = (fn) => wrap(items.filter((t, i) => fn(collection[i])));
+      collection.map = (fn) => items.map((t, i) => fn(collection[i]));
+      return collection;
+    };
+    void stub;
+    return wrap(list);
+  },
+  getElementById(id) {
+    const found = this._terms.some((t) => t.id === id);
+    return {empty: () => !found};
+  },
 };
 """
 
@@ -79,24 +108,134 @@ def test_manual_mode_never_moves_the_viewport_by_itself(camera):
     assert camera.evaluate("window.cyStub.calls.length") == 0
 
 
-def test_pan_mode_moves_the_viewport_over_time(camera):
+def test_pan_mode_travels_towards_a_term_instead_of_sliding_sideways(camera):
+    """The automatic mode goes somewhere; it does not drift across the field."""
     camera.evaluate("window.cam.setMode('pan')")
+    # Sit out the opening dwell, then take a step into the first leg.
+    camera.evaluate("window.cam.step(5.0)")
+    assert camera.evaluate("window.cam.roamState.phase") == "travel"
+    target = camera.evaluate("window.cam.roamState.targetId")
+    assert target in ("t1", "t2", "t3")
+
+    before = camera.evaluate("window.cyStub._pan.x")
     camera.evaluate("window.cam.step(1.0)")
-    first = camera.evaluate("window.cyStub._pan.x")
-    camera.evaluate("window.cam.step(1.0)")
-    second = camera.evaluate("window.cyStub._pan.x")
-    assert first != 0
-    assert second != first
+    assert camera.evaluate("window.cyStub._pan.x") != before
 
 
-def test_pan_reverses_at_the_edge_instead_of_running_away(camera):
+def test_a_leg_starts_and_ends_at_zero_speed(camera):
+    """Cosine easing: no visible kick at the start, no slam at the arrival.
+
+    Asserted as a relation, not a constant — the first slice of a leg must
+    move less than the middle slice, and so must the last.
+    """
     camera.evaluate("window.cam.setMode('pan')")
-    camera.evaluate("for (let i = 0; i < 400; i++) window.cam.step(1.0)")
-    positions = camera.evaluate(
-        "window.cyStub.calls.filter(c => c[0] === 'pan').map(c => c[1].x)"
+    camera.evaluate("window.cam.step(5.0)")  # into travel
+    samples = camera.evaluate(
+        """(() => {
+             const xs = [window.cyStub._pan.x];
+             for (let i = 0; i < 10; i++) { window.cam.step(0.52); xs.push(window.cyStub._pan.x); }
+             return xs;
+           })()"""
     )
-    assert min(positions) > -100000 and max(positions) < 100000
-    assert any(a > b for a, b in zip(positions, positions[1:]))  # direction reversed
+    deltas = [abs(b - a) for a, b in zip(samples, samples[1:])]
+    middle = max(deltas)
+    assert deltas[0] < middle
+    assert deltas[-1] < middle
+
+
+def test_the_camera_rests_after_arriving_before_choosing_again(camera):
+    """The dwell is the beat that makes the motion read as deliberate."""
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(5.0)")  # into travel
+    camera.evaluate("window.cam.step(6.0)")  # past the end of the leg
+    assert camera.evaluate("window.cam.roamState.phase") == "dwell"
+
+
+def test_direction_never_changes_mid_flight(camera):
+    """No bounce: within one leg the pan advances monotonically.
+
+    The old camera reversed against an invisible wall, which is the exact
+    moment a viewer sees the machine. Every direction change now happens at a
+    standstill, between legs.
+    """
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(5.0)")
+    xs = camera.evaluate(
+        """(() => {
+             const xs = [window.cyStub._pan.x];
+             for (let i = 0; i < 8; i++) { window.cam.step(0.5); xs.push(window.cyStub._pan.x); }
+             return xs;
+           })()"""
+    )
+    deltas = [b - a for a, b in zip(xs, xs[1:])]
+    signs = {d > 0 for d in deltas if abs(d) > 1e-9}
+    assert len(signs) <= 1, f"direction flipped mid-leg: {deltas}"
+
+
+def test_a_target_that_leaves_the_graph_does_not_strand_the_camera(camera):
+    """Density raised or term hidden mid-leg: restart, never point at nothing."""
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(5.0)")
+    camera.evaluate("window.cyStub._terms = []")
+    camera.evaluate("window.cam.onGraphChanged()")
+    assert camera.evaluate("window.cam.roamState.targetId") is None
+    camera.evaluate("window.cam.step(5.0)")  # must not throw on an empty wall
+
+
+def test_the_tour_runs_at_full_speed_by_default(camera):
+    assert camera.evaluate("window.cam.roamSpeed") == 1
+
+
+def test_a_quarter_speed_leg_takes_four_times_as_long(camera):
+    """The slider scales DURATIONS, so a leg still arrives — it just lingers.
+
+    Asserted as a relation between two runs rather than against a millisecond
+    constant: the tuned pace may be retuned, the 4x ratio is the contract.
+    """
+
+    def leg_seconds(speed):
+        camera.evaluate("(s) => { window.cam.setRoamSpeed(s); window.cam.setMode('pan'); }", speed)
+        # Step out of the opening dwell in small slices until travel starts.
+        for _ in range(400):
+            camera.evaluate("window.cam.step(0.1)")
+            if camera.evaluate("window.cam.roamState.phase") == "travel":
+                break
+        seconds = 0.0
+        for _ in range(1000):
+            camera.evaluate("window.cam.step(0.1)")
+            seconds += 0.1
+            if camera.evaluate("window.cam.roamState.phase") == "dwell":
+                break
+        return seconds
+
+    full = leg_seconds(1)
+    quarter = leg_seconds(0.25)
+    assert 3.5 < quarter / full < 4.5, f"full={full}s quarter={quarter}s"
+
+
+def test_changing_speed_mid_leg_does_not_jerk_the_camera(camera):
+    """The duration is frozen when a leg starts.
+
+    Reading the live speed every frame would rescale a glide already in
+    flight, and the eased position would jump the moment the operator touched
+    the slider — the one thing the easing exists to prevent.
+    """
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(5.0)")  # into travel at full speed
+    before = camera.evaluate("window.cyStub._pan.x")
+    camera.evaluate("window.cam.setRoamSpeed(0.25)")
+    camera.evaluate("window.cam.step(0.1)")
+    after = camera.evaluate("window.cyStub._pan.x")
+    # One 0.1s slice of an eased leg moves a little; a rescale would teleport.
+    assert abs(after - before) < 200, f"jumped {abs(after - before):.0f}px on a speed change"
+
+
+def test_the_speed_is_clamped_rather_than_rejected(camera):
+    """A bad value must slow the wall down, never stop it rendering."""
+    camera.evaluate("window.cam.setRoamSpeed(9)")
+    assert camera.evaluate("window.cam.roamSpeed") == 1
+    camera.evaluate("window.cam.setRoamSpeed(0)")
+    assert camera.evaluate("window.cam.roamSpeed") == 0.25
 
 
 def test_the_default_zoom_factor_fits_the_whole_net(camera):

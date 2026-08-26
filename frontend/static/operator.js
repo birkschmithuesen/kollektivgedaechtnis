@@ -10,6 +10,7 @@ let lastState = {
   min_mentions: 1,
   camera_mode: 'fit',
   camera_zoom: 1,
+  camera_speed: 1,
   stt_connected: false,
   interview: null,
 };
@@ -66,9 +67,10 @@ function render(graph, state) {
 
   document.getElementById('min-mentions').value = String(state.min_mentions);
   document.getElementById('camera').value = state.camera_mode;
-  // String(): the <option> values are strings, so a numeric 1 from the server
-  // would match no option and silently blank the select.
   document.getElementById('camera-zoom').value = String(state.camera_zoom ?? 1);
+  showZoomValue(state.camera_zoom ?? 1);
+  document.getElementById('camera-speed').value = String(state.camera_speed ?? 1);
+  showSpeedValue(state.camera_speed ?? 1);
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
   document.getElementById('interview').textContent = state.interview
     ? 'Interview läuft'
@@ -76,15 +78,37 @@ function render(graph, state) {
 
   const list = document.getElementById('entries');
   list.replaceChildren();
+  // Same density threshold the wall applies, so the list offers an action only
+  // where that action has a visible effect. Deliberately NOT visibleGraph():
+  // that one also drops hidden nodes, which is right for the wall and fatal
+  // here — the hidden entry IS the way back, and a list that dropped it would
+  // make "ausblenden" a one-way door with no matching "einblenden".
+  const threshold = Math.max(1, Number(state.min_mentions) || 1);
   graph.nodes
     .filter((node) => node.type === 'term')
-    .slice()
-    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+    .filter((node) => node.hidden || (node.mentions || 0) >= threshold)
+    .sort((a, b) => a.label.localeCompare(b.label, 'de'))
     .forEach((node) => list.appendChild(entryRow(node)));
 }
 
 function showTranscript(text) {
   document.getElementById('transcript').textContent = text;
+}
+
+/** Print the slider's value the way an operator reads it, not the way JS
+ * stringifies a float: "1,45×", never "1.4500000000000002×".
+ *
+ * At 1,00× the whole net is in frame by definition, so the automatic tour has
+ * nowhere to travel to: it still runs, but every target is already on screen
+ * and the wall looks motionless. That reads as a broken camera (Birk,
+ * 2026-08-26 — reported as "no automatic movement" with the slider at the
+ * bottom stop), so the control says it rather than leaving it to be
+ * rediscovered on the exhibition floor. */
+function showZoomValue(factor) {
+  const value = Number(factor);
+  const hint = value < 1.05 ? ' — ganzes Netz, Fahrt ohne Wirkung' : '';
+  document.getElementById('camera-zoom-value').textContent =
+    `${value.toFixed(2).replace('.', ',')}×${hint}`;
 }
 
 document.getElementById('min-mentions').addEventListener('change', (event) =>
@@ -93,8 +117,37 @@ document.getElementById('min-mentions').addEventListener('change', (event) =>
 document.getElementById('camera').addEventListener('change', (event) =>
   post('/api/camera', { mode: event.target.value }),
 );
+// Two listeners, deliberately: `input` fires continuously while the operator
+// drags and only updates the local read-out, so the number under the thumb
+// tracks the hand. `change` fires once on release and is the only one that
+// posts — a POST per pixel would push a state broadcast to every SSE client
+// (wall, plenary mirror) dozens of times per second.
+document.getElementById('camera-zoom').addEventListener('input', (event) =>
+  showZoomValue(event.target.value),
+);
 document.getElementById('camera-zoom').addEventListener('change', (event) =>
   post('/api/camera_zoom', { factor: Number(event.target.value) }),
+);
+
+/** The tour's pace as a plain fraction — "1/1", "1/2", "1/4".
+ *
+ * Not a percentage and not seconds: the operator is choosing "half as fast",
+ * and 0.5 or "50 %" or "10,4 s pro Etappe" all take a moment of arithmetic to
+ * turn back into that. The slider is continuous, so anything between the neat
+ * fractions is shown as a decimal divisor ("1/1,4"). */
+function showSpeedValue(factor) {
+  const value = Math.min(1, Math.max(0.25, Number(factor) || 1));
+  const divisor = 1 / value;
+  const rounded = Math.round(divisor * 10) / 10;
+  const text = Number.isInteger(rounded) ? String(rounded) : String(rounded).replace('.', ',');
+  document.getElementById('camera-speed-value').textContent = `1/${text}`;
+}
+
+document.getElementById('camera-speed').addEventListener('input', (event) =>
+  showSpeedValue(event.target.value),
+);
+document.getElementById('camera-speed').addEventListener('change', (event) =>
+  post('/api/camera_speed', { factor: Number(event.target.value) }),
 );
 
 window.kgOperator = { render, showTranscript };
@@ -104,6 +157,7 @@ let state = {
   min_mentions: 1,
   camera_mode: 'fit',
   camera_zoom: 1,
+  camera_speed: 1,
   stt_connected: false,
   interview: null,
 };

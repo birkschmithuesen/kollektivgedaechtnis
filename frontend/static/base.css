@@ -1,2 +1,101 @@
 html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 #cy { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+
+/* Visitor controls, surface A only (`?touch=1`). Sized for a finger on a 65"
+   panel at arm's length, not for a mouse: 72px tall, generous gaps. The iiyama
+   is an IR touchscreen — contacts register slightly ABOVE the glass, so a
+   cramped target is missed more often than on a capacitive phone. */
+.touch-controls {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  /* Sits over the graph without a hard edge: the wall should still read as one
+     surface, not as an app with a toolbar bolted on. */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  z-index: 10;
+  font-family: inherit;
+}
+.touch-density { display: flex; gap: 12px; }
+.touch-button {
+  /* Smaller than the first draft (Birk, 2026-08-26 — 72px/26px was too loud
+     on the wall). 48px is the floor, not a taste choice: it is the standard
+     minimum touch target, and this is an IR panel where contacts register
+     slightly above the glass, so a smaller target gets missed more often than
+     on a capacitive phone. The bar should recede behind the graph; it must
+     still be hittable without aiming. */
+  min-height: 48px;
+  min-width: 132px;
+  padding: 0 20px;
+  font-size: 18px;
+  color: var(--fg, #fff);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  /* No text selection or long-press callout: a held finger on an exhibition
+     screen must never raise the browser's own context UI. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.touch-button.active {
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Quote on touch (spec §10.2).
+   Bottom-centre, above the touch controls. Fades rather than pops: the wall's
+   whole language is slow transitions, and a quote snapping in would be the only
+   hard cut on the screen.
+
+   The panel needs its OWN light surface, not a translucent dark one. Every
+   theme sets --bg to #000000, so the original rgba(0,0,0,0.72) fill rendered
+   as pure black on pure black — the box was invisible and the white text hung
+   in the void over a graph that also draws in white (measured 2026-08-26:
+   median luminance 0 inside the panel, identical to the background). A quote
+   has to read as a card laid ON the wall, which needs contrast in the surface
+   itself. */
+.quote-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%) translateY(12px);
+  max-width: min(1100px, 78vw);
+  margin: 0;
+  padding: 32px 44px;
+  background: #f4f1ea;
+  color: #14120f;
+  border-radius: 3px;
+  /* Lifts the card off the wall and hides the seam where the graph's own
+     white strokes would otherwise touch the edge. */
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  transition: opacity 600ms ease, transform 600ms ease;
+  pointer-events: none; /* never steals a tap meant for the graph */
+  z-index: 9;
+}
+.quote-overlay.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+.quote-text {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.42;
+  color: inherit;
+  font-style: italic;
+  /* Hanging opening quote: the mark sits in the margin so the first letter
+     still lines up with the rest of the paragraph. */
+  text-indent: -0.42em;
+}
+.quote-text::before { content: '\201E'; }
+.quote-text::after { content: '\201C'; }
+/* Density steps carry their own term count: a step that would empty the wall
+   has to say so before it is pressed, not after. Label and count sit on one
+   baseline — stacked, they would double the bar's height, which is exactly
+   what the smaller sizing is meant to avoid. */
+.touch-button.density { display: flex; align-items: baseline; gap: 9px; }
+.density-count { font-size: 14px; opacity: 0.58; font-variant-numeric: tabular-nums; }
+.touch-button.density.empty { opacity: 0.45; }
+.touch-button.density.empty .density-count { opacity: 0.9; }

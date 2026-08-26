@@ -17,6 +17,9 @@
 <script src="static/vendor/cytoscape-layout-utilities.js"></script>
 <script type="module">
   import { createGraphView } from './static/projection.js';
+  import { attachTouchAutonomy } from './static/touch-autonomy.js';
+  import { createTouchControls } from './static/touch-controls.js';
+  import { attachQuoteOverlay } from './static/quote-overlay.js';
 
   const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
@@ -82,20 +85,67 @@
     window.kgView = view;
     window.kgReady = false;
 
+    // Quote on touch (spec §10.2's parked nice-to-have). Attached on every
+    // surface, not just the touchscreen: surface C gets no visitors, so it
+    // simply never fires there, and keeping one code path avoids a second
+    // page that drifts from this one.
+    const quotes = attachQuoteOverlay(view);
+    window.kgQuotes = quotes;
+
+    // Surface A only (`?touch=1`). Surface C in the plenary room loads the same
+    // page without the flag and stays a pure display: no controls to press, no
+    // local mode override, exactly the operator's setting all day.
+    const isTouch = params.get('touch') === '1';
+    let autonomy = null;
+    let controls = null;
+    if (isTouch) {
+      autonomy = attachTouchAutonomy(view);
+      controls = createTouchControls(document.body, {
+        onOverview: () => {
+          // Two things at once, because "Übersicht" means one thing to the
+          // visitor: leave my manual zoom AND show the whole net.
+          autonomy.releaseNow();
+          view.camera.setZoomFactor(1);
+          view.camera.setMode('fit');
+        },
+        onDensity: (value) => {
+          view.setMinMentions(value);
+          fetch('/api/min_mentions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ value }),
+          }).catch((error) => console.warn('failed to set density', error));
+        },
+      });
+      window.kgTouch = { autonomy, controls };
+    }
+
     const events = new EventSource('/events');
     events.onmessage = (message) => {
       const payload = JSON.parse(message.data);
       if (payload.type === 'graph') {
         view.update(payload.graph);
+        quotes.setGraph(payload.graph);
+        if (controls) controls.setGraph(payload.graph);
         window.kgReady = true;
       } else if (payload.type === 'state') {
         view.setMinMentions(payload.state.min_mentions);
-        view.camera.setMode(payload.state.camera_mode);
+        if (controls) controls.setDensity(payload.state.min_mentions);
+        // Route the operator's mode through the autonomy guard on the touch
+        // surface: applying it directly would snatch the view away from a
+        // visitor mid-gesture. Everywhere else it applies immediately.
+        if (autonomy) autonomy.setOperatorMode(payload.state.camera_mode);
+        else view.camera.setMode(payload.state.camera_mode);
         // D4: the zoom level is an on-site setting, carried in the same state
         // push as the mode. Guard the value — setZoomFactor throws below 1,
         // and an exhibition wall must degrade rather than stop rendering.
         const zoom = Number(payload.state.camera_zoom);
         if (zoom >= 1) view.camera.setZoomFactor(zoom);
+        // Guarded the same way: setRoamSpeed clamps rather than throws, but an
+        // absent field (older server, replayed state) must leave the pace alone
+        // instead of resetting it to full.
+        const speed = Number(payload.state.camera_speed);
+        if (speed > 0) view.camera.setRoamSpeed(speed);
       }
     };
   });

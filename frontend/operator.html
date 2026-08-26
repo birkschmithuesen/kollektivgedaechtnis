@@ -21,11 +21,23 @@
     </select>
   </label>
   <label>Zoom
-    <select id="camera-zoom">
-      <option value="1">1× — ganzes Netz</option>
-      <option value="1.5">1,5×</option>
-      <option value="2">2× — halbes Netz</option>
-    </select>
+    <!-- Continuous, not three steps (Birk, 2026-08-26): the question being
+         answered on site is "far enough in that the labels are readable on
+         THIS wall, from THIS distance", and that has no reason to land on one
+         of three preset numbers. Range and step match the server's own bound
+         (CameraZoom: 1.0-4.0) so the UI can never post a value the API
+         rejects. `input` would fire on every pixel of the drag and flood the
+         SSE fanout; `change` fires once, when the operator lets go. -->
+    <input id="camera-zoom" type="range" min="1" max="4" step="0.05" value="1">
+    <output id="camera-zoom-value">1,00×</output>
+  </label>
+  <label>Tempo
+    <!-- Speed of the automatic tour as a fraction of its tuned pace: right
+         stop = the speed the motion was judged at, left stop = a quarter of
+         it. Only downwards on purpose — there is no setting that runs faster
+         than what was ever looked at on the wall. -->
+    <input id="camera-speed" type="range" min="0.25" max="1" step="0.05" value="1">
+    <output id="camera-speed-value">1/1</output>
   </label>
   <span id="interview"></span>
 </header>
