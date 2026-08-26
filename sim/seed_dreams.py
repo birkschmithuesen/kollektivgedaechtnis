@@ -17,55 +17,58 @@ from pathlib import Path
 from kg2.config import DreamConfig
 from kg2.store import DreamStore
 
-#: Forty fictional dreams of one fictional festival day. Written to spec §5.1's
-#: 20-40 word target, so the layout is judged against sentences the real system
-#: would actually produce — a strip judged on eight-word captions proves nothing
-#: about a thirty-word one.
+#: Forty fictional dreams of one fictional festival day. Spec §5.1's target is
+#: ~20-40 words; this corpus genuinely SPANS that range (20 to 40, six of them
+#: at 36-40) rather than clustering at the bottom of it. A strip judged only on
+#: sentences barely over the floor never exercises the hard case: whether a
+#: real 36-40 word sentence still fits the two-line `#sentence` budget without
+#: pushing the strip off screen (review finding, 2026-08-26 — the previous
+#: corpus topped out at 21 words, so that case was never rendered at all).
 #:
 #: Invented outright, and deliberately not drawn from the corpus: these end up
 #: in a review directory, and a half-formed dream of real people's words does
 #: not belong there.
 SENTENCES = [
-    "In einem Hof, der gleichzeitig gegossen und bepflanzt wird, warten zwei Generationen darauf, dass die jeweils andere zuerst aufgibt.",
-    "Die Bagger halten an, weil jemand vergessen hat, wem der Boden gehört, und die Baugrube füllt sich langsam mit Schilf.",
-    "Ein Haus lernt sprechen und benutzt sein erstes Wort, um nach der Miete zu fragen, die niemand mehr aufbringen kann.",
-    "Über der Umgehungsstraße hängt ein Dorf an Seilen, und die, die es gebaut haben, dürfen nicht darin wohnen.",
-    "Hundert Klebepunkte auf einem Plan ergeben zusammen ein Gesicht, das niemand wiedererkennt und alle unterschrieben haben.",
-    "Der Beton atmet zum ersten Mal aus, und was er ausatmet, ist der Staub aller Häuser, die vorher hier standen.",
-    "In der Tiefgarage wächst ein Wald, dessen Bäume nach oben durch die Decke wollen und dabei sehr höflich bleiben.",
-    "Eine Maschine plant ein Zuhause, das perfekt ist, bis auf den Geruch, und genau daran erkennt es jeder sofort.",
-    "Die Fassade wird jeden Morgen neu gedruckt, und jeden Abend sammelt jemand die alte auf und trägt sie fort.",
-    "Zwei Nachbarn teilen sich eine Wand und streiten seit zwölf Jahren darüber, auf welcher Seite sie eigentlich steht.",
-    "Der Kran über dem Quartier dreht sich weiter, obwohl unten längst niemand mehr baut, und niemand traut sich, ihn abzustellen.",
-    "Aus dem Leerstand im Erdgeschoss wächst nachts ein Marktplatz, der morgens wieder verschwindet und Krümel hinterlässt.",
-    "Ein Dach aus Solarzellen wirft einen Schatten, in dem nichts mehr wächst, und alle finden das trotzdem richtig.",
-    "Die Wohnung ist so klug geworden, dass sie ihre Bewohner beim Namen nennt und dabei jedes Mal zögert.",
-    "Im Modell steht schon der Park, im Maßstab eins zu fünfhundert, wo draußen noch der Parkplatz auf sein Ende wartet.",
-    "Ein Bagger und eine Buche stehen sich gegenüber, und beide warten darauf, dass eine Behörde endlich zurückschreibt.",
-    "Die Bauakte wird so schwer, dass sie durch den Boden des Amtes bricht und im Archiv darunter weiterwächst.",
-    "Hinter der Dämmung wohnt seit Jahren ein Vogel, den niemand entfernen darf und niemand füttern will.",
-    "Ein Neubau steht fertig da und wartet auf Menschen, die sich ihn ausgerechnet deshalb nicht leisten können.",
-    "Der Fluss holt sich die Uferstraße zurück, sehr langsam, und die Stadt nennt es einen Naturerlebnisraum.",
-    "In der Mitte des Quartiers steht ein Haus, das allen gehört und deshalb von niemandem repariert wird.",
-    "Die Ziegel erinnern sich an die Hand, die sie gelegt hat, und geben das Wissen an keine Maschine weiter.",
-    "Ein Aufzug fährt durch ein Gebäude, das es nicht mehr gibt, und hält weiter zuverlässig im vierten Stock.",
-    "Die neue Siedlung ist aus dem Abbruch der alten gebaut, und nachts hört man, dass das Material sich nicht einig ist.",
-    "Ein Balkon wächst so weit über die Straße, dass er dem Balkon gegenüber die Hand geben könnte, wenn er dürfte.",
-    "Die Bewohner planen ihr Haus gemeinsam und finden nach vier Jahren heraus, dass alle etwas anderes gezeichnet haben.",
-    "Auf dem Dach steht ein Feld, unten steht ein Supermarkt, und dazwischen redet niemand miteinander.",
-    "Der Rechner schlägt vor, die Straße zu verschmälern, und schlägt gleichzeitig vor, mehr Autos hineinzulassen.",
-    "Ein Fenster wird jeden Winter kleiner, weil die Dämmung von innen wächst, und irgendwann ist es eine Erinnerung.",
-    "Zwei Bauträger bauen dasselbe Grundstück, jeder ohne den anderen zu sehen, und die Häuser stehen ineinander.",
-    "Der Hof ist versiegelt, damit nichts wächst, und die Kinder tragen jeden Tag ein bisschen Erde hinein.",
-    "Ein Kalksandstein träumt davon, wieder Sand zu sein, und wartet darauf, dass die Abrissbirne endlich kommt.",
-    "Die Beteiligung war vorbildlich, das Protokoll ist zweihundert Seiten lang, und gebaut wird der erste Entwurf.",
-    "Im Treppenhaus hängt ein Plan des Gebäudes, auf dem eine Wohnung eingezeichnet ist, die niemand finden kann.",
-    "Der Rohbau steht seit sieben Jahren offen, und Efeu hat entschieden, dass er jetzt die Fassade macht.",
-    "Ein Dorf zieht in die Stadt und die Stadt zieht aufs Land, und sie begegnen sich auf halber Strecke am Bahnhof.",
-    "Die Wärmepumpe summt so laut, dass die Nachbarn ausziehen, und danach ist die Bilanz endlich ausgeglichen.",
-    "Auf der Brache steht ein Schild, das eine Zukunft ankündigt, und das Schild ist inzwischen älter als die Brache.",
-    "Ein Haus aus Lehm steht neben einem Haus aus Beton, und beide behaupten, das jeweils andere sei die Vergangenheit.",
-    "Die letzte Baugenehmigung des Jahres wird erteilt für ein Gebäude, das seine eigene Grundfläche wieder freigeben soll.",
+    "In einem Hof, der gleichzeitig gegossen und bepflanzt wird, warten zwei Generationen geduldig darauf, dass die jeweils andere zuerst endgültig aufgibt und den Platz freimacht.",
+    "Die Bagger halten mitten in der Nacht an, weil plötzlich niemand mehr sagen kann, wem der Boden eigentlich gehört, und die Baugrube füllt sich langsam mit Schilf und stillem Wasser, während am Rand jemand die Grenze längst vergessen hat.",
+    "Ein Haus lernt sprechen und benutzt sein allererstes, mühsam geübtes Wort ausgerechnet dafür, nach einer Miete zu fragen, die in dieser Stadt niemand mehr aufbringen kann.",
+    "Über der alten Umgehungsstraße hängt an dünnen Seilen ein ganzes Dorf, und ausgerechnet die, die es mit eigenen Händen gebaut haben, dürfen darin nicht wohnen.",
+    "Hundert kleine Klebepunkte auf einem ausgebreiteten Plan ergeben zusammen ein einziges Gesicht, das niemand im Saal wiedererkennt, obwohl alle Anwesenden es am Ende bereitwillig unterschrieben haben.",
+    "Der Beton atmet zum allerersten Mal richtig aus, und was er dabei ausatmet, ist der feine Staub sämtlicher Häuser, die vor ihm genau hier gestanden hatten.",
+    "In der Tiefgarage wächst über Nacht ein ganzer Wald, dessen junge Bäume unbedingt nach oben durch die Betondecke wollen und dabei erstaunlich höflich und rücksichtsvoll bleiben.",
+    "Eine Maschine entwirft in Sekunden ein Zuhause, das in jeder Hinsicht perfekt ist, bis auf den fehlenden Geruch, und genau daran erkennt es jeder Besucher sofort.",
+    "Die Fassade wird jeden einzelnen Morgen frisch neu gedruckt, und jeden Abend sammelt jemand still die alte, ausrangierte Haut ein und trägt sie schweigend fort.",
+    "Zwei Nachbarn teilen sich seit Jahrzehnten eine einzige tragende Wand und streiten seit zwölf zähen Jahren unversöhnt darüber, auf welcher Seite diese Wand eigentlich wirklich steht.",
+    "Der Kran über dem halbfertigen Quartier dreht sich unbeirrt weiter, obwohl unten längst niemand mehr baut, und keiner traut sich, ihn nach all der Zeit endlich abzustellen.",
+    "Aus dem dauerhaften Leerstand im Erdgeschoss wächst mitten in der Nacht ein ganzer Marktplatz, der jeden Morgen wieder spurlos verschwindet und nur ein paar Krümel hinterlässt.",
+    "Ein Dach aus dicht montierten Solarzellen wirft einen so tiefen Schatten, dass darunter nichts mehr wachsen kann, und trotzdem finden alle Beteiligten diese Lösung erstaunlich richtig.",
+    "Die Wohnung ist im Lauf der Jahre so klug geworden, dass sie ihre eigenen Bewohner beim vollen Namen nennt und dabei jedes einzelne Mal spürbar zögert.",
+    "Im sorgfältig gebauten Modell steht schon der Park, exakt im Maßstab eins zu fünfhundert, während draußen in der echten Welt der Parkplatz geduldig auf sein Ende wartet.",
+    "Ein alter Bagger und eine junge Buche stehen sich mitten auf der Brache gegenüber, und beide warten seit Wochen still darauf, dass irgendeine Behörde endlich zurückschreibt.",
+    "Die Bauakte wird über die Jahre so unfassbar schwer, dass sie eines Tages durch den Boden des Amtes bricht und im Archiv darunter einfach weiterwächst.",
+    "Hinter der alten Dämmung wohnt schon seit Jahren ein Vogel, den offiziell niemand entfernen darf und den niemand füttern will.",
+    "Ein fertiggestellter Neubau steht glänzend da und wartet geduldig auf Menschen, die sich ausgerechnet ihn, mit all seiner Perfektion, am Ende schlicht nicht leisten können.",
+    "Der Fluss holt sich die alte Uferstraße ganz langsam, aber unaufhaltsam zurück, Stein für Stein, und die Stadtverwaltung nennt das Ganze am Ende einen Naturerlebnisraum.",
+    "In der genauen Mitte des neuen Quartiers steht ein einzelnes Haus, das offiziell allen zugleich gehört und deshalb, wie sich zeigt, von niemandem mehr repariert wird.",
+    "Die alten Ziegel erinnern sich noch genau an die Hand, die sie einst gelegt hat, und geben dieses stille Wissen an keine einzige Maschine weiter.",
+    "Ein Aufzug fährt gleichmäßig weiter durch ein Gebäude, das es schon lange nicht mehr gibt, und hält trotzdem jeden Tag zuverlässig genau im vierten Stock.",
+    "Die neue Siedlung ist vollständig aus dem Abbruch der alten errichtet worden, und nachts hört man deutlich, dass sich das wiederverwertete Material darüber noch immer nicht einig ist, als stritten sich die Steine noch über ihr früheres Haus.",
+    "Ein Balkon wächst so weit und so beharrlich über die Straße hinaus, dass er dem Balkon gegenüber fast die Hand geben könnte, wenn er es nur dürfte.",
+    "Die Bewohner planen ihr gemeinsames Haus jahrelang einträchtig zusammen und finden nach vier zähen Jahren überrascht heraus, dass am Ende alle etwas ganz anderes gezeichnet haben.",
+    "Auf dem flachen Dach steht still ein ganzes Feld, unten direkt darunter steht ein großer Supermarkt, und zwischen den beiden Ebenen redet buchstäblich niemand mehr miteinander.",
+    "Der Planungsrechner schlägt in einem Atemzug vor, die enge Straße zu verschmälern, und schlägt im nächsten gleich vor, deutlich mehr Autos zusätzlich hineinzulassen.",
+    "Ein Fenster wird jeden einzelnen Winter ein kleines Stück kleiner, weil die Dämmung von innen unaufhaltsam wächst, und irgendwann ist von ihm nur noch eine Erinnerung übrig.",
+    "Zwei Bauträger bebauen gleichzeitig dasselbe Grundstück, jeder ohne den anderen je zu sehen, und am Ende stehen die Häuser ineinander verschachtelt.",
+    "Der versiegelte Hof lässt bewusst nichts mehr wachsen, und trotzdem tragen die Kinder jeden Tag geduldig ein kleines bisschen echte Erde heimlich wieder hinein.",
+    "Ein alter Kalksandstein träumt insgeheim davon, irgendwann wieder loser Sand zu sein, und wartet seit Jahren geduldig darauf, dass die Abrissbirne endlich kommt und ihn erlöst.",
+    "Die Bürgerbeteiligung war in jeder Hinsicht vorbildlich organisiert, das fertige Protokoll ist zweihundert Seiten lang, und am Ende wird trotzdem exakt der allererste Entwurf gebaut.",
+    "Im dunklen Treppenhaus hängt ein alter Plan des Gebäudes, auf dem eine kleine Wohnung eingezeichnet ist, die seit Jahren beim besten Willen niemand mehr finden kann.",
+    "Der Rohbau steht bereits seit sieben langen Jahren offen zum Himmel, und der Efeu hat inzwischen ganz von selbst entschieden, dass er ab jetzt die Fassade übernimmt.",
+    "Ein ganzes Dorf zieht geschlossen in die große Stadt, während zur gleichen Zeit die Stadt aufs weite Land zieht, und beide begegnen sich schließlich zufällig auf halber Strecke am alten Bahnhof, ohne sich zu erkennen.",
+    "Die neue Wärmepumpe summt so beharrlich und so laut, dass nach und nach sämtliche Nachbarn ausziehen, und erst danach ist die viel besprochene Energiebilanz des Hauses endlich wirklich ausgeglichen, obwohl niemand im Amt das jemals so geplant hatte.",
+    "Auf der weiten Brache steht seit Jahren ein verblasstes Schild, das lautstark eine glänzende Zukunft ankündigt, und inzwischen ist dieses Schild selbst schon spürbar älter als die Brache, die es bewirbt, und niemand erinnert sich mehr an die gemeinte Zukunft.",
+    "Ein schlichtes Haus aus gestampftem Lehm steht direkt neben einem kühlen Haus aus rohem Beton, und beide behaupten, wechselseitig und mit großer Überzeugung, das jeweils andere sei eindeutig die Vergangenheit, während der Wind das letzte Wort behält.",
+    "Die allerletzte Baugenehmigung des Jahres wird ausgerechnet für ein Gebäude erteilt, das laut Auflage seine eigene, mühsam versiegelte Grundfläche am Ende wieder vollständig freigeben soll, sobald die Frist abgelaufen ist, bis dort am Ende gar nichts mehr steht.",
 ]
 
 #: A realistic festival-day cadence: one dream every eight minutes.

@@ -116,6 +116,31 @@ def test_a_full_strip_of_forty_dreams_still_fits_on_screen(view):
     assert strip["y"] + strip["height"] <= 1081  # inside a 1080-high viewport
 
 
+def test_the_longest_seeded_sentence_does_not_push_the_strip_off_screen(view):
+    """Review finding: the seeded corpus used to top out at 21 words, so this
+    case — a genuine 36-40 word sentence in the two-line `#sentence` budget,
+    WITH a full strip below it — was never actually rendered before being
+    judged. Uses the real corpus, not a hand-picked long string, so a future
+    edit that quietly shortens it back down would be caught here too."""
+    from sim.seed_dreams import SENTENCES
+
+    longest = max(SENTENCES, key=lambda sentence: len(sentence.split()))
+    assert len(longest.split()) >= 36  # otherwise this isn't the hard case
+
+    apply(
+        view,
+        state(
+            current=dream(41, sentence=longest),
+            history=[dream(i) for i in range(1, 41)],
+        ),
+    )
+
+    strip = view.locator("#strip").bounding_box()
+    assert strip["y"] + strip["height"] <= 1081  # inside a 1080-high viewport
+    sentence_box = view.locator("#sentence").bounding_box()
+    assert sentence_box["y"] + sentence_box["height"] <= strip["y"]
+
+
 # -- sizing (spec §6 / T1§11) ------------------------------------------------
 
 

@@ -113,18 +113,75 @@ html, body {
 
 /* Smaller and dimmer: the strip is the evidence, not a second gallery. */
 #strip li {
-  /* Subtract more than the row's own gap-to-edge allowance: the current
-     image must stay unambiguously dominant (spec §6, asymmetric by design)
-     even at the default strip-ratio, not just barely win a pixel count. */
-  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
   flex: 0 1 auto;
   min-width: 0;
   opacity: var(--dim);
 }
 
 #strip li img {
+  display: block;
+}
+
+/* Review finding: at realistic counts (spec §11's 20/40-dream series) a
+   fixed-height, object-fit:cover strip crops each thumbnail to a thin
+   centre-vertical sliver — the evidence the strip exists to show gets thrown
+   away exactly as the day fills up. Which trade-off to accept is an artistic
+   call, not an implementer's, so THREE modes are built and left selectable
+   via `data-strip-mode` on <html> (query param `?strip_mode=`, read once at
+   load) rather than one being chosen here. `cover` stays the default so
+   nothing on the real wall changes until Birk picks — see
+   sim/dream_prerender.py --strip-mode for the side-by-side renders. No
+   ordering below implies a preference; they are listed alphabetically. */
+
+/* aspect: aspect-ratio on the LI itself ties width and height together, so
+   flex-shrink squeezes both in step as the count grows — smaller pictures,
+   the full frame always visible (object-fit: contain), never cropped. At a
+   handful of dreams max-height keeps it at the same size `cover` uses. */
+[data-strip-mode="aspect"] #strip li {
+  height: auto;
+  aspect-ratio: 16 / 9;
+  max-height: calc(var(--strip-ratio) * 100vh - 2.6vh);
+}
+
+[data-strip-mode="aspect"] #strip li img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+/* cover (default — today's behaviour): fixed height, crop to fill. Every
+   thumbnail is the SAME height no matter the count, so a busy day compresses
+   WIDTH instead — the crop that eats most of each picture past ~20 dreams. */
+[data-strip-mode="cover"] #strip li {
+  /* Subtract more than the row's own gap-to-edge allowance: the current
+     image must stay unambiguously dominant (spec §6, asymmetric by design)
+     even at the default strip-ratio, not just barely win a pixel count. */
+  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
+}
+
+[data-strip-mode="cover"] #strip li img {
   height: 100%;
   width: 100%;
   object-fit: cover;
-  display: block;
+}
+
+/* wrap: items keep cover's natural size (flex-shrink: 0) and the row wraps
+   onto more lines instead of compressing — the strip grows DOWN across the
+   fixed strip band rather than thinning sideways. At high counts the extra
+   rows can exceed the band and are clipped by #strip's own overflow:hidden,
+   which is the trade-off this mode is presented to show, not a bug to hide. */
+[data-strip-mode="wrap"] #strip {
+  flex-wrap: wrap;
+  align-content: flex-end;
+}
+
+[data-strip-mode="wrap"] #strip li {
+  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
+  flex-shrink: 0;
+}
+
+[data-strip-mode="wrap"] #strip li img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
 }
