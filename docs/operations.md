@@ -182,3 +182,225 @@ verschmelzen. Der Rest ist echte Bedeutungsdistanz — „3D-Drucker" und
 obwohl beide „Roboter auf der Baustelle" meinen. Ein größeres Kandidatenfenster
 würde dem Judge nur mehr Rauschen zeigen. Das ist der erwartete Zustand, kein
 Defekt: die Wand zeigt dann zwei verwandte Knoten statt einem.
+
+## Kollektivtraum — Screen B (Tool 2)
+
+Läuft auf einer **eigenen kleinen Maschine** neben dem Ausstellungsrechner
+(Spec §9). Tool 1 und Tool 2 hängen nicht voneinander ab: Fällt Tool 2 aus,
+bleibt die Wand unberührt; fällt Tool 1 aus, zeigt Screen B seinen letzten
+Traum und den vollen Verlaufsstreifen weiter.
+
+### Vor dem Festival, auf der Traum-Maschine
+
+1. Zwei Geheimnisse exportieren (nie in `config2.toml`, nie aus `~/.hermes/.env`):
+
+   ```bash
+   export ANTHROPIC_API_KEY=...      # Stufe 1: Graph -> Satz
+   export OPENROUTER_API_KEY=...     # Stufe 2: Satz -> Bild
+   ```
+
+2. `cp config2.example.toml config2.toml`, dann `tool1_url` auf die Adresse
+   setzen, die der Core beim Start ausgibt.
+
+3. **Netzprüfung, von DIESER Maschine aus** (siehe „Netzwerk für Screen B und
+   Screen C" oben — auf dem Ausstellungsrechner selbst gelingt sie auch bei
+   falschem Bind und beweist deshalb nichts):
+
+   ```bash
+   # auf der Traum-Maschine, nicht auf dem Ausstellungsrechner:
+   curl -s http://<adresse>:8800/graph.json | head -c 200
+   ```
+
+4. Rauchtest ohne Ausstellungsrechner und ohne Modelle:
+
+   ```bash
+   uv run python -m kg2 --no-watch
+   ```
+
+   Danach `http://<traum-maschine>:8810/dream` und `/operator` öffnen.
+
+5. **Vor der ersten echten Ausstellung, einmalig:** den Bild-Endpunkt
+   sondieren. `docs/dream-image-contract.md` ist als „NOCH NICHT VERIFIZIERT"
+   markiert — die Request-/Response-Form, gegen die `kg2/imagegen.py`
+   geschrieben wurde, stammt aus der Modell-Dokumentation, nicht aus einem
+   echten Aufruf. Das Sondierungsskript steht in diesem Dokument unter
+   „Aktion für einen Menschen mit Schlüssel"; es kostet einen Aufruf (ein paar
+   Cent) und druckt nur die Form der Antwort. Ergebnis dort eintragen, bevor
+   der erste echte Traum am Ausstellungstag entsteht.
+
+### Der Rhythmus
+
+Ein Traum entsteht, **wenn ein Interview fertig verarbeitet ist** — nicht nach
+der Uhr, nie während der Stille. Der Watcher fragt alle
+`poll_interval_s` Sekunden `graph.json` ab und erkennt ein fertiges Interview
+daran, dass ein Personenknoten **Kanten hat**. Ein Personenknoten ohne Kanten
+ist erst das Foto; die Begriffe kommen Sekunden bis Minuten später (Spec §4.1).
+
+Zwischen zwei Träumen liegen mindestens `min_interval_s` Sekunden. Landen
+mehrere Interviews in diesem Fenster, werden sie zu **einem** Traum
+zusammengefasst — der Traum ist der des ganzen Graphen, nicht der einer Person.
+
+### Die Regler (alle im Operator-Fenster der Traum-Maschine)
+
+**Anzeige** — Leitfrage zeigen/verbergen und nach N Sekunden ausblenden;
+Überblenddauer; Streifenhöhe; Schreibmaschine an/aus.
+
+**Ablauf** — „Jetzt träumen" (ignoriert den Mindestabstand; für den Moment, in
+dem jemand vom Veranstalter vor dem Schirm steht), „Pause", „Aktuellen Traum
+verwerfen".
+
+> **Verwerfen ist der einzige Notausgang** (Spec §7). Es nimmt das Bild in
+> einem Schritt vom großen Schirm **und** aus dem Verlaufsstreifen; der
+> vorherige Traum rückt wieder nach vorn. Der Datensatz bleibt erhalten —
+> „zurückholen" ist derselbe Knopf. Kein Freigabeprozess, keine Kuratierung.
+
+**Nicht im Interface, absichtlich:** Leitfrage, Bildregister und Gewichtung.
+Alle drei werden morgens in `config2.toml` gesetzt. Eine wandernde Leitfrage
+macht genau die Vergleichbarkeit kaputt, für die der Verlaufsstreifen da ist.
+
+### Wenn etwas ausfällt
+
+| Symptom | Bedeutung | Maßnahme |
+|---|---|---|
+| Bild wechselt nicht mehr, Streifen steht | Cloud oder Netz weg | Nichts tun. Das letzte Bild bleibt stehen, der nächste Trigger versucht es erneut. Kein Retry-Sturm, keine Zusatzkosten. |
+| Nie ein neuer Traum, obwohl Interviews laufen | Tool 1 nicht erreichbar | `curl http://<adresse>:8800/graph.json` **von der Traum-Maschine**. Danach Bind und Firewall prüfen. |
+| Screen B ist schwarz | Tool-2-Prozess tot | Neu starten. Wand und zweiter Raum sind unberührt. |
+| Bild ist unbrauchbar oder peinlich | Bildmodell | „Aktuellen Traum verwerfen". Der vorherige kommt zurück. |
+| Traum steht auf „läuft" und wird nicht fertig | Absturz mitten im Zyklus | Nichts tun — er erscheint nie auf dem Schirm. Der nächste Trigger macht einen neuen. |
+| Platte voll | ~40 Bilder am Tag zu einigen hundert KB | Für einen Tag kein Thema (Spec §8). Bewusst nicht wegprogrammiert. |
+
+**Physischer Rückfallweg:** LTE-Stick. Beide Cloud-Aufrufe hängen am Uplink,
+und Messe-WLAN ist genau dort um 14 Uhr am schwächsten.
+
+**Was ein Neustart erhält:** den aktuellen Traum, den vollständigen
+Verlaufsstreifen inklusive der verworfenen Einträge (als verworfen), jede
+Anzeige-Einstellung, den Pausenzustand — und die Information, welche Interviews
+schon geträumt wurden, sodass nach dem Neustart weder alles noch einmal geträumt
+wird noch gar nichts mehr. Alles liegt in `dreams.sqlite3`; nichts nur im
+Speicher.
+
+### Kalibrierte Werte (Tool 2)
+
+Diese Werte stehen in `config2.toml`. Zwei sind tatsächlich kalibriert, einer
+ist ein Startwert aus der Spec, der noch nicht am generierten Material
+überprüft wurde. Der Unterschied wird hier nicht verwischt.
+
+- `min_interval_s` = **240** — kalibriert (`sim.dream_calibrate floor`,
+  Simulationslauf 2026, kein Modell nötig, reine Arithmetik über den
+  Tagestakt). Bei 60 Interviews über 8 h liegt die Taktung bei einem
+  Interview alle 480 s. Ergebnistabelle:
+
+  | `min_interval_s` | Träume | zusammengefasst |
+  |---|---|---|
+  | 120 | 60 | 0 |
+  | 240 | 60 | 0 |
+  | 360 | 60 | 0 |
+  | 480 | 60 | 0 |
+  | 900 | 30 | 30 |
+
+  Bei 40 Interviews über 6 h (Takt 540 s) zeigt sich dieselbe Form.
+  **Der eigentliche Befund:** Bei der erwarteten Taktung greift ein
+  240-s-Boden **nie** — 60 Träume, 0 zusammengefasst, genau wie bei 120, 360
+  und 480. Er ist keine laufende Bremse, sondern eine Versicherung gegen einen
+  Schwall von Interviews, die dicht hintereinander eintreffen; erst deutlich
+  über der Tagesspannung (hier: ab etwa 900 s) beginnt er, den Tag wirklich zu
+  formen — und halbiert dort die Anzahl. Alles bei oder unter dem Tagesabstand
+  ist ein No-op. **Das steht hier bewusst so deutlich, damit niemand den Wert
+  später nach oben „nachjustiert" in der Annahme, er würde im Normalbetrieb
+  etwas tun — das tut er nicht.**
+- `poll_interval_s` = **5** — bei diesem Mindestabstand ist eine
+  Erkennungsverzögerung von 5 s unsichtbar (Spec §4.1).
+- `contradiction_min_persons` = **6** — **noch nicht kalibriert.** Das ist der
+  Startwert aus der Spec (§5.1), nicht das Ergebnis eines Kalibrierungslaufs.
+  Unterhalb dieser Personenzahl läuft Stufe 1 allein auf der Gewichtung, weil
+  das Modell bei drei Interviews sonst einen Gegensatz erfinden würde, der im
+  Material gar nicht da ist. Ob 6 die richtige Schwelle ist, sagt erst der
+  Lauf unten in „Offene Entscheidungen" — mit echten generierten Sätzen, nicht
+  mit der Annahme, die den Startwert begründet hat.
+
+### Offene Entscheidungen
+
+Die folgenden vier Werte sind **nicht** entschieden. `config2.example.toml`
+trägt für die ersten beiden vorläufige Startwerte (dieselben, die
+`kg2/config.py` als Ausgangspunkt für Task 16 nennt) — das sind KEINE
+gewählten Werte, nur das, womit `kg2` offline läuft, solange niemand
+gewählt hat. Jede Zeile hier nennt den exakten Befehl, der die Entscheidung
+möglich macht. Kein Wert aus dieser Liste darf ungeprüft in den
+Ausstellungsbetrieb gehen.
+
+1. **Wortlaut der Leitfrage** (`guiding_question`). Vier Kandidaten, alle breit
+   genug für alle drei Interviewthemen (Zukunft des Bauens, KI im Bauen, neue
+   Formen des Zusammenlebens), werden bei 3/10/30/60 Personen als Sätze
+   ausgegeben — Birk liest die Sätze kalt und wählt, ohne dass eine
+   Empfehlung im Output steht:
+
+   ```bash
+   uv run python -m sim.dream_calibrate questions   | tee out/calibrate-questions.txt
+   ```
+
+   Braucht `ANTHROPIC_API_KEY`, ca. 16 Stufe-1-Aufrufe. Der aktuelle Wert in
+   `config2.example.toml` (`"Wie leben und bauen wir in zehn Jahren?"`) ist der
+   Vorschlag, mit dem die Kandidaten anfangen — nicht das Ergebnis der Wahl.
+
+2. **Bestätigung der Widerspruchsschwelle** (`contradiction_min_persons`).
+   Jede Kandidatengröße wird mit und ohne die Widerspruchs-Klausel
+   nebeneinandergestellt, damit sichtbar wird, ob der Widerspruch im Material
+   wirklich vorhanden war oder vom Modell erfunden wurde:
+
+   ```bash
+   uv run python -m sim.dream_calibrate contradiction   | tee out/calibrate-contradiction.txt
+   ```
+
+   Braucht `ANTHROPIC_API_KEY`, ca. 8 Stufe-1-Aufrufe.
+
+3. **Bildregister** (`visual_register`). Vier Register — Aquarell, malerisch-
+   atmosphärisch, Radierung, Siebdruck — werden auf demselben erfundenen Satz
+   gerendert, alphabetisch aufgelistet, keine Reihenfolge, keine Empfehlung im
+   Output:
+
+   ```bash
+   uv run python -m sim.dream_register --out out/register1
+   ```
+
+   Braucht `OPENROUTER_API_KEY`, 4 Bildaufrufe. Birk wählt an den Bildern,
+   nicht am Text. Der gewählte Registertext kommt danach als
+   `visual_register` in `config2.toml`.
+
+4. **Modus des Verlaufsstreifens.** Drei Modi wurden bei 20 und 40 Träumen in
+   `out/dream-strip-comparison/` gerendert und mit inhaltstragenden
+   Platzhalterbildern gemessen (nicht mit einfarbigen Flächen, an denen ein
+   Zuschnitt unsichtbar bliebe):
+
+   | Modus | 20 Träume | 40 Träume | Beobachtung |
+   |---|---|---|---|
+   | `cover` (aktueller Standard) | 80×210 px | 31×210 px | Zuschnitt auf einen mittigen Streifen; bei 40 nahezu vollständiger Verlust von links/rechts. |
+   | `aspect` | 80×45 px | 31×18 px | Kein Zuschnitt, aber beide Maße schrumpfen bis zur Unleserlichkeit; das reservierte Streifenband bleibt bei 40 größtenteils leer. |
+   | `wrap` | 372×210 px | 372×210 px (pro Bild) | Kein Zuschnitt einzelner Bilder, aber die Zeilenhöhe ist fest mit `overflow: hidden` — nur ein Teil der Träume ist sichtbar, der Rest wird stillschweigend abgeschnitten. |
+
+   Keiner der drei Modi ist hier empfohlen. Birk wählt anhand der gerenderten
+   Dateien in `out/dream-strip-comparison/` (Dateinamen tragen den Modus).
+   Gewählt wird per `--strip-mode` beim Pre-Rendering und per
+   `data-strip-mode` auf der Seite.
+
+5. **Die 40-Bilder-Vorab-Serie**, für die Beurteilung des vollen Tages statt
+   eines leeren Streifens — braucht Register **und** Streifenmodus aus 3. und
+   4., damit die 40 echten Bilder nicht an einer noch unfertigen Anzeige
+   verschwendet werden:
+
+   ```bash
+   uv run python -m sim.dream_prerender --out out/dream-prerender2 --generate
+   ```
+
+   Braucht `OPENROUTER_API_KEY`, 40 Bildaufrufe — ein sichtbarer, bewusster
+   Kostenposten, kein Nebeneffekt.
+
+6. **Vertrag des Bild-Endpunkts.** Siehe Schritt 5 unter „Vor dem Festival"
+   oben: `docs/dream-image-contract.md` ist als „NOCH NICHT VERIFIZIERT"
+   markiert, weil beim Bau kein `OPENROUTER_API_KEY` zur Verfügung stand. Das
+   eingebettete Sondierungsskript muss einmal mit echtem Schlüssel laufen,
+   bevor der erste echte Traum am Ausstellungstag entsteht; Ergebnis wird in
+   diesem Dokument nachgetragen.
+
+**Vorab-Renderings, sobald 3.–5. entschieden sind:** `out/dream-prerender2/`
+zeigt die Seite bei 1, 5, 20 und 40 Träumen. Der Streifen wird voll beurteilt,
+nicht leer — 40 ist der Zustand um 17 Uhr.

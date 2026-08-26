@@ -21,20 +21,33 @@ min_interval_s = 240
 # Ab wie vielen Personen der Widerspruch als Konstruktionsprinzip eingeschaltet
 # wird (Spec §5.1). Darunter läuft Stufe 1 allein auf der Gewichtung, weil das
 # Modell bei drei Interviews einen Gegensatz erfinden würde.
+# NOCH NICHT KALIBRIERT: Startwert aus der Spec, nicht Ergebnis eines Laufs.
+# Bestätigen mit: uv run python -m sim.dream_calibrate contradiction
+# Siehe docs/operations.md, "Offene Entscheidungen".
 contradiction_min_persons = 6
 
 # EINE Leitfrage, den ganzen Tag (Spec §7). Nicht zur Laufzeit änderbar:
 # eine wandernde Frage macht den Verlaufsstreifen unlesbar.
+# NOCH NICHT GEWÄHLT: dies ist der Kandidat, mit dem die Kalibrierung anfängt
+# (kg2.config.DEFAULT_GUIDING_QUESTION), nicht Birks Wahl aus den vier
+# Kandidatensätzen. Wählen mit: uv run python -m sim.dream_calibrate questions
+# Siehe docs/operations.md, "Offene Entscheidungen".
 guiding_question = "Wie leben und bauen wir in zehn Jahren?"
 
 # EIN Bildregister, den ganzen Tag (Spec §5.2, §10). Wird an jeden Bildprompt
 # angehängt, nie vom Modell gewählt, nie aus dem Graphen abgeleitet.
+# NOCH NICHT GEWÄHLT: dies ist der Startwert (kg2.config.DEFAULT_VISUAL_REGISTER,
+# das Register der genehmigten Aufnahme kollektivtraum-screen_v2_2026-08-16.png),
+# nicht Birks Wahl aus den vier gerenderten Registern.
+# Wählen mit: uv run python -m sim.dream_register --out out/register1
+# Siehe docs/operations.md, "Offene Entscheidungen".
 visual_register = "Malerisch und atmosphärisch, weiche Übergänge, gedämpfte Farbigkeit, diffuses Licht, sichtbarer Pinselduktus. Kein Fotorealismus, kein Architektur-Rendering, keine Schrift im Bild."
 
 condense_model = "claude-opus-5"
 condense_effort = "high"
 
-# Vertrag verifiziert in docs/dream-image-contract.md.
+# Vertrag NOCH NICHT VERIFIZIERT — siehe docs/dream-image-contract.md, vor der
+# Ausstellung einmal mit echtem OPENROUTER_API_KEY sondieren.
 image_model = "google/gemini-3-pro-image"
 image_url = "https://openrouter.ai/api/v1/chat/completions"
 image_aspect_ratio = "16:9"
