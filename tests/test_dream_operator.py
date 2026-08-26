@@ -238,8 +238,19 @@ def test_there_is_no_control_for_the_register_or_the_weighting(ui):
 
     html = ui.locator("body").inner_html().lower()
     for forbidden in ("register", "bildsprache", "gewichtung", "min_mentions"):
-        assert f'id="{forbidden}' not in html
-        assert f"name={forbidden}" not in html
+        # Substring, not prefix: an id like "visualRegister" or
+        # "dream-register-toggle" would slip past a `id="register` check while
+        # breaking the constraint outright.
+        assert forbidden not in html
+    # And no writable control of any kind beyond the five display settings and
+    # the three flow buttons — a new <input> here is how a morning-only setting
+    # quietly becomes a runtime one.
+    writable = ui.locator("input, textarea, select").evaluate_all(
+        "els => els.map((e) => e.id).sort()"
+    )
+    assert writable == sorted(
+        ["fade-ms", "question-seconds", "question-visible", "strip-ratio", "typewriter"]
+    )
 
 
 # -- failure feedback -------------------------------------------------------

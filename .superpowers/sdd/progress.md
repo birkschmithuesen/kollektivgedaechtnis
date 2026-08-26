@@ -1072,3 +1072,32 @@ Task 12: complete (commits aaf2d98, 29361e9 + this one, review clean after 1 fix
   word-by-word build run to completion, against "turning it off is a switch,
   not a rebuild".
   Also removed a duplicated comment block left on question_seconds.
+
+Task 13: complete (commits 5dd031f + this one, review clean — Minor only).
+  frontend2/operator.html, static/operator.js, static/operator.css,
+  tests/test_dream_operator.py: 19 passing.
+  Reviewer VERIFIED all four numeric input bounds match kg2/server.py's
+  DisplaySettings exactly (question_seconds 0-36000, fade_ms 100-10000,
+  strip_ratio 0.05-0.25) — a client bound looser than the server's turns a
+  legal-looking nudge into an unexplained 422; tighter hides range the operator
+  is entitled to. The implementer correctly carried Task 12's lowered
+  strip_ratio ceiling into the HTML.
+  Also confirmed: a failed /api/discard needs no revert because the button does
+  no optimistic DOM update — the row only changes after a successful round-trip
+  via the SSE state event; and refreshDreams() on failure only warns, so the
+  last good list stays on screen rather than blanking.
+  TWO Minor fixed: a dead `lastDreams` variable (assigned, never read — an
+  abandoned symmetry with lastState); and
+  test_there_is_no_control_for_the_register_or_the_weighting only checked ids
+  literally STARTING with the forbidden words, so `id="visualRegister"` would
+  have slipped past. Now a substring check plus a whitelist assertion over every
+  input/textarea/select on the page — a new writable control is how a
+  morning-only setting quietly becomes a runtime one.
+  TWO Minor NOT fixed, carried to the final review:
+   - post()'s `if (lastState) render(lastState)` silently skips the revert when
+     a write fails before the first SSE state has arrived. The window is tiny
+     (the server emits state synchronously on /events connect) but the
+     guarantee has an unenforced edge rather than an explicit fallback.
+   - The plan's "Produces" line names window.kgDreamOperator = {render,
+     renderDreams} while both the plan's own code and the shipped module also
+     export refreshDreams. Documentation drift only.

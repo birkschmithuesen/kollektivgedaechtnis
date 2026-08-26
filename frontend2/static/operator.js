@@ -7,7 +7,6 @@
 // just the control snapping back to the truth. Copied from Tool 1's operator
 // UI on purpose — same surface, same stakes.
 let lastState = null;
-let lastDreams = [];
 
 function post(url, body) {
   return fetch(url, {
@@ -100,7 +99,6 @@ function render(state) {
 }
 
 function renderDreams(dreams) {
-  lastDreams = dreams;
   const list = document.getElementById('dreams');
   list.replaceChildren();
   // Newest first: the operator reaches for the dream that is on screen NOW.
