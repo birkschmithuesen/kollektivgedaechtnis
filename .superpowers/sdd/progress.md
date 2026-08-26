@@ -1135,3 +1135,23 @@ Task 14: complete (commits 6cd40b7 + this one, review clean — 1 Important fixe
   commit() in a NON-LAST DreamStore setter, because a later write on the same
   sqlite connection flushes the earlier uncommitted one. Order-dependent, narrow
   (needs a hard kill between two specific writes), and predates this task.
+
+Task 15: complete (commit 8b5f6ca + this one). sim/dream_register.py,
+  tests/test_dream_register.py: 9 passing, all offline (render_fn is injected).
+  STANDING RULE HELD: the module recommends nothing. Four registers —
+  aquarell, malerisch-atmosphaerisch, radierung, siebdruck — listed
+  alphabetically so the order carries no meaning, no ranking in the filenames,
+  no favourite in the output or in a comment. Verified by grep and by test.
+  Every register forbids text inside the image, which is load-bearing rather
+  than decorative: the sentence is a separate displayed artefact (spec §5.2)
+  and text in the picture would compete with it.
+  The fictional sentence is checked against the REAL committed graph fixture so
+  no term from the corpus can leak into it — a sample built on real material
+  invites judging the CONTENT, which is not what is being decided, and would
+  leave a half-formed dream of real people's words in a review directory.
+  >>> OPEN ACTION FOR BIRK <<< The four images have NOT been generated: no
+  OPENROUTER_API_KEY in this environment. Run:
+      uv run python -m sim.dream_register --out out/register1
+  then put the chosen register string into config2.toml as `visual_register`.
+  Existing files are never overwritten, so a re-run to add a fifth register
+  will not silently remake the first four.
