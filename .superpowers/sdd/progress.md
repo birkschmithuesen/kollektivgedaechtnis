@@ -1343,3 +1343,9 @@ Task 18: complete (commits 79db838, a841a1e). docs/operations.md gains the Tool 
   Ledger's unfixed Minors were triaged; the reviewer judged all of them able to
   stand, most because they are unreachable in this codebase today.
   Tool 2 suite after the fixes: 334 passing. Full repo suite before them: 607.
+
+===== TOOL 2 COMPLETE =====
+  Full repo suite after all fixes: 624 passed, 0 failed (31m11s), at 25b30d5.
+  (Tool 1 alone was 277 at the end of its own build; Tool 2 added ~334 and some
+  Tool 1 growth from Birk's concurrent work is in that number too.)
+  All 18 tasks done, each reviewed, every Critical and Important finding fixed.
