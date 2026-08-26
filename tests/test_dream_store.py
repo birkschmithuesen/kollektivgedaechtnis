@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from kg2.models import Dream
 from kg2.store import DreamStore
 
@@ -185,6 +187,22 @@ def test_last_started_at_counts_failed_and_discarded_dreams_too(tmp_path):
     store.fail_dream(failed.id, "timeout")
 
     assert store.last_started_at() == 200.0
+
+    # And a discarded dream must count too — set_discarded must not remove it
+    # from the floor's reference point either. Made the most recent row, so a
+    # `WHERE discarded = 0` regression in last_started_at() would return
+    # 200.0 (the failed dream) instead of 300.0 and this assertion would
+    # catch it.
+    discarded = store.create_dream(
+        created_at=300.0, graph_generated_at=299.0, person_count=1, term_count=1,
+        edge_count=1, contradiction=False, guiding_question="Q", absorbed_persons=["p3"],
+    )
+    store.set_stage1(discarded.id, prompt="S1", sentence="s", model="claude-opus-5")
+    store.set_stage2_prompt(discarded.id, prompt="S2", model="google/gemini-3-pro-image")
+    store.finish_dream(discarded.id, image_path="d.png")
+    store.set_discarded(discarded.id, True)
+
+    assert store.last_started_at() == 300.0
     store.close()
 
 
@@ -242,4 +260,74 @@ def test_ids_never_repeat_even_after_a_discard(tmp_path):
 
     assert first.id == "d1"
     assert second.id == "d2"
+    store.close()
+
+
+def test_a_created_at_tie_breaks_on_insertion_order_not_id_text(tmp_path):
+    """id is TEXT ("d1".."d10", ...), so ordering by id on a created_at tie
+    would sort lexicographically (d1, d10, d2, ...) instead of by insertion
+    order. Ten dreams sharing one created_at reproduces it directly: the
+    lexicographic-last id among d1..d10 is "d9", so a regression back to
+    `ORDER BY created_at, id` would make current_dream() return "d9" instead
+    of the genuinely newest, "d10"."""
+    store = open_store(tmp_path)
+    dreams = [make_dream(store, at=1.0, sentence=f"traum {i}") for i in range(10)]
+
+    assert [d.id for d in dreams] == [f"d{i + 1}" for i in range(10)]
+    assert store.current_dream().id == "d10"
+    assert [d.id for d in store.visible_dreams()] == [f"d{i + 1}" for i in range(10)]
+    store.close()
+
+
+def test_create_dream_is_thread_safe_under_concurrent_creation(tmp_path):
+    # kg2.db.connect opens SQLite with check_same_thread=False so a single
+    # DreamStore (and its connection) can be shared across FastAPI's
+    # threadpool, the watcher loop, and the dream cycle. Hammer create_dream
+    # from many threads at once: if the upsert-then-read in _next_id, or the
+    # INSERT+commit around it, were not properly serialised, two threads
+    # could mint the same id and collide against dream's TEXT PRIMARY KEY, or
+    # corrupt the connection's transaction state.
+    #
+    # Modelled on kg/store.py's
+    # test_next_id_is_thread_safe_under_concurrent_creation, sized down: a
+    # reviewer verified by probe that 20 threads x 200 calls reliably yields
+    # 4000 unique ids with no collisions, but this suite must stay fast, so a
+    # few hundred total calls is enough to catch a lock regression.
+    store = open_store(tmp_path)
+    thread_count = 10
+    creations_per_thread = 30
+    dreams: list[Dream] = []
+    dreams_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def worker(tag: int) -> None:
+        try:
+            for i in range(creations_per_thread):
+                dream = store.create_dream(
+                    created_at=float(tag * creations_per_thread + i),
+                    graph_generated_at=None,
+                    person_count=1,
+                    term_count=1,
+                    edge_count=1,
+                    contradiction=False,
+                    guiding_question="Q",
+                    absorbed_persons=["p1"],
+                )
+                with dreams_lock:
+                    dreams.append(dream)
+        except BaseException as exc:  # noqa: BLE001 - surface any thread failure
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(tag,)) for tag in range(thread_count)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+        assert not t.is_alive(), "thread did not finish within 60s - suspect a deadlock regression"
+
+    assert not errors, errors
+    assert len(dreams) == thread_count * creations_per_thread
+    ids = [d.id for d in dreams]
+    assert len(set(ids)) == len(ids)
+    assert len(store.all_dreams()) == thread_count * creations_per_thread
     store.close()

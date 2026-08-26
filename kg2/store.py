@@ -86,12 +86,20 @@ class DreamStore:
         self.conn.close()
 
     def _next_id(self) -> str:
-        self.conn.execute(
-            "INSERT INTO counters(name, value) VALUES ('dream', 1) "
-            "ON CONFLICT(name) DO UPDATE SET value = value + 1"
-        )
-        row = self.conn.execute("SELECT value FROM counters WHERE name='dream'").fetchone()
-        return f"d{row[0]}"
+        # The upsert-then-read below is made atomic with self._lock (see the
+        # rationale in __init__): its only caller, create_dream, is itself a
+        # @_locked public method, so this lock is always re-entrant here —
+        # but it is taken explicitly anyway so _next_id stays correct even if
+        # ever called some other way.
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO counters(name, value) VALUES ('dream', 1) "
+                "ON CONFLICT(name) DO UPDATE SET value = value + 1"
+            )
+            row = self.conn.execute(
+                "SELECT value FROM counters WHERE name='dream'"
+            ).fetchone()
+            return f"d{row[0]}"
 
     # -- writing ------------------------------------------------------------
 
@@ -187,7 +195,12 @@ class DreamStore:
     @_locked
     def all_dreams(self) -> list[Dream]:
         """Every row, whatever its status. The record, not the display."""
-        rows = self.conn.execute("SELECT * FROM dream ORDER BY created_at, id").fetchall()
+        # Tiebreak on rowid, not id: id is TEXT ("d1", "d2", ... "d10"), so on
+        # a created_at tie sorting by id would go lexicographic (d1, d10, d2,
+        # ...) instead of insertion order. SQLite's implicit rowid is
+        # monotonic with insertion order and immune to that, and to any float
+        # collision in created_at.
+        rows = self.conn.execute("SELECT * FROM dream ORDER BY created_at, rowid").fetchall()
         return [_row(row) for row in rows]
 
     @_locked
@@ -198,9 +211,10 @@ class DreamStore:
         until the new one exists, which is what makes a 60 s generation
         invisible and a failure look like nothing at all (spec §8).
         """
+        # See all_dreams() for why the tiebreak is rowid, not id.
         rows = self.conn.execute(
             "SELECT * FROM dream WHERE status='done' AND discarded=0 "
-            "ORDER BY created_at, id"
+            "ORDER BY created_at, rowid"
         ).fetchall()
         return [_row(row) for row in rows]
 
