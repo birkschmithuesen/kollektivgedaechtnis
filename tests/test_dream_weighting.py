@@ -1,0 +1,335 @@
+"""Spec §5.1 — what goes into stage 1, and what deliberately does not."""
+
+from __future__ import annotations
+
+import copy
+
+from kg2.weighting import (
+    Material,
+    build_material,
+    contradiction_enabled,
+    render_material,
+)
+
+
+def graph(nodes, edges, quotes=(), *, min_mentions=1, generated_at=1000.0) -> dict:
+    return {
+        "version": 1,
+        "generated_at": generated_at,
+        "min_mentions": min_mentions,
+        "nodes": nodes,
+        "edges": [
+            {"id": f"e{i}", "source": s, "target": t} for i, (s, t) in enumerate(edges, 1)
+        ],
+        "quotes": [
+            {"id": f"q{i}", "person_id": p, "text": text}
+            for i, (p, text) in enumerate(quotes, 1)
+        ],
+    }
+
+
+def person(pid, hidden=False) -> dict:
+    return {
+        "id": pid, "type": "person", "portrait": None, "created_at": 1.0,
+        "hidden": hidden, "x": None, "y": None,
+    }
+
+
+def term(tid, label, mentions, hidden=False) -> dict:
+    return {
+        "id": tid, "type": "term", "label": label, "mentions": mentions,
+        "created_at": 2.0, "hidden": hidden, "x": None, "y": None,
+    }
+
+
+def test_shared_terms_are_ordered_by_how_many_people_said_them():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), person("p3"),
+             term("t1", "Weiterbauen im Bestand", 3), term("t2", "Holzbau", 2)],
+            [("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p1", "t2"), ("p2", "t2")],
+        )
+    )
+
+    assert [(w.label, w.mentions) for w in material.shared] == [
+        ("Weiterbauen im Bestand", 3),
+        ("Holzbau", 2),
+    ]
+    assert material.marginal == []
+
+
+def test_a_term_said_by_one_person_is_marginal_not_shared():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"),
+             term("t1", "Holzbau", 2), term("t2", "Sickerfähige Beläge", 1)],
+            [("p1", "t1"), ("p2", "t1"), ("p1", "t2")],
+        )
+    )
+
+    assert [w.label for w in material.shared] == ["Holzbau"]
+    assert [w.label for w in material.marginal] == ["Sickerfähige Beläge"]
+
+
+def test_min_mentions_is_never_applied():
+    """Spec §5.1: that dial is the wall's legibility filter, not a statement
+    about what was said. The dream reads everything."""
+    material = build_material(
+        graph(
+            [person("p1"), term("t1", "Sickerfähige Beläge", 1)],
+            [("p1", "t1")],
+            min_mentions=3,
+        )
+    )
+
+    assert [w.label for w in material.marginal] == ["Sickerfähige Beläge"]
+
+
+def test_a_hidden_term_is_excluded():
+    """T1§8's emergency exit: something pulled from the wall must not reappear
+    in the dream."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"),
+             term("t1", "Holzbau", 2), term("t2", "Peinlich", 2, hidden=True)],
+            [("p1", "t1"), ("p2", "t1"), ("p1", "t2"), ("p2", "t2")],
+        )
+    )
+
+    labels = [w.label for w in material.shared + material.marginal]
+    assert labels == ["Holzbau"]
+    assert material.term_count == 1
+
+
+def test_a_hidden_person_is_excluded_and_their_mentions_do_not_count():
+    """The payload's `mentions` counts edges from hidden persons too. Reading it
+    off the node would leave a hidden visitor's voice in the dream."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2", hidden=True), term("t1", "Holzbau", 2)],
+            [("p1", "t1"), ("p2", "t1")],
+        )
+    )
+
+    assert material.person_count == 1
+    # Recomputed from the surviving edges: 1, not the payload's 2.
+    assert [(w.label, w.mentions) for w in material.marginal] == [("Holzbau", 1)]
+    assert material.shared == []
+
+
+def test_a_term_left_with_no_speakers_disappears_entirely():
+    material = build_material(
+        graph(
+            [person("p1", hidden=True), term("t1", "Holzbau", 1)],
+            [("p1", "t1")],
+        )
+    )
+
+    assert material.shared == []
+    assert material.marginal == []
+    assert material.term_count == 0
+    assert material.edge_count == 0
+
+
+def test_quotes_are_included():
+    """T1§11 stores them for Tool 2's benefit even though the wall never shows
+    them (spec §5.1)."""
+    material = build_material(
+        graph(
+            [person("p1"), term("t1", "Holzbau", 1)],
+            [("p1", "t1")],
+            [("p1", "Wir bauen zu viel Neues.")],
+        )
+    )
+
+    assert material.quotes == ["Wir bauen zu viel Neues."]
+
+
+def test_a_hidden_persons_quote_is_excluded():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2", hidden=True), term("t1", "Holzbau", 2)],
+            [("p1", "t1"), ("p2", "t1")],
+            [("p1", "bleibt"), ("p2", "verschwindet")],
+        )
+    )
+
+    assert material.quotes == ["bleibt"]
+
+
+def test_counts_describe_what_the_dream_actually_saw():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), term("t1", "a", 2), term("t2", "b", 1)],
+            [("p1", "t1"), ("p2", "t1"), ("p1", "t2")],
+            generated_at=1700000000.0,
+        )
+    )
+
+    assert material == Material(
+        person_count=2,
+        term_count=2,
+        edge_count=3,
+        generated_at=1700000000.0,
+        shared=material.shared,
+        marginal=material.marginal,
+        quotes=[],
+    )
+
+
+def test_an_empty_graph_produces_empty_material():
+    material = build_material(graph([], []))
+
+    assert material.person_count == 0
+    assert material.shared == []
+    assert material.marginal == []
+    assert material.quotes == []
+
+
+def test_render_labels_the_marginal_terms_as_detail_not_theme():
+    """Spec §5.1: single mentions enter „explicitly labelled as such so the
+    model can place them as a detail rather than a theme"."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"),
+             term("t1", "Holzbau", 2), term("t2", "Sickerfähige Beläge", 1)],
+            [("p1", "t1"), ("p2", "t1"), ("p1", "t2")],
+            [("p1", "Wir bauen zu viel Neues.")],
+        )
+    )
+
+    text = render_material(material)
+
+    assert "Holzbau" in text
+    assert "2×" in text
+    assert "Sickerfähige Beläge" in text
+    # The label is what makes the weighting legible to the model.
+    assert "Detail" in text
+    assert "Randnotiz" in text
+    assert "Wir bauen zu viel Neues." in text
+
+
+def test_render_omits_a_section_that_has_nothing_in_it():
+    """An empty heading reads to the model as „there were no quotes", which is
+    true but noisy; leaving it out is the same statement, shorter."""
+    material = build_material(
+        graph([person("p1"), person("p2"), term("t1", "Holzbau", 2)],
+              [("p1", "t1"), ("p2", "t1")])
+    )
+
+    text = render_material(material)
+
+    assert "Randnotiz" not in text
+    assert "Stimmen" not in text
+
+
+def test_the_contradiction_threshold_is_a_person_count():
+    """Spec §5.1: with three interviews there are no real oppositions and the
+    model would invent one."""
+    small = build_material(graph([person(f"p{i}") for i in range(3)], []))
+    large = build_material(
+        graph(
+            [person(f"p{i}") for i in range(8)] + [term("t1", "a", 8)],
+            [(f"p{i}", "t1") for i in range(8)],
+        )
+    )
+
+    assert contradiction_enabled(small, threshold=6) is False
+    assert contradiction_enabled(large, threshold=6) is True
+
+
+def test_the_threshold_counts_visible_persons_only():
+    material = build_material(
+        graph(
+            [person(f"p{i}", hidden=i >= 4) for i in range(8)] + [term("t1", "a", 8)],
+            [(f"p{i}", "t1") for i in range(8)],
+        )
+    )
+
+    assert material.person_count == 4
+    assert contradiction_enabled(material, threshold=6) is False
+
+
+# -- malformed payloads -------------------------------------------------------
+
+
+def test_a_malformed_payload_degrades_to_empty_material():
+    """`kg2.graph_client.fetch_graph` only checks that `version`, `nodes` and
+    `edges` are present — never their value types (see review of an earlier
+    task). `kg2.trigger.absorbed_persons` was hardened against exactly this
+    shape; `build_material` must degrade the same way rather than raise."""
+    malformed = {"version": 1, "nodes": "corrupted", "edges": []}
+
+    material = build_material(malformed)
+
+    assert material == Material(0, 0, 0, None, [], [], [])
+
+
+def test_a_well_shaped_list_of_ill_shaped_nodes_does_not_raise():
+    """`nodes` IS a list, but entries are missing `id`/`label`, or are not
+    dicts at all. Subscripting one would raise on a payload the client waved
+    through."""
+    bad_graph = {
+        "version": 1,
+        "generated_at": None,
+        "nodes": [
+            "not-a-dict",
+            {"type": "person"},  # person, no id
+            {"type": "person", "id": None},
+            {"type": "term"},  # term, no id or label
+            {"type": "term", "id": "t1"},  # term, no label
+            None,
+        ],
+        "edges": [{"id": "e1", "source": "p1", "target": "t1"}, "not-a-dict", None],
+        "quotes": ["not-a-dict", {"person_id": "p1", "text": "hi"}, None],
+    }
+
+    material = build_material(bad_graph)
+
+    assert material.person_count == 0
+    assert material.shared == []
+    assert material.marginal == []
+
+
+def test_a_none_graph_degrades_to_empty_material():
+    assert build_material(None) == Material(0, 0, 0, None, [], [], [])
+
+
+# -- against the real thing -------------------------------------------------
+
+
+def test_the_real_replay_graph_yields_realistic_material(real_graph):
+    """Spec §11: contract against a real artefact. Run 19c has a long tail of
+    single mentions — the shape the weighting exists to handle."""
+    material = build_material(real_graph)
+
+    assert material.person_count == 60
+    assert material.term_count == 163
+    assert material.edge_count == 267
+    assert len(material.quotes) == 117
+    assert len(material.shared) + len(material.marginal) == 163
+    # 114 of 163 terms were said by exactly one person (docs/operations.md).
+    assert len(material.marginal) == 114
+    assert material.shared[0].mentions == 7
+
+
+def test_the_real_graph_renders_into_a_prompt_of_workable_size(real_graph):
+    """~50 persons is the ceiling (T1§2), so this stays bounded — and nothing
+    is silently truncated to make it so."""
+    text = render_material(build_material(real_graph))
+
+    assert "Scheinbeteiligung pro forma" in text  # the most-mentioned term
+    assert 5_000 < len(text) < 60_000
+
+
+def test_hiding_a_person_in_the_real_graph_removes_their_voice(real_graph):
+    graph_with_hidden = copy.deepcopy(real_graph)
+    for node in graph_with_hidden["nodes"]:
+        if node["id"] == "p1":
+            node["hidden"] = True
+
+    material = build_material(graph_with_hidden)
+    quotes_of_p1 = [q["text"] for q in real_graph["quotes"] if q["person_id"] == "p1"]
+
+    assert material.person_count == 59
+    assert all(quote not in material.quotes for quote in quotes_of_p1)
