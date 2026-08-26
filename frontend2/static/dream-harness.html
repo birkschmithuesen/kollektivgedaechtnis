@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>dream harness</title>
+<!--
+  The same markup and the same module as dream.html, WITHOUT the EventSource.
+  Tool 1 uses exactly this pattern (frontend/static/render-harness.html): the
+  tests drive the view directly, so nothing in them depends on a running
+  server, and the thing under test is the real renderer rather than a copy.
+-->
+<link rel="stylesheet" href="dream.css">
+<div id="page">
+  <div id="question"></div>
+  <div id="stage">
+    <img class="frame" id="frame-a" alt="">
+    <img class="frame" id="frame-b" alt="">
+    <div id="typewriter" hidden></div>
+  </div>
+  <div id="sentence"></div>
+  <ul id="strip"></ul>
+</div>
+<script type="module">
+  import { createDreamView } from './dream.js';
+  window.kgDream = createDreamView(document.documentElement);
+</script>
+</html>

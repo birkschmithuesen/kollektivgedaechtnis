@@ -1,1 +1,130 @@
-/* Task 12 */
+/* Screen B. Every size is viewport-relative (spec §6, T1§11): the 65" screen's
+   resolution is organiser-provided and still open, so nothing may be in
+   pixels. --strip-ratio and --fade-ms are set from the operator's state. */
+
+:root {
+  --strip-ratio: 0.22;
+  --fade-ms: 1200ms;
+  --ink: #f2efe9;
+  --ground: #0d0e10;
+  --dim: 0.55;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Inter", "Helvetica Neue", system-ui, sans-serif;
+  overflow: hidden;
+  /* A display, never a control surface (spec §12: no interaction on B). */
+  cursor: none;
+  user-select: none;
+}
+
+#page {
+  height: 100vh;
+  display: grid;
+  /* question / image / sentence / strip. The image row takes what is left,
+     which is what makes the layout asymmetric by construction rather than by
+     a magic number. */
+  grid-template-rows: auto 1fr auto calc(var(--strip-ratio) * 100vh);
+  gap: 1.4vh;
+  padding: 2.2vh 3vw;
+}
+
+#question {
+  font-size: 2.6vh;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+  text-align: center;
+  transition: opacity var(--fade-ms) ease;
+}
+
+#question[hidden] { display: none; }
+
+#stage {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Two stacked frames, opacity only. A cross-fade, explicitly NOT a morph
+   (Birk, spec §6): between two independently generated images a morph is
+   either this, or an img2img chain that converges to mush. */
+#stage .frame {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: var(--fade-ms);
+  transition-timing-function: ease-in-out;
+}
+
+#stage .frame.visible { opacity: 1; }
+
+/* The very first image of a session has no previous frame to cross FROM —
+   it is a reveal, not a cross-fade between two dreams — so it applies
+   instantly instead of animating in over --fade-ms. */
+#stage .frame.instant { transition: none; }
+
+#sentence {
+  font-size: 3.1vh;
+  line-height: 1.35;
+  text-align: center;
+  min-height: 4.2vh;
+  max-width: 74vw;
+  justify-self: center;
+}
+
+/* The typewriter is an ANIMATION LAYER over the baseline, not a second layout
+   (spec §6): larger, centred, over the stage — and when the image arrives the
+   text settles into #sentence, the same fixed line the baseline always uses. */
+#typewriter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 8vw;
+  font-size: 4.4vh;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+}
+
+#typewriter[hidden] { display: none; }
+
+#strip {
+  list-style: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.8vw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Smaller and dimmer: the strip is the evidence, not a second gallery. */
+#strip li {
+  /* Subtract more than the row's own gap-to-edge allowance: the current
+     image must stay unambiguously dominant (spec §6, asymmetric by design)
+     even at the default strip-ratio, not just barely win a pixel count. */
+  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
+  flex: 0 1 auto;
+  min-width: 0;
+  opacity: var(--dim);
+}
+
+#strip li img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  display: block;
+}

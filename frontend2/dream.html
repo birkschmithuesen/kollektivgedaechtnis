@@ -1,2 +1,39 @@
 <!doctype html>
-<html lang="de"><meta charset="utf-8"><title>Kollektivtraum</title>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivtraum</title>
+<!-- Relative asset paths, like Tool 1's pages: served at /dream these resolve
+     to /static/… and the harness can load the same module from a file server. -->
+<link rel="stylesheet" href="static/dream.css">
+<div id="page">
+  <div id="question"></div>
+  <div id="stage">
+    <img class="frame" id="frame-a" alt="">
+    <img class="frame" id="frame-b" alt="">
+    <div id="typewriter" hidden></div>
+  </div>
+  <div id="sentence"></div>
+  <ul id="strip"></ul>
+</div>
+<script type="module">
+  import { createDreamView } from './static/dream.js';
+
+  const view = createDreamView(document.documentElement);
+  window.kgDream = view;
+  window.kgDreamReady = false;
+
+  // The state push is complete state, like Tool 1's graph event — there is no
+  // delta to miss, so a dropped event costs nothing and a reconnect needs no
+  // catch-up logic.
+  const events = new EventSource('/events');
+  events.onmessage = (message) => {
+    const payload = JSON.parse(message.data);
+    if (payload.type === 'state') {
+      view.applyState(payload.state);
+      window.kgDreamReady = true;
+    } else if (payload.type === 'dreaming') {
+      view.showDreaming(payload.sentence);
+    }
+  };
+</script>
+</html>
