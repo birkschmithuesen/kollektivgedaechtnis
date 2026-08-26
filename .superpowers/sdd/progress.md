@@ -938,3 +938,37 @@ Task 8: complete (commits 88c56ec + this one, review clean after 1 fix).
   and leaving a half-written file where the strip expects a picture. Now
   converted to ImageError with the file removed; test added. The dead
   module-level logger flagged as the other Minor is now used by that handler.
+
+Task 9: complete (commits 48b9712, 5b8c435, review clean after 1 fix round).
+  kg2/cycle.py, tests/test_dream_cycle.py. Whole Tool 2 suite: 155 passing.
+  Reviewer VERIFIED clean: record honesty at every failure boundary (stage 1,
+  on_sentence, build_image_prompt, render, save_image); stage2_prompt is
+  persisted BEFORE the render so a failed render leaves the prompt that failed;
+  no image-filename collision path exists (dream ids come from an RLock-
+  serialised atomic upsert, and save_image's O_EXCL is defence in depth).
+  TWO Important defects in the plan's own design, both probe-verified:
+   1. build_material / absorbed_persons / create_dream all ran BEFORE the try
+      block, and two realistic payloads crashed run_dream outright:
+        - a person node whose "id" is a list -> unhashable type in a set
+          comprehension;
+        - two person ids of mixed type ("p1" and 2) -> sorted() cannot compare
+          str to int;
+        - two terms tied on mentions with non-comparable labels -> the same in
+          weighting's sort.
+      WORSE than the mid-cycle crash the design protects against: create_dream
+      never ran, so there was NO row at all, not even a `running` one.
+      Fixed at the root — absorbed_persons and build_material now require ids
+      and labels to be strings (a Tool 1 node id always is one, so anything
+      else is not an id), which kills the unhashable case and the mixed-type
+      sort in one move. Plus a belt-and-braces guard around the pre-try block
+      that logs and skips the poll WITHOUT writing a row, with a comment saying
+      why that path differs from the main handler.
+   2. `except BaseException` swallowed KeyboardInterrupt instead of re-raising,
+      so Ctrl-C mid-cycle was consumed as an ordinary failed dream and the
+      process kept running. Now split: (KeyboardInterrupt, SystemExit) marks
+      the row failed and RE-RAISES; Exception marks it failed and returns None.
+  TWO Minor also fixed: the failure handler's own store.fail_dream() call was
+  unguarded (a locked DB there would escape and break the never-raises
+  guarantee by a second route); and no test fed run_dream an adversarial graph,
+  which is precisely why defect 1 shipped. Adversarial tests added at all three
+  levels — cycle, trigger and weighting.
