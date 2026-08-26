@@ -853,3 +853,31 @@ Task 5: complete (commits 9ffa9f7 + this one, review clean after 1 fix).
   list of ill-shaped nodes, which the original test missed by only exercising a
   wrong-type container. Verified by probe.
   Minor NOT fixed: the implementer's report miscounts its own tests (27+1=29).
+
+Task 6: complete (commit 4f973a1, review clean first pass).
+  kg2/weighting.py, tests/test_dream_weighting.py: 20 passing (17 from the plan
+  + 3 for defensive payload handling). Spot check trigger+contract: 41 passing.
+  Reviewer VERIFIED by probe, so these are established not assumed:
+   - hidden exclusion works in BOTH directions (visible person -> hidden term,
+     and hidden person -> visible term); edge_count counts only edges whose two
+     endpoints both survive.
+   - mentions really are recomputed: a term node carrying mentions:999 with one
+     surviving edge yields 1. The payload field is never read anywhere.
+   - determinism: two graphs identical except edge insertion order produce
+     BYTE-IDENTICAL render_material output. The sort key (-mentions, label) is
+     not strictly total, but TermWeight carries no id, so tied entries are
+     value-equal and indistinguishable in the output.
+   - nothing is truncated: the real 60-person graph renders to 21,722 chars
+     against a 5,000-60,000 bound, with no cap logic anywhere.
+  PLAN DEFECT found and fixed by the implementer: the plan's own sample code
+  used an all-caps heading "RANDNOTIZEN" while the plan's own test asserts
+  `"Randnotiz" in text` — case-sensitive, so the prescribed code failed the
+  prescribed test. Headings are now title-case (Geteilte Begriffe, Randnotizen,
+  Stimmen aus den Interviews). No test depended on the all-caps form.
+  Defensive hardening added, mirroring Task 5's absorbed_persons: build_material
+  degrades to empty Material for a non-dict graph, wrong-typed nodes/edges/quotes,
+  non-dicts inside any list, nodes missing id or label, and quotes missing
+  person_id or text. All probed directly by the reviewer; none raise.
+  Minor NOT fixed: no dedicated test pins the tie-break case (two distinct term
+  ids sharing a label and a mention count). Harmless today because TermWeight has
+  no id field; would matter if one were ever added.
