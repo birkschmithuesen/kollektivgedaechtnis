@@ -93,7 +93,7 @@ def test_every_display_setting_can_be_changed(app):
             "question_visible": False,
             "question_seconds": 20,
             "fade_ms": 800,
-            "strip_ratio": 0.3,
+            "strip_ratio": 0.2,
             "typewriter": True,
         },
     )
@@ -103,7 +103,7 @@ def test_every_display_setting_can_be_changed(app):
     assert state["question_visible"] is False
     assert state["question_seconds"] == 20
     assert state["fade_ms"] == 800
-    assert state["strip_ratio"] == 0.3
+    assert state["strip_ratio"] == 0.2
     assert state["typewriter"] is True
 
 
@@ -124,7 +124,8 @@ def test_a_partial_display_update_leaves_the_rest_alone(app):
         {"fade_ms": 0},  # a 0 ms "cross-fade" is a cut, which Birk ruled out
         {"fade_ms": 20000},
         {"strip_ratio": 0.0},  # no strip at all — the evidence would vanish
-        {"strip_ratio": 0.9},  # the strip would swallow the current dream
+        {"strip_ratio": 0.3},  # above the measured dominance ceiling (0.25) —
+        # the strip would start to rival the stage it is evidence for
         {"question_seconds": -1},
     ],
 )

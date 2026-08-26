@@ -16,6 +16,12 @@ export function createDreamView(root) {
   const frames = [stage.querySelector('#frame-a'), stage.querySelector('#frame-b')];
 
   let currentId = null;
+  // Separate from currentId on purpose: currentId goes back to null whenever
+  // the stage is cleared (a discard with nothing earlier to fall back to, or
+  // the 09:00 empty state), but that is not the same event as "nothing has
+  // ever been shown this session". Only the latter should skip the cross-fade
+  // — conflating them turned a discard-then-new-dream into a cut (Finding 2).
+  let everRevealed = false;
   let visibleFrame = 0;
   let fading = false;
   let fadeTimer = null;
@@ -45,7 +51,21 @@ export function createDreamView(root) {
     }
   }
 
+  function scheduleFadeDone() {
+    // Shared by every transition that runs the CSS opacity fade (a new image
+    // arriving, or the stage clearing to blank): `fading` and its timer exist
+    // once so `applyState`'s idempotency check has one place to look, not one
+    // per caller that could drift out of sync.
+    fading = true;
+    clearTimeout(fadeTimer);
+    const ms = parseFloat(getComputedStyle(root).getPropertyValue('--fade-ms')) || 0;
+    fadeTimer = setTimeout(() => {
+      fading = false;
+    }, ms + 40);
+  }
+
   function showImage(url, alt, instant) {
+    everRevealed = true;
     const next = 1 - visibleFrame;
     const incoming = frames[next];
     incoming.alt = alt || '';
@@ -71,12 +91,18 @@ export function createDreamView(root) {
     frames[visibleFrame].classList.remove('visible');
     visibleFrame = next;
 
-    fading = true;
-    clearTimeout(fadeTimer);
-    const ms = parseFloat(getComputedStyle(root).getPropertyValue('--fade-ms')) || 0;
-    fadeTimer = setTimeout(() => {
-      fading = false;
-    }, ms + 40);
+    scheduleFadeDone();
+  }
+
+  function clearStage() {
+    // A discard of the only dream, or the 09:00 state before anything has
+    // happened, leaves nothing to cross-fade TO. Cutting the stale frame to
+    // black would read as a fault; fading it out re-uses the same mechanism
+    // as every other transition, so a blank stage is still a state change,
+    // not a crash (Finding 2 — the spec's "replace with the previous dream"
+    // rule bottoms out at "nothing" when there is no previous one).
+    frames[visibleFrame].classList.remove('visible');
+    scheduleFadeDone();
   }
 
   function renderStrip(history) {
@@ -103,23 +129,42 @@ export function createDreamView(root) {
   function applyState(state) {
     setFade(state.fade_ms);
     root.style.setProperty('--strip-ratio', String(state.strip_ratio));
+    const wasTypewriterEnabled = typewriterEnabled;
     typewriterEnabled = Boolean(state.typewriter);
+    if (wasTypewriterEnabled && !typewriterEnabled) {
+      // Turning it off is a switch, not a rebuild (Finding 4, spec §6): a
+      // build in progress must stop where it stands. Without this, a build
+      // only stopped when the dream id also changed, so flipping the switch
+      // mid-word let the animation run to completion on screen regardless.
+      stopTypewriter();
+    }
     applyQuestion(state);
     renderStrip(state.history || []);
 
     const dream = state.current;
     if (!dream) {
       sentence.textContent = '';
+      // Only fade if a frame is actually showing. At 09:00, before the first
+      // interview, currentId is already null and there is nothing on the
+      // stage to fade — clearStage() would spin up a --fade-ms cycle for an
+      // image nobody ever saw.
+      if (currentId !== null) {
+        clearStage();
+      }
       currentId = null;
       return;
     }
     // Idempotent: the same dream re-applied is a no-op for the image, so a
     // control change never re-fades the wall.
     if (dream.id !== currentId) {
-      const isFirstReveal = currentId === null;
+      // A blank stage from a discard-to-empty is NOT the same as a session
+      // that has shown nothing yet — everRevealed (not currentId) tracks
+      // that, so the dream that follows a discard cross-fades in rather than
+      // cutting onto a frame that only just faded out (Finding 2).
+      const instant = !everRevealed;
       currentId = dream.id;
       stopTypewriter();
-      showImage(dream.image, dream.sentence, isFirstReveal);
+      showImage(dream.image, dream.sentence, instant);
     }
     sentence.textContent = dream.sentence || '';
   }

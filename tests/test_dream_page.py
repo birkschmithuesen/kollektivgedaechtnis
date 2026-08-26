@@ -79,6 +79,25 @@ def test_the_current_image_dominates_the_strip(view):
     assert stage["height"] > thumb["height"] * 3
 
 
+def test_the_stage_dominates_the_strip_across_the_full_legal_range(view):
+    """An operator control must not be able to express a layout that inverts
+    the design (Finding 1). `strip_ratio`'s bounds in kg2/server.py were
+    lowered from a measured sweep showing the stage-vs-thumbnail dominance
+    that held at the default ratio broke down well inside the OLD legal
+    range (inverted outright at 0.5). Walking min/middle/max here — instead
+    of only the default, like the test above — is what makes a future change
+    to either the CSS geometry or the bound fail loudly rather than silently
+    re-opening that gap."""
+    for ratio in (0.05, 0.15, 0.25):  # legal minimum, middle, legal maximum
+        apply(
+            view,
+            state(current=dream(3), history=[dream(i) for i in range(1, 6)], strip_ratio=ratio),
+        )
+        stage = view.locator("#stage").bounding_box()
+        thumb = view.locator("#strip li").first.bounding_box()
+        assert stage["height"] > thumb["height"] * 2, f"dominance lost at strip_ratio={ratio}"
+
+
 def test_the_page_is_readable_with_no_dreams_at_all(view):
     """09:00, before the first interview. Empty, not broken."""
     apply(view, state())
@@ -165,6 +184,41 @@ def test_a_new_dream_cross_fades_rather_than_cutting(view):
     view.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
 
 
+def test_discarding_the_only_dream_leaves_no_stale_image_on_the_stage(view):
+    """Finding 2: applyState({current: None}) — the only dream was discarded,
+    or the store genuinely has nothing left — must not leave the previous
+    frame frozen on screen with no sentence under it. Going blank is correct
+    here; a stale frame is not."""
+    apply(view, state(current=dream(1)))
+
+    apply(view, state(current=None, history=[]))
+
+    assert view.locator("#sentence").inner_text() == ""
+    opacities = view.locator("#stage .frame").evaluate_all(
+        "els => els.map(e => Number(getComputedStyle(e).opacity))"
+    )
+    assert all(value == 0 for value in opacities)
+
+
+def test_a_dream_after_a_discard_to_empty_cross_fades_rather_than_cutting(view):
+    """Finding 2: the instant-reveal decision used to key off `currentId ===
+    null`, which is also true right after a discard-to-empty — so the next
+    dream took the no-animation reveal path from a stage that was still
+    showing the old frame a moment before. Tracking "ever revealed this
+    session" separately from `currentId` is what makes this a fade again."""
+    apply(view, state(current=dream(1)))
+    apply(view, state(current=None, history=[]))
+
+    view.evaluate("(s) => window.kgDream.applyState(s)", state(current=dream(2)))
+    view.wait_for_timeout(150)  # mid-fade
+
+    opacities = view.locator("#stage .frame").evaluate_all(
+        "els => els.map(e => Number(getComputedStyle(e).opacity))"
+    )
+    assert sum(1 for value in opacities if 0 < value < 1) >= 1
+    view.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
+
+
 def test_the_fade_duration_follows_the_operator_setting(view):
     apply(view, state(current=dream(1), fade_ms=400))
 
@@ -190,14 +244,24 @@ def test_the_transition_is_opacity_only_never_a_transform(view):
 
 def test_re_applying_the_same_state_does_not_re_fade(view):
     """The state push arrives on every control change too. Re-fading the image
-    each time an operator nudges the strip ratio would be visible on the wall."""
+    each time an operator nudges the strip ratio would be visible on the wall.
+
+    Finding 3: the earlier version of this test asserted `current == first`
+    (trivially true — nothing here changes the id) and `fading is False`
+    (guaranteed by the `apply()` helper, which polls for exactly that before
+    returning). It passed even with the `dream.id !== currentId` guard
+    deleted. This version asserts on what a re-fade would actually do: swap
+    which of the two stacked frames carries `visible`, and write a src onto
+    the frame that a real re-fade would target. Confirmed to fail without the
+    guard, then the guard was restored — see the fix report."""
     apply(view, state(current=dream(1)))
-    first = view.evaluate("() => window.kgDream.current")
+    visible_id_before = view.locator("#stage .frame.visible").get_attribute("id")
+    other_src_before = view.locator("#stage .frame:not(.visible)").get_attribute("src")
 
-    apply(view, state(current=dream(1), strip_ratio=0.3))
+    apply(view, state(current=dream(1), strip_ratio=0.2))
 
-    assert view.evaluate("() => window.kgDream.current") == first
-    assert view.evaluate("() => window.kgDream.fading") is False
+    assert view.locator("#stage .frame.visible").get_attribute("id") == visible_id_before
+    assert view.locator("#stage .frame:not(.visible)").get_attribute("src") == other_src_before
 
 
 # -- the typewriter (spec §6) ------------------------------------------------
@@ -239,6 +303,28 @@ def test_the_typewriter_switch_off_leaves_the_baseline_intact(view):
 
     assert view.locator("#typewriter").is_visible() is False
     assert view.locator("#sentence").inner_text() == "Traum 1"
+
+
+def test_turning_the_typewriter_off_mid_animation_stops_it(view):
+    """Finding 4: `applyState` used to call `stopTypewriter()` only when the
+    dream id changed, so flipping `typewriter: true -> false` while a
+    word-by-word build was ticking let it run to completion on screen.
+    Turning it off is a switch, not a rebuild — it must stop where it
+    stands, not at the end of the sentence."""
+    apply(view, state(current=dream(1), typewriter=True))
+    view.evaluate("() => window.kgDream.showDreaming('Der Beton träumt von einem Wald voller Vögel')")
+    view.wait_for_timeout(120)
+    partial = view.locator("#typewriter").inner_text()
+    assert partial != "" and "Vögel" not in partial  # confirms it was still mid-build
+
+    apply(view, state(current=dream(1), typewriter=False))
+
+    assert view.locator("#typewriter").is_visible() is False
+    assert view.locator("#typewriter").inner_text() == ""
+    # Long enough for the old interval to have reached the last word if it
+    # had kept ticking — proves it was actually cleared, not just hidden.
+    view.wait_for_timeout(400)
+    assert view.locator("#typewriter").inner_text() == ""
 
 
 def test_the_baseline_carries_the_sixty_second_risk_either_way(view):

@@ -44,8 +44,15 @@ class DisplaySettings(BaseModel):
     fade_ms: int | None = Field(default=None, ge=100, le=10000)
     # Never 0 (the strip is the evidence and may not vanish) and never so large
     # that the strip swallows the dream it is evidence for (spec §6: asymmetric
-    # by design).
-    strip_ratio: float | None = Field(default=None, ge=0.05, le=0.5)
+    # by design). The ceiling is not a round number picked by eye — it is
+    # measured against dream.css's actual geometry at 1920x1080: the stage
+    # stays more than 2.6x the thumbnail height up to 0.25, crosses under 2x
+    # by ~0.29, falls to a 1.18x sliver at 0.4, and at the old ceiling of 0.5
+    # the thumbnail is taller than the stage — a complete inversion of "the
+    # strip may never rival the dream it is evidence for". 0.25 is the value
+    # below which dominance holds with comfortable margin across the whole
+    # range, not just at the default.
+    strip_ratio: float | None = Field(default=None, ge=0.05, le=0.25)
     typewriter: bool | None = None
 
 
