@@ -1,0 +1,54 @@
+# Kollektivtraum (Tool 2) — auf der Traum-Maschine nach config2.toml kopieren.
+# Geheimnisse stehen NICHT hier, sondern in der Umgebung:
+#   export ANTHROPIC_API_KEY=...      # Stufe 1: Graph -> Satz
+#   export OPENROUTER_API_KEY=...     # Stufe 2: Satz -> Bild
+
+data_dir = "dream-data"
+
+# Tool 1 über das Netz, nie über das Dateisystem (Spec §2, §9).
+# Die Adresse druckt der Core beim Start; von DIESER Maschine aus prüfen:
+#   curl -s http://<adresse>:8800/graph.json | head -c 200
+tool1_url = "http://127.0.0.1:8800"
+
+# Vollständiger Zustand, kein Delta (Spec §4.1). 5 s sind bei 240 s
+# Mindestabstand unsichtbar; hier verstellbar, falls das Netz vor Ort zickt.
+poll_interval_s = 5.0
+
+# Mindestabstand zwischen zwei Träumen, gemessen ab dem START des letzten.
+# Startwert 240 — kalibriert, siehe docs/operations.md.
+min_interval_s = 240
+
+# Ab wie vielen Personen der Widerspruch als Konstruktionsprinzip eingeschaltet
+# wird (Spec §5.1). Darunter läuft Stufe 1 allein auf der Gewichtung, weil das
+# Modell bei drei Interviews einen Gegensatz erfinden würde.
+contradiction_min_persons = 6
+
+# EINE Leitfrage, den ganzen Tag (Spec §7). Nicht zur Laufzeit änderbar:
+# eine wandernde Frage macht den Verlaufsstreifen unlesbar.
+guiding_question = "Wie leben und bauen wir in zehn Jahren?"
+
+# EIN Bildregister, den ganzen Tag (Spec §5.2, §10). Wird an jeden Bildprompt
+# angehängt, nie vom Modell gewählt, nie aus dem Graphen abgeleitet.
+visual_register = "Malerisch und atmosphärisch, weiche Übergänge, gedämpfte Farbigkeit, diffuses Licht, sichtbarer Pinselduktus. Kein Fotorealismus, kein Architektur-Rendering, keine Schrift im Bild."
+
+condense_model = "claude-opus-5"
+condense_effort = "high"
+
+# Vertrag verifiziert in docs/dream-image-contract.md.
+image_model = "google/gemini-3-pro-image"
+image_url = "https://openrouter.ai/api/v1/chat/completions"
+image_aspect_ratio = "16:9"
+
+# Startwerte der Anzeige. Danach gehören sie dem Operator-UI, und ein Neustart
+# stellt DESSEN Wert wieder her, nicht diesen hier.
+default_question_visible = true
+default_question_seconds = 0     # 0 = dauerhaft
+default_fade_ms = 1200           # Überblendung, kein Morph (Spec §6)
+default_strip_ratio = 0.22
+default_typewriter = false       # Birk entscheidet vor Ort
+
+# Am Ausstellungstag auf "0.0.0.0", damit das Operator-Fenster von einem
+# zweiten Gerät erreichbar ist. 8810, damit beide Tools auf einer Kiste laufen
+# können, ohne sich den Port zu nehmen.
+server_host = "127.0.0.1"
+server_port = 8810
