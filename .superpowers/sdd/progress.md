@@ -800,3 +800,29 @@ Task 3: complete (commit 8b521f8, review clean first pass).
       docstring merely mentioning ".post(" would false-positive it. It catches
       the casual case, which is what its own docstring claims.
   tests/test_dream_contract.py: 11 passing. Tool 1 spot check: 26 passing.
+
+Task 4: complete (commits f946f89..90656f4, review clean after 1 fix round).
+  kg2/db.py, kg2/models.py, kg2/store.py, tests/test_dream_store.py. 16 passing.
+  Tool 2 has its OWN dreams.sqlite3 and never opens Tool 1's kg.db.
+  Reviewer VERIFIED by probe, so these are established not assumed:
+   - _next_id is thread-safe (20 threads x 200 create_dream = 4000 unique ids).
+   - create_dream's counter UPSERT and dream INSERT share ONE implicit sqlite3
+     transaction, so a crash between them rolls back BOTH — no "counter advanced,
+     no row", no duplicate id. This works by virtue of sqlite3's default
+     isolation_level, which is therefore load-bearing and worth not "cleaning up".
+  Implementer deviation, accepted: @_locked added to current_dream()/history(),
+  which the plan left undecorated. Makes the get-list-then-index two-step atomic;
+  safe because _lock is an RLock.
+  FOUR review gaps fixed in 90656f4:
+   1. (Important) test_last_started_at_counts_failed_and_discarded_dreams_too
+      never discarded anything — a `WHERE discarded=0` regression would have
+      passed the suite and silently broken the anti-retry-storm floor.
+   2. (Important) No concurrency test at all, despite the module docstring
+      claiming Tool 1's exact FastAPI-threadpool hazard. Added, modelled on
+      Tool 1's test_store.py equivalent.
+   3. (Minor) ORDER BY created_at, id sorted d1,d10,d2..d9 on a tie because id
+      is TEXT — current_dream() returned d9 over d10. Now ORDER BY created_at,
+      rowid, with a test pinning insertion order.
+   4. (Minor) _next_id now takes the RLock explicitly, matching Tool 1's
+      defense-in-depth precedent rather than relying on its one caller.
+  Tool 1 spot check test_store.py: 21 passing.
