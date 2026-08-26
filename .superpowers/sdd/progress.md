@@ -1155,3 +1155,35 @@ Task 15: complete (commit 8b5f6ca + this one). sim/dream_register.py,
   then put the chosen register string into config2.toml as `visual_register`.
   Existing files are never overwritten, so a re-run to add a fifth register
   will not silently remake the first four.
+
+Task 16: complete (commit e17fa28 + this one). sim/dream_calibrate.py,
+  tests/test_dream_calibrate.py: 19 passing.
+  STANDING RULE HELD: nothing in the questions/contradiction output marks a
+  candidate as recommended, and the four wordings carry no implied order. A
+  test enforces that every candidate is wide enough for all three interview
+  themes — a question naming one material or one technology cannot carry the
+  other two and is therefore not a candidate.
+  FLOOR CALIBRATION RUN (needs no model, so it was actually performed):
+      60 interviews over 8 h = one every 480 s
+      min_interval_s  120 / 240 / 360 / 480  -> 60 dreams, 0 collapsed
+      min_interval_s  900                    -> 30 dreams, 30 collapsed
+      40 interviews over 6 h = one every 540 s: same shape.
+  >>> THE FINDING: at the expected cadence a 240 s floor NEVER BINDS. It is not
+  >>> a routine limiter — it is insurance against a burst of interviews landing
+  >>> close together, and 240 is a good value precisely BECAUSE it stays out of
+  >>> the normal rhythm. Anything at or under the day's spacing is a no-op; the
+  >>> floor only starts shaping the day above ~900 s, where it halves the count.
+  >>> This belongs in the runbook (Task 18) so nobody later "tunes" it upward
+  >>> thinking it is doing work it is not.
+  prefix_graph derives earlier graph states from the REAL run-19c artefact
+  rather than inventing them. Its one honest limitation is kept in the
+  docstring: Tool 1's store has no rename history, so final merged labels are
+  carried back into earlier states. The terms are what those interviews really
+  produced; the wording is what they ended the day with. For calibrating a
+  threshold and a question that is the right trade — the alternative is 60 live
+  pipeline runs per candidate.
+  >>> OPEN ACTIONS FOR BIRK (need ANTHROPIC_API_KEY, ~24 stage-1 calls, no
+  >>> images):
+  >>>   uv run python -m sim.dream_calibrate questions      | tee out/calibrate-questions.txt
+  >>>   uv run python -m sim.dream_calibrate contradiction  | tee out/calibrate-contradiction.txt
+  >>> Then put the chosen wording and threshold into config2.toml.
