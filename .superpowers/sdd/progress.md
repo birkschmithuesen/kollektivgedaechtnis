@@ -1187,3 +1187,55 @@ Task 16: complete (commit e17fa28 + this one). sim/dream_calibrate.py,
   >>>   uv run python -m sim.dream_calibrate questions      | tee out/calibrate-questions.txt
   >>>   uv run python -m sim.dream_calibrate contradiction  | tee out/calibrate-contradiction.txt
   >>> Then put the chosen wording and threshold into config2.toml.
+
+Task 17: complete (commits 074b39e, c830686 + this one, review found 1 Critical).
+  sim/seed_dreams.py, sim/dream_prerender.py, tests/test_dream_prerender.py.
+  Tool 2 suite: 303 passing.
+  >>> CRITICAL FINDING, AND IT IS A DECISION FOR BIRK, NOT FOR ME <<<
+  The history strip destroys its own content at realistic counts. #strip li has
+  a fixed height with flex-shrink and object-fit:cover, so per-item width falls
+  ~1/count while height stays put — each 16:9 dream is cropped to a thin centre
+  vertical slice. The reviewer measured it with a CONTENT-BEARING pool (shape
+  left, marker centre, different shape right):
+      5 dreams  -> ~280px wide, left/centre/right all visible, strip works
+      20 dreams -> already a sliver showing only the centre marker
+      40 dreams -> 31x210px. Total collapse.
+  So it is broken by 20 — HALF the four sizes the series renders — not just at
+  40. The spec calls the strip "the evidence"; cropped to slivers it is colour
+  texture instead.
+  The first visual review MISSED this because its placeholder pool was solid
+  colours, and a crop of a solid colour is still that solid colour. That is now
+  fixed at the root: --placeholder-pool writes content-bearing 1600x900 PNGs, so
+  a strip can never again be judged on material that cannot show the failure.
+  THREE MODES BUILT AS ARTEFACTS, NONE MARKED AS PREFERRED (standing rule).
+  Rendered at 20 and 40 into out/dream-strip-comparison/:
+      cover  20: 80x210   40: 31x210   — crops left/right away past ~20
+      aspect 20: 80x45    40: 31x18    — whole frame kept, both dimensions
+                                          shrink toward illegibility; leaves the
+                                          reserved strip band mostly empty at 40
+      wrap   20: 372x210  40: 372x210  — never crops, but the row height is
+                                          fixed with overflow:hidden, so only a
+                                          handful are visible and the REST ARE
+                                          SILENTLY CLIPPED — a different
+                                          failure, not a fix
+  `cover` remains the default, so nothing changes until Birk picks. Selected via
+  data-strip-mode on the page root and --strip-mode on the pre-render CLI;
+  filenames carry the mode so the files can be told apart unopened.
+  TWO Important also fixed: the 40 seeded sentences measured 15-21 words while
+  claiming the spec's 20-40 range, so the layout was being judged at the very
+  bottom of it — rewritten to genuinely span 20-40 including several at 36-40,
+  with the test now asserting both ends and a page test that the longest one
+  does not push the strip off screen (at 40 words it takes four lines and the
+  image shrinks to fit, which is exactly the hard case that was invisible
+  before). And --generate died with a raw traceback when OPENROUTER_API_KEY was
+  unset; now a clean SystemExit naming what to export and what the run costs.
+  ONE Minor fixed: test_the_pool_is_cycled_when_it_is_smaller_than_the_count had
+  a body identical to another test and asserted nothing about cycling.
+  ONE Minor recorded, not fixed: _free_port/_launch_chromium/Shot are duplicated
+  verbatim from sim/prerender.py rather than imported (the plan prescribed it).
+  NOTE: Birk is editing frontend/static/operator.js, tests/test_operator_ui.py
+  and a new sim/export_interviews_md.py in the same tree. Left untouched.
+  >>> OPEN ACTION FOR BIRK: pick a strip mode from out/dream-strip-comparison/,
+  >>> then run the real series once a register is set:
+  >>>   uv run python -m sim.dream_prerender --out out/dream-prerender2 --generate
+  >>> That is 40 real image-model calls.
