@@ -29,7 +29,7 @@
 - **Crash recovery is Tool 1's standard** (§8): after a restart the screen comes back exactly as it stood — current dream, full strip, settings. Nothing lives only in memory.
 - **No dashboard** (§6): no counters, no progress bars, no „generating…" spinner. The only motion is the fade and, optionally, the typewriter.
 - **Sizing follows Tool 1's rule** (§6, T1§11): everything in viewport-relative units, so a different screen changes nothing.
-- **Credentials from env only** — `ANTHROPIC_API_KEY` (stage 1), `OPENROUTER_API_KEY` (stage 2). Never committed, never read from `~/.hermes/.env` (§2).
+- **Credentials from env only** — `ANTHROPIC_API_KEY` (stage 1), `OPENROUTER_API_KEY` (stage 2). Never committed, never written into a project `.env` (§2). The exhibition machine gets them by `export` and nothing else — it has no Hermes install. On Birk's vServer, and only for preparation runs, loading them from `~/.hermes/.env` into the environment is permitted (`set -a; . ~/.hermes/.env; set +a`) — released by Birk 2026-08-26.
 - **Language:** German for all visitor-facing text and all prompts; English for code, identifiers and comments.
 - **LLM:** model id `claude-opus-5` exactly (no date suffix). Adaptive thinking is on by default — do not pass `thinking`. Never pass `temperature`, `top_p`, `top_k`, or `budget_tokens` (they return 400). Depth is controlled by `output_config.effort`.
 - **Contract tests run against a REAL `graph.json` produced by `sim/replay.py`** (§11), committed as `sim/data/graph-19c.json` — never a hand-written fixture, and never a fresh replay run (that needs credentials and minutes; Tool 2's suite must stay runnable offline).

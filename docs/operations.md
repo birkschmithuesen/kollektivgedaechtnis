@@ -6,14 +6,28 @@ die es im UI nicht gibt.
 
 ## Vor dem Festival
 
-1. Drei Geheimnisse in die Umgebung exportieren (nie `~/.hermes/.env` verwenden,
-   nie in `config.toml` schreiben):
+1. Drei Geheimnisse in die Umgebung exportieren (nie in `config.toml` schreiben,
+   nie in eine `.env` im Projekt kopieren):
 
    ```bash
    export ANTHROPIC_API_KEY=...      # Extraktion + Merge-Judge
    export KG_TELEGRAM_TOKEN=...      # Foto-Auslöser
    export OPENROUTER_API_KEY=...     # nur Embeddings, darf ein eigener Schlüssel sein
    ```
+
+   **Vor Ort ist das der einzige Weg** — der Ausstellungsrechner hat keine
+   Hermes-Installation. Nur auf Birks vServer, für Vorbereitungsläufe
+   (Register-Muster, Kalibrierung, Pre-Render), dürfen die Schlüssel stattdessen
+   aus `~/.hermes/.env` in die Umgebung geladen werden (Freigabe Birk,
+   2026-08-26):
+
+   ```bash
+   set -a; . ~/.hermes/.env; set +a
+   ```
+
+   Die Schlüssel leben dann nur in der Prozess-Umgebung des Kommandos. Der Code
+   liest sie ausschließlich über `os.environ` (`kg/config.py`, `kg2/config.py`) —
+   eine Projekt-`.env` gibt es nicht und soll es nicht geben.
 
 2. `cp config.example.toml config.toml` und Werte prüfen. Die kalibrierten Werte
    stehen unten und werden im Betrieb **nicht** verändert.
@@ -254,12 +268,16 @@ Traum und den vollen Verlaufsstreifen weiter.
 
 ### Vor dem Festival, auf der Traum-Maschine
 
-1. Zwei Geheimnisse exportieren (nie in `config2.toml`, nie aus `~/.hermes/.env`):
+1. Zwei Geheimnisse exportieren (nie in `config2.toml`, nie in eine
+   Projekt-`.env`):
 
    ```bash
    export ANTHROPIC_API_KEY=...      # Stufe 1: Graph -> Satz
    export OPENROUTER_API_KEY=...     # Stufe 2: Satz -> Bild
    ```
+
+   Für Vorbereitungsläufe auf Birks vServer (nicht vor Ort) gilt derselbe
+   Kurzweg wie oben: `set -a; . ~/.hermes/.env; set +a`.
 
 2. `cp config2.example.toml config2.toml`, dann `tool1_url` auf die Adresse
    setzen, die der Core beim Start ausgibt.
