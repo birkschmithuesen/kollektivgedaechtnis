@@ -28,6 +28,15 @@ hardened to degrade rather than raise on the malformed shapes
 `kg2.graph_client.fetch_graph` lets through, so a guard around that step is
 belt-and-braces, not the primary defence — see the comment at its `except` for
 why it deliberately writes no row when it fires.
+
+One more guard sits before step 1 even begins: an empty `Material` (no terms —
+an empty graph at 09:00, or a person who is still only a photo) also writes no
+row. Stage 1's prompt still ends "Antworte mit genau einem Satz" regardless of
+what the material contains, so without this the model invents a dream out of
+nothing, and — worse than an ordinary failure — that invented dream would
+SUCCEED and take a permanent seat in the day's evidence strip (Finding 2). See
+the guard's own comment below for why it applies to a forced „Dream now" just
+as much as to an automatic cycle.
 """
 
 from __future__ import annotations
@@ -71,6 +80,30 @@ def run_dream(
         # writes NO row at all. The watcher must still survive the poll, so
         # log and skip the cycle rather than let the exception escape.
         log.error("dream skipped: could not process graph: %s", exc)
+        return None
+
+    if material.term_count == 0:
+        # Finding 2: "Dream now" on an empty graph — the spec's own use case
+        # for the button, someone from the organiser wanting to see how it
+        # works at 09:00 — or on a graph with only a photographed-but-not-yet-
+        # processed person ("1 Menschen, 0 Begriffe") has nothing for stage 1
+        # to condense. Stage 1's prompt does not know that: it still ends
+        # "Antworte mit genau einem Satz", so the model answers the guiding
+        # question anyway, and a confident sentence-and-image pair lands as
+        # dream #1 of a day whose strip is supposed to be evidence of what
+        # people actually said. Applies equally to a forced and an automatic
+        # cycle: the automatic trigger cannot reach this state today (spec
+        # §4.1's `evaluate` only fires on a person node WITH an edge, which
+        # means at least one term exists), but that is a property of
+        # `kg2.trigger`, not of this function, and this guard must not depend
+        # on it staying true. Checked before `create_dream`, so — unlike the
+        # ordinary failure path below — this writes NO row at all: there is
+        # nothing here worth recording as an attempt, because the cycle never
+        # actually started.
+        log.info(
+            "dream skipped: no material to condense (%d persons, 0 terms)",
+            material.person_count,
+        )
         return None
 
     dream = store.create_dream(

@@ -394,13 +394,23 @@ async def test_the_sentence_push_survives_the_worker_thread_hop(harness):
     assert event == {"type": "dreaming", "sentence": "Ein Satz im Werden."}
 
 
-async def test_a_failed_dream_pushes_nothing_new_to_the_display(harness):
-    """Spec §8: the screen looks calm, not broken. A push with an unchanged
-    current dream is harmless but pointless; a push is only made on success."""
+async def test_a_failed_dream_pushes_no_state_but_does_clear_the_typewriter(harness):
+    """Spec §8: the screen looks calm, not broken. A `state` push with an
+    unchanged current dream would be harmless but pointless, so none is made.
+
+    Finding 1: that is not the same as pushing NOTHING. Stage 1's `dreaming`
+    event may already have started the typewriter on the display for a
+    sentence whose dream then failed at stage 2 — `applyState`'s
+    `dream.id !== currentId` guard cannot clear that, since the current dream
+    is unchanged on a failure. Without a further event, the overlay would
+    stay up indefinitely. `dream_failed` is that event; it carries no state
+    of its own, only the clear signal."""
     harness.fail_next = True
     harness.graph = graph(["p1"])
     queue = harness.bus.subscribe()
 
     await harness.watcher.tick()
 
+    event = queue.get_nowait()
+    assert event == {"type": "dream_failed"}
     assert queue.empty()

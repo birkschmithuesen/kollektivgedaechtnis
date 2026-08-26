@@ -204,3 +204,17 @@ def test_the_runbook_says_what_a_restart_preserves():
     assert "Neustart" in section
     for preserved in ("Streifen", "Einstellung"):
         assert preserved in section
+
+
+def test_the_runbook_tells_the_operator_how_to_start_a_new_festival_day_empty():
+    """Finding 5: nothing else in the design separates one day's evidence
+    strip from the next — `dreams.sqlite3` and `images/` both survive a
+    restart on purpose (see the test above), so without an explicit runbook
+    step, day 2 opens with day 1's dreams still in the strip."""
+    section = tool2_section()
+
+    assert "Neuer Ausstellungstag" in section
+    idx = section.index("Neuer Ausstellungstag")
+    nearby = section[idx : idx + 1200]
+    assert "dream-data/dreams.sqlite3" in nearby
+    assert "dream-data/images" in nearby

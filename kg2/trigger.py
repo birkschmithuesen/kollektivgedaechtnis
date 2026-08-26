@@ -18,8 +18,11 @@ is structural: **a person node that has at least one edge**.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 
 def absorbed_persons(graph: dict | None) -> set[str]:
@@ -133,13 +136,33 @@ def evaluate(
         # correctly nothing: no new material has been said.
         return Decision(False, "nothing new")
 
-    if state.last_started_at is not None and now - state.last_started_at < min_interval_s:
-        # THE FLOOR IS A DELAY, NOT A DROP. `state` is returned untouched and no
-        # `absorbed` is reported, so the same fresh persons are still fresh at
-        # the next poll and the dream fires the moment the floor expires. Folding
-        # them in here would swallow the interview silently and forever — and
-        # nothing on screen would ever say so.
-        return Decision(False, "floor")
+    if state.last_started_at is not None:
+        elapsed = now - state.last_started_at
+        if elapsed < 0:
+            # Finding 3: the dream machine is a dedicated small box that can
+            # boot with its RTC ahead of real time and have NTP correct it
+            # backwards later. That leaves `last_started_at` in the future,
+            # so `elapsed` stays negative — not just past `min_interval_s`,
+            # but permanently, since it never counts up from a point in the
+            # future. A restart does not clear this either: `resume_state`
+            # reads the same `created_at` back out of the store. There is no
+            # floor to meaningfully enforce against a timestamp that has not
+            # happened yet, so this is treated as "the clock moved", not as
+            # "too soon" — the dream is allowed to fire. Logged, because a
+            # clock jump this large is worth an operator's attention even
+            # though the trigger itself recovers with no help needed.
+            log.warning(
+                "dream trigger: now (%s) is before last_started_at (%s); "
+                "treating this as a clock correction and firing anyway",
+                now, state.last_started_at,
+            )
+        elif elapsed < min_interval_s:
+            # THE FLOOR IS A DELAY, NOT A DROP. `state` is returned untouched and no
+            # `absorbed` is reported, so the same fresh persons are still fresh at
+            # the next poll and the dream fires the moment the floor expires. Folding
+            # them in here would swallow the interview silently and forever — and
+            # nothing on screen would ever say so.
+            return Decision(False, "floor")
 
     # Everything absorbed so far, not just `fresh`: the dream is of the whole
     # graph, so several interviews inside the floor collapse into one (spec §4.1)

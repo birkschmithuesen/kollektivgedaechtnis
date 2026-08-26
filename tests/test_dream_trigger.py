@@ -336,6 +336,28 @@ def test_a_failed_dream_retries_the_same_material_at_the_next_trigger():
     assert retry.absorbed == frozenset({"p1"})
 
 
+def test_a_clock_that_jumped_backwards_does_not_wedge_the_floor():
+    """Finding 3: the dream machine's RTC can boot ahead of real time and be
+    corrected backwards by NTP later, leaving `last_started_at` in the
+    future. The ordinary `now - last_started_at < min_interval_s` floor check
+    would then stay negative — and hence blocking — forever: pinned here with
+    a stamp 150 days ahead of `now`, which under the old logic returned
+    `fire=False, reason='floor'` for 150 days straight. A restart does not
+    clear this either (`resume_state` reads the same `created_at` back out of
+    the store), so the trigger itself has to recognise the clock moved rather
+    than treat the gap as still-too-soon."""
+    ONE_DAY = 86400
+    state = TriggerState(frozenset({"p1"}), 5000.0 + 150 * ONE_DAY)
+
+    decision = evaluate(
+        state, graph(["p1", "p2"], [("p1", "t1"), ("p2", "t2")]),
+        now=5000.0, min_interval_s=240,
+    )
+
+    assert decision.fire is True
+    assert decision.absorbed == frozenset({"p1", "p2"})
+
+
 def test_a_failed_dream_does_not_retry_before_the_floor():
     state = TriggerState(frozenset(), None).with_dream_started(100.0)
 

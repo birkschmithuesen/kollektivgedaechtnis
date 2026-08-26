@@ -28,6 +28,15 @@ from kg.transcript import TranscriptLog
 def resolved_host(host: str) -> str:
     """The address to PRINT. Never the address to bind.
 
+    Duplicated verbatim (with its two helpers below) as `kg2.__main__`'s own
+    copy, on purpose (Finding 4 of Tool 2's review): `kg2/__main__.py` used to
+    import this function directly, which transitively pulled `kg.store`,
+    `kg.core`, `kg.server` and PIL into Tool 2's process even though this
+    function itself needs none of them. Do not "fix" the duplication by
+    reintroducing that import, or by factoring this out into a module shared
+    by both `__main__`s — a shared module would recreate exactly the import
+    coupling between the two tools that keeping two small copies avoids.
+
     Binding to `0.0.0.0` is correct and stays exactly as configured — that is
     what makes Tool 1 reachable from the dream machine (spec §3.1 of the
     Kollektivtraum spec). Printing it is a trap: `http://0.0.0.0:8800` opens

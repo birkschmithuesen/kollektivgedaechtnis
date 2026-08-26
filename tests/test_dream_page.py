@@ -364,6 +364,33 @@ def test_the_baseline_carries_the_sixty_second_risk_either_way(view):
         assert view.locator("#stage .frame.visible").count() == 1
 
 
+# -- a failed dream (Finding 1) ----------------------------------------------
+
+
+def test_dream_failed_clears_the_typewriter_but_leaves_the_baseline_untouched(view):
+    """Finding 1: stage 2 failed after stage 1 already announced a sentence
+    and the typewriter started building it. `dreamFailed()` — the signal the
+    watcher publishes on this path instead of a `state` push — must clear the
+    overlay without touching the previous dream's sentence or image (spec
+    §8's "ride it out": a failure needs nothing undone because nothing about
+    the current dream changed)."""
+    apply(view, state(current=dream(1), typewriter=True))
+    view.evaluate("() => window.kgDream.showDreaming('Der Beton träumt von Wald')")
+    view.wait_for_timeout(120)
+    partial = view.locator("#typewriter").inner_text()
+    assert partial != ""  # confirms the typewriter really was mid-build
+
+    view.evaluate("() => window.kgDream.dreamFailed()")
+
+    assert view.locator("#typewriter").is_visible() is False
+    assert view.locator("#typewriter").inner_text() == ""
+    # The baseline — sentence AND image — is exactly what it was before the
+    # failed attempt started, not blanked and not advanced.
+    assert view.locator("#sentence").inner_text() == "Traum 1"
+    assert view.locator("#stage .frame.visible").count() == 1
+    assert view.locator("#stage .frame.visible").get_attribute("src") == dream(1)["image"]
+
+
 # -- no dashboard (spec §6) --------------------------------------------------
 
 

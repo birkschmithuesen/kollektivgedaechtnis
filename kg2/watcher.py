@@ -90,6 +90,19 @@ class DreamWatcher:
         if dream is None:
             # Failed. The seen set is NOT advanced, so the same material is
             # retried at the next trigger past the floor (spec §8).
+            #
+            # Finding 1: `announce` above may already have told the display a
+            # sentence was coming, and the typewriter is mid-build off of it.
+            # `broadcast_dream_state` is deliberately NOT called here — the
+            # baseline (previous image and sentence) must not change on a
+            # failure — but with no event at all, nothing would ever tell the
+            # display to clear that overlay; it would sit there, pasted over
+            # the stage, until the next success. `dream_failed` carries no
+            # state of its own, only the clear signal. We are back on the
+            # loop's own thread here (this runs after the `await` on
+            # `asyncio.to_thread`), so a direct `bus.publish` is safe — unlike
+            # `announce`, which runs inside the cycle's worker thread.
+            self.bus.publish({"type": "dream_failed"})
             return None
 
         self.state = self.state.with_absorbed(decision.absorbed)

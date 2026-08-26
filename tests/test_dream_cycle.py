@@ -240,8 +240,12 @@ def test_a_person_with_a_list_id_does_not_crash_the_cycle(tmp_path):
     """`kg2.graph_client.fetch_graph` never checks value types. An unhashable
     id used to blow up `absorbed_persons`'s set comprehension before the row
     could even be created, leaving no record at all — the worse failure mode
-    Finding 1 called out. Hardened, the bad id is just dropped: the cycle
-    degrades to an (almost) empty dream rather than crashing OR skipping."""
+    Finding 1 called out. Hardened, the bad id is just dropped rather than
+    crashing — but dropping it also leaves zero real material (the term node
+    survives, but with no valid edge reaching it once its only source id is
+    filtered out), so Finding 2's empty-material guard now means this
+    degrades to no dream and no row at all, not a `done` dream over an
+    all-zero graph."""
     cfg, store = setup(tmp_path)
     bad = {
         "version": 1, "generated_at": 1.0, "min_mentions": 1,
@@ -256,10 +260,8 @@ def test_a_person_with_a_list_id_does_not_crash_the_cycle(tmp_path):
     result = run_dream(store, cfg, object(), bad, 1.0,
                        condense_fn=good_condense(), render_fn=good_render())
 
-    assert result is not None
-    assert result.status == "done"
-    assert result.person_count == 0
-    assert result.absorbed_persons == []
+    assert result is None
+    assert store.all_dreams() == []
     store.close()
 
 
@@ -383,6 +385,69 @@ def test_a_broken_on_sentence_callback_does_not_fail_the_dream(tmp_path):
 
     assert dream is not None
     assert dream.status == "done"
+    store.close()
+
+
+# -- empty material (Finding 2) ---------------------------------------------
+
+
+def empty_graph() -> dict:
+    return {
+        "version": 1, "generated_at": 1.0, "min_mentions": 1,
+        "nodes": [], "edges": [], "quotes": [],
+    }
+
+
+def one_unprocessed_person_graph() -> dict:
+    """T1's first `graph.json` broadcast per interview (spec §4.1): the photo
+    landed, the pipeline has not run yet. Same shape of nothing as the empty
+    graph — "1 Menschen, 0 Begriffe" is still zero terms for stage 1."""
+    return {
+        "version": 1, "generated_at": 1.0, "min_mentions": 1,
+        "nodes": [
+            {"id": "p1", "type": "person", "portrait": None, "created_at": 1.0,
+             "hidden": False, "x": None, "y": None},
+        ],
+        "edges": [], "quotes": [],
+    }
+
+
+def test_a_forced_cycle_on_an_empty_graph_produces_no_dream_and_no_row(tmp_path):
+    """Finding 2: exactly the spec's own use case for 'Dream now' — someone
+    from the organiser at 09:00, before the first interview. Without the
+    guard, stage 1's prompt still ends 'Antworte mit genau einem Satz' and
+    the model invents a dream from nothing."""
+    cfg, store = setup(tmp_path)
+
+    result = run_dream(store, cfg, object(), empty_graph(), 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is None
+    assert store.all_dreams() == []
+    store.close()
+
+
+def test_a_forced_cycle_on_one_photographed_unprocessed_person_produces_no_dream(tmp_path):
+    cfg, store = setup(tmp_path)
+
+    result = run_dream(store, cfg, object(), one_unprocessed_person_graph(), 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is None
+    assert store.all_dreams() == []
+    store.close()
+
+
+def test_a_forced_cycle_with_real_material_still_works(tmp_path):
+    """The guard must not swallow a legitimate 'Dream now' that has real
+    material behind it — only the genuinely empty case."""
+    cfg, store = setup(tmp_path)
+
+    result = run_dream(store, cfg, object(), graph(persons=3), 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+
+    assert result is not None
+    assert result.status == "done"
     store.close()
 
 

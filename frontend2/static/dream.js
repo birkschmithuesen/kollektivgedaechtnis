@@ -169,6 +169,18 @@ export function createDreamView(root) {
     sentence.textContent = dream.sentence || '';
   }
 
+  function dreamFailed() {
+    // Finding 1: stage 1's `dreaming` event may already have started the
+    // typewriter build for a sentence whose dream then failed at stage 2.
+    // `applyState`'s `dream.id !== currentId` guard cannot catch this — the
+    // current dream is unchanged on a failure, so that idempotency check
+    // never fires — which is exactly why the server publishes a distinct
+    // `dream_failed` signal instead of folding this into a `state` push.
+    // Only the overlay clears; the baseline sentence and image are left
+    // exactly as they are (spec §8's "ride it out").
+    stopTypewriter();
+  }
+
   function showDreaming(text) {
     // Stage 1 has returned and stage 2 is running. The BASELINE carries this
     // moment either way — the previous image and sentence stay exactly where
@@ -192,6 +204,7 @@ export function createDreamView(root) {
   return {
     applyState,
     showDreaming,
+    dreamFailed,
     get current() {
       return currentId;
     },

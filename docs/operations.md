@@ -264,6 +264,7 @@ macht genau die Vergleichbarkeit kaputt, für die der Verlaufsstreifen da ist.
 |---|---|---|
 | Bild wechselt nicht mehr, Streifen steht | Cloud oder Netz weg | Nichts tun. Das letzte Bild bleibt stehen, der nächste Trigger versucht es erneut. Kein Retry-Sturm, keine Zusatzkosten. |
 | Nie ein neuer Traum, obwohl Interviews laufen | Tool 1 nicht erreichbar | `curl http://<adresse>:8800/graph.json` **von der Traum-Maschine**. Danach Bind und Firewall prüfen. |
+| Nie ein neuer Traum, obwohl Interviews laufen, UND ein Neustart hat nicht geholfen | Systemuhr der Traum-Maschine ist zurückgesprungen (RTC beim Booten vor der echten Zeit, später per NTP korrigiert) — der gespeicherte Start-Zeitstempel des letzten Traums liegt dann in der Zukunft, und ein Neustart liest genau diesen Zeitstempel aus `dreams.sqlite3` zurück, löscht ihn also nicht | Nichts zu tun: Der Trigger erkennt einen Start-Zeitstempel in der Zukunft selbst als Uhrsprung und lässt den nächsten Traum trotzdem zu (mit Log-Eintrag). Bleibt er dennoch aus, Systemzeit prüfen (`date`). |
 | Screen B ist schwarz | Tool-2-Prozess tot | Neu starten. Wand und zweiter Raum sind unberührt. |
 | Bild ist unbrauchbar oder peinlich | Bildmodell | „Aktuellen Traum verwerfen". Der vorherige kommt zurück. |
 | Traum steht auf „läuft" und wird nicht fertig | Absturz mitten im Zyklus | Nichts tun — er erscheint nie auf dem Schirm. Der nächste Trigger macht einen neuen. |
@@ -278,6 +279,27 @@ Anzeige-Einstellung, den Pausenzustand — und die Information, welche Interview
 schon geträumt wurden, sodass nach dem Neustart weder alles noch einmal geträumt
 wird noch gar nichts mehr. Alles liegt in `dreams.sqlite3`; nichts nur im
 Speicher.
+
+### Neuer Ausstellungstag
+
+Genau das eben beschriebene Verhalten — `dreams.sqlite3` und die Bilder
+überleben jeden Neustart — hat eine Kehrseite: Es gibt sonst nichts, das einen
+Tag vom nächsten trennt. Ohne Eingriff öffnet Tag 2 mit den ~40 Träumen von
+Tag 1 noch im Verlaufsstreifen und wächst von dort weiter.
+
+Der Streifen ist die Beweiskette für GENAU EINEN Tag (Spec §6, §8) — er zeigt,
+was an diesem einen Tag gesagt wurde, nicht eine über mehrere Tage
+akkumulierte Sammlung. Vor dem zweiten (und jedem weiteren) Ausstellungstag,
+auf der Traum-Maschine, bei gestopptem Prozess:
+
+```bash
+rm dream-data/dreams.sqlite3
+rm -rf dream-data/images/
+```
+
+Beide Pfade werden beim nächsten Start automatisch neu angelegt (leere
+Datenbank, leerer Bilderordner) — dasselbe Verzeichnis, das `config2.toml`
+unter `data_dir` nennt.
 
 ### Kalibrierte Werte (Tool 2)
 

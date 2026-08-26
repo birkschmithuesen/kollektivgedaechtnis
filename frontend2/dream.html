@@ -41,6 +41,12 @@
       window.kgDreamReady = true;
     } else if (payload.type === 'dreaming') {
       view.showDreaming(payload.sentence);
+    } else if (payload.type === 'dream_failed') {
+      // Finding 1: stage 2 failed after stage 1 already announced a
+      // sentence. No `state` event follows a failure (the baseline is
+      // untouched on purpose), so this is the one signal that clears a
+      // typewriter build left stranded mid-word.
+      view.dreamFailed();
     }
   };
 </script>
