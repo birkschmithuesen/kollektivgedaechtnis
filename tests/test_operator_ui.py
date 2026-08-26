@@ -95,6 +95,46 @@ def test_the_density_dial_reflects_state_and_posts_changes(ui):
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/min_mentions", {"value": 3}]
 
 
+def _density_options(ui):
+    return ui.eval_on_selector_all("#min-mentions option", "els => els.map(e => e.textContent)")
+
+
+def test_each_density_step_says_how_many_terms_it_would_leave_on_the_wall(ui):
+    """Moved here from the touchscreen on 2026-08-26, with the dial itself.
+
+    The number exists because of a concrete incident: eight interviews in,
+    somebody raised the density, got a blank wall and concluded the control
+    was broken. It was not — nothing had been said by three people yet. The
+    count turns a dead-looking step into an honest statement about the graph,
+    and that has to survive the move to the operator laptop.
+
+    Counted the way the wall counts: hidden terms are not on it, so `Unfug`
+    (hidden, 1 mention) is in no step. `Aussenwand` (1), `Holzbau` (2) and
+    `Ziegel` (3) are.
+    """
+    assert _density_options(ui) == ["1 — alles (3)", "2 — geteilt (2)", "3 — nur häufig (1)"]
+
+
+def test_the_counts_follow_every_graph_push(ui):
+    """A step that is empty now may have something behind it a minute later."""
+    grown = {
+        **GRAPH,
+        "nodes": GRAPH["nodes"]
+        + [{"id": "t5", "type": "term", "label": "Dämmung", "mentions": 3, "hidden": False, "created_at": 7}],
+    }
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [grown, STATE])
+    assert _density_options(ui) == ["1 — alles (4)", "2 — geteilt (3)", "3 — nur häufig (2)"]
+
+
+def test_a_step_that_would_empty_the_wall_says_so_before_it_is_chosen(ui):
+    """The blank-wall case itself: the step stays selectable — the graph may
+    grow into it — but it no longer lies about what is behind it."""
+    early = {**GRAPH, "nodes": [n for n in GRAPH["nodes"] if n["id"] != "t4"]}
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [early, STATE])
+    assert _density_options(ui) == ["1 — alles (2)", "2 — geteilt (1)", "3 — nur häufig (0)"]
+    assert ui.eval_on_selector_all("#min-mentions option[disabled]", "els => els.length") == 0
+
+
 def test_the_camera_switch_reflects_state_and_posts_changes(ui):
     assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
     ui.select_option("#camera", "fit")

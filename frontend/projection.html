@@ -100,6 +100,8 @@
     let controls = null;
     if (isTouch) {
       autonomy = attachTouchAutonomy(view);
+      // Nothing wired in here may post: whatever a visitor presses on surface A
+      // must stay on surface A (see touch-controls.js and touch-autonomy.js).
       controls = createTouchControls(document.body, {
         onOverview: () => {
           // Two things at once, because "Übersicht" means one thing to the
@@ -107,14 +109,6 @@
           autonomy.releaseNow();
           view.camera.setZoomFactor(1);
           view.camera.setMode('fit');
-        },
-        onDensity: (value) => {
-          view.setMinMentions(value);
-          fetch('/api/min_mentions', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ value }),
-          }).catch((error) => console.warn('failed to set density', error));
         },
       });
       window.kgTouch = { autonomy, controls };
@@ -126,11 +120,11 @@
       if (payload.type === 'graph') {
         view.update(payload.graph);
         quotes.setGraph(payload.graph);
-        if (controls) controls.setGraph(payload.graph);
         window.kgReady = true;
       } else if (payload.type === 'state') {
+        // The operator's density applies to every surface, touchscreen
+        // included — it just has no counterpart to reflect there any more.
         view.setMinMentions(payload.state.min_mentions);
-        if (controls) controls.setDensity(payload.state.min_mentions);
         // Route the operator's mode through the autonomy guard on the touch
         // surface: applying it directly would snatch the view away from a
         // visitor mid-gesture. Everywhere else it applies immediately.

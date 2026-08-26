@@ -2,9 +2,13 @@
 
 The load-bearing property under test is an isolation one: touching the
 touchscreen must NOT change what surface C in the plenary room is doing.
-`camera_mode` is global state pushed over SSE, so the only safe design is a
-LOCAL override that never posts — and that is exactly what can silently
-regress into "just POST the mode" during a later refactor.
+Both `camera_mode` and `min_mentions` are global state pushed over SSE, so the
+only safe design is a LOCAL override that never posts — and that is exactly
+what can silently regress into "just POST it" during a later refactor.
+
+The second half of the file tests that property against the real `?touch=1`
+page rather than against a module, because "what may a visitor's finger
+reach" is a wiring question that `projection.html` answers.
 """
 
 import pytest
@@ -143,3 +147,78 @@ def test_touching_the_graph_still_counts_as_navigating(touch):
     """The counterpart — the exemption must not swallow real gestures."""
     _touch_screen(touch)
     assert touch.evaluate("window.fakeCamera.mode") == "manual"
+
+
+# --- What a visitor may reach at all, on the real page -----------------------
+
+TOUCH_GRAPH = {
+    "version": 1,
+    "min_mentions": 1,
+    "nodes": [
+        {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 100, "y": 100},
+        # Mentioned once, so it is on the wall at density 1 and gone at any
+        # step above it. That makes it the probe: if a visitor's press could
+        # still raise the density, this node would leave the graph.
+        {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 1, "hidden": False, "x": 400, "y": 250},
+    ],
+    "edges": [{"id": "e1", "source": "p1", "target": "t1"}],
+    "quotes": [],
+}
+
+
+@pytest.fixture()
+def surface_a(page, static_server):
+    """The touchscreen as it actually runs: `projection.html?touch=1`."""
+    page.goto(f"{static_server}/frontend/projection.html?touch=1")
+    page.wait_for_function("window.kgTouch !== undefined")
+    page.evaluate(
+        "window.kgFetches = [];"
+        " window.fetch = (url) => { window.kgFetches.push(url);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); };"
+        " void 0;"
+    )
+    page.evaluate("(g) => window.kgView.update(g, 1)", TOUCH_GRAPH)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+    return page
+
+
+def _press_every_visitor_control(page):
+    page.eval_on_selector_all(".touch-controls button", "els => els.forEach((el) => el.click())")
+
+
+def test_no_control_a_visitor_can_press_reaches_the_server(surface_a):
+    """A guest in the foyer has no mandate for the plenary room.
+
+    Until 2026-08-26 the density buttons posted `/api/min_mentions`, which is
+    global state: one finger on the touchscreen changed what surface C showed
+    to a seated audience. Whatever the bar offers now, none of it may leave
+    this browser — pressed one after another, the whole bar stays silent.
+    """
+    _press_every_visitor_control(surface_a)
+    assert surface_a.evaluate("window.kgFetches") == []
+
+
+def test_a_visitor_cannot_change_the_density_even_on_their_own_screen(surface_a):
+    """The counterpart to the test above: the buttons are gone, not muted.
+
+    A local-only density would still be wrong here — it would make the foyer
+    disagree with the operator's setting for the rest of the day, with nobody
+    to notice. `t1` has one mention and survives only at density 1.
+    """
+    _press_every_visitor_control(surface_a)
+    assert surface_a.evaluate("window.kgView.cy.$('#t1').length") == 1
+
+
+def test_uebersicht_survives_as_the_one_thing_a_visitor_may_still_do(surface_a):
+    """It changes nothing beyond this screen — it undoes a pinch.
+
+    Without it there is no way out of a visitor's abandoned close-up except
+    waiting 30 s for the idle timeout, so it stays while the density goes.
+    """
+    surface_a.evaluate(
+        "window.kgView.camera.setMode('manual'); window.kgView.camera.setZoomFactor(2.5)"
+    )
+    surface_a.click("#touch-overview")
+    assert surface_a.evaluate("window.kgView.camera.mode") == "fit"
+    assert surface_a.evaluate("window.kgView.camera.zoomFactor") == 1
+    assert surface_a.evaluate("window.kgFetches") == []

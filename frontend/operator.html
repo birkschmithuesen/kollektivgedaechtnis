@@ -7,6 +7,13 @@
 <header>
   <span id="stt" class="badge">STT</span>
   <label>Dichte
+    <!-- Each step gets its term count appended live by operator.js ("2 —
+         geteilt (14)"). The label written here is the base; operator.js keeps
+         it in `data-label` on first render so re-rendering cannot stack
+         suffixes. Why the count is worth the noise: on 2026-08-26, eight
+         interviews in, raising the density produced a blank wall and read as
+         a broken control — nothing had been said by three people yet. The
+         number says that before the wall goes empty in front of the room. -->
     <select id="min-mentions">
       <option value="1">1 — alles</option>
       <option value="2">2 — geteilt</option>

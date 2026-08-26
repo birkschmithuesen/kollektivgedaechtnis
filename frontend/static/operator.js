@@ -61,11 +61,35 @@ function entryRow(node) {
   return item;
 }
 
+/** Append to each density step how many terms it would leave on the wall.
+ *
+ * The count used to sit on the touchscreen's own density buttons; it followed
+ * the dial here when the visitor controls lost it (2026-08-26), because the
+ * knowledge behind it must not be lost with them: a step with nothing behind
+ * it empties the wall and reads as a broken control unless it says so first.
+ *
+ * Counted the way the wall counts — hidden terms are not on it, so they are in
+ * no step. Deliberately not the operator list's own rule below, which keeps
+ * hidden entries so "einblenden" stays reachable; that is a different question
+ * from "what would the room see". */
+function showDensityCounts(graph) {
+  const terms = (graph.nodes || []).filter((node) => node.type === 'term' && !node.hidden);
+  for (const option of document.getElementById('min-mentions').options) {
+    // The markup's text is the base label. Cached on first pass so a second
+    // render appends to the label, not to the label plus its last count.
+    if (option.dataset.label === undefined) option.dataset.label = option.textContent;
+    const threshold = Number(option.value);
+    const count = terms.filter((term) => (term.mentions || 0) >= threshold).length;
+    option.textContent = `${option.dataset.label} (${count})`;
+  }
+}
+
 function render(graph, state) {
   lastGraph = graph;
   lastState = state;
 
   document.getElementById('min-mentions').value = String(state.min_mentions);
+  showDensityCounts(graph);
   document.getElementById('camera').value = state.camera_mode;
   document.getElementById('camera-zoom').value = String(state.camera_zoom ?? 1);
   showZoomValue(state.camera_zoom ?? 1);

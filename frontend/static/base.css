@@ -2,14 +2,19 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 #cy { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 
 /* Visitor controls, surface A only (`?touch=1`). Sized for a finger on a 65"
-   panel at arm's length, not for a mouse: 72px tall, generous gaps. The iiyama
-   is an IR touchscreen — contacts register slightly ABOVE the glass, so a
-   cramped target is missed more often than on a capacitive phone. */
+   panel at arm's length, not for a mouse. The iiyama is an IR touchscreen —
+   contacts register slightly ABOVE the glass, so a cramped target is missed
+   more often than on a capacitive phone.
+   Since 2026-08-26 the bar holds a single button ("Übersicht"); the density
+   steps that used to sit at the other end went to the operator, because they
+   changed the wall in the plenary room too. Hence flex-start rather than
+   space-between: with one child the two are identical today, but the rule
+   should say where the control belongs, not where the gap used to be. */
 .touch-controls {
   position: fixed;
   left: 0; right: 0; bottom: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 16px;
   padding: 12px 20px;
@@ -19,7 +24,6 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   z-index: 10;
   font-family: inherit;
 }
-.touch-density { display: flex; gap: 12px; }
 .touch-button {
   /* Smaller than the first draft (Birk, 2026-08-26 — 72px/26px was too loud
      on the wall). 48px is the floor, not a taste choice: it is the standard
@@ -41,10 +45,6 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   touch-action: manipulation;
-}
-.touch-button.active {
-  background: rgba(255, 255, 255, 0.26);
-  border-color: rgba(255, 255, 255, 0.7);
 }
 
 /* Quote on touch (spec §10.2).
@@ -91,11 +91,3 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 }
 .quote-text::before { content: '\201E'; }
 .quote-text::after { content: '\201C'; }
-/* Density steps carry their own term count: a step that would empty the wall
-   has to say so before it is pressed, not after. Label and count sit on one
-   baseline — stacked, they would double the bar's height, which is exactly
-   what the smaller sizing is meant to avoid. */
-.touch-button.density { display: flex; align-items: baseline; gap: 9px; }
-.density-count { font-size: 14px; opacity: 0.58; font-variant-numeric: tabular-nums; }
-.touch-button.density.empty { opacity: 0.45; }
-.touch-button.density.empty .density-count { opacity: 0.9; }

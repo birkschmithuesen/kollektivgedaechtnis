@@ -168,6 +168,12 @@ Anzeigefilter: verwirft nichts, jederzeit umkehrbar. Startwert 2, siehe unten.
 N-mal gesagt (`COUNT(DISTINCT person_id)`, `kg/store.py`). Sagt eine Person
 denselben Begriff fünfmal, bleibt der Zähler bei 1.
 
+> Jede Stufe trägt die Zahl der Begriffe, die sie übrig ließe — „2 — geteilt
+> (14)", bei jedem Graph-Push nachgeführt. Früh am Tag steht dort schnell
+> „3 — nur häufig (0)": dann ist die Stufe nicht kaputt, es hat nur noch
+> niemand denselben Begriff zu dritt genannt. Die Stufe bleibt wählbar — der
+> Graph wächst hinein.
+
 **Kamera** — „alles zeigen" (ganzes Netz im Bild, steht still), „manuell"
 (Besucher zoomt und schiebt per Touch), „automatisch schwenken" (die Kamera
 wandert von selbst von Begriff zu Begriff). **Voreinstellung ist
@@ -212,14 +218,25 @@ das Flag ist die Seite reine Anzeige; genau so läuft Fläche C im Plenumssaal.
 | Portrait antippen | Zitat der Person erscheint; nochmal = nächstes Zitat |
 | Hintergrund antippen | Zitat weg (sonst nach 12 s von selbst) |
 | „Übersicht" | ganzes Netz, Zoom 1×, zurück zur Automatik |
-| Dichte-Knöpfe | alle / geteilt (ab 2) / häufig (ab 3), mit Anzahl |
+
+„Übersicht" ist der **einzige** Knopf am Touchscreen. Alles, was ein Besucher
+dort tut, bleibt auf diesem Schirm.
 
 **Berührung schaltet lokal auf „manuell", 30 s ohne Kontakt schaltet zurück.**
 Lokal heißt: Der Wechsel wird **nicht** an den Server gemeldet. `camera_mode`
 ist globaler Zustand — ein POST würde Fläche C im Plenumssaal mit auf
-„manuell" ziehen, wo niemand etwas anfassen kann. Die Dichte-Knöpfe posten
-dagegen sehr wohl: *wohin die Kamera schaut* ist lokal, *was die Wand zeigt*
-gilt überall.
+„manuell" ziehen, wo niemand etwas anfassen kann.
+
+> **Die Dichte gehört dem Operator, nicht dem Gast** (Birk, 2026-08-26). Bis
+> dahin standen die drei Dichte-Knöpfe mit am Touchscreen und posteten
+> `/api/min_mentions` — mit der Begründung, *wohin die Kamera schaut* sei lokal,
+> *was die Wand zeigt* gelte überall. Für den Operator stimmt das; er hat den
+> Regler ohnehin. Für einen Finger im Foyer stimmt es nicht: Fläche A steht am
+> Eingang, Fläche C im Plenumssaal, und ein Gast, der dort „häufig (ab 3)"
+> drückte, riss die Saalwand vor dem sitzenden Publikum mit um. Die Knöpfe sind
+> weg; der Regler sitzt nur noch im Operator-Fenster. „Übersicht" bleibt, weil
+> er nichts Globales verstellt — ohne ihn käme man aus einer verpinchten Ansicht
+> nur durch 30 s Warten wieder heraus.
 
 Zwei Warnungen aus dem Handbuch, die den Aufbau betreffen:
 
