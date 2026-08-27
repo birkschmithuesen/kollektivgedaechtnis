@@ -81,6 +81,54 @@ def test_display_settings_start_from_config_and_are_then_owned_by_the_operator(a
     assert client.get("/api/state").json()["fade_ms"] == 400
 
 
+def test_strip_max_defaults_to_ten_when_nothing_is_set(app):
+    client, _, cfg, _ = app
+
+    state = client.get("/api/state").json()
+
+    assert cfg.default_strip_max == 10
+    assert state["strip_max"] == 10
+
+
+def test_strip_max_survives_a_restart(app):
+    client, store, cfg, _ = app
+
+    client.post("/api/display", json={"strip_max": 5})
+    seed_display_settings(store, cfg)  # a restart re-seeds; it must not win
+
+    assert client.get("/api/state").json()["strip_max"] == 5
+
+
+def test_the_strip_keeps_the_newest_dreams_not_the_oldest(app):
+    client, store, cfg, _ = app
+    for index in range(1, 6):
+        add_dream(store, cfg, at=float(index), sentence=f"traum {index}")
+    # d6 is "current" (the newest visible dream); history is d1..d5.
+    add_dream(store, cfg, at=6.0, sentence="traum 6")
+
+    client.post("/api/display", json={"strip_max": 3})
+
+    state = client.get("/api/state").json()
+    assert [d["sentence"] for d in state["history"]] == ["traum 3", "traum 4", "traum 5"]
+
+
+def test_raising_strip_max_makes_older_dreams_visible_again_nothing_deleted(app):
+    client, store, cfg, _ = app
+    for index in range(1, 6):
+        add_dream(store, cfg, at=float(index), sentence=f"traum {index}")
+    add_dream(store, cfg, at=6.0, sentence="traum 6")
+
+    client.post("/api/display", json={"strip_max": 2})
+    assert len(client.get("/api/state").json()["history"]) == 2
+
+    client.post("/api/display", json={"strip_max": 5})
+
+    state = client.get("/api/state").json()
+    assert [d["sentence"] for d in state["history"]] == \
+        ["traum 1", "traum 2", "traum 3", "traum 4", "traum 5"]
+    assert len(store.all_dreams()) == 6  # nothing was ever removed from the record
+
+
 # -- display controls (spec §7) --------------------------------------------
 
 
@@ -94,6 +142,7 @@ def test_every_display_setting_can_be_changed(app):
             "question_seconds": 20,
             "fade_ms": 800,
             "strip_ratio": 0.2,
+            "strip_max": 7,
             "typewriter": True,
         },
     )
@@ -104,6 +153,7 @@ def test_every_display_setting_can_be_changed(app):
     assert state["question_seconds"] == 20
     assert state["fade_ms"] == 800
     assert state["strip_ratio"] == 0.2
+    assert state["strip_max"] == 7
     assert state["typewriter"] is True
 
 
@@ -126,6 +176,8 @@ def test_a_partial_display_update_leaves_the_rest_alone(app):
         {"strip_ratio": 0.0},  # no strip at all — the evidence would vanish
         {"strip_ratio": 0.3},  # above the measured dominance ceiling (0.25) —
         # the strip would start to rival the stage it is evidence for
+        {"strip_max": 0},  # an empty strip is not what this control is for
+        {"strip_max": 41},  # above the largest count the wall design was judged at
         {"question_seconds": -1},
     ],
 )

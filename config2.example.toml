@@ -58,6 +58,11 @@ default_question_visible = true
 default_question_seconds = 0     # 0 = dauerhaft
 default_fade_ms = 1200           # Überblendung, kein Morph (Spec §6)
 default_strip_ratio = 0.22
+# Obergrenze für den Streifen: nur die letzten N Träume werden gezeigt, der
+# Rest bleibt in dreams.sqlite3 und wird sichtbar, sobald der Wert wieder
+# hochgesetzt wird. 40 gleichzeitig auf dem Schirm waren zu viel (Birk,
+# 2026-08-26, an den gerenderten Vergleichen).
+default_strip_max = 10
 default_typewriter = false       # Birk entscheidet vor Ort
 
 # Am Ausstellungstag auf "0.0.0.0", damit das Operator-Fenster von einem

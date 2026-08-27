@@ -174,7 +174,11 @@ def test_the_page_renders_at_every_size(tmp_path, pool, page, static_server):
         page.evaluate("(s) => window.kgDream.applyState(s)", state)
         page.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
 
-        assert page.locator("#strip li").count() == size - 1
+        # The strip is deliberately capped to the newest `strip_max` dreams
+        # (kg2/server.py's dream_state()) — 40 on screen at once was judged
+        # too many (docs/operations.md, 2026-08-26). Every entry still comes
+        # from the real record; nothing here is about deletion.
+        assert page.locator("#strip li").count() == min(size - 1, cfg.default_strip_max)
         assert page.locator("#sentence").inner_text() != ""
         strip = page.locator("#strip").bounding_box()
         assert strip["y"] + strip["height"] <= 1081

@@ -242,14 +242,23 @@ def test_there_is_no_control_for_the_register_or_the_weighting(ui):
         # "dream-register-toggle" would slip past a `id="register` check while
         # breaking the constraint outright.
         assert forbidden not in html
-    # And no writable control of any kind beyond the five display settings and
-    # the three flow buttons — a new <input> here is how a morning-only setting
-    # quietly becomes a runtime one.
+    # And no writable control of any kind beyond the display settings and the
+    # three flow buttons — a new <input> here is how a morning-only setting
+    # quietly becomes a runtime one. This list is maintained by hand on
+    # purpose: a new control must be added here explicitly, or the test fails
+    # — that friction is the point of the guard.
     writable = ui.locator("input, textarea, select").evaluate_all(
         "els => els.map((e) => e.id).sort()"
     )
     assert writable == sorted(
-        ["fade-ms", "question-seconds", "question-visible", "strip-ratio", "typewriter"]
+        [
+            "fade-ms",
+            "question-seconds",
+            "question-visible",
+            "strip-max",
+            "strip-ratio",
+            "typewriter",
+        ]
     )
 
 

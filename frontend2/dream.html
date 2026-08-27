@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-strip-mode="cover">
+<html lang="de" data-strip-mode="wrap">
 <meta charset="utf-8">
 <title>Kollektivtraum</title>
 <!-- Relative asset paths, like Tool 1's pages: served at /dream these resolve
@@ -18,9 +18,10 @@
 <script type="module">
   import { createDreamView } from './static/dream.js';
 
-  // Review finding: the strip's crop-vs-shrink trade-off is Birk's call, not
-  // this file's. `cover` (set on <html> above) is the default so the wall
-  // never changes on its own; `?strip_mode=aspect|wrap` on the URL is how
+  // Review finding: the strip's crop-vs-shrink trade-off was Birk's call, not
+  // this file's. `wrap` (set on <html> above) is the default, decided
+  // 2026-08-26 from the rendered comparison (docs/operations.md): it crops
+  // no individual image. `?strip_mode=aspect|cover` on the URL is how
   // sim/dream_prerender.py's --strip-mode drives the three comparison
   // renders, and how anyone can preview a mode by hand.
   const stripMode = new URLSearchParams(location.search).get('strip_mode');

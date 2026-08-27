@@ -74,6 +74,10 @@ class DreamConfig:
     default_question_seconds: int = 0  # 0 = permanent
     default_fade_ms: int = 1200  # spec §6: cross-fade, default 1.2 s
     default_strip_ratio: float = 0.22
+    # 40 gleichzeitige Träume erwiesen sich als zu viel (Birk, 2026-08-26, an
+    # den gerenderten Vergleichen aus sim.dream_prerender): der Streifen zeigt
+    # ab hier nur noch die N NEUESTEN, der Rest bleibt in dreams.sqlite3.
+    default_strip_max: int = 10
     default_typewriter: bool = False  # spec §6: Birk decides visually on site
 
     # -- Tool 2's own server ------------------------------------------------
@@ -123,6 +127,7 @@ _FIELD_NAMES = {
     "default_question_seconds",
     "default_fade_ms",
     "default_strip_ratio",
+    "default_strip_max",
     "default_typewriter",
     "server_host",
     "server_port",

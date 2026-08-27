@@ -51,6 +51,12 @@ class DisplaySettings(BaseModel):
     # below which dominance holds with comfortable margin across the whole
     # range, not just at the default.
     strip_ratio: float | None = Field(default=None, ge=0.05, le=0.25)
+    # Never 0 (the strip is the evidence and this control only trims it —
+    # discarding a single dream already exists for removing one). The upper
+    # bound is the largest count the wall design has ever been judged at
+    # (sim.dream_prerender's four-point series stops at 40; spec §6, Birk
+    # 2026-08-26 on the rendered comparisons).
+    strip_max: int | None = Field(default=None, ge=1, le=40)
     typewriter: bool | None = None
 
 
@@ -68,6 +74,7 @@ _DEFAULTS = {
     "question_seconds": ("default_question_seconds", int),
     "fade_ms": ("default_fade_ms", int),
     "strip_ratio": ("default_strip_ratio", float),
+    "strip_max": ("default_strip_max", int),
     "typewriter": ("default_typewriter", bool),
 }
 
@@ -104,16 +111,21 @@ def dream_payload(dream) -> dict | None:
 
 
 def dream_state(store, cfg) -> dict:
+    strip_max = int(store.get_setting("strip_max", str(cfg.default_strip_max)))
     return {
         "question": cfg.guiding_question,
         "question_visible": store.get_setting("question_visible", "1") == "1",
         "question_seconds": int(store.get_setting("question_seconds", "0")),
         "fade_ms": int(store.get_setting("fade_ms", str(cfg.default_fade_ms))),
         "strip_ratio": float(store.get_setting("strip_ratio", str(cfg.default_strip_ratio))),
+        # Display only: the strip's newest `strip_max` entries. Nothing is
+        # deleted from the store — history() already returns everything
+        # oldest-first, this only slices what goes out over the wire.
+        "strip_max": strip_max,
         "typewriter": store.get_setting("typewriter", "0") == "1",
         "paused": store.get_setting("paused", "0") == "1",
         "current": dream_payload(store.current_dream()),
-        "history": [dream_payload(dream) for dream in store.history()],
+        "history": [dream_payload(dream) for dream in store.history()[-strip_max:]],
     }
 
 

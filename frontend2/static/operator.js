@@ -87,6 +87,7 @@ function render(state) {
   document.getElementById('question-seconds').value = String(state.question_seconds ?? 0);
   document.getElementById('fade-ms').value = String(state.fade_ms);
   document.getElementById('strip-ratio').value = String(state.strip_ratio);
+  document.getElementById('strip-max').value = String(state.strip_max);
   document.getElementById('typewriter').checked = Boolean(state.typewriter);
 
   // One button that says what it will DO, not what the state IS — the operator
@@ -128,6 +129,9 @@ document
 document
   .getElementById('strip-ratio')
   .addEventListener('change', (event) => display({ strip_ratio: Number(event.target.value) }));
+document
+  .getElementById('strip-max')
+  .addEventListener('change', (event) => display({ strip_max: Number(event.target.value) }));
 document
   .getElementById('typewriter')
   .addEventListener('change', (event) => display({ typewriter: event.target.checked }));

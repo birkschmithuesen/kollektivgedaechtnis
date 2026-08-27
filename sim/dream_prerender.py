@@ -120,7 +120,7 @@ def _launch_chromium(playwright):
 
 
 def render_series(
-    dbs: dict[int, Path], out_dir, sizes=SIZES, strip_mode: str = "cover"
+    dbs: dict[int, Path], out_dir, sizes=SIZES, strip_mode: str = "wrap"
 ) -> list[Shot]:
     """One screenshot per size, through the real page and the real server.
 
@@ -344,11 +344,11 @@ def main() -> None:
     parser.add_argument(
         "--strip-mode",
         choices=["aspect", "cover", "wrap"],
-        default="cover",
-        help="which history-strip layout dream.css renders (Finding 1: an "
-        "artistic call left open, not picked here). 'cover' is today's "
-        "behaviour and stays the default so nothing changes unless asked; "
-        "listed alphabetically, which implies no preference.",
+        default="wrap",
+        help="which history-strip layout dream.css renders. 'wrap' is Birk's "
+        "choice from the rendered comparison (docs/operations.md, "
+        "2026-08-26) and stays the default; 'cover' and 'aspect' remain "
+        "selectable for future comparisons.",
     )
     parser.add_argument(
         "--placeholder-pool",

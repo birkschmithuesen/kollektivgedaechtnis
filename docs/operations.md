@@ -395,7 +395,9 @@ zusammengefasst — der Traum ist der des ganzen Graphen, nicht der einer Person
 ### Die Regler (alle im Operator-Fenster der Traum-Maschine)
 
 **Anzeige** — Leitfrage zeigen/verbergen und nach N Sekunden ausblenden;
-Überblenddauer; Streifenhöhe; Schreibmaschine an/aus.
+Überblenddauer; Streifenhöhe; Streifenlänge (nur die letzten N Träume, Rest
+bleibt in `dreams.sqlite3` und wird beim Hochsetzen wieder sichtbar);
+Schreibmaschine an/aus.
 
 **Ablauf** — „Jetzt träumen" (ignoriert den Mindestabstand; für den Moment, in
 dem jemand vom Veranstalter vor dem Schirm steht), „Pause", „Aktuellen Traum
@@ -558,19 +560,30 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Regel einmal gebrochen hat — das kann Zufall eines Laufs sein, sollte aber
    vor der 40-Bilder-Serie bewusst sein.
 
-4. **Modus des Verlaufsstreifens** — **gerendert**, Wahl offen. Sechs Dateien
-   in `out/dream-strip-comparison/` (Dateinamen tragen den Modus), dazu zwei
+4. **Modus des Verlaufsstreifens** — **entschieden von Birk am 2026-08-26**,
+   an den gerenderten Vergleichen. Sechs Dateien in
+   `out/dream-strip-comparison/` (Dateinamen tragen den Modus), dazu zwei
    gestapelte Vergleichskarten `UEBERSICHT-20-traeume.png` und
    `UEBERSICHT-40-traeume.png` — drei Modi übereinander, gleiche Breite.
 
    | Modus | 20 Träume | 40 Träume | Beobachtung |
    |---|---|---|---|
-   | `cover` (aktueller Standard) | 80×210 px | 31×210 px | Zuschnitt auf einen mittigen Streifen; bei 40 nahezu vollständiger Verlust von links/rechts. |
+   | `cover` (bisheriger Standard) | 80×210 px | 31×210 px | Zuschnitt auf einen mittigen Streifen; bei 40 nahezu vollständiger Verlust von links/rechts. |
    | `aspect` | 80×45 px | 31×18 px | Kein Zuschnitt, aber beide Maße schrumpfen bis zur Unleserlichkeit; das reservierte Streifenband bleibt bei 40 größtenteils leer. |
-   | `wrap` | 372×210 px | 372×210 px (pro Bild) | Kein Zuschnitt einzelner Bilder, aber die Zeilenhöhe ist fest mit `overflow: hidden` — nur ein Teil der Träume ist sichtbar, der Rest wird stillschweigend abgeschnitten. |
+   | `wrap` (**gewählt**) | 372×210 px | 372×210 px (pro Bild) | Kein Zuschnitt einzelner Bilder — der von Birk genannte Grund. Die Zeilenhöhe ist fest mit `overflow: hidden`; ohne Gegenmaßnahme wäre bei 40 gleichzeitigen Träumen ein Teil stillschweigend abgeschnitten worden. |
 
-   Keiner der drei Modi ist hier empfohlen. Gewählt wird per `--strip-mode`
-   beim Pre-Rendering und per `data-strip-mode` auf der Seite.
+   Entscheidung: `wrap`, jetzt Standardwert in `frontend2/dream.html` und
+   `frontend2/static/dream-harness.html` (`data-strip-mode`) sowie in
+   `sim.dream_prerender`'s `--strip-mode`. Der `?strip_mode=`-URL-Parameter
+   bleibt für Vergleichsrenderings erhalten (per `--strip-mode` beim
+   Pre-Rendering und `data-strip-mode` auf der Seite wählbar).
+
+   Zusammen mit dieser Wahl eingeführt: eine Obergrenze `strip_max` im
+   Operator-UI („Streifenlänge", Default 10) — sie begrenzt den Streifen auf
+   die letzten N Träume und ist genau die Gegenmaßnahme zum oben genannten
+   Abschneiden bei vielen gleichzeitigen Träumen. Die Begrenzung betrifft nur
+   die Anzeige; `dreams.sqlite3` bleibt vollständig, und ein Hochsetzen macht
+   ältere Träume wieder sichtbar.
 
 5. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
    Register **und** Streifenmodus aus 3. und 4., damit die 40 echten Bilder
