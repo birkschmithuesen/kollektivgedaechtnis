@@ -81,9 +81,12 @@ def render_samples(out_dir, cfg, registers=None, render_fn=render_image) -> list
 
     samples: list[Sample] = []
     for name, register in registers.items():
-        target = out_dir / f"register-{name}.png"
-        if target.exists():
-            log.info("%s already exists, left alone", target)
+        # No extension here: the real one is decided by the bytes, not
+        # assumed (contract document, „Abweichung 3" — PNG or JPEG per call).
+        stem = out_dir / f"register-{name}"
+        existing = sorted(stem.parent.glob(stem.name + ".*"))
+        if existing:
+            log.info("%s already exists, left alone", existing[0])
             continue
         prompt = build_image_prompt(FICTIONAL_SENTENCE, register, cfg.image_aspect_ratio)
         try:
@@ -94,7 +97,7 @@ def render_samples(out_dir, cfg, registers=None, render_fn=render_image) -> list
                 url=cfg.image_url,
                 timeout=cfg.image_timeout_s,
             )
-            save_image(data, target)
+            target = save_image(data, stem)
         except Exception as exc:
             log.error("register %s failed: %s", name, exc)
             continue

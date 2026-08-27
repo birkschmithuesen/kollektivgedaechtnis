@@ -196,10 +196,14 @@ def render_series(
 
 
 def _pool_images(source: Path) -> list[Path]:
-    images = sorted(Path(source).glob("*.png"))
+    # Both extensions: a register or generate run can leave either behind
+    # (contract document, „Abweichung 3" — the model picks PNG or JPEG per call).
+    images = sorted(
+        path for pattern in ("*.png", "*.jpg", "*.jpeg") for path in Path(source).glob(pattern)
+    )
     if not images:
         raise SystemExit(
-            f"no PNGs in {source}. Run `python -m sim.dream_register --out {source}` "
+            f"no PNGs or JPEGs in {source}. Run `python -m sim.dream_register --out {source}` "
             "first, or point --pool at a directory that has some."
         )
     return images
@@ -234,9 +238,12 @@ def _generate_images(count: int, out: Path, cfg) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     paths = []
     for index in range(count):
-        target = out / f"generated-{index:02d}.png"
-        if target.exists():
-            paths.append(target)
+        # No extension here: the real one is decided by the bytes, not
+        # assumed (contract document, „Abweichung 3" — PNG or JPEG per call).
+        stem = out / f"generated-{index:02d}"
+        existing = sorted(stem.parent.glob(stem.name + ".*"))
+        if existing:
+            paths.append(existing[0])
             continue
         prompt = build_image_prompt(
             SENTENCES[index], cfg.visual_register, cfg.image_aspect_ratio
@@ -245,7 +252,7 @@ def _generate_images(count: int, out: Path, cfg) -> list[Path]:
             prompt, model=cfg.image_model, api_key=cfg.openrouter_api_key,
             url=cfg.image_url, timeout=cfg.image_timeout_s,
         )
-        save_image(data, target)
+        target = save_image(data, stem)
         print(f"  {index + 1}/{count} {target.name}")
         paths.append(target)
     return paths

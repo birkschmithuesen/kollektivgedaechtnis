@@ -25,6 +25,16 @@ def png_bytes() -> bytes:
     )
 
 
+def jpeg_bytes() -> bytes:
+    """A minimal valid JFIF/JPEG header (SOI, APP0, EOI) — the byte shape the
+    contract document recorded from the live endpoint, „Abweichung 3"."""
+    return (
+        b"\xff\xd8"
+        + b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        + b"\xff\xd9"
+    )
+
+
 def graph(persons=8, generated_at=1700000000.0) -> dict:
     nodes = [
         {"id": f"p{i}", "type": "person", "portrait": None, "created_at": 1.0,
@@ -101,6 +111,25 @@ def test_the_image_lands_at_images_slash_dream_id_png(tmp_path):
 
     assert dream.image_path == "d1.png"
     assert (cfg.image_dir / "d1.png").read_bytes() == png_bytes()
+    store.close()
+
+
+def test_a_jpeg_response_lands_with_a_jpg_extension_everywhere_the_path_is_read(tmp_path):
+    """Contract document, „Abweichung 3": the model returns JPEG on roughly 2
+    of 5 calls, an equally valid image. The name recorded in `dreams.sqlite3`
+    (`image_path`) must be the same name the file actually has on disk, or
+    `/media/images/<image_path>` (kg2/server.py) 404s in the browser."""
+    cfg, store = setup(tmp_path)
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=1.0,
+        condense_fn=good_condense(), render_fn=good_render(jpeg_bytes()),
+    )
+
+    assert dream.status == "done"
+    assert dream.image_path == "d1.jpg"
+    assert (cfg.image_dir / "d1.jpg").read_bytes() == jpeg_bytes()
+    assert not (cfg.image_dir / "d1.png").exists()
     store.close()
 
 

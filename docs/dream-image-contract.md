@@ -18,7 +18,7 @@ dagegen programmieren.** Dieser Schritt ist jetzt erfolgt.
 | Endpunkt | `POST https://openrouter.ai/api/v1/chat/completions` — bestätigt |
 | Modell | `google/gemini-3-pro-image` — bestätigt |
 | Auth | `Authorization: Bearer $OPENR...KEY` — bestätigt |
-| Abweichungen von Spec §5.2 | **Zwei, beide unkritisch für `kg2/imagegen.py`** — (1) `images` enthält **zwei** Einträge, nicht einen; (2) `message.content` ist `None`, nicht Text. Details unten. |
+| Abweichungen von Spec §5.2 | **Drei** — (1) `images` enthält **zwei** Einträge, nicht einen; (2) `message.content` ist `None`, nicht Text; beide unkritisch für `kg2/imagegen.py`. (3) **das Bildformat variiert pro Aufruf** (PNG oder JPEG) — kritisch, macht eine Codeänderung nötig. Details unten. |
 | Kosten | **≈ 0,139 USD pro Bild** (gemessen: 0,138882 / 0,138146). Das ist **nicht** „ein paar Cent" — siehe „Kosten" unten. |
 
 ## Request — bestätigte Form
@@ -63,8 +63,11 @@ usage:
 ```
 
 Bestätigt: Das Bild kommt als **Data-URL im Body**, nicht als nachzuladender
-Link. Der Client dekodiert Base64 und schreibt PNG-Bytes. PNG, RGB,
-**1376 × 768 px** (Seitenverhältnis 16:9 wird also geliefert).
+Link. Der Client dekodiert Base64 und schreibt die dekodierten Bytes weg.
+In dieser Sondierung (drei Aufrufe) PNG, RGB, **1376 × 768 px**
+(Seitenverhältnis 16:9 wird also geliefert) — im späteren Produktivbetrieb
+kam aber auch JPEG vor, siehe „Abweichung 3" unten. Das Seitenverhältnis gilt
+für beide Formate gleichermaßen.
 
 ### Abweichung 1: `images` enthält ZWEI Einträge
 
@@ -90,6 +93,27 @@ Modells in die Fehlermeldung zu setzen (`str(message.get("content", ""))`).
 Bei `content: None` liefert `.get` nicht den Default, sondern `None`, und die
 Meldung enthält dann `'None'` statt der Prosa. Das ist kosmetisch und betrifft
 ausschließlich die Fehlermeldung — der Erfolgspfad ist nicht berührt.
+
+### Abweichung 3: Bildformat variiert (PNG oder JPEG)
+
+**Am echten Endpunkt beobachtet, 2026-08-26**, außerhalb der obigen
+Drei-Aufrufe-Sondierung: bei einer Serie von 5 Bild-Aufrufen kamen **2 von 5**
+Bildern als JPEG zurück statt als PNG, korrekt deklariert als
+`data:image/jpeg;base64,` (Bytes beginnen mit `\xff\xd8\xff\xe0\x00\x10JF`,
+der JPEG-typische JFIF-Header). Die übrigen 3 kamen als
+`data:image/png;base64,` wie in der Sondierung oben.
+
+Nicht prompt-abhängig reproduzierbar — das Modell entscheidet das Format pro
+Aufruf, unabhängig vom Inhalt der Anfrage. Beide Formate sind vollständige,
+unbeschädigte Bilder; keines davon ist ein Fehlerfall.
+
+**Folge für den Code:** `kg2/imagegen.py::save_image` prüfte bisher hart auf
+die PNG-Magic-Number und verwarf jedes JPEG als `ImageError`, obwohl das Bild
+intakt war. Der Code muss **beide** Formate akzeptieren und die Dateiendung
+aus den tatsächlichen Bytes ableiten (nicht aus dem deklarierten MIME-Typ,
+der nicht als vertrauenswürdig gilt — nur der Byte-Header entscheidet). Die
+Schutzwirkung gegen Nicht-Bild-Inhalte (z. B. ein base64-dekodierter
+Fehlertext) bleibt bestehen: abgelehnt wird, was weder PNG noch JPEG ist.
 
 ### Kosten — die eigentliche Überraschung
 
@@ -170,6 +194,8 @@ beschreibt Fehlerklassen, nicht die genaue Erfolgsform.
 |---|---|---|
 | Kein `images` im Ergebnis (Modell antwortet in Text) | `KeyError`/leere Liste | `ImageError` → Traum `failed`, letztes Bild bleibt stehen (Spec §8) |
 | `url` ist kein `data:`-URL | Präfixprüfung | `ImageError` |
+| Bild kommt als JPEG statt PNG (Abweichung 3) | Byte-Header, nicht der deklarierte MIME-Typ | wird als gültiges Bild akzeptiert, landet mit `.jpg`-Endung auf der Platte |
+| Bytes sind weder PNG noch JPEG (z. B. Fehlertext) | Byte-Header | `ImageError` → Traum `failed`, keine Datei bleibt liegen |
 | HTTP 429 / 5xx | `raise_for_status` | `ImageError`, kein Retry-Sturm — der nächste Trigger versucht es erneut |
 | Timeout | `httpx` | dito; das Zeitlimit steht in `config2.toml` (`image_timeout_s`) |
 

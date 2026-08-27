@@ -14,7 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from kg2.imagegen import ImageError, build_image_prompt, decode_image, render_image, save_image
+from kg2.imagegen import (
+    ImageError,
+    build_image_prompt,
+    decode_image,
+    image_extension,
+    render_image,
+    save_image,
+)
 
 REGISTER = (
     "Malerisch und atmosphärisch, weiche Übergänge, gedämpfte Farbigkeit, "
@@ -38,8 +45,20 @@ def png_bytes() -> bytes:
     )
 
 
-def response_with(data: bytes) -> dict:
-    url = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+def jpeg_bytes() -> bytes:
+    """A minimal valid JFIF/JPEG: SOI, APP0/JFIF, a bare EOI. Not a decodable
+    image, but the byte header the contract document recorded from the live
+    endpoint (`\\xff\\xd8\\xff\\xe0\\x00\\x10JF`), which is all `save_image`
+    inspects."""
+    return (
+        b"\xff\xd8"  # SOI
+        + b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"  # APP0
+        + b"\xff\xd9"  # EOI
+    )
+
+
+def response_with(data: bytes, mime: str = "image/png") -> dict:
+    url = f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
     return {
         "choices": [
             {"message": {"role": "assistant", "content": "",
@@ -133,6 +152,13 @@ def test_decode_image_error_does_not_say_none_when_content_is_null():
     assert "None" not in str(excinfo.value)
 
 
+def test_decode_image_accepts_a_declared_jpeg_mime():
+    """The live endpoint declares `data:image/jpeg;base64,` on roughly 2 of 5
+    calls (contract document, Abweichung 3, 2026-08-26) — the prefix check
+    must not reject on the declared type, only on the `data:`/`base64,` shape."""
+    assert decode_image(response_with(jpeg_bytes(), mime="image/jpeg")) == jpeg_bytes()
+
+
 def test_decode_image_rejects_a_url_that_is_not_inline_data():
     payload = {
         "choices": [{"message": {"images": [{"image_url": {"url": "https://example/x.png"}}]}}]
@@ -207,6 +233,27 @@ def test_render_image_does_not_retry():
     assert len(calls) == 1
 
 
+# -- format detection --------------------------------------------------------
+
+
+def test_image_extension_recognises_png():
+    assert image_extension(png_bytes()) == ".png"
+
+
+def test_image_extension_recognises_jpeg():
+    """Contract document, Abweichung 3 (2026-08-26): the live endpoint returns
+    JPEG on roughly 2 of 5 calls, byte-identical in spirit to the JFIF header
+    actually observed (`\\xff\\xd8\\xff\\xe0\\x00\\x10JF`)."""
+    assert image_extension(jpeg_bytes()) == ".jpg"
+
+
+def test_image_extension_rejects_bytes_that_are_neither():
+    """The protection this function exists for: reject content that is not a
+    real image at all (e.g. a base64-decoded error body), not JPEG."""
+    with pytest.raises(ImageError):
+        image_extension(b"{'error': 'nope'}")
+
+
 # -- saving -----------------------------------------------------------------
 
 
@@ -216,13 +263,54 @@ def test_save_image_writes_the_bytes(tmp_path):
     assert target.read_bytes() == png_bytes()
 
 
+def test_save_image_keeps_the_png_extension_for_png_bytes(tmp_path):
+    target = save_image(png_bytes(), tmp_path / "d1")
+
+    assert target == tmp_path / "d1.png"
+
+
+def test_save_image_accepts_jpeg_and_gives_it_the_jpg_extension(tmp_path):
+    """Both formats are equally valid for display (contract document,
+    Abweichung 3) — a JPEG is not rejected for arriving as JPEG."""
+    target = save_image(jpeg_bytes(), tmp_path / "d1")
+
+    assert target == tmp_path / "d1.jpg"
+    assert target.read_bytes() == jpeg_bytes()
+
+
+def test_save_image_corrects_a_wrong_declared_extension(tmp_path):
+    """The extension must come from the real bytes, never from what the
+    caller assumed: JPEG data handed in at a path that still says `.png` is
+    renamed, not trusted (no second, disagreeing truth about the format)."""
+    target = save_image(jpeg_bytes(), tmp_path / "d1.png")
+
+    assert target == tmp_path / "d1.jpg"
+    assert not (tmp_path / "d1.png").exists()
+    assert target.read_bytes() == jpeg_bytes()
+
+
 def test_save_image_never_overwrites(tmp_path):
-    """Spec §5.2: the image is written to images/<dream_id>.png and never
+    """Spec §5.2: the image is written to images/<dream_id>.<ext> and never
     overwritten. An overwrite would silently rewrite the history strip."""
     save_image(png_bytes(), tmp_path / "d1.png")
 
     with pytest.raises(FileExistsError):
-        save_image(b"other", tmp_path / "d1.png")
+        save_image(png_bytes(), tmp_path / "d1.png")
+
+    assert (tmp_path / "d1.png").read_bytes() == png_bytes()
+
+
+def test_save_image_never_overwrites_across_a_format_change(tmp_path):
+    """PNG now, JPEG later (or vice versa) for the same id is still one
+    dream's image, not two: a format change between attempts must not let a
+    second render sneak in under a different filename."""
+    save_image(png_bytes(), tmp_path / "d1")
+
+    with pytest.raises(FileExistsError):
+        save_image(jpeg_bytes(), tmp_path / "d1")
+
+    assert (tmp_path / "d1.png").read_bytes() == png_bytes()
+    assert not (tmp_path / "d1.jpg").exists()
 
 
 def test_save_image_creates_the_directory(tmp_path):
@@ -231,7 +319,7 @@ def test_save_image_creates_the_directory(tmp_path):
     assert target.is_file()
 
 
-def test_save_image_rejects_bytes_that_are_not_a_png(tmp_path):
+def test_save_image_rejects_bytes_that_are_neither_png_nor_jpeg(tmp_path):
     """A JSON error body base64-encoded into a data URL would otherwise land on
     disk as `d1.png` and render as a broken image on the wall."""
     with pytest.raises(ImageError):
@@ -243,6 +331,15 @@ def test_save_image_leaves_no_partial_file_when_it_rejects(tmp_path):
         save_image(b"not a png", tmp_path / "d1.png")
 
     assert not (tmp_path / "d1.png").exists()
+
+
+def test_save_image_leaves_the_directory_empty_when_it_rejects(tmp_path):
+    """Format is decided before any file is opened, so invalid bytes must not
+    even leave an extension-less stand-in behind — not just the named target."""
+    with pytest.raises(ImageError):
+        save_image(b"not a png", tmp_path / "d1")
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_save_image_reports_a_full_disk_as_an_image_error(tmp_path, monkeypatch):

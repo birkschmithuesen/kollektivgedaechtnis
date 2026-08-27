@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from kg2.config import DreamConfig
+from kg2.imagegen import image_extension
 from kg2.store import DreamStore
 
 #: Forty fictional dreams of one fictional festival day. Spec §5.1's target is
@@ -115,10 +116,12 @@ def seed_dreams(data_dir, count: int, images, *, start_at=START_AT, sentences=No
         store.set_stage2_prompt(
             dream.id, prompt="(seeded — no model call)", model=cfg.image_model
         )
-        filename = f"{dream.id}.png"
-        (cfg.image_dir / filename).write_bytes(
-            Path(images[index % len(images)]).read_bytes()
-        )
+        # The extension comes from the source bytes, not assumed as `.png`:
+        # a pool built from real generation can hold JPEGs too (contract
+        # document, „Abweichung 3" — PNG or JPEG per call).
+        data = Path(images[index % len(images)]).read_bytes()
+        filename = f"{dream.id}{image_extension(data)}"
+        (cfg.image_dir / filename).write_bytes(data)
         store.finish_dream(dream.id, image_path=filename)
     store.close()
     return cfg.db_path

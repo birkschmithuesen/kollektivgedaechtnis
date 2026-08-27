@@ -139,9 +139,10 @@ def run_dream(
             url=cfg.image_url,
             timeout=cfg.image_timeout_s,
         )
-        filename = f"{dream.id}.png"
-        save_image(data, cfg.image_dir / filename)
-        store.finish_dream(dream.id, image_path=filename)
+        # No extension here: the real one is decided by the bytes, not
+        # assumed (contract document, „Abweichung 3" — PNG or JPEG per call).
+        target = save_image(data, cfg.image_dir / dream.id)
+        store.finish_dream(dream.id, image_path=target.name)
     except (KeyboardInterrupt, SystemExit):
         # A KeyboardInterrupt during the shutdown of an exhibition day must
         # still close the row honestly rather than leave it stuck at
