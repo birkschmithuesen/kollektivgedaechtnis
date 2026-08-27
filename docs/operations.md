@@ -509,12 +509,19 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
 > (bezahlt), 40-Bilder-Serie **≈ 5,55 USD**, Ausstellungstag ≈ 5,55 USD.
 > Beleg: `usage.cost`, siehe `docs/dream-image-contract.md`.
 
-1. **Wortlaut der Leitfrage** (`guiding_question`) — **Lauf erledigt**,
-   Entscheidung offen. Ergebnis: `out/calibrate-questions.txt`, 16 Sätze
-   (4 Formulierungen × 3/10/30/60 Personen), ohne Empfehlung.
+1. **Wortlaut der Leitfrage** (`guiding_question`) — **ENTSCHIEDEN am
+   2026-08-26.** Birk hat aus den vier Kandidaten gewählt:
+   **„Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"** Begründung:
+   der soziale Miteinander-Aspekt ist ihm wichtig. Der Wert steht so in
+   `config2.example.toml`.
 
-   Der aktuelle Wert in `config2.example.toml` ("Wie leben und bauen wir in zehn Jahren?")
-   ist der Vorschlag, mit dem die Kandidaten anfangen — nicht das Ergebnis der Wahl.
+   Grundlage waren 16 kalt gelesene Sätze (4 Formulierungen × 3/10/30/60
+   Personen) in `out/calibrate-questions.txt`, erzeugt ohne Empfehlung im
+   Output.
+
+   Offen bleibt eine Nachprüfung: ob das Programm der NEW bauhaus 2026 eine
+   Formulierung nahelegt, die in noch mehr Vorträgen als Fragestellung steckt
+   (`docs/HANDOFF-2026-08-26.md`, Punkt D).
 
    ```bash
    # gefahren am 2026-08-26; Wiederholung nur nötig, wenn die Kandidaten sich ändern:
