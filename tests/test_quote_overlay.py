@@ -97,14 +97,15 @@ def test_each_portrait_shows_its_own_quote(wall):
     )
 
 
-def test_tapping_the_same_face_again_cycles_through_their_quotes(wall):
-    """The only "more" gesture on a surface with no scrollbars."""
+def test_tapping_the_same_face_again_does_not_change_the_quote(wall):
+    """Exactly one quote per person now — repeated taps are a no-op, not a cycle.
+
+    p1 still carries two quotes in the fixture on purpose: it doubles as the
+    Altbestand case (a store from before the one-quote-per-person rule) and
+    proves the frontend keeps only the first there too.
+    """
     _tap(wall, "p1")
     _tap(wall, "p1")
-    assert wall.eval_on_selector("#quote-overlay .quote-text", "el => el.textContent") == (
-        "Der Bestand ist das Material."
-    )
-    _tap(wall, "p1")  # wraps back round
     assert wall.eval_on_selector("#quote-overlay .quote-text", "el => el.textContent") == (
         "Wir bauen viel zu viel neu."
     )

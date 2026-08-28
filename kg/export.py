@@ -53,10 +53,27 @@ def build_graph(store) -> dict:
         "edges": [
             {"id": e.id, "source": e.person_id, "target": e.term_id} for e in store.list_edges()
         ],
-        "quotes": [
-            {"id": q.id, "person_id": q.person_id, "text": q.text} for q in store.list_quotes()
-        ],
+        "quotes": _quotes(store),
     }
+
+
+def _quotes(store) -> list[dict]:
+    """At most one quote per person.
+
+    The pipeline never writes more than one these days, but older stores
+    (never migrated — deletions are Birk's call, not this code's) can still
+    hold several per person. `store.list_quotes()` is ordered by created_at,
+    so keeping the first person_id we see keeps the oldest — the deliberate
+    compromise for that leftover data.
+    """
+    seen: set[str] = set()
+    quotes = []
+    for q in store.list_quotes():
+        if q.person_id in seen:
+            continue
+        seen.add(q.person_id)
+        quotes.append({"id": q.id, "person_id": q.person_id, "text": q.text})
+    return quotes
 
 
 def write_graph_json(store, path: Path) -> dict:

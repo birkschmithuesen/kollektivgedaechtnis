@@ -34,8 +34,9 @@ export function attachQuoteOverlay(
   panel.appendChild(text);
   container.appendChild(panel);
 
-  // person_id -> [quote, ...]. Rebuilt on every graph push: quotes arrive in
-  // the same payload as the nodes, so they can never be staler than the wall.
+  // person_id -> quote text, at most one per person. Rebuilt on every graph
+  // push: quotes arrive in the same payload as the nodes, so they can never
+  // be staler than the wall.
   let byPerson = new Map();
   let timer = null;
   let shownFor = null;
@@ -49,19 +50,14 @@ export function attachQuoteOverlay(
   }
 
   function show(personId) {
-    const quotes = byPerson.get(personId);
-    if (!quotes || quotes.length === 0) {
+    const quote = byPerson.get(personId);
+    if (quote === undefined) {
       // A person whose extraction failed, or who said nothing quotable. Better
       // to do nothing than to open an empty panel that looks broken.
       hide();
       return false;
     }
-    // Several quotes: pick one per tap rather than showing a wall of text.
-    // Tapping the same face again cycles to the next — the only "more" gesture
-    // on a surface with no scrollbars.
-    const index = shownFor === personId ? (panel.dataset.index | 0) + 1 : 0;
-    panel.dataset.index = String(index % quotes.length);
-    text.textContent = quotes[index % quotes.length];
+    text.textContent = quote;
     shownFor = personId;
     panel.hidden = false;
     panel.classList.add('visible');
@@ -92,8 +88,10 @@ export function attachQuoteOverlay(
     setGraph(graph) {
       const next = new Map();
       for (const quote of graph.quotes || []) {
-        if (!next.has(quote.person_id)) next.set(quote.person_id, []);
-        next.get(quote.person_id).push(quote.text);
+        // Exactly one quote per person now; kg/export.py already enforces
+        // this, but an older graph.json snapshot could still carry more —
+        // keep the first, the same compromise export.py makes for it.
+        if (!next.has(quote.person_id)) next.set(quote.person_id, quote.text);
       }
       byPerson = next;
       // The person on screen may have just been hidden by the operator or

@@ -39,6 +39,20 @@ def test_extract_truncates_the_term_list_to_the_configured_cap():
     assert llm.calls[0][2] is ExtractionResult
 
 
+def test_extract_caps_the_quote_list_to_one_even_if_the_model_sends_more():
+    result = ExtractionResult(
+        interview_end_index=10,
+        terms=[],
+        quotes=[{"text": "Erstes Zitat."}, {"text": "Zweites Zitat."}],
+    )
+    llm = FakeLLM(result)
+
+    out = extract(llm, "irgendein transkript", max_terms=3)
+
+    assert len(out.quotes) == 1
+    assert out.quotes[0].text == "Erstes Zitat."
+
+
 def test_extract_clamps_the_end_index_into_the_transcript():
     transcript = "kurz"
     llm = FakeLLM(ExtractionResult(interview_end_index=9999, terms=[], quotes=[]))

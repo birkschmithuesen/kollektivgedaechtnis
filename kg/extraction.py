@@ -55,8 +55,16 @@ Sätze, keine Personennamen, keine Firmennamen. Lieber weniger Begriffe als \
 schwache Begriffe. `evidence` ist die kurze Textstelle, auf die sich der \
 Begriff stützt.
 
-3. ZITATE. Ein bis zwei wörtliche Zitate der Person, je höchstens 200 Zeichen, \
-sprachlich geglättet (Füllwörter raus), inhaltlich unverändert.
+3. ZITAT. Genau EIN wörtliches Zitat der Person, höchstens 200 Zeichen, \
+sprachlich geglättet (Füllwörter raus), inhaltlich unverändert. Wähle nicht \
+das erste passende, sondern das stärkste: das eigenwilligste, konkreteste, \
+das, an dem man diese Person unter allen anderen wiedererkennt.
+   Gut (unverwechselbar, hat eine Kante): „Ich will kein Museum bauen, ich \
+will einen Ort, an dem meine Enkel noch Dreck machen dürfen."
+   Schlecht (könnte jede Person hier gesagt haben): „Ich finde, wir sollten \
+insgesamt mehr auf Nachhaltigkeit achten."
+   Keine brave Zusammenfassung der Position der Person — ein echter Satz aus \
+dem Transkript.
 
 Antworte ausschließlich im geforderten JSON-Schema.
 """
@@ -74,6 +82,10 @@ class ExtractedQuote(BaseModel):
 class ExtractionResult(BaseModel):
     interview_end_index: int
     terms: list[ExtractedTerm]
+    # A list, not a single optional field: `extract()` enforces the "at most
+    # one" rule the same way it caps `terms` — by slicing the model's answer
+    # after the call — so the two fields share one enforcement pattern instead
+    # of the cap living in the type for one and in code for the other.
     quotes: list[ExtractedQuote]
 
 
@@ -93,8 +105,9 @@ def extract(llm, transcript: str, max_terms: int) -> ExtractionResult:
     )
     end = max(0, min(int(result.interview_end_index), len(transcript)))
     # The cap is enforced here too: graph density must not depend on the model's mood.
+    # Same discipline for quotes: exactly one per person, never the prompt's word alone.
     return ExtractionResult(
         interview_end_index=end,
         terms=list(result.terms)[:max_terms],
-        quotes=list(result.quotes),
+        quotes=list(result.quotes)[:1],
     )

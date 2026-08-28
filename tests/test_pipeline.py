@@ -80,6 +80,52 @@ def test_happy_path_creates_edges_quotes_and_graph_json(env):
     assert {n["type"] for n in graph["nodes"]} == {"person", "term"}
 
 
+def test_only_one_quote_ever_reaches_the_store_even_if_the_model_sends_two(env):
+    cfg, store, log = env
+    fill_log(log, [("Recycling-Beton ist die Zukunft.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [
+            ExtractionResult(
+                interview_end_index=9999,
+                terms=[],
+                quotes=[{"text": "Erstes Zitat."}, {"text": "Zweites Zitat."}],
+            )
+        ]
+    )  # no MergeResult queued — terms is empty, so a second call would raise IndexError
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    quotes = store.list_quotes()
+    assert len(quotes) == 1
+    assert quotes[0].text == "Erstes Zitat."
+
+
+def test_zero_quotes_from_the_model_creates_no_quote_and_does_not_crash(env):
+    cfg, store, log = env
+    fill_log(log, [("Recycling-Beton ist die Zukunft.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([ExtractionResult(interview_end_index=9999, terms=[], quotes=[])])
+
+    result = process_interview(
+        store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0
+    )
+
+    assert result.status == "done"
+    assert store.list_quotes() == []
+
+
+def test_a_blank_quote_text_is_dropped(env):
+    cfg, store, log = env
+    fill_log(log, [("Recycling-Beton ist die Zukunft.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([ExtractionResult(interview_end_index=9999, terms=[], quotes=[{"text": "   "}])])
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert store.list_quotes() == []
+
+
 def test_the_stop_command_is_stripped_before_the_llm_sees_the_text(env):
     cfg, store, log = env
     fill_log(log, [("Holzbau ist gut.", 105.0), ("Interview beendet", 150.0)])

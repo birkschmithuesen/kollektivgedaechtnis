@@ -82,3 +82,17 @@ def test_write_is_atomic_and_leaves_valid_json(store, tmp_path):
 def test_export_of_an_empty_graph_is_valid(store, tmp_path):
     graph = write_graph_json(store, tmp_path / "graph.json")
     assert graph["nodes"] == [] and graph["edges"] == [] and graph["quotes"] == []
+
+
+def test_a_persons_second_quote_is_dropped_from_the_export(store):
+    """Altbestand may still carry >1 quote per person (no migration, Birk's
+    call) — the export keeps only the first so a person never appears twice.
+    """
+    p1 = store.create_person(started_at=100.0)
+    store.add_quote(p1.id, "Erstes Zitat.", created_at=101.0)
+    store.add_quote(p1.id, "Zweites Zitat.", created_at=102.0)
+
+    graph = build_graph(store)
+
+    texts = [q["text"] for q in graph["quotes"] if q["person_id"] == p1.id]
+    assert texts == ["Erstes Zitat."]

@@ -73,6 +73,8 @@ def process_interview(
         store.set_person_transcript(person_id, transcript)
         for term_id in term_ids:
             store.add_edge(person_id, term_id, created_at=stopped_at)
+        # result.quotes has at most one entry — extract() caps it — so this
+        # writes at most one quote per person.
         for quote in result.quotes:
             if quote.text.strip():
                 store.add_quote(person_id, quote.text.strip(), created_at=stopped_at)
