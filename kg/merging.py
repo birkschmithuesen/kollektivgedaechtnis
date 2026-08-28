@@ -8,6 +8,7 @@ graph cannot wobble in live operation.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 
 from pydantic import BaseModel
@@ -42,6 +43,15 @@ Antworte ausschließlich im geforderten JSON-Schema.
 #: prompt itself uses, plus the ASCII and English forms it sometimes swaps in.
 _QUOTE_CHARS = "„“”\"'"
 
+#: Two garbled forms of a `\uXXXX` unicode escape observed in real judge
+#: output (out/sim19c/sim.db): a literal backslash before the "u", or — when
+#: the model instead typed a spurious "r" between the backslash and the "u"
+#: ("\r" + "u201e") — the actual carriage-return control character JSON
+#: decoded that "\r" into, immediately followed by the literal "uXXXX" text.
+#: Exactly 4 hex digits is required, so this never matches a truncated or
+#: non-hex lookalike, and `chr()` of any 4-hex value never raises.
+_ESCAPE_RE = re.compile(r"[\\\r]u([0-9a-fA-F]{4})")
+
 
 def unquote_label(label: str) -> str:
     """Strip a surrounding quote pair from a label the model produced.
@@ -51,11 +61,19 @@ def unquote_label(label: str) -> str:
     attached. Looked up verbatim they match nothing, so the group resolves to
     no existing term and the merge silently does nothing (Task 19).
 
+    The model also sometimes echoes a label with a literal, undecoded unicode
+    escape instead of the character itself (Task: merge bugs). Escapes are
+    decoded FIRST, before whitespace/quote stripping: a decoded escape can
+    itself be a „ or " character sitting right at the boundary, and only the
+    quote-stripping loop below removes those — reversing the order would
+    leave them stuck on the label.
+
     Every model-produced label passes through here BEFORE it is used — for the
     lookup and for the alias that is written. One notion, one function:
     detection and storage cannot diverge.
     """
-    text = label.strip()
+    text = _ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), label)
+    text = text.strip()
     while len(text) >= 2 and text[0] in _QUOTE_CHARS and text[-1] in _QUOTE_CHARS:
         text = text[1:-1].strip()
     return text
@@ -149,7 +167,27 @@ def apply_merges(
             # drag this group's *other* members along with it — drop it here
             # and let it resolve on its own (standalone) below.
             members = [m for m in members if m not in claimed]
-            if len(members) < 2:
+            # The judge sometimes states a merge with the EXISTING node as
+            # canonical_label and only the NEW term as the lone member —
+            # {"canonical_label": "Bodenpolitik", "members": ["Bodenpolitik
+            # und Baurecht"]} — instead of listing both as members. That is a
+            # complete merge statement, not an incomplete one, PROVIDED
+            # canonical_label actually names something that already exists;
+            # otherwise it is just a single term standing for itself (the
+            # system prompt tells the judge to omit those), and it must fall
+            # through to get_or_create_term below like any other unmatched
+            # label — no merge into the blue. A group that shrank to one
+            # member via the claimed-filter above is judged by the exact same
+            # rule: claiming happens first, so the meaning of "one member"
+            # never depends on how many members the group started with.
+            canonical_term = None
+            if len(members) == 1:
+                canonical_term = store.find_term_by_alias(
+                    canonical_label
+                ) or store.get_term_by_label(canonical_label)
+                if canonical_term is None:
+                    continue
+            elif len(members) < 2:
                 continue
             # A label of nothing but quotes strips to "" — keep the judgement,
             # drop the unusable name and let the group be called after a member.
@@ -168,6 +206,11 @@ def apply_merges(
             collision = store.get_term_by_label(canonical_label)
             if collision is not None and collision.id not in existing_ids:
                 existing_ids.append(collision.id)
+            # canonical_term may have resolved via an ALIAS rather than the
+            # term's current label, which the collision check above (exact
+            # label match only) would miss entirely.
+            if canonical_term is not None and canonical_term.id not in existing_ids:
+                existing_ids.append(canonical_term.id)
 
             if existing_ids:
                 # Every existing term the group touches folds onto one

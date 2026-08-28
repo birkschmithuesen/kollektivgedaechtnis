@@ -449,6 +449,107 @@ def test_apply_merges_falls_back_to_a_member_when_the_canonical_label_is_all_quo
     assert term_ids[0] == term_ids[1]
 
 
+def test_apply_merges_folds_a_single_member_group_whose_canonical_label_matches_an_existing_term(
+    store,
+):
+    # Bug A (out/sim19c/sim.db): the judge sometimes puts the EXISTING node in
+    # canonical_label and only the NEW term in members, e.g.
+    # {"canonical_label": "Bodenpolitik", "members": ["Bodenpolitik und Baurecht"]}.
+    # That is a complete, valid merge statement — the old `len(members) < 2`
+    # guard threw it away, leaving "Bodenpolitik" and "Bodenpolitik und
+    # Baurecht" as two separate one-mention nodes instead of one node with two.
+    existing = store.get_or_create_term("Bodenpolitik", created_at=1.0)
+    result = MergeResult(
+        groups=[
+            MergeGroup(canonical_label="Bodenpolitik", members=["Bodenpolitik und Baurecht"])
+        ]
+    )
+    person = store.create_person(started_at=2.0)
+
+    term_ids = apply_merges(store, person.id, ["Bodenpolitik und Baurecht"], result, at=2.0)
+
+    assert term_ids == [existing.id]
+    assert len(store.list_terms()) == 1
+    assert store.find_term_by_alias("Bodenpolitik und Baurecht").id == existing.id
+
+
+def test_apply_merges_folds_a_single_member_group_whose_canonical_label_is_only_an_alias(store):
+    # The spec asks for resolution via `find_term_by_alias` OR
+    # `get_term_by_label` — a canonical_label that only matches a past alias
+    # (not the node's current displayed label) must still resolve.
+    existing = store.get_or_create_term("Weiterbauen im Bestand", created_at=1.0)
+    store.add_alias(existing.id, "Sanieren, Umbauen, Weiterbauen")
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Sanieren, Umbauen, Weiterbauen",
+                members=["Neu denken statt abreißen"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=2.0)
+
+    term_ids = apply_merges(store, person.id, ["Neu denken statt abreißen"], result, at=2.0)
+
+    assert term_ids == [existing.id]
+    assert len(store.list_terms()) == 1
+    assert store.find_term_by_alias("Neu denken statt abreißen").id == existing.id
+
+
+def test_apply_merges_ignores_a_single_member_group_whose_canonical_label_does_not_resolve(store):
+    # No existing node named or aliased "Kompostierbare Fassaden" — this is
+    # not a valid merge statement, so it stays wirkungslos and the member
+    # gets its own node via the usual get_or_create_term fallback.
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Kompostierbare Fassaden", members=["Pilzbasierte Dämmstoffe"]
+            )
+        ]
+    )
+    person = store.create_person(started_at=1.0)
+
+    term_ids = apply_merges(store, person.id, ["Pilzbasierte Dämmstoffe"], result, at=2.0)
+
+    terms = store.list_terms()
+    assert len(terms) == 1
+    assert terms[0].label == "Pilzbasierte Dämmstoffe"
+    assert term_ids == [terms[0].id]
+
+
+def test_apply_merges_ignores_a_group_with_no_members(store):
+    result = MergeResult(groups=[MergeGroup(canonical_label="Ghost", members=[])])
+    person = store.create_person(started_at=1.0)
+
+    term_ids = apply_merges(store, person.id, ["Holzbau"], result, at=2.0)
+
+    assert store.list_terms()[0].label == "Holzbau"
+    assert term_ids == [store.list_terms()[0].id]
+
+
+def test_apply_merges_finds_an_existing_term_through_a_double_escaped_member(store):
+    # Bug B (out/sim19c/sim.db): the judge occasionally echoes a member as
+    # literal escaped text — "Betonsprühende Maschinen" as the six raw
+    # characters backslash, u, 0, 0, f, c — instead of the decoded "ü". Left
+    # undecoded, the alias is stored under a surface nobody ever types again.
+    existing = store.get_or_create_term("Mauerroboter", created_at=1.0)
+    result = MergeResult(
+        groups=[
+            MergeGroup(
+                canonical_label="Mauerroboter",
+                members=["Mauerroboter", "Betonspr\\u00fchende Maschinen"],
+            )
+        ]
+    )
+    person = store.create_person(started_at=1.0)
+
+    term_ids = apply_merges(store, person.id, ["Betonsprühende Maschinen"], result, at=2.0)
+
+    assert term_ids == [existing.id]
+    assert store.find_term_by_alias("Betonsprühende Maschinen").id == existing.id
+    assert store.find_term_by_alias("Betonspr\\u00fchende Maschinen") is None
+
+
 def test_unquote_label_strips_typographic_and_ascii_pairs_but_not_inner_marks():
     assert unquote_label("„Zugebaute Freiflächen“") == "Zugebaute Freiflächen"
     assert unquote_label(" “Recycling-Beton” ") == "Recycling-Beton"
@@ -458,6 +559,30 @@ def test_unquote_label_strips_typographic_and_ascii_pairs_but_not_inner_marks():
     # An apostrophe inside the label is part of the word, not a wrapper.
     assert unquote_label("Bauen fürs Übermorgen") == "Bauen fürs Übermorgen"
     assert unquote_label("„“") == ""
+
+
+def test_unquote_label_decodes_a_double_escaped_unicode_sequence():
+    # Bug B: the model sometimes emits the six raw characters \, u, 0, 0, f, c
+    # instead of the decoded "ü" (out/sim19c/sim.db: "Betonsprühende
+    # Maschinen"). unquote_label must decode this before the lookup.
+    assert unquote_label('"Betonspr\\u00fchende Maschinen"') == "Betonsprühende Maschinen"
+
+
+def test_unquote_label_decodes_the_carriage_return_escape_variant_and_strips_the_result():
+    # Second observed form in the same DB: the escape prefix survives JSON
+    # decoding as an actual carriage-return control character (not the two
+    # characters "\" "r") immediately followed by literal "u201e"/"u201c" hex
+    # digits. Decoding must happen BEFORE the quote-stripping loop below, or
+    # the resulting „ / " characters are never stripped off the ends.
+    label = "\ru201eBürgerversammlung als Pflichttermin\ru201c"
+    assert unquote_label(label) == "Bürgerversammlung als Pflichttermin"
+
+
+def test_unquote_label_leaves_a_lookalike_escape_sequence_unchanged():
+    # Looks like an escape sequence but isn't a valid one (too few hex digits,
+    # non-hex characters) — must pass through unchanged, never raise.
+    assert unquote_label("Preis \\u12 Rabatt") == "Preis \\u12 Rabatt"
+    assert unquote_label("Budget \\uZZZZ Rest") == "Budget \\uZZZZ Rest"
 
 
 def test_a_label_repeated_across_two_groups_does_not_conflate_them(store):
