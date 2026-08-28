@@ -15,6 +15,8 @@ from pathlib import Path
 import pytest
 
 from kg2.imagegen import (
+    MOOD_LIGHT,
+    TENSION_COHERENCE,
     ImageError,
     build_image_prompt,
     decode_image,
@@ -24,11 +26,10 @@ from kg2.imagegen import (
 )
 
 REGISTER = (
-    "Malerisch und atmosphärisch, weiche Übergänge, gedämpfte Farbigkeit, "
-    "diffuses Licht, sichtbarer Pinselduktus. Kein Fotorealismus, kein "
-    "Architektur-Rendering, keine Schrift im Bild."
+    "Photographic, natural depth of field, eye-level, no text anywhere in the "
+    "frame, a single photograph."
 )
-SENTENCE = "Der Beton träumt von Wald, und der Wald schickt Rechnungen."
+SENTENCE = "Concrete dreams of the forest, and the forest sends an invoice."
 
 
 def png_bytes() -> bytes:
@@ -67,40 +68,105 @@ def response_with(data: bytes, mime: str = "image/png") -> dict:
     }
 
 
-# -- the prompt -------------------------------------------------------------
+# -- the prompt: five blocks, English, in order ------------------------------
 
 
-def test_the_register_is_appended_to_every_prompt():
-    """Spec §5.2: held in config as a style suffix, never model-chosen, never
-    graph-driven. The history strip is a measurement series and exactly one
-    variable may change — and that is the material."""
-    prompt = build_image_prompt(SENTENCE, REGISTER, "16:9")
+def test_the_prompt_is_five_blocks_in_order_sentence_first():
+    """Doc's own template order: [Subject] + [Action]... first, register and
+    format last (google/gemini-3-pro-image prompting guide). The English
+    sentence is the motif and must be the subject, not the register."""
+    prompt = build_image_prompt(SENTENCE, mood=4, tension=5, register=REGISTER, aspect_ratio="16:9")
 
-    assert SENTENCE in prompt
-    assert REGISTER in prompt
+    positions = [
+        prompt.index(SENTENCE),
+        prompt.index(MOOD_LIGHT[4]),
+        prompt.index(TENSION_COHERENCE[5]),
+        prompt.index(REGISTER),
+        prompt.index("16:9"),
+    ]
+    assert positions == sorted(positions)
+    assert prompt.index(SENTENCE) == 0
 
 
 def test_the_aspect_ratio_is_landscape_and_stated():
-    """Spec §5.2: matching the 65″ screen."""
-    prompt = build_image_prompt(SENTENCE, REGISTER, "16:9")
+    """Spec §5.2: matching the 65″ screen. Googles own example states the
+    ratio in the prompt text too, even though it is also a parameter — not
+    documented whether the chat/completions path forwards the parameter."""
+    prompt = build_image_prompt(SENTENCE, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9")
 
     assert "16:9" in prompt
-    assert "Querformat" in prompt
+    assert "landscape" in prompt.lower()
 
 
-def test_the_sentence_comes_first_so_it_is_the_subject():
-    """The register is boilerplate. A prompt that opens with lighting
-    instructions gets an image about lighting."""
-    prompt = build_image_prompt(SENTENCE, REGISTER, "16:9")
+def test_the_register_is_appended_verbatim():
+    """Spec §5.2: held in config as a style suffix, never model-chosen, never
+    graph-driven. The history strip is a measurement series and exactly one
+    variable may change — and that is the material."""
+    prompt = build_image_prompt(SENTENCE, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9")
 
-    assert prompt.index(SENTENCE) < prompt.index(REGISTER)
+    assert REGISTER in prompt
 
 
-def test_two_sentences_share_a_register_exactly():
-    a = build_image_prompt("Satz A.", REGISTER, "16:9")
-    b = build_image_prompt("Satz B.", REGISTER, "16:9")
+def test_two_calls_with_the_same_mood_and_tension_produce_the_same_boilerplate():
+    """Reproducibility across the strip: two dreams at the same mood/tension
+    must get identical wording for those blocks, or the strip would show
+    formulation noise instead of material drift (docs/operations.md finding
+    on prompt order, an analogous concern)."""
+    a = build_image_prompt("Satz A.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
+    b = build_image_prompt("Satz B.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
 
     assert a.replace("Satz A.", "X") == b.replace("Satz B.", "X")
+
+
+def test_a_different_mood_changes_only_the_mood_block():
+    warm = build_image_prompt(SENTENCE, mood=5, tension=3, register=REGISTER, aspect_ratio="16:9")
+    cold = build_image_prompt(SENTENCE, mood=1, tension=3, register=REGISTER, aspect_ratio="16:9")
+
+    assert warm != cold
+    assert MOOD_LIGHT[5] in warm
+    assert MOOD_LIGHT[1] in cold
+    assert MOOD_LIGHT[5] not in cold
+
+
+def test_a_different_tension_changes_only_the_tension_block():
+    calm = build_image_prompt(SENTENCE, mood=3, tension=1, register=REGISTER, aspect_ratio="16:9")
+    torn = build_image_prompt(SENTENCE, mood=3, tension=5, register=REGISTER, aspect_ratio="16:9")
+
+    assert calm != torn
+    assert TENSION_COHERENCE[1] in calm
+    assert TENSION_COHERENCE[5] in torn
+
+
+def test_there_are_exactly_five_mood_and_five_tension_stages():
+    assert set(MOOD_LIGHT) == {1, 2, 3, 4, 5}
+    assert set(TENSION_COHERENCE) == {1, 2, 3, 4, 5}
+
+
+def test_mood_formulations_describe_only_light_and_colour():
+    """Birk's explicit constraint: a formulation like "used objects, traces of
+    life" is already interpretation and would hallucinate things into the
+    image that are not in the material. Light is the one thing every image
+    has regardless of its content — checked here by requiring the word and
+    forbidding concrete nouns that would smuggle in a scene."""
+    forbidden = ("object", "person", "people", "furniture", "figure", "room", "trace")
+    for stage, text in MOOD_LIGHT.items():
+        lowered = text.lower()
+        assert "light" in lowered or "colour" in lowered or "color" in lowered
+        for word in forbidden:
+            assert word not in lowered, f"mood stage {stage} names a concrete thing: {word!r}"
+
+
+def test_tension_formulations_name_nothing_concrete():
+    forbidden = ("object", "person", "people", "furniture", "figure", "room")
+    for stage, text in TENSION_COHERENCE.items():
+        lowered = text.lower()
+        for word in forbidden:
+            assert word not in lowered, f"tension stage {stage} names a concrete thing: {word!r}"
+
+
+def test_mood_and_tension_formulations_are_english():
+    for text in list(MOOD_LIGHT.values()) + list(TENSION_COHERENCE.values()):
+        assert "der " not in text.lower() and "und " not in text.lower()
 
 
 # -- decoding ---------------------------------------------------------------

@@ -88,7 +88,13 @@ def render_samples(out_dir, cfg, registers=None, render_fn=render_image) -> list
         if existing:
             log.info("%s already exists, left alone", existing[0])
             continue
-        prompt = build_image_prompt(FICTIONAL_SENTENCE, register, cfg.image_aspect_ratio)
+        # Neutral mood/tension (3/3): this comparison holds everything except
+        # the register constant, and mood/tension are their own dimension
+        # since 2026-08-28 (kg2/imagegen.py) — not this module's concern.
+        prompt = build_image_prompt(
+            FICTIONAL_SENTENCE, mood=3, tension=3,
+            register=register, aspect_ratio=cfg.image_aspect_ratio,
+        )
         try:
             data = render_fn(
                 prompt,

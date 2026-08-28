@@ -20,11 +20,10 @@ recorded there:
 
 Two rules that look like details and are not:
 
-* **The register is fixed and appended to every prompt.** Never model-chosen,
-  never graph-driven (spec §5.2, brainstorm §10). The history strip is a
-  measurement series; exactly one variable may change, and that is the material.
-  A travelling style would make the strip show style changes and bury the
-  content drift behind them.
+* **The register (machart) is fixed and appended to every prompt.** Never
+  model-chosen, never graph-driven (spec §5.2, brainstorm §10). The history
+  strip is a measurement series; exactly one variable may change, and that is
+  the material.
 * **The image is never overwritten** (spec §5.2). An overwrite would silently
   rewrite history, and the strip is the evidence that there was never one vision
   of the future.
@@ -32,6 +31,50 @@ Two rules that look like details and are not:
 There is deliberately NO retry (spec §8). A failed render abandons the dream,
 the current image stays up, and the next trigger tries again — that is „ride it
 out", and it is also what keeps a conference-wifi outage from tripling the bill.
+
+## The image prompt (revised 2026-08-28): English prose, five blocks
+
+The whole prompt is now English (the wall stays German) and connected prose,
+not a keyword list — Google's own guidance for this exact model is explicit:
+„A simple list of keywords won't cut it; you need to describe the scene
+narratively." (`ai.google.dev/gemini-api/docs/interactions/image-generation`,
+and the „ultimate prompting guide for nano banana"). `build_image_prompt`
+below assembles five blocks in the documented order, `[Subject] + [Action] +
+[Location] + [Composition] + [Style]`:
+
+1. **The English sentence** — stage 1's `sentence_en`, the motif. Variable,
+   changes every dream.
+2. **Mood** — from `MOOD_LIGHT`, one of five FIXED formulations chosen by
+   stage 1's `mood` (1-5). Fixed wording, not model-phrased, so two dreams at
+   the same mood produce identical wording here — otherwise the strip would
+   show formulation noise instead of material drift.
+3. **Tension** — from `TENSION_COHERENCE`, same discipline, keyed by
+   stage 1's `tension` (1-5).
+4. **Register** — `DreamConfig.visual_register`, fixed all day (unchanged
+   rule from above).
+5. **Format** — aspect ratio and orientation, fixed.
+
+**Mood formulations describe ONLY light and colour — Birk's explicit
+constraint.** A formulation like „used objects, traces of life" is already
+interpretation: it would hallucinate concrete things into the image that are
+not in the material. Light is the one thing every image has, regardless of
+what it depicts.
+
+**`tension` is NOT „absurdity".** Contradiction in the material is the normal
+case (spec §5.1's evidence clause explicitly allows but never forces one), so
+if tension mapped to absurdity almost every image would be absurd. Instead
+`TENSION_COHERENCE` controls HOW a contradiction shows up in the image — from
+„calm, everything belongs together" through „two incompatible things side by
+side, both real" to, only at the extreme (stage 5), „physically impossible".
+Absurdity is the end of the scale, not the scale itself.
+
+**Deliberately NOT included** (so nobody „cleans this up" later):
+film stock / colour grading (would fight the mood channel and make its five
+stages indistinguishable), quality/mood adjectives („cinematic", „dramatic",
+„award-winning"), a style reference („in the style of X"), a fixed composition
+rule (composition is the one thing the sentence itself still gets to decide,
+and the highest tension stage depends on being allowed to break it), and
+„context and intent" framing (pulls exhibition visitors into the image).
 """
 
 from __future__ import annotations
@@ -72,17 +115,57 @@ def image_extension(data: bytes) -> str:
     raise ImageError(f"stage 2 returned {len(data)} bytes that are neither a PNG nor a JPEG")
 
 
-def build_image_prompt(sentence: str, register: str, aspect_ratio: str) -> str:
-    """The sentence first, the register after it.
+#: Fixed wording, keyed 1 (coldest/most negative) to 5 (warmest/most
+#: positive) — see the module docstring for why these describe ONLY light and
+#: colour, never objects, people, or state.
+MOOD_LIGHT: dict[int, str] = {
+    1: "The light is cold and flat, coming from nowhere in particular, with "
+       "grey-blue colours and no warmth anywhere in the frame.",
+    2: "The light is cool and low, with muted, slightly desaturated colours "
+       "and soft grey shadows.",
+    3: "The light is neutral and even, with balanced, ordinary colours and no "
+       "strong emotional cast.",
+    4: "The light is warm and gentle, with soft golden colours and a mild, "
+       "inviting glow.",
+    5: "The light is warm and low, coming from one side, with long soft "
+       "shadows and colours running toward amber.",
+}
 
-    Order matters: a prompt that opens with lighting instructions gets an image
-    about lighting. The sentence is the subject; the register is how it is
-    painted.
+#: Fixed wording, keyed 1 (everything coheres) to 5 (physically impossible) —
+#: describes only the DEGREE of coherence, names nothing concrete. See the
+#: module docstring for why this is not "absurdity" as a whole scale.
+TENSION_COHERENCE: dict[int, str] = {
+    1: "Everything in the frame belongs together, forming one calm and "
+       "coherent whole.",
+    2: "The scene is coherent, with only a faint sense of something slightly "
+       "out of place.",
+    3: "Two different qualities sit side by side in the frame, not fully "
+       "resolved into one.",
+    4: "Two clearly incompatible qualities occupy the same frame at once, "
+       "both fully real, neither one dominant.",
+    5: "The frame holds something physically impossible, as if two "
+       "realities were fused into one that could not actually coexist.",
+}
+
+
+def build_image_prompt(
+    sentence_en: str, *, mood: int, tension: int, register: str, aspect_ratio: str
+) -> str:
+    """Five blocks, in the documented order (module docstring): subject
+    (the English sentence) first, mood, tension, register, format last.
+
+    Order matters: a prompt that opens with lighting instructions gets an
+    image about lighting. The sentence is the subject; everything after it is
+    how the subject is rendered.
     """
-    return (
-        f"{sentence}\n\n"
-        f"Bildsprache (unveränderlich, gilt für jedes Bild dieser Reihe): {register}\n"
-        f"Format: Seitenverhältnis {aspect_ratio}, Querformat."
+    return "\n\n".join(
+        [
+            sentence_en,
+            MOOD_LIGHT.get(mood, MOOD_LIGHT[3]),
+            TENSION_COHERENCE.get(tension, TENSION_COHERENCE[3]),
+            register,
+            f"Aspect ratio {aspect_ratio}, landscape orientation, a single photograph.",
+        ]
     )
 
 

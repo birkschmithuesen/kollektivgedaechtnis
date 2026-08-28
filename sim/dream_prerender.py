@@ -245,8 +245,11 @@ def _generate_images(count: int, out: Path, cfg) -> list[Path]:
         if existing:
             paths.append(existing[0])
             continue
+        # Neutral mood/tension: this series is about layout (SIZES), not the
+        # mood/tension channel introduced 2026-08-28 (kg2/imagegen.py).
         prompt = build_image_prompt(
-            SENTENCES[index], cfg.visual_register, cfg.image_aspect_ratio
+            SENTENCES[index], mood=3, tension=3,
+            register=cfg.visual_register, aspect_ratio=cfg.image_aspect_ratio,
         )
         data = render_image(
             prompt, model=cfg.image_model, api_key=cfg.openrouter_api_key,

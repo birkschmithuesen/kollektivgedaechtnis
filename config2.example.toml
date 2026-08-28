@@ -18,38 +18,55 @@ poll_interval_s = 5.0
 # Startwert 240 — kalibriert, siehe docs/operations.md.
 min_interval_s = 240
 
-# Ab wie vielen Personen der Widerspruch als Konstruktionsprinzip eingeschaltet
-# wird (Spec §5.1).
-# ENTSCHIEDEN von Birk am 2026-08-26: Die Widerspruchs-Klausel fällt WEG.
-# Begründung: Sie zwingt ein „aber/oder" in den Satz und provoziert damit
-# Halluzination; die Sätze sind auch ohne sie absurd genug (Beleg:
-# out/calibrate-contradiction.txt, alle vier Graphgrößen mit und ohne Klausel).
-# Statt der Klausel wird im Prompt erzwungen, dass alles am Material belegbar
-# ist. Solange dieser Umbau nicht erfolgt ist, bleibt der Wert stehen — danach
-# entfällt er ersatzlos. Siehe docs/HANDOFF-2026-08-26.md, Punkt B.
-contradiction_min_persons = 6
+# ENTSCHIEDEN von Birk am 2026-08-26, UMGESETZT am 2026-08-28: Die
+# Widerspruchs-Klausel fällt ERSATZLOS weg (kg2/condense.py). Begründung: Sie
+# zwang ein „aber/oder" in den Satz und provozierte damit Halluzination; die
+# Sätze sind auch ohne sie absurd genug (Beleg: out/calibrate-contradiction.txt,
+# alle vier Graphgrößen mit und ohne Klausel). Ersetzt durch eine
+# Belegbarkeits-Klausel im Prompt: alles muss sich auf das gelieferte Material
+# stützen. Die Personen-Schwelle für die alte Klausel gibt es deshalb hier
+# nicht mehr — es gibt keine Schwelle mehr zu setzen.
 
 # EINE Leitfrage, den ganzen Tag (Spec §7). Nicht zur Laufzeit änderbar:
 # eine wandernde Frage macht den Verlaufsstreifen unlesbar.
 # GEWÄHLT von Birk am 2026-08-26 aus vier Kandidaten (Lauf:
 # sim.dream_calibrate questions, Ergebnis out/calibrate-questions.txt).
 # Begründung: der soziale Miteinander-Aspekt ist ihm wichtig.
+# SEIT 2026-08-28 steuert dieser Wert AUSSCHLIESSLICH die Überschrift auf dem
+# Schirm (kg2/server.py) — nicht mehr den Trauminhalt. Eine sechste Frage, die
+# niemand im Raum gestellt bekam, hätte dem Modell eine Leserichtung
+# aufgezwungen, die im Material nicht liegen muss (derselbe Fehler wie bei der
+# Widerspruchs-Klausel). Siehe kg2/condense.py.
 # Offen bleibt nur, ob das Programm der NEW bauhaus 2026 eine noch bessere
 # Formulierung nahelegt — siehe docs/HANDOFF-2026-08-26.md, Punkt D.
 guiding_question = "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"
 
 # EIN Bildregister, den ganzen Tag (Spec §5.2, §10). Wird an jeden Bildprompt
-# angehängt, nie vom Modell gewählt.
-# GRUNDRICHTUNG von Birk am 2026-08-26 entschieden: FOTOREALISTISCH. Das
-# Register hält fest, dass das Bild immer eine Fotografie ist und nie zur
-# Malerei wird — nicht mehr. Stimmung, Grad der Absurdität und Nähe zur
-# Realität sollen sich am Material ändern dürfen und gehören NICHT hierher;
-# dafür ist ein eigener Analyse-Schritt vorgesehen (docs/HANDOFF-2026-08-26.md,
-# Punkte A und F).
-# NOCH NACHZUSCHÄRFEN: der genaue Wortlaut. Bisherige Muster wirkten auf Birk
-# „runtergekommen"; gesucht ist derselbe Fotorealismus in freundlicherem Ton.
+# angehängt, nie vom Modell gewählt. Legt NUR die Machart fest — sie wechselt
+# nie von Fotografie zu Aquarell oder Rendering. Stimmung und Spannung sind
+# SEIT 2026-08-28 eigene Bausteine (kg2/imagegen.py, aus stage 1's `mood` und
+# `tension`) und stehen deshalb NICHT hier.
+#
+# SEIT 2026-08-28 auf Englisch, wie der gesamte Bildprompt (die Wand bleibt
+# deutsch) — Googles eigene Doku für dieses Modell verlangt „beschreibende
+# Prosa, keine Schlagwortliste"
+# (ai.google.dev/gemini-api/docs/interactions/image-generation).
+#
+# GRUNDRICHTUNG von Birk am 2026-08-26 entschieden: FOTOREALISTISCH.
+# Zusätzlich drei technische Festlegungen aus der Doku-Recherche (alle fix,
+# kg2/imagegen.py):
+# - Kamera/Objektiv: die neutralste Wahl (Augenhöhe, Normalbrennweite),
+#   sonst wählt das Modell pro Durchlauf eine andere Brennweite — genau die
+#   wandernde Variable, die die Messreihe kaputtmachen würde.
+# - Schriftfreiheit als „Semantic Negative Prompt" (positiv formuliert, nicht
+#   verneint) — das Modell ist auf Textrendering optimiert und neigt dazu.
+# - Einzelbild-Hinweis, sonst kann das Modell zu einer Infografik oder
+#   Mehrfach-Panel-Komposition greifen.
+# NOCH NACHZUSCHÄRFEN: der genaue Wortlaut der Machart selbst. Bisherige
+# deutsche Muster wirkten auf Birk „runtergekommen"; gesucht ist derselbe
+# Fotorealismus in freundlicherem Ton.
 # Varianten rendern mit: uv run python -m sim.dream_register --out out/registerN
-visual_register = "Fotorealistische Aufnahme, hohe Detailschärfe, glaubwürdiges Licht, Anmutung einer echten Fotografie. Keine Malerei, keine Illustration, kein Architektur-Rendering, keine Schrift im Bild."
+visual_register = "Photographic, high detail, credible light, the look of a genuine photograph. Not a painting, not an illustration, not an architectural rendering. Shot from eye level with a normal focal length and natural depth of field. Every surface in the frame is free of writing: no signs, no labels, no lettering. A single photograph, not a collage or a multi-panel composition."
 
 condense_model = "claude-opus-5"
 condense_effort = "high"
