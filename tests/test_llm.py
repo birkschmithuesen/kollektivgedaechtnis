@@ -106,3 +106,68 @@ def test_a_refusal_raises_llm_error():
 
     with pytest.raises(LLMError):
         client.parse(system="S", user="U", output_model=Outer)
+
+
+def test_a_max_tokens_cutoff_raises_llm_error_even_with_parseable_json():
+    """A `max_tokens` stop is a truncated answer, never a normal one — even
+    when the cut happens to leave syntactically valid JSON behind (e.g. a
+    schema-constrained decoder closing the structure early). Silently
+    parsing that would let a broken value through with nothing in the log to
+    explain it (docs/... truncation incident)."""
+
+    class CutoffMessages:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+
+            class Block:
+                type = "text"
+                text = json.dumps({"count": 1, "items": []})
+
+            class Response:
+                stop_reason = "max_tokens"
+                content = [Block()]
+
+            return Response()
+
+    class CutoffClient:
+        def __init__(self):
+            self.messages = CutoffMessages()
+
+    fake = CutoffClient()
+    client = LLMClient(
+        model="claude-opus-5", effort="high", max_tokens=16000, client=fake, max_attempts=1
+    )
+
+    with pytest.raises(LLMError):
+        client.parse(system="S", user="U", output_model=Outer)
+    assert fake.messages.calls == 1
+
+
+def test_max_tokens_cutoff_is_logged_as_a_warning(caplog):
+    class CutoffMessages:
+        def create(self, **kwargs):
+            class Block:
+                type = "text"
+                text = json.dumps({"count": 1, "items": []})
+
+            class Response:
+                stop_reason = "max_tokens"
+                content = [Block()]
+
+            return Response()
+
+    class CutoffClient:
+        messages = CutoffMessages()
+
+    client = LLMClient(
+        model="claude-opus-5", effort="high", max_tokens=16000, client=CutoffClient(), max_attempts=1
+    )
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(LLMError):
+            client.parse(system="S", user="U", output_model=Outer)
+
+    assert "max_tokens" in caplog.text

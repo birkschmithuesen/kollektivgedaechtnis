@@ -82,6 +82,14 @@ class LLMClient:
                 )
                 if getattr(response, "stop_reason", None) == "refusal":
                     raise LLMError("model refused the request")
+                if getattr(response, "stop_reason", None) == "max_tokens":
+                    # A truncated answer is a failed answer, never a normal
+                    # one — even when the cut happens to leave syntactically
+                    # valid (but semantically broken) JSON behind, e.g. a
+                    # schema-constrained decoder closing structures early.
+                    # Left unchecked this used to pass json.loads silently
+                    # and hand a mid-word-truncated string on to the caller.
+                    raise LLMError("response was truncated at max_tokens")
                 text = next(
                     (b.text for b in response.content if getattr(b, "type", "") == "text"), ""
                 )

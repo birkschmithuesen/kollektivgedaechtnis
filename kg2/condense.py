@@ -174,6 +174,36 @@ def _clean(sentence: str) -> str:
     return cleaned
 
 
+def _is_truncated(sentence: str) -> bool:
+    """A raw control character inside the sentence body — not just missing
+    trailing punctuation.
+
+    The real incident this guards against (`docs/operations.md`,
+    `out/calibrate-terms.txt`): a stage 1 call returned a syntactically valid
+    JSON payload whose `sentence` field was
+    ``"...unter zugewachsenen G\\ndie"`` — generation broke mid-word and a
+    second, unrelated fragment was spliced in after a literal newline, all
+    inside one JSON string. `kg/llm.py`'s `stop_reason == "max_tokens"` check
+    catches a cut that leaves invalid JSON behind; it does not catch one that
+    (by luck or by a schema-constrained decoder closing the structure early)
+    still parses. This is the second line of defence, checked on the
+    already-parsed value.
+
+    Deliberately NOT "missing terminal punctuation": Spec §8 requires riding
+    out imperfection rather than halting for it, and stage 1 routinely (and
+    acceptably, see `out/calibrate-*.txt`) returns a complete sentence with no
+    final period — `SENTENCE_MAX_WORDS` and the comma check above already log
+    that without rejecting it. A raw control character is categorically
+    different: FORM demands "genau ein Hauptsatz" — one clause, one line —
+    and no legitimate answer to that instruction contains a newline, tab, or
+    carriage return; every real example in `out/calibrate-*.txt` confirms
+    that. So this predicate can only fire on a genuinely broken value, never
+    on a stylistically rough but complete one, which is what makes it safe to
+    reject rather than merely log.
+    """
+    return any(control in sentence for control in ("\n", "\r", "\t"))
+
+
 def _clamp_1_to_5(value: int, name: str) -> int:
     """Enforced here, not just in the prompt — same discipline as
     `terms_per_interview` in kg/extraction.py:95: "The cap is enforced here
@@ -205,8 +235,14 @@ def condense(
     sentence = _clean(result.sentence)
     if not sentence:
         raise ValueError("stage 1 returned an empty sentence")
+    if _is_truncated(sentence):
+        # Broken, not merely imperfect — see _is_truncated's docstring for
+        # why this is rejected while a missing final period is not.
+        raise ValueError(f"stage 1 sentence looks truncated/corrupted: {sentence!r}")
 
     sentence_en = _clean(result.sentence_en or "")
+    if _is_truncated(sentence_en):
+        raise ValueError(f"stage 1 English sentence looks truncated/corrupted: {sentence_en!r}")
     if not sentence_en:
         # A missing image motif would be worse than reusing the German
         # sentence — stage 2 (kg2/imagegen.py) needs SOMETHING to render.

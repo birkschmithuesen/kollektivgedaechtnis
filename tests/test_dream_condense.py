@@ -271,6 +271,39 @@ def test_a_short_comma_free_sentence_is_not_logged(caplog):
     assert caplog.text == ""
 
 
+# -- truncation ---------------------------------------------------------------
+
+
+def test_condense_raises_on_a_sentence_with_an_embedded_newline():
+    """The real incident (out/calibrate-terms.txt): 'Unsere Klebepunkte ...
+    unter zugewachsenen G\\ndie' — a raw control character mid-word where
+    generation broke and something else got spliced in. Spec §5.1's FORM
+    requires genau ein Hauptsatz on one line; a sentence cannot legitimately
+    contain a newline, unlike a merely missing final period, so this is
+    treated as a failed dream (spec §8), not logged and kept."""
+    broken = (
+        "Unsere Klebepunkte versickern pro forma in Tiefgaragen unter "
+        "zugewachsenen G\ndie"
+    )
+
+    with pytest.raises(ValueError):
+        condense(FakeLLM(broken), material())
+
+
+def test_condense_raises_on_an_english_sentence_with_an_embedded_newline():
+    with pytest.raises(ValueError):
+        condense(FakeLLM(sentence_en="The dots sink into G\ndie garage."), material())
+
+
+def test_a_normal_sentence_without_a_final_period_is_not_treated_as_broken():
+    """The important test: a real, complete sentence that merely lacks a
+    trailing period (accepted and common per the calibration output) must
+    NOT be rejected by the same check that catches truncation."""
+    result = condense(FakeLLM("Der Beton träumt vom Wald ohne Punkt"), material())
+
+    assert result.sentence == "Der Beton träumt vom Wald ohne Punkt"
+
+
 # -- mood / tension clamping -------------------------------------------------
 
 
