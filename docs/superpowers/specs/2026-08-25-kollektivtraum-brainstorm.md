@@ -175,20 +175,37 @@ Two consequences that follow directly and belong in the spec:
   exhibition machine does memory, the small machine does dream, they share one
   file.
 
-## 10. Visual register — **(a) fixed all day**
+## 10. Visual register — **(a) fixed all day, revised 2026-08-28**
 
-One style, every image, all day. Only the content changes. The style is set in
-the morning like the guiding question.
+**The machart (photography vs. painting vs. rendering) is fixed, every image,
+all day, set in the morning like the guiding question.** That part of the
+original reasoning stands unchanged: the history strip is a measurement
+series and needs exactly one variable travelling at a time, and a machart
+that changed mid-day would make the strip show style changes and bury the
+content drift behind them.
 
-Reasoning: same as 7. The history strip is a measurement series and needs exactly
-one variable. A travelling style makes the strip show style changes and buries
-the content drift behind them. Graph-driven style (b) is also unprovable in the
-room — nobody can verify the image is harsher *because* the conversation was more
-contentious.
+**Revised 2026-08-28: mood and tension are no longer folded into "style".**
+They are now their own channel — two more values from the SAME stage-1 call
+that produced the sentence (`kg2/condense.py`'s `mood`/`tension`,
+`kg2/imagegen.py`'s `MOOD_LIGHT`/`TENSION_COHERENCE`), each with five FIXED
+formulations picked by the stage-1 output, never phrased by the model itself.
+This is deliberately NOT graph-driven style in the sense this section
+originally rejected: mood/tension describe only light, colour, and the degree
+of coherence — never a change in machart, subject choice, or composition
+rule. The objection this section originally raised against graph-driven style
+— „unprovable in the room, nobody can verify the image is harsher *because*
+the conversation was more contentious" — **still holds for a single image**,
+and is deliberately left standing rather than argued away: nobody standing in
+front of one picture can verify it. What changed is the unit of judgement.
+Across the SERIES — the whole point of the history strip — the development
+becomes visible: a strip where images visibly warm and cool with the day's
+material is exactly the kind of drift the strip exists to show. A fixed style
+the whole day would have hidden that; the material's temperature would have
+had nowhere to register at all.
 
-**Open, deliberately decided at images not in words:** which register exactly.
-When the spec stands, generate three or four register samples with identical
-fictional content and let Birk pick.
+**Open, deliberately decided at images not in words:** the machart's exact
+wording. When the spec stands, generate three or four register samples with
+identical fictional content and let Birk pick.
 
 ## Carried forward into the spec
 

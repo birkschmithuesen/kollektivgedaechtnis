@@ -29,7 +29,7 @@ die es im UI nicht gibt.
    > Zeile `ANTHROPIC_API_KEY=`, aber **ohne Wert** — Birks Hermes fährt Claude
    > über das Abo (`anthropic_plan`) und einen lokalen Proxy, nicht über einen
    > API-Schlüssel. Ein Vorbereitungslauf, der Stufe 1 braucht
-   > (`sim.dream_calibrate questions` / `contradiction`), scheitert deshalb an
+   > (`sim.dream_calibrate terms` / `mood` / `quotes`), scheitert deshalb an
    > `set -a; . ~/.hermes/.env; set +a` allein mit „Could not resolve
    > authentication method" — und zwar in **jedem** Teilschritt, sodass der
    > Lauf durchläuft und nur FEHLER druckt. Für Stufe-1-Läufe auf dem vServer
@@ -493,20 +493,47 @@ ist ein Startwert aus der Spec, der noch nicht am generierten Material
   etwas tun — das tut er nicht.**
 - `poll_interval_s` = **5** — bei diesem Mindestabstand ist eine
   Erkennungsverzögerung von 5 s unsichtbar (Spec §4.1).
-- `contradiction_min_persons` = **6** — **noch nicht kalibriert.** Das ist der
-  Startwert aus der Spec (§5.1), nicht das Ergebnis eines Kalibrierungslaufs.
-  Unterhalb dieser Personenzahl läuft Stufe 1 allein auf der Gewichtung, weil
-  das Modell bei drei Interviews sonst einen Gegensatz erfinden würde, der im
-  Material gar nicht da ist. Ob 6 die richtige Schwelle ist, sagt erst der
-  Lauf unten in „Offene Entscheidungen" — mit echten generierten Sätzen, nicht
-  mit der Annahme, die den Startwert begründet hat.
+- `SINGLE_MENTION_BUDGET` / `SHARED_TERMS_SATURATION` (`kg2/weighting.py`,
+  vorläufig **20** / **25**) — **noch nicht kalibriert.** Das sind die zwei
+  Parameter der gleitenden Begriffsauswahl, die seit 2026-08-28 die alte
+  Widerspruchsklausel-Ära-Regel ersetzt: alle geteilten Begriffe (≥2
+  Nennungen) laufen immer mit, dazu höchstens `SINGLE_MENTION_BUDGET`
+  Einmal-Nennungen — die jüngsten zuerst —, wobei dieses Budget linear auf 0
+  schrumpft, während die Zahl der geteilten Begriffe von 0 auf
+  `SHARED_TERMS_SATURATION` wächst. Absichtlich Modul-Konstanten, nicht
+  Config-Werte: sie sind eine Eigenschaft des Verfahrens, kein Tagesregler —
+  anders als Tool 1's `min_mentions`, das ein Anzeigeregler ist. Ob 20/25 die
+  richtigen Werte sind, sagt erst der Lauf unten in „Offene Entscheidungen".
+- **Bewusst NICHT an Tool 1's `min_mentions` gekoppelt.** Beide Werkzeuge
+  folgen jetzt derselben Regel (alle geteilten, aufgefüllt mit den jüngsten
+  einmaligen), aber jedes rechnet sie unabhängig aus seinen eigenen
+  Konstanten. Die Wand kappt aus einem **physikalischen** Grund (Fläche,
+  Schriftgröße auf dem Touchscreen); der Traum kappt aus einem **inhaltlichen**
+  (das Modell soll nicht in Randnotizen ertrinken). Eine Kopplung würde einen
+  Operator, der am `min_mentions`-Regler wegen der Schriftgröße dreht,
+  unabsichtlich ändern lassen, woraus die Bilder entstehen — und zwei
+  Ausstellungstage wären nicht mehr vergleichbar. Das ist eine bewusste
+  Entscheidung, keine Lücke — bitte nicht „aufräumen".
+
+**Neuer Befund (2026-08-28): die Reihenfolge der Begriffe im Prompt hat
+keinen nachweisbaren Einfluss.** Gemessen mit 6 Läufen über denselben
+60-Personen-Graphen: drei Kontrollläufe mit identischem Prompt lieferten drei
+deutlich verschiedene Sätze; die Läufe mit umgekehrter und mit gewürfelter
+Reihenfolge unterschieden sich nicht stärker davon. Ein Shuffle wurde deshalb
+bewusst **nicht** gebaut — er hätte die Reproduzierbarkeit aus Spec §5.3
+gekostet (der Seed im Datensatz) ohne belegten Nutzen. Die vom Eigentümer
+beobachtete Ähnlichkeit der Sätze bei 30 vs. 60 Personen hat eine andere
+Ursache: von 163 Begriffen sind 114 Einmal-Nennungen, die in den Sätzen
+ohnehin fast nie vorkommen; die häufigen Begriffe sind bei 30 und 60 Personen
+weitgehend dieselben.
 
 ### Offene Entscheidungen
 
-**Stand 2026-08-26:** Die Läufe für 1.–4. und 6. sind **gefahren**, die
-Ergebnisse liegen als Dateien vor. Was jetzt noch offen ist, sind Birks
-Entscheidungen an diesem Material — nicht mehr die Beschaffung des Materials.
-Punkt 5 (40-Bilder-Serie) hängt unverändert an 3. und 4.
+**Stand 2026-08-28:** Die Läufe für 2.–5. und 8. sind **gefahren**, die
+Ergebnisse liegen als Dateien vor. Punkt 1 braucht seit dem Umbau keinen Lauf
+mehr (reine Textentscheidung, siehe dort). Was jetzt noch offen ist, sind
+Birks Entscheidungen an diesem Material — nicht mehr die Beschaffung des
+Materials. Punkt 7 (40-Bilder-Serie) hängt unverändert an 5. und 6.
 
 Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
 `config2.example.toml` trägt weiterhin nur vorläufige Startwerte.
@@ -523,42 +550,52 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    `config2.example.toml`.
 
    Grundlage waren 16 kalt gelesene Sätze (4 Formulierungen × 3/10/30/60
-   Personen) in `out/calibrate-questions.txt`, erzeugt ohne Empfehlung im
-   Output.
+   Personen) in `out/calibrate-questions.txt` (Lauf vom 2026-08-26, vor dem
+   Umbau unten), erzeugt ohne Empfehlung im Output.
 
-   Offen bleibt eine Nachprüfung: ob das Programm der NEW bauhaus 2026 eine
-   Formulierung nahelegt, die in noch mehr Vorträgen als Fragestellung steckt
-   (`docs/HANDOFF-2026-08-26.md`, Punkt D).
+   **SEIT 2026-08-28 gegenstandslos für den Trauminhalt:** Die Leitfrage
+   steuert nur noch die Überschrift auf dem Schirm (`kg2/server.py`), nicht
+   mehr Stufe 1's Prompt (`kg2/condense.py`) — ein weiterer Vergleichslauf
+   über generierte Sätze ergibt daher keinen Sinn mehr, der Befehl
+   `sim.dream_calibrate questions` wurde ersatzlos entfernt. Bleibt offen: ob
+   das Programm der NEW bauhaus 2026 eine Formulierung nahelegt, die in noch
+   mehr Vorträgen als Fragestellung steckt (`docs/HANDOFF-2026-08-26.md`,
+   Punkt D) — das ist jetzt eine reine Textentscheidung, kein Kalibrierlauf.
 
-   ```bash
-   # gefahren am 2026-08-26; Wiederholung nur nötig, wenn die Kandidaten sich ändern:
-   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
-   uv run python -m sim.dream_calibrate questions   | tee out/calibrate-questions.txt
-   ```
-
-   **Eine Beobachtung aus dem Lauf, ohne Wertung:** Kandidat *„Was soll in zehn
-   Jahren anders sein an dem Ort, an dem Sie leben?"* hat als einziger die
-   Längenvorgabe gerissen — zweimal 50 Wörter bei einem Ziel von 20–40 (bei
-   30 und 60 Personen). Die anderen drei Formulierungen blieben durchgehend im
-   Rahmen. Das ist keine Empfehlung, aber es ist ein messbarer Unterschied und
-   gehört neben die Sätze.
-
-2. **Bestätigung der Widerspruchsschwelle** (`contradiction_min_persons`) —
-   **Lauf erledigt**, Entscheidung offen. Ergebnis:
-   `out/calibrate-contradiction.txt`, vier Größen je mit und ohne Klausel.
+2. **Gleitende Begriffsauswahl** (`SINGLE_MENTION_BUDGET` /
+   `SHARED_TERMS_SATURATION`, `kg2/weighting.py`) — **Lauf erledigt**,
+   Entscheidung offen. Ergebnis: `out/calibrate-terms.txt`, vier Größen je
+   mehrere N/X-Kombinationen, mit der Zahl der tatsächlich im Prompt
+   gelandeten geteilten und einmaligen Begriffe.
 
    ```bash
    export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
-   uv run python -m sim.dream_calibrate contradiction | tee out/calibrate-contradiction.txt
+   uv run python -m sim.dream_calibrate terms | tee out/calibrate-terms.txt
    ```
 
-   **Befund:** Bei allen vier Größen (3, 10, 30, 60) unterscheidet sich der
-   Satz mit Klausel vom Satz ohne — die Klausel ist also nirgends wirkungslos.
-   Ob der Gegensatz bei kleinen Größen im Material **war** oder erfunden
-   wurde, entscheidet nur das Lesen; das ist genau die Frage, die der
-   Startwert 6 offengelassen hat.
+3. **Skala für Stimmung und Spannung** (`mood`/`tension`, `kg2/condense.py`)
+   — **Lauf erledigt**, Entscheidung offen. Vier gebaute Extreme (frei
+   erfundenes Material) je dreimal durch Stufe 1 geschickt, dazu der reale
+   Graph in vier Größen. Ergebnis: `out/calibrate-mood.txt`.
 
-3. **Bildregister** (`visual_register`) — **gerendert**, Wahl offen.
+   ```bash
+   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
+   uv run python -m sim.dream_calibrate mood | tee out/calibrate-mood.txt
+   ```
+
+4. **Zitate im Material** (`include_quotes`, `kg2/weighting.py::render_material`)
+   — **Lauf erledigt**, Entscheidung endgültig zu bestätigen. Seit
+   2026-08-28 ist der Standard OHNE Zitate (§5.1: auf der Wand sind nur die
+   Begriffe sichtbar, Zitate erschienen bei 60 Personen bisher als 76 % des
+   Materialblocks — für etwas im Raum Unsichtbares). Ergebnis, je Graphgröße
+   ein Satzpaar mit/ohne Zitate: `out/calibrate-quotes.txt`.
+
+   ```bash
+   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
+   uv run python -m sim.dream_calibrate quotes | tee out/calibrate-quotes.txt
+   ```
+
+5. **Bildregister** (`visual_register`) — **gerendert**, Wahl offen.
    Vier Bilder in `out/register1/`, plus eine 2×2-Kontaktkarte
    `out/register1/UEBERSICHT-4-register.png`. Alle PNG 1376 × 768 (16:9).
 
@@ -574,7 +611,7 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Regel einmal gebrochen hat — das kann Zufall eines Laufs sein, sollte aber
    vor der 40-Bilder-Serie bewusst sein.
 
-4. **Modus des Verlaufsstreifens** — **entschieden von Birk am 2026-08-26**,
+6. **Modus des Verlaufsstreifens** — **entschieden von Birk am 2026-08-26**,
    an den gerenderten Vergleichen. Sechs Dateien in
    `out/dream-strip-comparison/` (Dateinamen tragen den Modus), dazu zwei
    gestapelte Vergleichskarten `UEBERSICHT-20-traeume.png` und
@@ -599,8 +636,8 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    die Anzeige; `dreams.sqlite3` bleibt vollständig, und ein Hochsetzen macht
    ältere Träume wieder sichtbar.
 
-5. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
-   Register **und** Streifenmodus aus 3. und 4., damit die 40 echten Bilder
+7. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
+   Register **und** Streifenmodus aus 5. und 6., damit die 40 echten Bilder
    nicht an einer noch unfertigen Anzeige verschwendet werden.
 
    ```bash
@@ -610,7 +647,7 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Braucht `OPENROUTER_API_KEY`, 40 Bildaufrufe — **≈ 5,55 USD** (gemessen,
    siehe Kostenkorrektur oben), ein sichtbarer, bewusster Kostenposten.
 
-6. **Vertrag des Bild-Endpunkts** — **erledigt am 2026-08-26.**
+8. **Vertrag des Bild-Endpunkts** — **erledigt am 2026-08-26.**
    `docs/dream-image-contract.md` ist verifiziert: Request-Form bestätigt,
    zwei Abweichungen dokumentiert (`images` hat zwei pixelidentische Einträge;
    `message.content` ist `None`). `kg2/imagegen.py` wurde entsprechend

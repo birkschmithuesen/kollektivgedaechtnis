@@ -202,31 +202,56 @@ is itself a displayed artefact and must be readable on its own.
   not a statement about what was said. The dream reads everything — the
   weighting already handles prominence.
 
-**Contradiction as construction principle** (brainstorm §4c): the model is
-instructed to locate the two most distant positions in the material and hold
-them in one image **without resolving them**. This is the instruction that
-prevents the consensus brochure; without it every model smooths.
+**Contradiction as construction principle (retired 2026-08-28).** The
+original design instructed the model to locate the two most distant positions
+in the material and hold them in one image without resolving them, below a
+`contradiction_min_persons` threshold this instruction was dropped. Removed
+without replacement-by-threshold: it forced an „aber/oder" into the sentence
+and invited hallucination, and the sentences are absurd enough without it.
+Replaced by a plain evidence clause instead (`kg2/condense.py`): everything in
+the sentence must trace back to a delivered term, nothing invented that is
+not in the material. `contradiction_min_persons` no longer exists as a value
+to calibrate (see §10, now superseded).
 
-**Threshold:** below `contradiction_min_persons` (default **6**, calibrated in
-§10) this instruction is dropped and stage 1 runs on weighting alone. With three
-interviews there are no real oppositions and the model would invent one.
+**Output:** a short German sentence — condensed from the material in the
+dream's own logic (no longer an "answer to the guiding question": see below).
+This is what appears on screen. **Form target, revised 2026-08-28:** one main
+clause, at most 16 words, no comma. Measured against the real frontend
+(1920x1080, `#sentence` at 3.1vh = 33.5px, `docs/operations.md`): the
+original target of „~20–40 words: long enough to carry the fault line, short
+enough to read at a glance from standing distance" is contradicted by the
+material itself — 36 words made 4 lines and ~11s to read, 50 words made 5.
+At ≤16 words a sentence is 1-2 lines, which is what „read at a glance while
+walking past" actually requires.
 
-**Output:** a short German sentence — the answer to the guiding question, in the
-dream's own logic. This is what appears on screen. Length target ~20–40 words:
-long enough to carry the fault line, short enough to read at a glance from
-standing distance.
+**The guiding question no longer enters stage 1's prompt at all** (neither
+system nor user message, `kg2/condense.py`, 2026-08-28). It was a sixth
+question nobody in the room was actually asked, and imposing it forced a
+reading direction the material may not contain — the same failure mode the
+contradiction clause had. `DreamConfig.guiding_question` still exists but
+steers only the on-screen headline (`kg2/server.py`) from here on.
 
 **Model:** `claude-opus-5`, same as Tool 1's extraction. One model to reason
 about, one credential, and it is the model the merge judge is already tuned on.
 
 ### 5.2 Stage 2 — sentence → image
 
-The sentence is translated into an image prompt and rendered.
+The English sentence (`sentence_en`, a literal translation of the German one
+produced in the SAME stage-1 call) becomes an image prompt and is rendered.
+**Revised 2026-08-28: the whole image prompt is English prose, five blocks in
+order** (`kg2/imagegen.py::build_image_prompt`): the English sentence (motif),
+mood (from `mood`, five FIXED light/colour formulations), tension (from
+`tension`, five FIXED coherence formulations — see brainstorm §10's revision),
+the register, and the format. English and connected prose rather than a
+keyword list per Google's own guidance for this model.
 
-- **Fixed visual register** (brainstorm §10), set in the morning like the
-  guiding question. Held in config as a style suffix appended to every prompt,
-  never model-chosen, never graph-driven. The history strip is a measurement
-  series: exactly one variable may change, and that is the material.
+- **Fixed visual register (machart only)** (brainstorm §10), set in the
+  morning like the guiding question. Held in config as a style suffix
+  appended to every prompt, never model-chosen, never graph-driven — mood and
+  tension are graph-driven now, but the machart itself (photography vs.
+  painting vs. rendering) is not and never travels mid-day. The history strip
+  is a measurement series: the register holds the machart constant so that
+  mood/tension and the sentence remain the variables the strip actually shows.
 - **Model:** `google/gemini-3-pro-image` via OpenRouter — the model the approved
   rendering `kollektivtraum-screen_v2_2026-08-16.png` was made with, so the
   register is already known to be reachable. OpenRouter is already a dependency
@@ -369,8 +394,13 @@ and the run-19c section of `docs/operations.md`), then recorded in
 `docs/operations.md`:
 
 - `min_interval_s` — floor between dreams. Start 240 s.
-- `contradiction_min_persons` — threshold for §5.1's contradiction instruction.
-  Start 6.
+- `SINGLE_MENTION_BUDGET` / `SHARED_TERMS_SATURATION` (`kg2/weighting.py`) —
+  superseded §5.1's contradiction threshold (2026-08-28, the clause itself is
+  retired). The two parameters of the gliding single-mention selection
+  (`sim.dream_calibrate terms`). Provisional start values 20 / 25.
+- **Stage 1's `mood`/`tension` scale** — whether the 1-5 range is actually
+  used on built extremes and whether real material varies it at all
+  (`sim.dream_calibrate mood`, added 2026-08-28).
 - **The guiding question's wording** — wide enough to carry all three interview
   themes (future of building / AI in building / living together): closer to
   „Wie leben und bauen wir in zehn Jahren?" than a narrow material question.
