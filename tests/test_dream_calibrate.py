@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from sim.dream_calibrate import QUESTIONS, SIZES, floor_table, prefix_graph
+from kg2.weighting import build_material
+from sim.dream_calibrate import (
+    SIZES,
+    SYNTHETIC_CASES,
+    TERMS_N,
+    TERMS_X,
+    _synthetic_graph,
+    floor_table,
+    prefix_graph,
+)
 
 
 def test_the_sizes_span_an_empty_morning_to_a_full_day():
@@ -81,37 +90,47 @@ def test_prefix_graph_still_looks_like_a_graph_json(real_graph):
     assert small["version"] == 1
 
 
-# -- the guiding-question candidates ---------------------------------------
+# -- the `terms` calibration inputs -----------------------------------------
 
 
-def test_there_are_three_or_four_candidate_wordings():
-    assert 3 <= len(QUESTIONS) <= 4
+def test_terms_n_and_x_are_nonempty_candidate_sets():
+    assert len(TERMS_N) >= 1
+    assert len(TERMS_X) >= 1
+    assert all(n > 0 for n in TERMS_N)
+    assert all(x > 0 for x in TERMS_X)
 
 
-def test_every_candidate_is_a_german_question():
-    for question in QUESTIONS:
-        assert question.strip().endswith("?")
-        assert len(question.split()) >= 4
+# -- the `mood` calibration inputs -------------------------------------------
 
 
-def test_no_candidate_is_marked_as_recommended():
-    """Standing rule: Birk reads them cold."""
-    for question in QUESTIONS:
+def test_there_are_four_synthetic_mood_cases():
+    """Spec-decided (task brief, 2026-08-28): one clearly positive/unified,
+    one clearly negative/conflicted, two in between."""
+    assert len(SYNTHETIC_CASES) == 4
+
+
+def test_the_synthetic_cases_are_not_a_recommendation():
+    for label in SYNTHETIC_CASES:
         for forbidden in ("empfohlen", "recommended", "*", "(a)", "1."):
-            assert forbidden not in question
+            assert forbidden not in label
 
 
-def test_no_candidate_narrows_to_a_single_theme():
-    """Spec §10 / brainstorm §7: wide enough to carry the future of building,
-    AI in building, AND new forms of living together. A question naming one
-    material or one technology cannot carry the other two."""
-    narrow = ("beton", "holz", "dämmung", "ziegel", "photovoltaik", "roboter", "drohne")
-    for question in QUESTIONS:
-        assert not any(word in question.lower() for word in narrow)
+def test_every_synthetic_case_produces_real_material():
+    """Every synthetic term is said by every synthetic person, so
+    build_material must see it as shared, real material — not something the
+    gliding single-mention formula (kg2.weighting) could trim away."""
+    for terms in SYNTHETIC_CASES.values():
+        material = build_material(_synthetic_graph(terms))
+        assert material.term_count == len(terms)
+        assert material.marginal == []
+        assert len(material.shared) == len(terms)
 
 
-def test_the_candidates_are_distinct():
-    assert len(set(QUESTIONS)) == len(QUESTIONS)
+def test_synthetic_graphs_carry_distinct_content_per_case():
+    """The four cases must not accidentally collapse to the same material —
+    that would make the whole calibration prove nothing."""
+    all_terms = [tuple(sorted(terms)) for terms in SYNTHETIC_CASES.values()]
+    assert len(set(all_terms)) == len(all_terms)
 
 
 # -- the floor --------------------------------------------------------------

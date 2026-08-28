@@ -1,15 +1,25 @@
-"""Spec §10's four values, produced by the simulation and not guessed.
+"""Spec §10's values, produced by the simulation and not guessed.
 
-The same discipline Tool 1's density values were produced under (T1§14.4, run
-19c): run it, read the output, write the answer into `docs/operations.md`.
+The same discipline Tool 1's density values were produced under (T1§14.4 and
+run-19c): run it, read the output, write the answer into `docs/operations.md`.
 
-Three sub-commands, because the three values need different evidence:
+Four sub-commands (`questions` and `contradiction` were retired 2026-08-28
+along with the guiding-question prompt slot and the contradiction clause —
+see kg2/condense.py):
 
-* `questions`    — 4 wordings × 4 graph sizes, sentences printed. BIRK PICKS.
-* `contradiction`— each size with and without the clause, side by side. The
-                   threshold is where the clause stops inventing an opposition.
-* `floor`        — arithmetic, no LLM. The floor is a question about the day's
-                   cadence, not about the model.
+* `terms`  — the gliding single-mention formula's two constants
+              (`kg2.weighting.SINGLE_MENTION_BUDGET`,
+              `SHARED_TERMS_SATURATION`): several N/X combinations per graph
+              size, sentences printed alongside how many shared/single-mention
+              terms actually made it into the prompt. BIRK PICKS.
+* `mood`   — whether stage 1's `mood`/`tension` scale (kg2/condense.py) is
+              actually used across its 1-5 range on built extremes, and
+              whether real material varies it at all.
+* `quotes` — a side-by-side with/without quotes in the material (spec §5.1's
+              revised default is without), so the cost of leaving them out is
+              visible before it is final.
+* `floor`  — arithmetic, no LLM. The floor is a question about the day's
+              cadence, not about the model.
 
 **This module recommends nothing** (standing rule, 2026-08-25). Reading the
 sentences cold is the point.
@@ -22,25 +32,56 @@ import json
 from pathlib import Path
 
 from kg2.condense import condense
-from kg2.weighting import build_material, contradiction_enabled
+from kg2.weighting import build_material, select_marginal
 
 FIXTURE = Path(__file__).resolve().parent / "data" / "graph-19c.json"
 
 #: Empty morning, mid-morning, afternoon, end of the day.
 SIZES = (3, 10, 30, 60)
 
-#: Candidate wordings. Every one must carry all three interview themes — future
-#: of building, AI in building, new forms of living together (spec §10,
-#: brainstorm §7). A question naming one material or one technology cannot, and
-#: is therefore not a candidate.
-#:
-#: Order is arbitrary and means nothing. None is marked.
-QUESTIONS = (
-    "Wie leben und bauen wir in zehn Jahren?",
-    "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?",
-    "Was soll in zehn Jahren anders sein an dem Ort, an dem Sie leben?",
-    "Wer baut in zehn Jahren unsere Häuser, und wer entscheidet darüber?",
-)
+#: Candidate values for kg2.weighting.SINGLE_MENTION_BUDGET (N) and
+#: SHARED_TERMS_SATURATION (X). Not a claim that these are the right ones —
+#: a starting spread around the module's provisional defaults (20, 25).
+TERMS_N = (10, 20, 30)
+TERMS_X = (15, 25, 40)
+
+#: Four BUILT extremes, not drawn from real interviews — deliberate (task
+#: brief, 2026-08-28): this tests whether the 1-5 scale is used at all, not
+#: what any real person said. Terms are invented outright and are each said
+#: by every synthetic person, so every one of them is "shared" and nothing
+#: about the gliding single-mention formula interferes with the reading.
+SYNTHETIC_CASES: dict[str, list[str]] = {
+    "eindeutig positiv, einig": [
+        "Gemeinsam gepflegte Gärten",
+        "Nachbarschaftshilfe beim Umbau",
+        "Frisch renovierte Fassaden",
+        "Kinderlachen im Innenhof",
+        "Vertrauen in die Bauverwaltung",
+        "Sonnige, offene Dachterrassen",
+    ],
+    "eher positiv, leichte Spannung": [
+        "Neue Balkone für alle Wohnungen",
+        "Steigende Mieten nach der Sanierung",
+        "Mehr Grün auf dem Hof",
+        "Lange Wartezeiten für Fördermittel",
+        "Freundliche neue Nachbarschaft",
+    ],
+    "eher negativ, leichte Hoffnung": [
+        "Rissige Fassaden seit Jahren",
+        "Erste Zusagen für Fördergelder",
+        "Leerstehende Erdgeschosse",
+        "Ein neuer Nachbarschaftsverein",
+        "Unklare Zuständigkeiten im Amt",
+    ],
+    "eindeutig negativ, zerstritten": [
+        "Drohende Zwangsräumungen",
+        "Schimmel in den Wänden",
+        "Offener Streit zwischen Eigentümern",
+        "Abgesperrte, verrottende Baustellen",
+        "Tiefes Misstrauen gegenüber der Verwaltung",
+        "Abgesagte Sanierungsversprechen",
+    ],
+}
 
 
 def prefix_graph(graph: dict, persons: int) -> dict:
@@ -81,6 +122,30 @@ def prefix_graph(graph: dict, persons: int) -> dict:
         "nodes": list(people) + terms,
         "edges": edges,
         "quotes": [q for q in graph["quotes"] if q.get("person_id") in kept],
+    }
+
+
+def _synthetic_graph(terms: list[str], persons: int = 6) -> dict:
+    """Every synthetic person "mentions" every term, so each term is shared —
+    the gliding single-mention formula (kg2.weighting) never trims this
+    down and the mood/tension reading is not confused by missing detail."""
+    person_nodes = [
+        {"id": f"sp{i}", "type": "person", "created_at": float(i), "hidden": False}
+        for i in range(persons)
+    ]
+    term_nodes = [
+        {"id": f"st{i}", "type": "term", "label": label, "created_at": 1000.0 + i,
+         "hidden": False}
+        for i, label in enumerate(terms)
+    ]
+    edges = [
+        {"id": f"se{i}-{j}", "source": f"sp{i}", "target": f"st{j}"}
+        for i in range(persons)
+        for j in range(len(terms))
+    ]
+    return {
+        "version": 1, "generated_at": 1000.0, "min_mentions": 1,
+        "nodes": person_nodes + term_nodes, "edges": edges, "quotes": [],
     }
 
 
@@ -130,43 +195,85 @@ def _llm(cfg):
     )
 
 
-def run_questions(graph: dict, cfg) -> None:
-    llm = _llm(cfg)
-    print("Vier Formulierungen, vier Graphgrößen. Nur die Frage ändert sich.\n")
-    for question in QUESTIONS:
-        print(f"=== {question}")
-        for size in SIZES:
-            material = build_material(prefix_graph(graph, size))
-            enabled = contradiction_enabled(material, cfg.contradiction_min_persons)
-            try:
-                result = condense(llm, material, question, enabled)
-                print(f"  {size:>2} Menschen: {result.sentence}")
-            except Exception as exc:
-                print(f"  {size:>2} Menschen: FEHLER — {exc}")
-        print()
-    # No recommendation (standing rule): reading them cold is the point.
-    print("Gewählte Formulierung als `guiding_question` in config2.toml eintragen.")
-
-
-def run_contradiction(graph: dict, cfg) -> None:
+def run_terms(graph: dict, cfg) -> None:
     llm = _llm(cfg)
     print(
-        "Jede Größe zweimal: einmal mit der Widerspruchs-Anweisung, einmal ohne.\n"
-        "Gesucht ist die Größe, ab der der Widerspruch im Material WIRKLICH da "
-        "ist statt erfunden zu werden.\n"
+        "Vier Graphgrößen, je mehrere N/X-Kombinationen (Einmal-Nennungs-Budget "
+        "/ Sättigung der geteilten Begriffe, kg2.weighting.SINGLE_MENTION_BUDGET "
+        "/ SHARED_TERMS_SATURATION). Geteilte Begriffe sind IMMER alle drin.\n"
     )
     for size in SIZES:
         material = build_material(prefix_graph(graph, size))
-        print(f"=== {size} Menschen, {material.term_count} Begriffe")
-        for enabled in (False, True):
-            label = "mit Widerspruch " if enabled else "ohne Widerspruch"
+        print(
+            f"=== {size} Menschen, {len(material.shared)} geteilte, "
+            f"{len(material.marginal)} einmalige Begriffe verfügbar"
+        )
+        for n in TERMS_N:
+            for x in TERMS_X:
+                selected = select_marginal(material, budget=n, saturation=x)
+                try:
+                    result = condense(
+                        llm, material, single_mention_budget=n, shared_terms_saturation=x
+                    )
+                    print(
+                        f"  N={n:>2} X={x:>2}: {len(material.shared)} geteilte + "
+                        f"{len(selected)} einmalige im Prompt — {result.sentence}"
+                    )
+                except Exception as exc:
+                    print(f"  N={n:>2} X={x:>2}: FEHLER — {exc}")
+        print()
+    print("Gewählte N/X als SINGLE_MENTION_BUDGET/SHARED_TERMS_SATURATION in kg2/weighting.py eintragen.")
+
+
+def run_mood(graph: dict, cfg) -> None:
+    llm = _llm(cfg)
+    print(
+        "Vier gebaute Extreme (frei erfundenes Material, keine echten "
+        "Interviews), je dreimal durch Stufe 1 geschickt. Prüft, ob das "
+        "1-5-Spektrum überhaupt ausgeschöpft wird.\n"
+    )
+    for label, terms in SYNTHETIC_CASES.items():
+        material = build_material(_synthetic_graph(terms))
+        print(f"=== {label}")
+        for _ in range(3):
             try:
-                result = condense(llm, material, QUESTIONS[0], enabled)
+                result = condense(llm, material)
+                print(f"  mood={result.mood} tension={result.tension} — {result.sentence}")
+            except Exception as exc:
+                print(f"  FEHLER — {exc}")
+        print()
+
+    print(
+        "Zur Einordnung: derselbe reale Graph in vier Größen. Bekäme er immer "
+        "denselben Wert, wäre die Skala zwar korrekt, aber am echten Material "
+        "nutzlos.\n"
+    )
+    for size in SIZES:
+        material = build_material(prefix_graph(graph, size))
+        try:
+            result = condense(llm, material)
+            print(f"  {size:>2} Menschen: mood={result.mood} tension={result.tension} — {result.sentence}")
+        except Exception as exc:
+            print(f"  {size:>2} Menschen: FEHLER — {exc}")
+
+
+def run_quotes(graph: dict, cfg) -> None:
+    llm = _llm(cfg)
+    print(
+        "Je Graphgröße ein Satzpaar: ohne Zitate (Standard seit 2026-08-28) und "
+        "mit Zitaten (include_quotes=True) im selben Material.\n"
+    )
+    for size in SIZES:
+        material = build_material(prefix_graph(graph, size))
+        print(f"=== {size} Menschen, {len(material.quotes)} Zitate verfügbar")
+        for include_quotes in (False, True):
+            label = "mit Zitaten " if include_quotes else "ohne Zitate"
+            try:
+                result = condense(llm, material, include_quotes=include_quotes)
                 print(f"  {label}: {result.sentence}")
             except Exception as exc:
                 print(f"  {label}: FEHLER — {exc}")
         print()
-    print("Gewählte Schwelle als `contradiction_min_persons` in config2.toml eintragen.")
 
 
 def run_floor(args) -> None:
@@ -191,7 +298,7 @@ def main() -> None:
     from kg2.config import load_dream_config
 
     parser = argparse.ArgumentParser(prog="sim.dream_calibrate")
-    parser.add_argument("mode", choices=("questions", "contradiction", "floor"))
+    parser.add_argument("mode", choices=("terms", "mood", "quotes", "floor"))
     parser.add_argument("--graph", default=str(FIXTURE))
     parser.add_argument("--config", default=None)
     parser.add_argument("--interviews", type=int, default=60)
@@ -205,10 +312,12 @@ def main() -> None:
 
     cfg = load_dream_config(Path(args.config) if args.config else None)
     graph = json.loads(Path(args.graph).read_text(encoding="utf-8"))
-    if args.mode == "questions":
-        run_questions(graph, cfg)
+    if args.mode == "terms":
+        run_terms(graph, cfg)
+    elif args.mode == "mood":
+        run_mood(graph, cfg)
     else:
-        run_contradiction(graph, cfg)
+        run_quotes(graph, cfg)
 
 
 if __name__ == "__main__":

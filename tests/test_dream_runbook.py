@@ -66,13 +66,21 @@ def test_the_recorded_values_match_the_example_config():
     """A runbook that disagrees with the file the operator copies is worse than
     no runbook."""
     section = tool2_section()
-    for key in ("min_interval_s", "contradiction_min_persons"):
+    for key in ("min_interval_s",):
         in_config = re.search(rf"^{key}\s*=\s*(\d+)", EXAMPLE, re.M)
         assert in_config, f"{key} missing from config2.example.toml"
         assert in_config.group(1) in section, (
             f"{key} = {in_config.group(1)} in config2.example.toml "
             f"but that value does not appear in the runbook"
         )
+
+
+def test_contradiction_min_persons_is_gone_from_both_documents():
+    """The clause it named is gone (kg2/condense.py, 2026-08-28) — neither the
+    example config nor the runbook may still describe a threshold that does
+    not exist."""
+    assert "contradiction_min_persons" not in EXAMPLE
+    assert "contradiction_min_persons" not in tool2_section()
 
 
 def test_the_min_interval_floor_finding_is_stated_plainly():
@@ -86,10 +94,11 @@ def test_the_min_interval_floor_finding_is_stated_plainly():
 
 
 def test_the_unvalidated_value_is_marked_as_not_calibrated():
-    """contradiction_min_persons is the spec's start value, not a calibration
-    result. The runbook must not dress it up as one."""
+    """SINGLE_MENTION_BUDGET/SHARED_TERMS_SATURATION (kg2/weighting.py) are
+    the module's provisional start values, not a calibration result yet. The
+    runbook must not dress them up as one."""
     section = tool2_section()
-    idx = section.index("contradiction_min_persons")
+    idx = section.index("SINGLE_MENTION_BUDGET")
     # Somewhere near its first mention, the text must say it is unconfirmed.
     nearby = section[idx : idx + 800]
     assert "noch nicht kalibriert" in nearby.lower() or "nicht kalibriert" in nearby.lower()
@@ -98,10 +107,12 @@ def test_the_unvalidated_value_is_marked_as_not_calibrated():
 @pytest.mark.parametrize(
     "undetermined_marker,command",
     [
-        # The guiding question's wording.
-        ("Wortlaut der Leitfrage", "sim.dream_calibrate questions"),
-        # The contradiction threshold's confirmation.
-        ("Bestätigung der Widerspruchsschwelle", "sim.dream_calibrate contradiction"),
+        # The gliding single-mention formula's two constants.
+        ("Gleitende Begriffsauswahl", "sim.dream_calibrate terms"),
+        # The mood/tension scale.
+        ("Skala für Stimmung und Spannung", "sim.dream_calibrate mood"),
+        # Quotes in vs. out of the material.
+        ("Zitate im Material", "sim.dream_calibrate quotes"),
         # The visual register.
         ("Bildregister", "sim.dream_register --out"),
         # The 40-image pre-render series.
@@ -195,8 +206,9 @@ def test_the_runbook_names_no_control_absent_from_the_operator_ui():
         # Every command the runbook tells the operator to type must exist.
         ("python -m kg2", "kg2/__main__.py"),
         ("--no-watch", "kg2/__main__.py"),
-        ("sim.dream_calibrate questions", "sim/dream_calibrate.py"),
-        ("sim.dream_calibrate contradiction", "sim/dream_calibrate.py"),
+        ("sim.dream_calibrate terms", "sim/dream_calibrate.py"),
+        ("sim.dream_calibrate mood", "sim/dream_calibrate.py"),
+        ("sim.dream_calibrate quotes", "sim/dream_calibrate.py"),
         ("sim.dream_register --out", "sim/dream_register.py"),
         ("sim.dream_prerender --out", "sim/dream_prerender.py"),
     ],
