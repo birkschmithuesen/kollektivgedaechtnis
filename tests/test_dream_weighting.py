@@ -7,8 +7,8 @@ import copy
 from kg2.weighting import (
     Material,
     build_material,
-    contradiction_enabled,
     render_material,
+    select_marginal,
 )
 
 
@@ -35,10 +35,10 @@ def person(pid, hidden=False) -> dict:
     }
 
 
-def term(tid, label, mentions, hidden=False) -> dict:
+def term(tid, label, mentions, hidden=False, created_at=2.0) -> dict:
     return {
         "id": tid, "type": "term", "label": label, "mentions": mentions,
-        "created_at": 2.0, "hidden": hidden, "x": None, "y": None,
+        "created_at": created_at, "hidden": hidden, "x": None, "y": None,
     }
 
 
@@ -206,7 +206,6 @@ def test_render_labels_the_marginal_terms_as_detail_not_theme():
     # The label is what makes the weighting legible to the model.
     assert "Detail" in text
     assert "Randnotiz" in text
-    assert "Wir bauen zu viel Neues." in text
 
 
 def test_render_omits_a_section_that_has_nothing_in_it():
@@ -223,31 +222,147 @@ def test_render_omits_a_section_that_has_nothing_in_it():
     assert "Stimmen" not in text
 
 
-def test_the_contradiction_threshold_is_a_person_count():
-    """Spec §5.1: with three interviews there are no real oppositions and the
-    model would invent one."""
-    small = build_material(graph([person(f"p{i}") for i in range(3)], []))
-    large = build_material(
-        graph(
-            [person(f"p{i}") for i in range(8)] + [term("t1", "a", 8)],
-            [(f"p{i}", "t1") for i in range(8)],
-        )
-    )
-
-    assert contradiction_enabled(small, threshold=6) is False
-    assert contradiction_enabled(large, threshold=6) is True
+# -- the header (removed) ----------------------------------------------------
 
 
-def test_the_threshold_counts_visible_persons_only():
+def test_render_no_longer_prints_the_person_term_edge_header():
+    """Contributed nothing the weighting did not already say, and tempted the
+    model to write the count into the sentence (observed: „...zu sechzig im
+    Hof...")."""
     material = build_material(
         graph(
-            [person(f"p{i}", hidden=i >= 4) for i in range(8)] + [term("t1", "a", 8)],
-            [(f"p{i}", "t1") for i in range(8)],
+            [person("p1"), person("p2"), term("t1", "Holzbau", 2)],
+            [("p1", "t1"), ("p2", "t1")],
         )
     )
 
-    assert material.person_count == 4
-    assert contradiction_enabled(material, threshold=6) is False
+    text = render_material(material)
+
+    assert "Der Graph umfasst" not in text
+    assert "Verbindungen." not in text
+
+
+# -- quotes (opt-in only) -----------------------------------------------------
+
+
+def test_render_omits_quotes_by_default():
+    """Spec §5.1 (revised): on the wall only the terms are visible; a prompt
+    that is three quarters invisible-in-the-room material would break the
+    graph-to-image link (the same argument spec §10 uses against graph-driven
+    style)."""
+    material = build_material(
+        graph(
+            [person("p1"), term("t1", "Holzbau", 1)],
+            [("p1", "t1")],
+            [("p1", "Wir bauen zu viel Neues.")],
+        )
+    )
+
+    text = render_material(material)
+
+    assert "Wir bauen zu viel Neues." not in text
+    assert "Stimmen" not in text
+
+
+def test_render_includes_quotes_when_asked_for_a_comparison_run():
+    material = build_material(
+        graph(
+            [person("p1"), term("t1", "Holzbau", 1)],
+            [("p1", "t1")],
+            [("p1", "Wir bauen zu viel Neues.")],
+        )
+    )
+
+    text = render_material(material, include_quotes=True)
+
+    assert "Wir bauen zu viel Neues." in text
+
+
+# -- the gliding single-mention selection ------------------------------------
+
+
+def _shared_terms(n: int) -> list[dict]:
+    return [term(f"s{i}", f"shared-{i}", 2) for i in range(n)]
+
+
+def _shared_edges(n: int) -> list[tuple[str, str]]:
+    edges = []
+    for i in range(n):
+        edges.append((f"p{2*i}", f"s{i}"))
+        edges.append((f"p{2*i+1}", f"s{i}"))
+    return edges
+
+
+def _persons_for_shared(n: int) -> list[dict]:
+    return [person(f"p{i}") for i in range(2 * n)]
+
+
+def test_all_shared_terms_are_never_capped():
+    """Unlike the wall, the dream has no space problem — a term two people
+    said must never be dropped."""
+    shared_count = 40
+    material = build_material(
+        graph(_persons_for_shared(shared_count) + _shared_terms(shared_count),
+              _shared_edges(shared_count))
+    )
+
+    text = render_material(material)
+
+    for i in range(shared_count):
+        assert f"shared-{i}" in text
+
+
+def test_select_marginal_follows_the_gliding_formula():
+    """erlaubt = round(N * max(0, 1 - len(shared) / X)) — this proves the
+    formula, not just an endpoint."""
+    budget, saturation = 20, 25
+
+    # 0 shared -> all N single mentions allowed.
+    zero_shared = build_material(
+        graph([person("p1")] + [term(f"m{i}", f"m{i}", 1) for i in range(25)],
+              [("p1", f"m{i}") for i in range(25)])
+    )
+    assert len(select_marginal(zero_shared, budget=budget, saturation=saturation)) == budget
+
+    # len(shared) >= X -> zero single mentions allowed.
+    saturated = build_material(
+        graph(_persons_for_shared(saturation) + _shared_terms(saturation)
+              + [term("m0", "m0", 1, created_at=99.0)],
+              _shared_edges(saturation) + [("p0", "m0")])
+    )
+    assert select_marginal(saturated, budget=budget, saturation=saturation) == []
+
+    # In between: the rounded intermediate value. 12 shared terms, plenty of
+    # single mentions available so the formula's count is never capped by
+    # how many marginal terms actually exist.
+    shared_n = 12
+    shared_persons = _persons_for_shared(shared_n)
+    marginal_persons = [person(f"q{i}") for i in range(25)]
+    halfway = build_material(
+        graph(
+            shared_persons + marginal_persons + _shared_terms(shared_n)
+            + [term(f"m{i}", f"m{i}", 1) for i in range(25)],
+            _shared_edges(shared_n) + [(f"q{i}", f"m{i}") for i in range(25)],
+        )
+    )
+    expected = round(budget * max(0, 1 - shared_n / saturation))
+    assert len(select_marginal(halfway, budget=budget, saturation=saturation)) == expected
+
+
+def test_select_marginal_keeps_the_most_recent_single_mentions():
+    """Newest, not oldest: the just-finished interview must be represented."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"),
+             term("old", "Altes Detail", 1, created_at=1.0),
+             term("new", "Neues Detail", 1, created_at=99.0)],
+            [("p1", "old"), ("p2", "new")],
+        )
+    )
+
+    selected = select_marginal(material, budget=1, saturation=25)
+
+    assert [w.label for w in selected] == ["Neues Detail"]
 
 
 # -- malformed payloads -------------------------------------------------------
@@ -373,11 +488,15 @@ def test_the_real_replay_graph_yields_realistic_material(real_graph):
 
 def test_the_real_graph_renders_into_a_prompt_of_workable_size(real_graph):
     """~50 persons is the ceiling (T1§2), so this stays bounded — and nothing
-    is silently truncated to make it so."""
+    about the SHARED terms is silently truncated to make it so. At 60 people
+    the real graph has 49 shared terms (docs/operations.md) — already at or
+    above the default saturation, so the single-mention budget is exhausted
+    and the block is materially smaller than before quotes and the header
+    were dropped."""
     text = render_material(build_material(real_graph))
 
     assert "Scheinbeteiligung pro forma" in text  # the most-mentioned term
-    assert 5_000 < len(text) < 60_000
+    assert 500 < len(text) < 10_000
 
 
 def test_hiding_a_person_in_the_real_graph_removes_their_voice(real_graph):

@@ -6,13 +6,30 @@ Four rules, each with a reason that has to survive a later edit:
   is computed on Tool 1's side. Frequently mentioned terms are dominant; single
   mentions are marginal detail, and are LABELLED as such in the rendered block
   so the model can place them as a detail rather than as a theme.
-* **Quotes are in.** They are in `graph.json` for exactly this reason (T1§11
-  stores them for Tool 2's benefit even though the wall never renders them).
+* **Quotes are collected but not rendered.** They stay in `graph.json` and in
+  `Material.quotes` (T1§11 stores them for Tool 2's benefit), but
+  `render_material` leaves them out by default (decided 2026-08-28): on the
+  wall only the terms are visible, quotes appear only when a visitor taps a
+  person. At 60 people they were 76% of the material block for something
+  invisible in the room — the same argument spec §10 uses against
+  graph-driven style. `include_quotes=True` exists for a side-by-side
+  comparison run, not for production.
 * **Hidden nodes are out.** `hidden: true` is the operator's emergency exit on
-  the wall (T1§8); something pulled from the wall must not reappear in the dream.
-* **`min_mentions` is NOT applied.** That dial is the wall's legibility filter,
-  not a statement about what was said. The dream reads everything and the
-  weighting handles prominence.
+  the wall (T1§8); something pulled from the wall must not reappear in the
+  dream.
+* **`min_mentions` is NOT applied — Tool 1 and Tool 2 share the SAME rule, but
+  are NOT coupled.** Both now read „all shared terms, topped up with the most
+  recent single mentions" (see `select_marginal` below) — but each computes it
+  independently, from its own two constants, not from one shared dial. This is
+  deliberate, not an oversight to "clean up" later: the wall's `min_mentions`
+  is a **physical** limit (screen area, font size) that an operator turns
+  while thinking about legibility, not about content. If it also controlled
+  what the dream reads, an operator adjusting font size at 14:00 would
+  unknowingly change what the images are made from, and two exhibition days
+  would stop being comparable. The dream's cap (`SINGLE_MENTION_BUDGET`,
+  `SHARED_TERMS_SATURATION` below) is a **content** limit — keeping the model
+  from drowning in footnotes — and is a property of the condensing procedure,
+  not a knob either tool's operator turns.
 
 One thing the spec does not spell out and the code must: the payload's
 `mentions` counts edges from hidden persons too, so it is RECOMPUTED here from
@@ -30,6 +47,10 @@ from dataclasses import dataclass
 class TermWeight:
     label: str
     mentions: int
+    #: The term node's `created_at` (0.0 if the payload did not carry a valid
+    #: one) — the only thing `select_marginal` below uses to break ties among
+    #: single mentions: the newest interview must be the one represented.
+    created_at: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -43,6 +64,13 @@ class Material:
     #: Said by exactly one person. Detail, not theme.
     marginal: list[TermWeight]
     quotes: list[str]
+
+
+# vorläufig — die endgültigen Werte kommen aus dem Kalibrierlauf
+# (`sim.dream_calibrate terms`) und werden von Birk entschieden, siehe
+# docs/operations.md, „Kalibrierte Werte (Tool 2)".
+SINGLE_MENTION_BUDGET = 20  # N
+SHARED_TERMS_SATURATION = 25  # X
 
 
 def _empty_material() -> Material:
@@ -87,7 +115,7 @@ def build_material(graph: dict | None) -> Material:
         and isinstance(node.get("id"), str)
     }
     terms = {
-        node.get("id"): node.get("label")
+        node.get("id"): (node.get("label"), node.get("created_at"))
         for node in nodes
         if isinstance(node, dict)
         and node.get("type") == "term"
@@ -112,7 +140,12 @@ def build_material(graph: dict | None) -> Material:
             counts[target] = counts.get(target, 0) + 1
             edge_count += 1
 
-    weights = [TermWeight(terms[tid], count) for tid, count in counts.items()]
+    weights = []
+    for tid, count in counts.items():
+        label, created_at = terms[tid]
+        if not isinstance(created_at, (int, float)):
+            created_at = 0.0
+        weights.append(TermWeight(label, count, created_at))
     # Descending by count, then by label: two runs over the same graph must
     # produce the same prompt, or the record in spec §5.3 explains nothing.
     weights.sort(key=lambda w: (-w.mentions, w.label))
@@ -143,14 +176,47 @@ def build_material(graph: dict | None) -> Material:
     )
 
 
-def render_material(material: Material) -> str:
+def select_marginal(
+    material: Material,
+    *,
+    budget: int = SINGLE_MENTION_BUDGET,
+    saturation: int = SHARED_TERMS_SATURATION,
+) -> list[TermWeight]:
+    """The single mentions that make it into the prompt (decided 2026-08-28).
+
+    All shared terms always go in — there is no cap on them, unlike the wall.
+    Single mentions are topped up on a gliding budget that shrinks linearly to
+    zero as the number of shared terms grows from 0 to `saturation`, so the
+    transition falls out of the graph itself rather than a threshold or a
+    stored day-part. The newest single mentions are kept, not the oldest, so
+    the interview that just finished is guaranteed to be represented.
+    """
+    allowed = round(budget * max(0, 1 - len(material.shared) / saturation))
+    if allowed <= 0:
+        return []
+    newest_first = sorted(material.marginal, key=lambda w: (-w.created_at, w.label))
+    return newest_first[:allowed]
+
+
+def render_material(
+    material: Material,
+    *,
+    include_quotes: bool = False,
+    single_mention_budget: int = SINGLE_MENTION_BUDGET,
+    shared_terms_saturation: int = SHARED_TERMS_SATURATION,
+) -> str:
     """The German block that goes into stage 1's user message.
 
-    Nothing is truncated. At Tool 1's documented ceiling of ~50 persons (T1§2)
-    this stays comfortably inside the model's window, and a silent cap would
-    make the dream quietly stop reading the day's later interviews — the one
-    failure this station cannot afford, because the strip is what makes drift
-    visible.
+    Shared terms are never truncated. At Tool 1's documented ceiling of ~50
+    persons (T1§2) this stays comfortably inside the model's window, and a
+    silent cap would make the dream quietly stop reading the day's later
+    interviews — the one failure this station cannot afford, because the
+    strip is what makes drift visible. Single mentions ARE limited, by
+    `select_marginal` above — on purpose, see the module docstring.
+
+    `single_mention_budget`/`shared_terms_saturation` default to this module's
+    constants and only exist as parameters so `sim.dream_calibrate terms` can
+    try other values without duplicating this function.
     """
     blocks: list[str] = []
 
@@ -161,29 +227,21 @@ def render_material(material: Material) -> str:
             "haben. Was oft genannt wurde, beherrscht das Bild:\n" + lines
         )
 
-    if material.marginal:
-        lines = "\n".join(f"  {w.label}" for w in material.marginal)
+    marginal = select_marginal(
+        material, budget=single_mention_budget, saturation=shared_terms_saturation
+    )
+    if marginal:
+        lines = "\n".join(f"  {w.label}" for w in marginal)
         blocks.append(
             "Randnotizen — jede davon hat genau ein Mensch gesagt. Das sind "
             "Detail und Beiwerk, nicht Thema. Sie dürfen im Bild vorkommen, "
             "aber klein und am Rand:\n" + lines
         )
 
-    if material.quotes:
+    if include_quotes and material.quotes:
         # Single-quoted f-string: the German quotation marks are literal text,
         # and a double-quoted one would end at the closing „ ".
         lines = "\n".join(f'  „{quote}"' for quote in material.quotes)
         blocks.append("Stimmen aus den Interviews, wörtlich:\n" + lines)
 
-    header = (
-        f"Der Graph umfasst {material.person_count} Menschen, "
-        f"{material.term_count} Begriffe und {material.edge_count} Verbindungen."
-    )
-    return "\n\n".join([header, *blocks])
-
-
-def contradiction_enabled(material: Material, threshold: int) -> bool:
-    """Spec §5.1: below the threshold the contradiction instruction is dropped
-    and stage 1 runs on weighting alone. With three interviews there are no real
-    oppositions and the model would invent one."""
-    return material.person_count >= threshold
+    return "\n\n".join(blocks)
