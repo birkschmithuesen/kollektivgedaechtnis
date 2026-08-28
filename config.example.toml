@@ -32,9 +32,15 @@ terms_per_interview = 5
 # Run 19b: in 7 of 8 near-misses the concept's own node sat at rank 7-56 in the
 # candidate pool, i.e. outside a window of 5 — the judge was never shown it.
 # Run 19c raised this to 12, which is nearly free (embeddings are cached; only
-# merge-prompt tokens grow). It is not a cure-all and must not be widened
-# further to chase a score: some near-misses are genuine semantic distance
-# („Zugebaute Baulücken" sat at rank 56).
+# merge-prompt tokens grow), and a later audit of run 19c confirmed it worked:
+# in 22 of 26 examined duplicate pairs the existing node was inside the top 12,
+# usually at rank 1 (docs/merge-audit-2026-08-27.md). Candidate selection is no
+# longer the bottleneck; most remaining non-merges are the judge deliberately
+# declining, not a missed candidate. It is not a cure-all and must not be
+# widened further to chase a score: single cases still sit outside the window
+# („Ungenutzte Vorzeigeprojekte" vs. „Leerstehende Häuser im Dorfkern", rank 58
+# of 87) and are genuine semantic distance, not a window that is still too
+# narrow.
 merge_neighbours = 12
 
 # merge_style (see kg.config.DEFAULT_MERGE_STYLE) is left unchanged by run 19b:

@@ -276,8 +276,15 @@ Diese Werte stehen in `config.toml` und werden im Betrieb **nicht** verändert.
   Begriffen pro Interview; ein niedrigerer Wert schneidet gute Begriffe ab statt
   den Einzelnennungs-Rand.
 - `merge_neighbours` = **12** — von 5 angehoben. Bei 5 lag der passende
-  bestehende Knoten in 7 von 8 Beinahe-Treffern auf Rang 7 bis 56, wurde dem
-  Judge also nie gezeigt.
+  bestehende Knoten in Lauf 19b in 7 von 8 Beinahe-Treffern auf Rang 7 bis 56,
+  wurde dem Judge also nie gezeigt. Eine spätere Auswertung von Lauf 19c
+  bestätigt, dass die Anhebung wirkt: in 22 von 26 untersuchten
+  Duplikat-Paaren stand der richtige bestehende Knoten in den Top-12, meist
+  auf Rang 1 (`docs/merge-audit-2026-08-27.md`). Die Kandidatenauswahl ist damit
+  nicht mehr das Nadelöhr — der verbleibende Nichtmerge-Anteil sind heute
+  überwiegend bewusste Judge-Entscheidungen. Einzelfälle bleiben trotzdem
+  außerhalb des Fensters, z. B. „Ungenutzte Vorzeigeprojekte" vs.
+  „Leerstehende Häuser im Dorfkern" auf Rang 58 von 87.
 - `merge_style` — unverändert (`kg.config.DEFAULT_MERGE_STYLE`). Nur 1 von 8
   Beinahe-Treffern war eine Fehlentscheidung des Judge; ein Lockern würde auch
   die rund 50 von 60 Interviews lockern, in denen er gut entscheidet.
