@@ -13,7 +13,6 @@ def test_load_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
         tool1_url = "http://192.168.1.10:8800"
         poll_interval_s = 5.0
         min_interval_s = 240
-        contradiction_min_persons = 6
         guiding_question = "Wie leben und bauen wir in zehn Jahren?"
         visual_register = "malerisch, atmosphaerisch, weich"
         server_host = "0.0.0.0"
@@ -34,7 +33,6 @@ def test_load_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
     assert cfg.graph_url == "http://192.168.1.10:8800/graph.json"
     assert cfg.poll_interval_s == 5.0
     assert cfg.min_interval_s == 240
-    assert cfg.contradiction_min_persons == 6
     assert cfg.guiding_question == "Wie leben und bauen wir in zehn Jahren?"
     assert cfg.visual_register == "malerisch, atmosphaerisch, weich"
     assert cfg.server_host == "0.0.0.0"
@@ -54,7 +52,6 @@ def test_defaults_are_the_spec_values(tmp_path, monkeypatch):
     # Spec §4.1 / §5.1 / §10 — the calibration START values, not final ones.
     assert cfg.poll_interval_s == 5.0
     assert cfg.min_interval_s == 240
-    assert cfg.contradiction_min_persons == 6
     # Spec §5.1 / §5.2 — one model to reason about, one credential each.
     assert cfg.condense_model == "claude-opus-5"
     assert cfg.image_model == "google/gemini-3-pro-image"

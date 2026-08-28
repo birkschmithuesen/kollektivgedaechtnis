@@ -13,6 +13,15 @@ Two kinds of value live here and they must not be confused:
   operator UI owns them and a restart must restore the operator's value, not the
   file's — the same `set_setting_default` discipline Tool 1 uses for
   `default_min_mentions`.
+
+**`guiding_question` no longer reaches stage 1's prompt** (decided 2026-08-28,
+`kg2/condense.py`). It steers exactly one thing now: the on-screen headline
+(`kg2/server.py`'s `dream_state`, `question` key). The dream itself is
+condensed with a fixed, neutral instruction that does not name a question at
+all — a sixth question nobody in the room was actually asked would force a
+reading direction the material may not contain. This field stays here rather
+than moving into display-only config because it is still set once in the
+morning and never runtime-adjustable, the same rule `visual_register` follows.
 """
 
 from __future__ import annotations
@@ -54,7 +63,8 @@ class DreamConfig:
     min_interval_s: int = 240
 
     # -- the dream (spec §5, calibrated at Tasks 15/16) ---------------------
-    contradiction_min_persons: int = 6
+    # `guiding_question` no longer steers stage 1's prompt — see the module
+    # docstring. It sets only the headline shown above the dream.
     guiding_question: str = DEFAULT_GUIDING_QUESTION
     visual_register: str = DEFAULT_VISUAL_REGISTER
 
@@ -113,7 +123,6 @@ _FIELD_NAMES = {
     "poll_interval_s",
     "fetch_timeout_s",
     "min_interval_s",
-    "contradiction_min_persons",
     "guiding_question",
     "visual_register",
     "condense_model",

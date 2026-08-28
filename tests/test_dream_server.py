@@ -27,7 +27,7 @@ def app(tmp_path):
 def add_dream(store, cfg, *, at, sentence, discarded=False):
     dream = store.create_dream(
         created_at=at, graph_generated_at=at - 1, person_count=6, term_count=5,
-        edge_count=9, contradiction=True, guiding_question=cfg.guiding_question,
+        edge_count=9, guiding_question=cfg.guiding_question,
         absorbed_persons=["p1"],
     )
     store.set_stage1(dream.id, prompt="S1", sentence=sentence, model="claude-opus-5")
@@ -325,7 +325,7 @@ def test_the_operator_sees_failed_and_discarded_dreams_too(app):
     add_dream(store, cfg, at=1.0, sentence="verworfen", discarded=True)
     broken = store.create_dream(
         created_at=2.0, graph_generated_at=1.0, person_count=1, term_count=1,
-        edge_count=1, contradiction=False, guiding_question="Q", absorbed_persons=["p2"],
+        edge_count=1, guiding_question="Q", absorbed_persons=["p2"],
     )
     store.fail_dream(broken.id, "timeout")
 

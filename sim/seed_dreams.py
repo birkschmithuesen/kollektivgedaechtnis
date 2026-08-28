@@ -103,14 +103,21 @@ def seed_dreams(data_dir, count: int, images, *, start_at=START_AT, sentences=No
             person_count=persons,
             term_count=persons * 3,
             edge_count=persons * 4,
-            contradiction=persons >= 6,
             guiding_question=cfg.guiding_question,
             absorbed_persons=[f"p{n}" for n in range(1, persons + 1)],
         )
+        # mood/tension cycle through the whole 1-5 range across the seeded day
+        # so a strip built from this corpus exercises every image-prompt
+        # stage — not just whatever a single fixed value would produce.
+        # sentence_en is left equal to the (German) seeded sentence: nothing
+        # here calls the image model, so no prompt is ever built from it.
         store.set_stage1(
             dream.id,
             prompt="(seeded — no model call)",
             sentence=sentences[index],
+            sentence_en=sentences[index],
+            mood=1 + index % 5,
+            tension=1 + (index * 2) % 5,
             model=cfg.condense_model,
         )
         store.set_stage2_prompt(

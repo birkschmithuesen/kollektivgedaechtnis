@@ -44,6 +44,9 @@ def _row(row: sqlite3.Row) -> Dream:
         absorbed_persons=json.loads(row["absorbed_persons"]),
         stage1_prompt=row["stage1_prompt"],
         sentence=row["sentence"],
+        sentence_en=row["sentence_en"],
+        mood=row["mood"],
+        tension=row["tension"],
         stage2_prompt=row["stage2_prompt"],
         condense_model=row["condense_model"],
         image_model=row["image_model"],
@@ -112,7 +115,6 @@ class DreamStore:
         person_count: int,
         term_count: int,
         edge_count: int,
-        contradiction: bool,
         guiding_question: str,
         absorbed_persons: list[str],
     ) -> Dream:
@@ -121,13 +123,18 @@ class DreamStore:
         A crash or a kill between here and `finish_dream` then leaves a row
         stuck at `running` — visibly incomplete, which is the honest record —
         rather than leaving no trace that a dream was ever attempted.
+
+        `contradiction` is not a parameter: the clause it named is gone
+        (kg2/condense.py, 2026-08-28), and every row from here on records 0 —
+        written explicitly, not left to a schema default, so a reader of this
+        code sees the decision rather than inferring it from db.py's DEFAULT.
         """
         dream_id = self._next_id()
         self.conn.execute(
             "INSERT INTO dream(id, created_at, graph_generated_at, person_count,"
             " term_count, edge_count, contradiction, guiding_question,"
             " absorbed_persons, status)"
-            " VALUES (?,?,?,?,?,?,?,?,?, 'running')",
+            " VALUES (?,?,?,?,?,?,0,?,?, 'running')",
             (
                 dream_id,
                 created_at,
@@ -135,7 +142,6 @@ class DreamStore:
                 person_count,
                 term_count,
                 edge_count,
-                int(contradiction),
                 guiding_question,
                 json.dumps(sorted(absorbed_persons)),
             ),
@@ -144,10 +150,21 @@ class DreamStore:
         return self.get_dream(dream_id)
 
     @_locked
-    def set_stage1(self, dream_id: str, *, prompt: str, sentence: str, model: str) -> None:
+    def set_stage1(
+        self,
+        dream_id: str,
+        *,
+        prompt: str,
+        sentence: str,
+        model: str,
+        sentence_en: str | None = None,
+        mood: int | None = None,
+        tension: int | None = None,
+    ) -> None:
         self.conn.execute(
-            "UPDATE dream SET stage1_prompt=?, sentence=?, condense_model=? WHERE id=?",
-            (prompt, sentence, model, dream_id),
+            "UPDATE dream SET stage1_prompt=?, sentence=?, sentence_en=?, mood=?,"
+            " tension=?, condense_model=? WHERE id=?",
+            (prompt, sentence, sentence_en, mood, tension, model, dream_id),
         )
         self.conn.commit()
 

@@ -25,11 +25,23 @@ CREATE TABLE IF NOT EXISTS dream (
     person_count       INTEGER NOT NULL DEFAULT 0,
     term_count         INTEGER NOT NULL DEFAULT 0,
     edge_count         INTEGER NOT NULL DEFAULT 0,
+    -- Altbestand, keine Migration: die Widerspruchs-Klausel selbst ist am
+    -- 2026-08-28 ersatzlos entfallen (kg2/condense.py), aber die Spalte zu
+    -- entfernen bräuchte eine Migration, die kein bestehender Datensatz
+    -- rechtfertigt. kg2/store.py::create_dream schreibt hier künftig immer 0.
     contradiction      INTEGER NOT NULL DEFAULT 0,
     guiding_question   TEXT NOT NULL DEFAULT '',
     absorbed_persons   TEXT NOT NULL DEFAULT '[]',
     stage1_prompt      TEXT,
     sentence           TEXT,
+    -- Literal English translation of `sentence` — the motif fed to stage 2
+    -- (kg2/imagegen.py). NULL for rows written before 2026-08-28; readers
+    -- must treat that the same as "no translation available".
+    sentence_en        TEXT,
+    -- 1-5, both from the same stage-1 call as `sentence` (kg2/condense.py).
+    -- NULL for rows written before 2026-08-28.
+    mood               INTEGER,
+    tension            INTEGER,
     stage2_prompt      TEXT,
     condense_model     TEXT,
     image_model        TEXT,

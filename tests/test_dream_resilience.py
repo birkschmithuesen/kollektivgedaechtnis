@@ -62,7 +62,7 @@ def graph(persons, generated_at=1000.0) -> dict:
 def good_condense(sentence="Der Beton träumt von Wald."):
     from kg2.condense import CondenseResult
 
-    def fn(llm, material, question, contradiction):
+    def fn(llm, material):
         return CondenseResult(prompt="P", sentence=sentence)
 
     return fn
@@ -106,7 +106,7 @@ def test_a_whole_day_of_no_connectivity_still_shows_a_calm_screen(tmp_path):
     for index in range(1, 6):
         seed_one_good_dream(store, cfg, at=float(index), sentence=f"traum {index}")
 
-    def dead(llm, material, question, contradiction):
+    def dead(llm, material):
         raise RuntimeError("no route to host")
 
     for index in range(20):
@@ -124,7 +124,7 @@ def test_a_stage_1_timeout_leaves_the_last_image_up(tmp_path):
     store = DreamStore.open(cfg.db_path)
     seed_one_good_dream(store, cfg)
 
-    def timeout(llm, material, question, contradiction):
+    def timeout(llm, material):
         raise TimeoutError("read timeout")
 
     assert run_dream(store, cfg, object(), graph(5), 300.0,
@@ -215,7 +215,7 @@ def test_a_dream_interrupted_by_the_crash_is_visibly_incomplete_not_invisible(tm
     store = DreamStore.open(cfg.db_path)
     seed_one_good_dream(store, cfg, sentence="das gute Bild")
     store.create_dream(created_at=300.0, graph_generated_at=299.0, person_count=5,
-                       term_count=4, edge_count=6, contradiction=False,
+                       term_count=4, edge_count=6,
                        guiding_question="Q", absorbed_persons=["p4"])
     store.close()  # killed mid-cycle
 

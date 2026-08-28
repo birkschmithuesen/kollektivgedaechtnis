@@ -20,6 +20,9 @@ class Dream:
     person_count: int = 0
     term_count: int = 0
     edge_count: int = 0
+    # Always False from 2026-08-28 on: the contradiction clause is gone
+    # (kg2/condense.py). The column and field stay — no migration for a
+    # feature that was never released — but nothing sets this True anymore.
     contradiction: bool = False
     guiding_question: str = ""
     # The person ids this dream condensed. Persisted because a restart has no
@@ -28,6 +31,13 @@ class Dream:
     absorbed_persons: list[str] = field(default_factory=list)
     stage1_prompt: str | None = None
     sentence: str | None = None
+    #: Literal English translation of `sentence` — stage 2's motif. None for
+    #: rows from before 2026-08-28, or a genuinely failed dream.
+    sentence_en: str | None = None
+    #: 1-5, produced in the same stage-1 call as `sentence`. None under the
+    #: same conditions as `sentence_en`.
+    mood: int | None = None
+    tension: int | None = None
     stage2_prompt: str | None = None
     condense_model: str | None = None
     image_model: str | None = None

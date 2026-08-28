@@ -56,11 +56,15 @@ def setup(tmp_path, **overrides):
     return cfg, DreamStore.open(cfg.db_path)
 
 
-def good_condense(sentence="Der Beton träumt von Wald."):
+def good_condense(sentence="Der Beton träumt von Wald.", sentence_en=None, mood=3, tension=3):
     from kg2.condense import CondenseResult
 
-    def fn(llm, material, question, contradiction):
-        return CondenseResult(prompt=f"P(contradiction={contradiction})", sentence=sentence)
+    def fn(llm, material):
+        return CondenseResult(
+            prompt="P", sentence=sentence,
+            sentence_en=sentence_en if sentence_en is not None else sentence,
+            mood=mood, tension=tension,
+        )
 
     return fn
 
@@ -146,29 +150,21 @@ def test_the_new_dream_becomes_the_current_one(tmp_path):
     store.close()
 
 
-# -- the contradiction threshold -------------------------------------------
+# -- the contradiction clause is gone (2026-08-28) ---------------------------
 
 
-def test_the_contradiction_instruction_is_on_above_the_threshold(tmp_path):
-    cfg, store = setup(tmp_path, contradiction_min_persons=6)
+def test_a_dream_never_records_a_contradiction_regardless_of_size(tmp_path):
+    """The clause is gone (kg2/condense.py); the DB column stays for the old
+    schema shape but is always written False now (kg2/store.py)."""
+    cfg, store = setup(tmp_path)
 
-    dream = run_dream(store, cfg, object(), graph(persons=8), 1.0,
-                      condense_fn=good_condense(), render_fn=good_render())
+    small = run_dream(store, cfg, object(), graph(persons=3), 1.0,
+                       condense_fn=good_condense(), render_fn=good_render())
+    large = run_dream(store, cfg, object(), graph(persons=8), 300.0,
+                       condense_fn=good_condense(), render_fn=good_render())
 
-    assert dream.contradiction is True
-    assert "contradiction=True" in dream.stage1_prompt
-    store.close()
-
-
-def test_the_contradiction_instruction_is_off_below_the_threshold(tmp_path):
-    """Spec §5.1: with three interviews the model would invent an opposition."""
-    cfg, store = setup(tmp_path, contradiction_min_persons=6)
-
-    dream = run_dream(store, cfg, object(), graph(persons=3), 1.0,
-                      condense_fn=good_condense(), render_fn=good_render())
-
-    assert dream.contradiction is False
-    assert "contradiction=False" in dream.stage1_prompt
+    assert small.contradiction is False
+    assert large.contradiction is False
     store.close()
 
 
@@ -181,7 +177,7 @@ def test_a_stage_1_failure_leaves_the_previous_image_up(tmp_path):
     run_dream(store, cfg, object(), graph(), 1.0,
               condense_fn=good_condense("das gute Bild"), render_fn=good_render())
 
-    def boom(llm, material, question, contradiction):
+    def boom(llm, material):
         raise RuntimeError("llm call failed after 2 attempts")
 
     result = run_dream(store, cfg, object(), graph(), 300.0,
@@ -218,7 +214,7 @@ def test_a_stage_2_failure_leaves_the_previous_image_up_and_keeps_the_sentence(t
 def test_a_failure_with_no_previous_dream_leaves_the_screen_empty_not_broken(tmp_path):
     cfg, store = setup(tmp_path)
 
-    def boom(llm, material, question, contradiction):
+    def boom(llm, material):
         raise RuntimeError("no connectivity at all")
 
     assert run_dream(store, cfg, object(), graph(), 1.0,
@@ -247,7 +243,7 @@ def test_a_keyboard_interrupt_propagates_after_closing_the_row(tmp_path):
     still be closed honestly, but the interrupt itself has to escape."""
     cfg, store = setup(tmp_path)
 
-    def interrupt(llm, material, question, contradiction):
+    def interrupt(llm, material):
         raise KeyboardInterrupt()
 
     try:
@@ -367,7 +363,7 @@ def test_the_row_exists_even_if_the_process_dies_mid_cycle(tmp_path):
     cfg, store = setup(tmp_path)
     seen = {}
 
-    def note_and_die(llm, material, question, contradiction):
+    def note_and_die(llm, material):
         seen["row"] = store.get_dream("d1")
         raise RuntimeError("killed")
 
@@ -498,5 +494,5 @@ def test_a_dream_over_the_real_replay_graph(real_graph):
         assert dream.term_count == 163
         assert dream.edge_count == 267
         assert len(dream.absorbed_persons) == 60
-        assert dream.contradiction is True  # 60 >= 6
+        assert dream.contradiction is False
         store.close()

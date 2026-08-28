@@ -22,8 +22,8 @@ but are then re-raised, because absorbing the operator's own shutdown signal
 would be a worse failure than a poll loop that occasionally dies loudly on
 purpose.
 
-Building the material (`build_material`, `contradiction_enabled`,
-`absorbed_persons`) happens before any row exists. Those functions are
+Building the material (`build_material`, `absorbed_persons`) happens before
+any row exists. Those functions are
 hardened to degrade rather than raise on the malformed shapes
 `kg2.graph_client.fetch_graph` lets through, so a guard around that step is
 belt-and-braces, not the primary defence — see the comment at its `except` for
@@ -47,7 +47,7 @@ from kg2.condense import condense as _condense
 from kg2.imagegen import build_image_prompt, render_image as _render_image, save_image
 from kg2.models import Dream
 from kg2.trigger import absorbed_persons
-from kg2.weighting import build_material, contradiction_enabled
+from kg2.weighting import build_material
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,6 @@ def run_dream(
     """Run one full cycle. Returns the finished Dream, or None if it failed."""
     try:
         material = build_material(graph)
-        contradiction = contradiction_enabled(material, cfg.contradiction_min_persons)
         absorbed = sorted(absorbed_persons(graph))
     except Exception as exc:
         # Belt-and-braces, not the primary defence: build_material and
@@ -112,23 +111,29 @@ def run_dream(
         person_count=material.person_count,
         term_count=material.term_count,
         edge_count=material.edge_count,
-        contradiction=contradiction,
         guiding_question=cfg.guiding_question,
         absorbed_persons=absorbed,
     )
 
     try:
-        result = condense_fn(llm, material, cfg.guiding_question, contradiction)
+        result = condense_fn(llm, material)
         store.set_stage1(
             dream.id,
             prompt=result.prompt,
             sentence=result.sentence,
+            sentence_en=result.sentence_en,
+            mood=result.mood,
+            tension=result.tension,
             model=cfg.condense_model,
         )
         _announce(on_sentence, result.sentence)
 
         image_prompt = build_image_prompt(
-            result.sentence, cfg.visual_register, cfg.image_aspect_ratio
+            result.sentence_en,
+            mood=result.mood,
+            tension=result.tension,
+            register=cfg.visual_register,
+            aspect_ratio=cfg.image_aspect_ratio,
         )
         store.set_stage2_prompt(dream.id, prompt=image_prompt, model=cfg.image_model)
 
