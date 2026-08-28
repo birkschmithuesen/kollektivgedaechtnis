@@ -3,7 +3,7 @@
 The same discipline Tool 1's density values were produced under (T1§14.4 and
 run-19c): run it, read the output, write the answer into `docs/operations.md`.
 
-Four sub-commands (`questions` and `contradiction` were retired 2026-08-28
+Five sub-commands (`questions` and `contradiction` were retired 2026-08-28
 along with the guiding-question prompt slot and the contradiction clause —
 see kg2/condense.py):
 
@@ -15,6 +15,16 @@ see kg2/condense.py):
 * `mood`   — whether stage 1's `mood`/`tension` scale (kg2/condense.py) is
               actually used across its 1-5 range on built extremes, and
               whether real material varies it at all.
+* `tension`— the `mood` run above (2026-08-28) confounded the two axes: its
+              four cases moved sentiment and disagreement together
+              (positive+unified, negative+conflicted), so a low tension on the
+              "negative, conflicted" case could not be told apart from
+              tension simply tracking mood. This run decouples the axes —
+              four cases crossing positive/negative sentiment with
+              unified/contradictory content — and asks the actual question:
+              does tension react to contradiction, or does it just ride along
+              with mood? See `TENSION_CASES` below and the task brief,
+              `.task-tension-kalibrierung.md` (2026-08-28).
 * `quotes` — a side-by-side with/without quotes in the material (spec §5.1's
               revised default is without), so the cost of leaving them out is
               visible before it is final.
@@ -29,6 +39,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from kg2.condense import condense
@@ -82,6 +94,139 @@ SYNTHETIC_CASES: dict[str, list[str]] = {
         "Abgesagte Sanierungsversprechen",
     ],
 }
+
+
+@dataclass(frozen=True)
+class TensionCase:
+    """One cell of the 2x2 grid that decouples sentiment from disagreement.
+
+    `mood_axis` and `tension_axis` are the case's INTENDED position on each
+    axis — not a prediction of what stage 1 will return, which is exactly
+    what this run checks.
+    """
+
+    label: str
+    mood_axis: str  # "positiv" | "negativ"
+    tension_axis: str  # "einig" | "zerstritten"
+    terms: list[str]
+
+
+#: The 2x2 grid the old `mood` run's fourth case (`SYNTHETIC_CASES`,
+#: "eindeutig negativ, zerstritten") conflated: it moved sentiment and
+#: disagreement together, so its low tension reading could not be told apart
+#: from tension simply tracking mood. Built fresh here so the two axes vary
+#: independently (task brief, 2026-08-28):
+#:
+#: * A (positiv, einig) — optimistic terms that reinforce each other.
+#: * B (positiv, zerstritten) — the case that was missing entirely: three
+#:   pairs of optimistic terms, each pair mutually exclusive (both cannot be
+#:   true of the same yard/house at once).
+#: * C (negativ, einig) — the OLD "zerstritten" case, kept verbatim and
+#:   relabelled as what it actually is: uniformly negative terms that all
+#:   point the same direction, no real contradiction among them.
+#: * D (negativ, zerstritten) — three pairs of negative terms, each pair
+#:   mutually exclusive, mirroring B's construction on the negative side.
+#:
+#: Every pair in B and D is said by the SAME synthetic persons as every other
+#: term (`_synthetic_graph` below), so both sides of a contradiction are
+#: mentioned equally often — a 5-vs-1 "contradiction" would not be one.
+TENSION_CASES: tuple[TensionCase, ...] = (
+    TensionCase(
+        "positiv, einig (A)",
+        "positiv",
+        "einig",
+        [
+            "Gemeinsam sanierte Fassaden",
+            "Neue Spielplätze für alle Kinder",
+            "Vertrauensvolle Zusammenarbeit mit der Verwaltung",
+            "Blühende Gemeinschaftsgärten",
+            "Stabile, bezahlbare Mieten",
+            "Offene Nachbarschaftstreffen",
+        ],
+    ),
+    TensionCase(
+        "positiv, zerstritten (B)",
+        "positiv",
+        "zerstritten",
+        [
+            "Glänzende Neubauten ersetzen jedes alte Haus",
+            "Jedes historische Haus bleibt für immer erhalten",
+            "Hohe Wohntürme schaffen Platz für alle",
+            "Niedrige Häuser bewahren die vertraute Höhe",
+            "Autofreie Höfe schenken den Kindern die Straße zurück",
+            "Ein eigener Parkplatz sichert jeder Familie ihre Mobilität",
+        ],
+    ),
+    TensionCase(
+        "negativ, einig (C)",
+        "negativ",
+        "einig",
+        [
+            "Drohende Zwangsräumungen",
+            "Schimmel in den Wänden",
+            "Offener Streit zwischen Eigentümern",
+            "Abgesperrte, verrottende Baustellen",
+            "Tiefes Misstrauen gegenüber der Verwaltung",
+            "Abgesagte Sanierungsversprechen",
+        ],
+    ),
+    TensionCase(
+        "negativ, zerstritten (D)",
+        "negativ",
+        "zerstritten",
+        [
+            "Die Bagger reißen jedes marode Haus sofort ab",
+            "Jedes marode Haus verrottet einfach ungenutzt weiter",
+            "Die Mieten steigen jeden Monat unaufhaltsam weiter",
+            "Die Wohnungen stehen inzwischen komplett leer",
+            "Jede Beschwerde wird im Amt sofort abgewiesen",
+            "Niemand im Amt ist überhaupt noch erreichbar",
+        ],
+    ),
+)
+
+
+@dataclass(frozen=True)
+class TensionRun:
+    """One `condense` call's outcome, tagged with the case it came from."""
+
+    case: str
+    mood_axis: str
+    tension_axis: str
+    mood: int
+    tension: int
+
+
+def tension_axis_summary(runs: Iterable[TensionRun]) -> dict:
+    """The actual question (task brief): does `tension` react to
+    contradiction, or does it just ride along with `mood`? Arithmetic only,
+    no LLM — kept separate from `run_tension` so it can be unit-tested on
+    hand-built runs.
+    """
+    runs = list(runs)
+
+    def avg(values: list[int]) -> float:
+        return sum(values) / len(values) if values else 0.0
+
+    einig = [r.tension for r in runs if r.tension_axis == "einig"]
+    zerstritten = [r.tension for r in runs if r.tension_axis == "zerstritten"]
+    positiv = [r.tension for r in runs if r.mood_axis == "positiv"]
+    negativ = [r.tension for r in runs if r.mood_axis == "negativ"]
+
+    spread: dict[str, tuple[int, int]] = {}
+    for case in dict.fromkeys(r.case for r in runs):
+        values = [r.tension for r in runs if r.case == case]
+        spread[case] = (min(values), max(values))
+
+    return {
+        "einig_avg": avg(einig),
+        "zerstritten_avg": avg(zerstritten),
+        "tension_axis_gap": avg(zerstritten) - avg(einig),
+        "positiv_avg": avg(positiv),
+        "negativ_avg": avg(negativ),
+        "mood_axis_gap": avg(negativ) - avg(positiv),
+        "spread_per_case": spread,
+    }
 
 
 def prefix_graph(graph: dict, persons: int) -> dict:
@@ -257,6 +402,77 @@ def run_mood(graph: dict, cfg) -> None:
             print(f"  {size:>2} Menschen: FEHLER — {exc}")
 
 
+def run_tension(graph: dict, cfg) -> None:
+    """Decoupled from `run_mood` (task brief, 2026-08-28): that run's four
+    cases moved sentiment and disagreement together, so a low `tension` on
+    its "negative, conflicted" case could not be told apart from `tension`
+    simply tracking `mood`. This run crosses the two axes independently
+    (`TENSION_CASES`) and answers the actual question with numbers, not a
+    recommendation (standing rule, see module docstring).
+    """
+    llm = _llm(cfg)
+    print(
+        "Vier gebaute Fälle, Stimmung und Widersprüchlichkeit unabhängig "
+        "voneinander (2x2), je dreimal durch Stufe 1 geschickt. Prüft, ob "
+        "`tension` auf Widerspruch reagiert oder nur mit `mood` mitläuft.\n"
+    )
+
+    runs: list[TensionRun] = []
+    for case in TENSION_CASES:
+        material = build_material(_synthetic_graph(case.terms))
+        print(f"=== {case.label}")
+        for _ in range(3):
+            try:
+                result = condense(llm, material)
+                print(f"  mood={result.mood} tension={result.tension} — {result.sentence}")
+                runs.append(
+                    TensionRun(
+                        case=case.label,
+                        mood_axis=case.mood_axis,
+                        tension_axis=case.tension_axis,
+                        mood=result.mood,
+                        tension=result.tension,
+                    )
+                )
+            except Exception as exc:
+                print(f"  FEHLER — {exc}")
+        print()
+
+    if runs:
+        summary = tension_axis_summary(runs)
+        print("=== Auswertung: reagiert tension auf Widerspruch oder auf Stimmung?\n")
+        print(
+            f"  tension, einige Fälle (A+C):        {summary['einig_avg']:.2f}\n"
+            f"  tension, zerstrittene Fälle (B+D):   {summary['zerstritten_avg']:.2f}\n"
+            f"  Differenz (zerstritten − einig):     {summary['tension_axis_gap']:+.2f}\n"
+        )
+        print(
+            f"  tension, positive Fälle (A+B):       {summary['positiv_avg']:.2f}\n"
+            f"  tension, negative Fälle (C+D):        {summary['negativ_avg']:.2f}\n"
+            f"  Differenz (negativ − positiv):        {summary['mood_axis_gap']:+.2f}\n"
+        )
+        print("  Streuung je Fall über die drei Wiederholungen (min–max):")
+        for label, (low, high) in summary["spread_per_case"].items():
+            print(f"    {label}: {low}–{high}")
+        print()
+
+    print(
+        "Zur Einordnung: derselbe reale Graph in vier Größen, je dreimal "
+        "(Vorbefund docs/operations.md: tension eng bei 3/4/4/4, mood bei "
+        "3/2/3/2).\n"
+    )
+    for size in SIZES:
+        material = build_material(prefix_graph(graph, size))
+        print(f"=== {size} Menschen")
+        for _ in range(3):
+            try:
+                result = condense(llm, material)
+                print(f"  mood={result.mood} tension={result.tension} — {result.sentence}")
+            except Exception as exc:
+                print(f"  FEHLER — {exc}")
+        print()
+
+
 def run_quotes(graph: dict, cfg) -> None:
     llm = _llm(cfg)
     print(
@@ -298,7 +514,7 @@ def main() -> None:
     from kg2.config import load_dream_config
 
     parser = argparse.ArgumentParser(prog="sim.dream_calibrate")
-    parser.add_argument("mode", choices=("terms", "mood", "quotes", "floor"))
+    parser.add_argument("mode", choices=("terms", "mood", "tension", "quotes", "floor"))
     parser.add_argument("--graph", default=str(FIXTURE))
     parser.add_argument("--config", default=None)
     parser.add_argument("--interviews", type=int, default=60)
@@ -316,6 +532,8 @@ def main() -> None:
         run_terms(graph, cfg)
     elif args.mode == "mood":
         run_mood(graph, cfg)
+    elif args.mode == "tension":
+        run_tension(graph, cfg)
     else:
         run_quotes(graph, cfg)
 

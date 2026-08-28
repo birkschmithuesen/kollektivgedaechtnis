@@ -6,11 +6,14 @@ from kg2.weighting import build_material
 from sim.dream_calibrate import (
     SIZES,
     SYNTHETIC_CASES,
+    TENSION_CASES,
     TERMS_N,
     TERMS_X,
+    TensionRun,
     _synthetic_graph,
     floor_table,
     prefix_graph,
+    tension_axis_summary,
 )
 
 
@@ -131,6 +134,97 @@ def test_synthetic_graphs_carry_distinct_content_per_case():
     that would make the whole calibration prove nothing."""
     all_terms = [tuple(sorted(terms)) for terms in SYNTHETIC_CASES.values()]
     assert len(set(all_terms)) == len(all_terms)
+
+
+# -- the `tension` calibration inputs ----------------------------------------
+
+
+def test_there_are_four_tension_cases():
+    """The 2x2 grid: mood and tension axis, each positiv/negativ x
+    einig/zerstritten, task brief 2026-08-28."""
+    assert len(TENSION_CASES) == 4
+
+
+def test_the_tension_cases_cover_the_2x2_grid_exactly_once():
+    """The whole point of this test material is that the two axes vary
+    independently — each of the four combinations must appear exactly once,
+    or the grid does not actually decouple mood from tension."""
+    axes = [(case.mood_axis, case.tension_axis) for case in TENSION_CASES]
+    assert set(axes) == {
+        ("positiv", "einig"),
+        ("positiv", "zerstritten"),
+        ("negativ", "einig"),
+        ("negativ", "zerstritten"),
+    }
+    assert len(set(axes)) == len(axes)
+
+
+def test_the_tension_cases_are_not_a_recommendation():
+    for case in TENSION_CASES:
+        for forbidden in ("empfohlen", "recommended", "*", "(a)", "1."):
+            assert forbidden not in case.label
+
+
+def test_every_tension_case_produces_real_material():
+    """Same discipline as the mood cases: every term said by every synthetic
+    person, so nothing is trimmed by the gliding single-mention formula and
+    both sides of a contradiction carry equal weight."""
+    for case in TENSION_CASES:
+        material = build_material(_synthetic_graph(case.terms))
+        assert material.term_count == len(case.terms)
+        assert material.marginal == []
+        assert len(material.shared) == len(case.terms)
+
+
+def test_tension_graphs_carry_distinct_content_per_case():
+    all_terms = [tuple(sorted(case.terms)) for case in TENSION_CASES]
+    assert len(set(all_terms)) == len(all_terms)
+
+
+def test_the_zerstritten_cases_have_an_even_number_of_terms():
+    """Built as contradiction PAIRS (task brief: "zwei Begriffe, die nicht
+    gleichzeitig wahr sein können") — an odd term out would not be a pair."""
+    for case in TENSION_CASES:
+        if case.tension_axis == "zerstritten":
+            assert len(case.terms) % 2 == 0
+
+
+def test_tension_axis_summary_separates_contradiction_from_mood():
+    """Hand-built runs where tension tracks disagreement, not sentiment —
+    the summary's gaps must reflect that, not require an LLM call."""
+    runs = [
+        TensionRun("A", "positiv", "einig", mood=5, tension=1),
+        TensionRun("B", "positiv", "zerstritten", mood=4, tension=5),
+        TensionRun("C", "negativ", "einig", mood=1, tension=1),
+        TensionRun("D", "negativ", "zerstritten", mood=2, tension=5),
+    ]
+
+    summary = tension_axis_summary(runs)
+
+    assert summary["einig_avg"] == 1.0
+    assert summary["zerstritten_avg"] == 5.0
+    assert summary["tension_axis_gap"] == 4.0
+    assert summary["positiv_avg"] == summary["negativ_avg"] == 3.0
+    assert summary["mood_axis_gap"] == 0.0
+
+
+def test_tension_axis_summary_reports_spread_per_case():
+    runs = [
+        TensionRun("A", "positiv", "einig", mood=5, tension=1),
+        TensionRun("A", "positiv", "einig", mood=5, tension=2),
+        TensionRun("A", "positiv", "einig", mood=5, tension=1),
+    ]
+
+    summary = tension_axis_summary(runs)
+
+    assert summary["spread_per_case"]["A"] == (1, 2)
+
+
+def test_tension_axis_summary_handles_no_runs():
+    summary = tension_axis_summary([])
+
+    assert summary["einig_avg"] == 0.0
+    assert summary["spread_per_case"] == {}
 
 
 # -- the floor --------------------------------------------------------------
