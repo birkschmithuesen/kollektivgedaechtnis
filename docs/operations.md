@@ -607,6 +607,22 @@ Speicher.
 
 ### Neuer Ausstellungstag
 
+**Vorher die Daten des vergangenen Tages sichern** — der nächste Schritt löscht
+sie. Auf dem vServer (der Ausstellungsrechner hat bewusst keine
+Nextcloud-Zugangsdaten):
+
+```bash
+scripts/sichere-ausstellungstag.sh 2026-09-02 <user>@<ausstellungsrechner>
+```
+
+Das holt `data/` und `dream-data/` per rsync, schiebt sie mit rclone nach
+`Hermes-Agent/RoboCloud/NewBauhaus-2026-Interviews/<tag>/` und prüft mit
+`rclone check` gegen. **Erst wenn „0 differences" bestätigt ist, darf lokal
+gelöscht werden** — diese Aufnahmen gibt es genau einmal. Warum die Nextcloud
+und nicht das Repo: Es ist öffentlich, und echte Interviews sind
+personenbezogene Daten. Kontext im Vault:
+`entities/artesmobiles/projekte/NewBauhaus/stationen/interview-graph-photobooth/`.
+
 Genau das eben beschriebene Verhalten — `dreams.sqlite3` und die Bilder
 überleben jeden Neustart — hat eine Kehrseite: Es gibt sonst nichts, das einen
 Tag vom nächsten trennt. Ohne Eingriff öffnet Tag 2 mit den ~40 Träumen von

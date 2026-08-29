@@ -324,15 +324,69 @@ def test_the_runbook_says_what_a_restart_preserves():
         assert preserved in section
 
 
+def new_festival_day_section() -> str:
+    """Der Abschnitt „Neuer Ausstellungstag" bis zur nächsten Überschrift.
+
+    Bewusst bis zur nächsten `###`-Überschrift statt eines festen
+    Zeichenfensters: Ein `[idx : idx+1200]` bricht, sobald jemand dem
+    Abschnitt einen Absatz voranstellt — genau am 2026-08-29 passiert, als der
+    Sicherungsschritt dazukam. Der Test wurde rot, obwohl die Löschbefehle
+    unverändert dastanden. Ein Fenster misst Textlänge; geprüft werden soll
+    aber, ob der Abschnitt seine Anweisungen enthält.
+    """
+    section = tool2_section()
+    start = section.index("### Neuer Ausstellungstag")
+    rest = section[start + 10 :]
+    end = rest.find("\n### ")
+    return rest if end == -1 else rest[:end]
+
+
 def test_the_runbook_tells_the_operator_how_to_start_a_new_festival_day_empty():
     """Finding 5: nothing else in the design separates one day's evidence
     strip from the next — `dreams.sqlite3` and `images/` both survive a
     restart on purpose (see the test above), so without an explicit runbook
     step, day 2 opens with day 1's dreams still in the strip."""
-    section = tool2_section()
+    section = new_festival_day_section()
 
-    assert "Neuer Ausstellungstag" in section
-    idx = section.index("Neuer Ausstellungstag")
-    nearby = section[idx : idx + 1200]
-    assert "dream-data/dreams.sqlite3" in nearby
-    assert "dream-data/images" in nearby
+    assert "dream-data/dreams.sqlite3" in section
+    assert "dream-data/images" in section
+
+
+def test_the_runbook_says_to_save_the_day_before_wiping_it():
+    """Der Löschbefehl und die Sicherung gehören in DENSELBEN Abschnitt.
+
+    Echte Interviewdaten sind personenbezogen und existieren genau einmal;
+    `rm -rf dream-data/images/` ist unumkehrbar. Stünde die Sicherung
+    woanders im Dokument, läse jemand am Morgen des zweiten Tages nur den
+    Löschbefehl — der Abschnitt heißt schließlich nach dem, was er tun will.
+    """
+    section = new_festival_day_section()
+
+    assert "sichere-ausstellungstag.sh" in section, (
+        "der Abschnitt löscht den Tag, ohne auf die Sicherung zu verweisen"
+    )
+    skript = Path("scripts/sichere-ausstellungstag.sh")
+    assert skript.exists(), "das Runbook nennt ein Sicherungsskript, das es nicht gibt"
+    assert skript.stat().st_mode & 0o111, "das Sicherungsskript ist nicht ausführbar"
+
+    # Die Reihenfolge ist die eigentliche Aussage: erst sichern, dann löschen.
+    assert section.index("sichere-ausstellungstag.sh") < section.index("rm -rf"), (
+        "der Löschbefehl steht vor der Sicherung — am Ausstellungsmorgen liest "
+        "niemand rückwärts"
+    )
+
+
+def test_the_backup_script_verifies_before_anything_may_be_deleted():
+    """`rclone check` ist der Grund, warum das Skript existiert: Ein `copy`
+    ohne Gegenprüfung meldet Erfolg, auch wenn eine Datei fehlt. Erst
+    „0 differences" rechtfertigt ein Löschen."""
+    skript = Path("scripts/sichere-ausstellungstag.sh").read_text(encoding="utf-8")
+
+    assert "rclone check" in skript
+    assert "--one-way" in skript
+    # Das Skript darf NIE selbst löschen — es druckt den Befehl, Birk entscheidet.
+    befehle = [
+        zeile.strip() for zeile in skript.splitlines()
+        if zeile.strip().startswith("rm ")
+    ]
+    assert not befehle, f"das Skript löscht selbst: {befehle}"
