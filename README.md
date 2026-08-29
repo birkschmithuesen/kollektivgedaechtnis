@@ -99,20 +99,28 @@ nicht das Dokument der Bequemlichkeit halber der Annahme angeglichen.
 
 ## Simulation
 
-Die Station lässt sich vollständig ohne Publikum betreiben. `sim/` enthält
-60 **synthetische** Interviews (von einem Sprachmodell erzeugt, keine realen
-Aussagen) und 16 **generierte** Portraits (keine realen Personen) — damit sind
-Wand und Traum reproduzierbar prüfbar, offline und kostenlos.
+Die Station lässt sich vollständig ohne Publikum betreiben. `sim/data/` enthält
+60 **synthetische** Interviews (von `claude-sonnet-5` erzeugt) und 16
+**generierte** Portraits — keine realen Personen, keine realen Aussagen. Details
+und wie man das selbst nachprüft: [`sim/data/README.md`](sim/data/README.md).
+
+Damit sind Wand und Traum reproduzierbar prüfbar, offline und kostenlos.
 
 ```bash
 uv run python -m sim.seed_graph --help        # Graph ohne Modellaufrufe füllen
 uv run python -m sim.dream_calibrate --help   # Kalibrierläufe für Tool 2
 ```
 
+**Echte Interviewdaten gehören nicht in dieses Repo.** Alles, was Menschen vor
+Ort sagen, und jedes Foto bleibt lokal unter `data/` bzw. `dream-data/` — beide
+ignoriert und durch `tests/test_keine_echten_daten_im_repo.py` abgesichert. Für
+die Sicherung echter Ausstellungsdaten ist ein separates **privates** Repo
+vorgesehen.
+
 ## Lizenz
 
 [MIT](LICENSE) — Copyright (c) 2026 Birk Schmithüsen.
 
-Das gilt auch für das Material unter `sim/`: die 60 Interviews sind von einem
-Sprachmodell erzeugt, die 16 Portraits von einem Bildmodell — es sind keine
-realen Personen und keine realen Aussagen darin.
+Gilt für alles in diesem Repo, auch für das Material unter `sim/data/`: Es ist
+maschinell erzeugt und enthält weder reale Personen noch reale Aussagen
+([`sim/data/README.md`](sim/data/README.md)).

@@ -1,11 +1,25 @@
 .venv/
 __pycache__/
 *.pyc
-/data/
-out/
 .env
-sim/data/runs/
+
+# ECHTE Interviewdaten. Alles, was Menschen vor Ort gesagt, und jedes Foto,
+# das sie von sich gemacht haben, bleibt LOKAL (Birk, 2026-08-29) — das Repo
+# ist oeffentlich. Betrifft Transkripte, kg.db, Portraits, den erzeugten
+# Graphen und die Traeume samt Bildern. Wer das sichern will, nimmt ein
+# SEPARATES PRIVATES Repo; hier darf es nie landen.
+/data/
 dream-data/
+out/
+sim/data/runs/
+
+# Die tatsaechlich benutzten Konfigurationen, im Unterschied zu den
+# *.example.toml, die mitlaufen. Sie tragen zwar keine Schluessel (die kommen
+# ausschliesslich aus der Umgebung, kg/config.py + kg2/config.py), aber die
+# Einstellungen der konkreten Aufbauten: telegram_chat_id, die Adressen der
+# Maschinen im Ausstellungsnetz, die Leitfrage des Tages.
+config.toml
+config2.toml
 
 # Auftragsbriefe an delegierte Coding-Agenten (.task-*.md). Bewusst untracked:
 # sie sind Arbeitsmaterial fuer EINEN Auftrag, nicht Projektdokumentation --
