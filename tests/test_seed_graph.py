@@ -112,11 +112,11 @@ def test_seeding_is_deterministic_for_the_same_seed(tmp_path):
         store2.close()
 
 
-def test_min_mentions_setting_is_one(tmp_path):
+def test_max_terms_setting_shows_everything(tmp_path):
     _, db_path = _seed(tmp_path)
     store = Store.open(db_path)
     try:
-        assert store.get_setting("min_mentions", "0") == "1"
+        assert store.get_setting("max_terms", "0") == "999"
     finally:
         store.close()
 

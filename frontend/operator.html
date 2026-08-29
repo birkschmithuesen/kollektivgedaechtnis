@@ -6,18 +6,26 @@
 <link rel="stylesheet" href="static/operator.css">
 <header>
   <span id="stt" class="badge">STT</span>
-  <label>Dichte
-    <!-- Each step gets its term count appended live by operator.js ("2 —
-         geteilt (14)"). The label written here is the base; operator.js keeps
-         it in `data-label` on first render so re-rendering cannot stack
+  <label>Begriffe auf der Wand
+    <!-- Each step gets its resulting term count appended live by operator.js
+         ("32 (32)"). The label written here is the base; operator.js keeps it
+         in `data-label` on first render so re-rendering cannot stack
          suffixes. Why the count is worth the noise: on 2026-08-26, eight
          interviews in, raising the density produced a blank wall and read as
          a broken control — nothing had been said by three people yet. The
-         number says that before the wall goes empty in front of the room. -->
-    <select id="min-mentions">
-      <option value="1">1 — alles</option>
-      <option value="2">2 — geteilt</option>
-      <option value="3">3 — nur häufig</option>
+         number says that before the wall goes empty in front of the room.
+         Replaces the old "Dichte" (min_mentions, a threshold): spec
+         2026-08-29 found that an indirect proxy for the real constraint, how
+         many labels fit on the wall — this is a direct cap on term count,
+         highest-mentioned and newest first (kg/config.py's `default_max_terms`,
+         `frontend/static/graph-model.js`'s selection rule). Step values are a
+         starting proposal (spec §4); the exact numbers get set on site
+         against the real beamer. -->
+    <select id="max-terms">
+      <option value="20">20</option>
+      <option value="32">32</option>
+      <option value="45">45</option>
+      <option value="999">alle</option>
     </select>
   </label>
   <label>Kamera

@@ -1,9 +1,11 @@
 """How many term labels stay legible on the wall — measured, not guessed.
 
-Written 2026-08-29 for the Tool 1 display-dial rebuild: the current dial is
-`min_mentions` ("show terms said by at least N people"), an indirect proxy for
-the real constraint. The real constraint is how many labels fit on a 1920x1080
-projection before they collide or shrink below reading size.
+Written 2026-08-29 for the Tool 1 display-dial rebuild: the dial being
+replaced is `min_mentions` ("show terms said by at least N people"), an
+indirect proxy for the real constraint. The real constraint is how many
+labels fit on a 1920x1080 projection before they collide or shrink below
+reading size — which is what `max_terms`, the cap this probe's numbers argue
+for, targets directly.
 
 Reuses `sim.prerender`'s own server + projection helpers so this measures the
 REAL frontend, not a mock. No LLM, no image generation.
@@ -77,6 +79,26 @@ MEASURE_JS = """
 """
 
 
+def _settle(page) -> None:
+    """Wait for the wall's OWN done-signal, never a fixed sleep.
+
+    The first version of this probe waited 4000 ms after each push. That is
+    long enough most of the time and not long enough some of the time: an
+    fcose relayout plus the camera glide was measured at up to ~3000 ms, and a
+    reading taken mid-animation reports the PREVIOUS frame's zoom. That is how
+    the spec ended up claiming that fewer terms produce smaller type — a
+    frozen camera view from the previous step, not a real measurement.
+
+    `layoutPending === false` is the wall's own statement that it has settled.
+    """
+    page.wait_for_function(
+        "() => window.kgView && window.kgView.layoutPending === false", timeout=60000
+    )
+    # The flag drops when the layout is done; the glide runs after it. One
+    # short settle covers the animation without going back to guessing.
+    page.wait_for_timeout(1500)
+
+
 def main() -> None:
     from playwright.sync_api import sync_playwright
 
@@ -86,16 +108,27 @@ def main() -> None:
         raise SystemExit(1)
 
     rows = []
-    with _served(db) as served:
+    # A scratch copy, not the fixture in place: this probe hides terms by
+    # writing `hidden` flags straight into the database, and a bare
+    # `_served(db)` would leave that mutation behind in `out/sim19c/sim.db`
+    # for the next thing that reads it. Found the hard way (2026-08-29): two
+    # probe runs over the same un-copied file produced an impossible-looking
+    # "identical zoom at two different term counts" result that was actually
+    # the second run reading the first run's leftover state.
+    with _served(db, scratch=REPO / "out" / "_wall_legibility_scratch") as served:
         with sync_playwright() as p:
             browser = _launch_chromium(p)
             page = browser.new_page(viewport={"width": 1920, "height": 1080})
             _open_projection(page, served.base_url, "dark")
-            page.wait_for_timeout(4000)
+            _settle(page)
 
             for cap in CAPS:
                 with served.store.transaction():
-                    served.store.set_setting("min_mentions", "1")
+                    # A large cap, never a small threshold: the exported
+                    # graph's own `max_terms` field is what the client applies
+                    # on every plain graph push (no explicit dial value here),
+                    # so it must not fight the `hidden`-flag capping below.
+                    served.store.set_setting("max_terms", "999")
                     _apply_cap(served.store, cap)
                 served.publish(
                     {
@@ -105,7 +138,7 @@ def main() -> None:
                         ),
                     }
                 )
-                page.wait_for_timeout(4000)
+                _settle(page)
                 r = page.evaluate(MEASURE_JS)
                 r["cap"] = cap
                 rows.append(r)

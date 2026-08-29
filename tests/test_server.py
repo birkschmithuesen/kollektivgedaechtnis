@@ -28,15 +28,30 @@ def test_graph_json_serves_the_current_state(client):
     assert len(data["edges"]) == 1
 
 
-def test_min_mentions_is_persisted_and_reported(client):
-    assert client.post("/api/min_mentions", json={"value": 3}).status_code == 200
-    assert client.get("/api/state").json()["min_mentions"] == 3
-    assert client.store.get_setting("min_mentions", "1") == "3"
+def test_max_terms_is_persisted_and_reported(client):
+    assert client.post("/api/max_terms", json={"value": 45}).status_code == 200
+    assert client.get("/api/state").json()["max_terms"] == 45
+    assert client.store.get_setting("max_terms", "1") == "45"
 
 
-def test_min_mentions_rejects_nonsense(client):
-    assert client.post("/api/min_mentions", json={"value": 0}).status_code == 422
-    assert client.post("/api/min_mentions", json={"value": "viele"}).status_code == 422
+def test_max_terms_rejects_nonsense(client):
+    assert client.post("/api/max_terms", json={"value": 0}).status_code == 422
+    assert client.post("/api/max_terms", json={"value": "viele"}).status_code == 422
+
+
+def test_a_legacy_database_with_min_mentions_set_starts_without_crashing(tmp_path):
+    # Bestandsdatenbank: an old `min_mentions` value must never be read as a
+    # `max_terms` value (spec 2026-08-29 §4) -- it just sits there unused, and
+    # the server falls back to its own default for the new key.
+    cfg = Config(data_dir=tmp_path / "state")
+    store = Store.open(cfg.db_path)
+    store.set_setting("min_mentions", "2")
+    app = create_app(store, cfg, EventBus())
+    with TestClient(app) as legacy_client:
+        state = legacy_client.get("/api/state").json()
+        assert "max_terms" in state
+        assert legacy_client.get("/graph.json").status_code == 200
+    store.close()
 
 
 def test_hiding_sets_the_flag_without_deleting_anything(client):

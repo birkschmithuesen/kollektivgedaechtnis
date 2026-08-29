@@ -268,7 +268,7 @@ def prefix_graph(graph: dict, persons: int) -> dict:
     return {
         "version": graph["version"],
         "generated_at": graph["generated_at"],
-        "min_mentions": graph["min_mentions"],
+        "max_terms": graph.get("max_terms", graph.get("min_mentions", 1)),
         "nodes": list(people) + terms,
         "edges": edges,
         "quotes": [q for q in graph["quotes"] if q.get("person_id") in kept],
@@ -294,7 +294,7 @@ def _synthetic_graph(terms: list[str], persons: int = 6) -> dict:
         for j in range(len(terms))
     ]
     return {
-        "version": 1, "generated_at": 1000.0, "min_mentions": 1,
+        "version": 1, "generated_at": 1000.0, "max_terms": 999,
         "nodes": person_nodes + term_nodes, "edges": edges, "quotes": [],
     }
 

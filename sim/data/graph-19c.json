@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_at": 1787644294.603667,
-  "min_mentions": 1,
+  "max_terms": 32,
   "nodes": [
     {
       "id": "p1",

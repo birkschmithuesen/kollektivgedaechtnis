@@ -17,8 +17,10 @@ from kg.export import build_graph, write_graph_json
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
 
-class MinMentions(BaseModel):
-    value: int = Field(ge=1, le=10)
+class MaxTerms(BaseModel):
+    # Upper bound generous enough to mean "alle" on any exhibition-scale
+    # graph without needing a separate sentinel value (spec §4).
+    value: int = Field(ge=1, le=1000)
 
 
 class HiddenFlag(BaseModel):
@@ -58,7 +60,7 @@ class Positions(BaseModel):
 def current_state(store) -> dict:
     person = store.open_person()
     return {
-        "min_mentions": int(store.get_setting("min_mentions", "1")),
+        "max_terms": int(store.get_setting("max_terms", "1")),
         "camera_mode": store.get_setting("camera_mode", "fit"),
         # D4 (Birk, 2026-08-19): the wall opens on the whole net; zoom is set
         # on site. The Camera component has always supported a zoom factor,
@@ -113,9 +115,9 @@ def create_app(store, cfg, bus) -> FastAPI:
     def api_state() -> dict:
         return current_state(store)
 
-    @app.post("/api/min_mentions")
-    def api_min_mentions(payload: MinMentions) -> dict:
-        store.set_setting("min_mentions", str(payload.value))
+    @app.post("/api/max_terms")
+    def api_max_terms(payload: MaxTerms) -> dict:
+        store.set_setting("max_terms", str(payload.value))
         broadcast_state(store, bus)
         broadcast_graph(store, cfg, bus)
         return {"ok": True}

@@ -1,23 +1,24 @@
 import pytest
 
 GRAPH = {
-    "min_mentions": 1,
+    "max_terms": 2,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "created_at": 2},
         {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 2, "hidden": False, "created_at": 3},
         {"id": "t2", "type": "term", "label": "Unfug", "mentions": 1, "hidden": True, "created_at": 4},
-        # Below the dial and NOT hidden: the wall is filtering it out, so the
+        # Below the cap and NOT hidden: the wall is filtering it out, so the
         # list must not offer a hide button that would change nothing on screen.
         {"id": "t3", "type": "term", "label": "Aussenwand", "mentions": 1, "hidden": False, "created_at": 5},
-        # Above the dial, sorts before "Holzbau" only under alphabetical order —
-        # newest-first would put it last, so this pins the sort direction.
+        # Above the cap: the most-mentioned term, so it always wins a slot.
         {"id": "t4", "type": "term", "label": "Ziegel", "mentions": 3, "hidden": False, "created_at": 6},
     ],
     "edges": [],
     "quotes": [{"id": "q1", "person_id": "p1", "text": "Wir bauen zu viel."}],
 }
+# max_terms=2: ranked by mentions then recency, only Ziegel (3) and Holzbau (2)
+# make the cut. Aussenwand (1 mention) is below it; Unfug is hidden regardless.
 STATE = {
-    "min_mentions": 2,
+    "max_terms": 2,
     "camera_mode": "pan",
     "camera_zoom": 2,
     "stt_connected": True,
@@ -47,35 +48,35 @@ def ui(page, static_server):
 
 def test_entries_are_listed_alphabetically_with_one_hide_button_each(ui):
     labels = ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)")
-    # "Aussenwand" (1 mention, visible) is below the dial at min_mentions=2 and
-    # is therefore absent; the rest is A-Z, not newest-first.
+    # "Aussenwand" (1 mention, visible) is below the cap at max_terms=2 and is
+    # therefore absent; the rest is A-Z, not newest-first.
     assert labels == ["Holzbau", "Unfug", "Ziegel"]
     assert ui.eval_on_selector_all(".entry button.hide", "els => els.length") == 3
     assert ui.eval_on_selector_all(".entry button", "els => els.length") == 3  # no approve/edit
 
 
-def test_terms_below_the_dial_are_not_listed(ui):
+def test_terms_below_the_cap_are_not_listed(ui):
     """The list offers an action only where the action is visible on the wall."""
     assert ui.eval_on_selector_all("#entry-t3", "els => els.length") == 0
 
 
-def test_a_hidden_term_below_the_dial_still_offers_the_way_back(ui):
+def test_a_hidden_term_below_the_cap_still_offers_the_way_back(ui):
     """The exhibition's only undo must never disappear.
 
-    `t2` is hidden AND sits below the dial (1 mention at min_mentions=2).
+    `t2` is hidden AND sits below the cap (1 mention at max_terms=2).
     Filtering it out the way the wall does would strand it: hidden forever,
     with no row left to click "einblenden" on.
     """
     assert ui.eval_on_selector("#entry-t2 button.hide", "el => el.textContent") == "einblenden"
 
 
-def test_raising_the_dial_shortens_the_list(ui):
+def test_lowering_the_cap_shortens_the_list(ui):
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])",
-        [GRAPH, {**STATE, "min_mentions": 3}],
+        [GRAPH, {**STATE, "max_terms": 1}],
     )
     labels = ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)")
-    # Only "Ziegel" (3) clears the dial; "Unfug" stays because it is hidden.
+    # Only "Ziegel" (3 mentions) clears a cap of 1; "Unfug" stays because it is hidden.
     assert labels == ["Unfug", "Ziegel"]
 
 
@@ -90,13 +91,36 @@ def test_clicking_hide_posts_the_flag(ui):
 
 
 def test_the_density_dial_reflects_state_and_posts_changes(ui):
-    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
-    ui.select_option("#min-mentions", "3")
-    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/min_mentions", {"value": 3}]
+    # A real option value this time (20/32/45/999 are the markup's own),
+    # independent of the small GRAPH fixture's own content above.
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "max_terms": 32}])
+    assert ui.eval_on_selector("#max-terms", "el => el.value") == "32"
+    ui.select_option("#max-terms", "45")
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/max_terms", {"value": 45}]
+
+
+def _term_node(i, created_at, mentions=1, hidden=False):
+    return {
+        "id": f"c{i}",
+        "type": "term",
+        "label": f"Begriff {i:03d}",
+        "mentions": mentions,
+        "hidden": hidden,
+        "created_at": created_at,
+    }
+
+
+def _counts_graph(term_count):
+    return {
+        "max_terms": 32,
+        "nodes": [_term_node(i, created_at=i) for i in range(term_count)],
+        "edges": [],
+        "quotes": [],
+    }
 
 
 def _density_options(ui):
-    return ui.eval_on_selector_all("#min-mentions option", "els => els.map(e => e.textContent)")
+    return ui.eval_on_selector_all("#max-terms option", "els => els.map(e => e.textContent)")
 
 
 def test_each_density_step_says_how_many_terms_it_would_leave_on_the_wall(ui):
@@ -108,31 +132,36 @@ def test_each_density_step_says_how_many_terms_it_would_leave_on_the_wall(ui):
     count turns a dead-looking step into an honest statement about the graph,
     and that has to survive the move to the operator laptop.
 
-    Counted the way the wall counts: hidden terms are not on it, so `Unfug`
-    (hidden, 1 mention) is in no step. `Aussenwand` (1), `Holzbau` (2) and
-    `Ziegel` (3) are.
+    25 unhidden terms: below every step but "20", so "20" alone differs from
+    the rest — the case worth pinning is that a cap the graph has not grown
+    into yet reports the graph's REAL size, not the cap number itself.
     """
-    assert _density_options(ui) == ["1 — alles (3)", "2 — geteilt (2)", "3 — nur häufig (1)"]
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(25), {**STATE, "max_terms": 32}]
+    )
+    assert _density_options(ui) == ["20 (20)", "32 (25)", "45 (25)", "alle (25)"]
 
 
 def test_the_counts_follow_every_graph_push(ui):
-    """A step that is empty now may have something behind it a minute later."""
-    grown = {
-        **GRAPH,
-        "nodes": GRAPH["nodes"]
-        + [{"id": "t5", "type": "term", "label": "Dämmung", "mentions": 3, "hidden": False, "created_at": 7}],
-    }
-    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [grown, STATE])
-    assert _density_options(ui) == ["1 — alles (4)", "2 — geteilt (3)", "3 — nur häufig (2)"]
+    """A step that reads the same as a smaller one now may differ a minute later."""
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(25), {**STATE, "max_terms": 32}]
+    )
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(26), {**STATE, "max_terms": 32}]
+    )
+    assert _density_options(ui) == ["20 (20)", "32 (26)", "45 (26)", "alle (26)"]
 
 
-def test_a_step_that_would_empty_the_wall_says_so_before_it_is_chosen(ui):
-    """The blank-wall case itself: the step stays selectable — the graph may
-    grow into it — but it no longer lies about what is behind it."""
-    early = {**GRAPH, "nodes": [n for n in GRAPH["nodes"] if n["id"] != "t4"]}
-    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [early, STATE])
-    assert _density_options(ui) == ["1 — alles (2)", "2 — geteilt (1)", "3 — nur häufig (0)"]
-    assert ui.eval_on_selector_all("#min-mentions option[disabled]", "els => els.length") == 0
+def test_early_steps_honestly_report_the_graph_the_wall_has_not_grown_into_yet(ui):
+    """The step stays selectable — the graph may grow into it — but it never
+    lies about what is behind it. Every step reading the same small number
+    is correct, not broken, and none of them may be disabled for it."""
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(5), {**STATE, "max_terms": 32}]
+    )
+    assert _density_options(ui) == ["20 (5)", "32 (5)", "45 (5)", "alle (5)"]
+    assert ui.eval_on_selector_all("#max-terms option[disabled]", "els => els.length") == 0
 
 
 def test_the_camera_switch_reflects_state_and_posts_changes(ui):
@@ -271,17 +300,18 @@ def test_stt_connection_state_is_visible(ui):
 
 
 def test_a_rejected_fetch_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "max_terms": 32}])
     warnings = []
     ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
     ui.evaluate("window.fetch = () => Promise.reject(new Error('network down')); void 0;")
 
-    ui.select_option("#min-mentions", "3")
-    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+    ui.select_option("#max-terms", "45")
+    assert ui.eval_on_selector("#max-terms", "el => el.value") == "32"
 
     ui.select_option("#camera", "fit")
     assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
 
-    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/max_terms" in w for w in warnings)
     assert any("api/camera" in w for w in warnings)
 
     # The page keeps working afterwards: a subsequent request still fires normally.
@@ -294,6 +324,7 @@ def test_a_rejected_fetch_reverts_the_dial_and_camera_and_the_page_keeps_working
 
 
 def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_working(ui):
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "max_terms": 32}])
     warnings = []
     ui.on("console", lambda msg: warnings.append(msg.text) if msg.type == "warning" else None)
     ui.evaluate(
@@ -301,18 +332,21 @@ def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_workin
         " json: () => Promise.resolve({})}); void 0;"
     )
 
-    ui.select_option("#min-mentions", "3")
-    assert ui.eval_on_selector("#min-mentions", "el => el.value") == "2"
+    ui.select_option("#max-terms", "45")
+    assert ui.eval_on_selector("#max-terms", "el => el.value") == "32"
 
     ui.select_option("#camera", "fit")
     assert ui.eval_on_selector("#camera", "el => el.value") == "pan"
 
-    assert any("api/min_mentions" in w for w in warnings)
+    assert any("api/max_terms" in w for w in warnings)
     assert any("api/camera" in w for w in warnings)
 
     # The page keeps working afterwards: the hide list still re-renders and a
-    # subsequent request still fires normally.
+    # subsequent request still fires normally. All four terms qualify at
+    # max_terms=32 -- this test rendered with that cap so the select's value
+    # would match a real option (see the render() call at the top).
     assert ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)") == [
+        "Aussenwand",
         "Holzbau",
         "Unfug",
         "Ziegel",

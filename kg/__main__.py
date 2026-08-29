@@ -150,9 +150,12 @@ async def main_async(args) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     store = Store.open(cfg.db_path)
-    # Apply the calibrated start density on a fresh database. On a restart the
+    # Apply the calibrated start cap on a fresh database. On a restart the
     # operator's live setting is already stored and must win (spec 7, 10.5).
-    store.set_setting_default("min_mentions", str(cfg.default_min_mentions))
+    # A distinct setting key from the retired `min_mentions` on purpose: an
+    # existing database that still carries `min_mentions` must never have that
+    # value read as `max_terms` (spec 2026-08-29 §4).
+    store.set_setting_default("max_terms", str(cfg.default_max_terms))
     # Same contract for the camera: a fresh station opens roaming (2026-08-26),
     # a restarted one comes back exactly as the operator left it.
     store.set_setting_default("camera_mode", cfg.default_camera_mode)

@@ -1,5 +1,7 @@
 // One action per entry: hide. No approving, no editing, no queue (spec 8).
 
+import { selectVisibleTermIds } from './graph-model.js';
+
 // The last graph/state a render() call actually received — from the server,
 // via /events, not merely attempted. post() reverts to these on failure, so
 // this is the exhibition's only feedback for a control the server never
@@ -7,7 +9,7 @@
 // snapping back to the truth.
 let lastGraph = { nodes: [], edges: [], quotes: [] };
 let lastState = {
-  min_mentions: 1,
+  max_terms: 32,
   camera_mode: 'fit',
   camera_zoom: 1,
   camera_speed: 1,
@@ -61,25 +63,30 @@ function entryRow(node) {
   return item;
 }
 
-/** Append to each density step how many terms it would leave on the wall.
+/** Append to each cap step how many terms it would actually leave on the wall.
  *
  * The count used to sit on the touchscreen's own density buttons; it followed
  * the dial here when the visitor controls lost it (2026-08-26), because the
  * knowledge behind it must not be lost with them: a step with nothing behind
  * it empties the wall and reads as a broken control unless it says so first.
+ * Also catches the case a plain cap number cannot show on its own: "alle"
+ * (999) on a graph with only 14 terms still says "alle (14)", not "alle
+ * (999)".
  *
  * Counted the way the wall counts — hidden terms are not on it, so they are in
  * no step. Deliberately not the operator list's own rule below, which keeps
  * hidden entries so "einblenden" stays reachable; that is a different question
- * from "what would the room see". */
+ * from "what would the room see". Same selection rule the wall itself applies
+ * (`graph-model.js`), so the number is never a different count than what a
+ * visitor would actually see at that step. */
 function showDensityCounts(graph) {
-  const terms = (graph.nodes || []).filter((node) => node.type === 'term' && !node.hidden);
-  for (const option of document.getElementById('min-mentions').options) {
+  const terms = (graph.nodes || []).filter((node) => node.type === 'term');
+  for (const option of document.getElementById('max-terms').options) {
     // The markup's text is the base label. Cached on first pass so a second
     // render appends to the label, not to the label plus its last count.
     if (option.dataset.label === undefined) option.dataset.label = option.textContent;
-    const threshold = Number(option.value);
-    const count = terms.filter((term) => (term.mentions || 0) >= threshold).length;
+    const cap = Number(option.value);
+    const count = selectVisibleTermIds(terms, cap).size;
     option.textContent = `${option.dataset.label} (${count})`;
   }
 }
@@ -88,7 +95,7 @@ function render(graph, state) {
   lastGraph = graph;
   lastState = state;
 
-  document.getElementById('min-mentions').value = String(state.min_mentions);
+  document.getElementById('max-terms').value = String(state.max_terms);
   showDensityCounts(graph);
   document.getElementById('camera').value = state.camera_mode;
   document.getElementById('camera-zoom').value = String(state.camera_zoom ?? 1);
@@ -102,15 +109,18 @@ function render(graph, state) {
 
   const list = document.getElementById('entries');
   list.replaceChildren();
-  // Same density threshold the wall applies, so the list offers an action only
-  // where that action has a visible effect. Deliberately NOT visibleGraph():
-  // that one also drops hidden nodes, which is right for the wall and fatal
-  // here — the hidden entry IS the way back, and a list that dropped it would
-  // make "ausblenden" a one-way door with no matching "einblenden".
-  const threshold = Math.max(1, Number(state.min_mentions) || 1);
-  graph.nodes
-    .filter((node) => node.type === 'term')
-    .filter((node) => node.hidden || (node.mentions || 0) >= threshold)
+  // Same cap the wall applies, so the list offers an action only where that
+  // action has a visible effect. Deliberately NOT visibleGraph(): that one
+  // also drops hidden nodes, which is right for the wall and fatal here — the
+  // hidden entry IS the way back, and a list that dropped it would make
+  // "ausblenden" a one-way door with no matching "einblenden". Also
+  // deliberately without the wall's own hysteresis grace list: this list
+  // answers "what would the cap alone show", not "what does the wall happen
+  // to still be holding onto right now".
+  const terms = graph.nodes.filter((node) => node.type === 'term');
+  const visibleTermIds = selectVisibleTermIds(terms, state.max_terms);
+  terms
+    .filter((node) => node.hidden || visibleTermIds.has(node.id))
     .sort((a, b) => a.label.localeCompare(b.label, 'de'))
     .forEach((node) => list.appendChild(entryRow(node)));
 }
@@ -135,8 +145,8 @@ function showZoomValue(factor) {
     `${value.toFixed(2).replace('.', ',')}×${hint}`;
 }
 
-document.getElementById('min-mentions').addEventListener('change', (event) =>
-  post('/api/min_mentions', { value: Number(event.target.value) }),
+document.getElementById('max-terms').addEventListener('change', (event) =>
+  post('/api/max_terms', { value: Number(event.target.value) }),
 );
 document.getElementById('camera').addEventListener('change', (event) =>
   post('/api/camera', { mode: event.target.value }),
@@ -178,7 +188,7 @@ window.kgOperator = { render, showTranscript };
 
 let graph = { nodes: [], edges: [], quotes: [] };
 let state = {
-  min_mentions: 1,
+  max_terms: 32,
   camera_mode: 'fit',
   camera_zoom: 1,
   camera_speed: 1,

@@ -56,11 +56,14 @@ llm_effort = "high"
 embedding_model = "openai/text-embedding-3-small"
 embedding_url = "https://openrouter.ai/api/v1/embeddings"
 
-# Display filter start value; the operator dial changes it at runtime (spec 7).
-# Run 19c (60 interviews, name lock D5 + merge_neighbours 12): 163 terms, 114 of
-# them said by exactly one person. At 1 the wall drowns the shared concepts in
-# singletons; at 2 it shows 49 terms, every one genuinely shared; at 3, 26.
-default_min_mentions = 2
+# Display cap start value: how many term labels may be on the wall at once,
+# the operator dial changes it at runtime (spec 2026-08-29). Replaces the old
+# `default_min_mentions` (a mention-count threshold) -- that was an indirect
+# proxy for the real constraint, how many labels fit before they collide or
+# shrink below reading size. Run 19c (60 interviews): 163 terms produced 56
+# label collisions unfiltered; a cap of 32 measured 2 collisions and ~14.7px
+# type on a 1920x1080 projection (docs/operations.md has the full table).
+default_max_terms = 32
 
 server_host = "127.0.0.1"
 server_port = 8800

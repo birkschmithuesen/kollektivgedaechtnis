@@ -2,7 +2,7 @@
 
 The load-bearing property under test is an isolation one: touching the
 touchscreen must NOT change what surface C in the plenary room is doing.
-Both `camera_mode` and `min_mentions` are global state pushed over SSE, so the
+Both `camera_mode` and `max_terms` are global state pushed over SSE, so the
 only safe design is a LOCAL override that never posts — and that is exactly
 what can silently regress into "just POST it" during a later refactor.
 
@@ -153,7 +153,7 @@ def test_touching_the_graph_still_counts_as_navigating(touch):
 
 TOUCH_GRAPH = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 1,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 100, "y": 100},
         # Mentioned once, so it is on the wall at density 1 and gone at any
@@ -189,7 +189,7 @@ def _press_every_visitor_control(page):
 def test_no_control_a_visitor_can_press_reaches_the_server(surface_a):
     """A guest in the foyer has no mandate for the plenary room.
 
-    Until 2026-08-26 the density buttons posted `/api/min_mentions`, which is
+    Until 2026-08-26 the density buttons posted `/api/max_terms`, which is
     global state: one finger on the touchscreen changed what surface C showed
     to a seated audience. Whatever the bar offers now, none of it may leave
     this browser — pressed one after another, the whole bar stays silent.

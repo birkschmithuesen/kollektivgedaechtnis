@@ -34,7 +34,7 @@ def build_state(cfg):
     store.add_edge(person.id, term.id, created_at=111.0)
     store.add_quote(person.id, "Wir bauen zu viel Neues.", created_at=112.0)
     store.save_positions({person.id: (12.0, -8.0), term.id: (40.0, 3.0)})
-    store.set_setting("min_mentions", "2")
+    store.set_setting("max_terms", "45")
     store.set_setting("camera_mode", "pan")
     store.close_person(person.id, stopped_at=160.0, reason="text")
     return store
@@ -52,7 +52,7 @@ def test_full_state_including_positions_survives_a_restart(tmp_path):
     assert after["nodes"] == before["nodes"]
     assert after["edges"] == before["edges"]
     assert after["quotes"] == before["quotes"]
-    assert after["min_mentions"] == 2
+    assert after["max_terms"] == 45
     assert reopened.get_setting("camera_mode", "fit") == "pan"
     reopened.close()
 
@@ -151,14 +151,14 @@ async def test_a_dead_stt_server_is_visible_but_not_fatal(tmp_path):
 
 def test_the_operators_live_settings_win_over_the_configured_defaults(tmp_path):
     """A restart must not reset the dial the operator turned (spec §7, §10.5)."""
-    cfg = Config(data_dir=tmp_path / "state", default_min_mentions=2)
+    cfg = Config(data_dir=tmp_path / "state", default_max_terms=32)
     store = Store.open(cfg.db_path)
-    store.set_setting_default("min_mentions", str(cfg.default_min_mentions))
-    store.set_setting("min_mentions", "3")  # operator opened it up during the day
+    store.set_setting_default("max_terms", str(cfg.default_max_terms))
+    store.set_setting("max_terms", "45")  # operator opened it up during the day
     store.close()
 
     reopened = Store.open(cfg.db_path)
-    reopened.set_setting_default("min_mentions", str(cfg.default_min_mentions))
+    reopened.set_setting_default("max_terms", str(cfg.default_max_terms))
 
-    assert reopened.get_setting("min_mentions", "1") == "3"
+    assert reopened.get_setting("max_terms", "1") == "45"
     reopened.close()

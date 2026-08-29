@@ -43,7 +43,14 @@ class Config:
     # explicitly fine here; the cache makes re-runs free and offline.
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_url: str = "https://openrouter.ai/api/v1/embeddings"
-    default_min_mentions: int = 1
+    # Replaces the old `default_min_mentions` (a threshold on mention count):
+    # spec 2026-08-29 found the threshold an indirect proxy for the real
+    # constraint, how many term labels fit on the wall before they collide or
+    # shrink below reading size. This is a direct cap on term count instead —
+    # a different setting, not a reinterpretation, so an existing database's
+    # `min_mentions` value is never read as a `max_terms` value (kg/store.py
+    # seeds this key fresh via set_setting_default, spec §4/§6).
+    default_max_terms: int = 32
     # The mode the wall opens in on a FRESH database. D4 (2026-08-19) opened on
     # the whole net; revised 2026-08-26 (Birk) once the automatic traversal
     # stopped being a sideways slide and became a tour from term to term —
@@ -105,7 +112,7 @@ _FIELD_NAMES = {
     "llm_max_tokens",
     "embedding_model",
     "embedding_url",
-    "default_min_mentions",
+    "default_max_terms",
     "default_camera_mode",
     "portrait_size",
     "server_host",

@@ -58,14 +58,28 @@ def test_hidden_entries_are_exported_with_the_flag_not_removed(store):
     assert len(graph["edges"]) == 3
 
 
-def test_min_mentions_is_reported_but_not_applied(store):
+def test_max_terms_is_reported_but_not_applied(store):
     seed(store)
-    store.set_setting("min_mentions", "2")
+    store.set_setting("max_terms", "2")
 
     graph = build_graph(store)
 
-    assert graph["min_mentions"] == 2
-    assert len(graph["nodes"]) == 4  # filtering happens in the consumer
+    assert graph["max_terms"] == 2
+    assert len(graph["nodes"]) == 4  # filtering happens in the consumer, never in the export
+
+
+def test_export_contains_every_term_regardless_of_the_cap(store):
+    """The most important test in this module (spec 2026-08-29 §5): Tool 2
+    reads graph.json and applies its own budget, so the wall's display cap
+    must never remove a term from the export, no matter how low it is set."""
+    seed(store)
+    store.set_setting("max_terms", "1")
+
+    graph = build_graph(store)
+
+    term_ids = {n["id"] for n in graph["nodes"] if n["type"] == "term"}
+    assert term_ids == {t.id for t in store.list_terms()}
+    assert len(term_ids) == 2
 
 
 def test_write_is_atomic_and_leaves_valid_json(store, tmp_path):

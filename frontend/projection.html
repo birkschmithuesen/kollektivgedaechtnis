@@ -122,9 +122,9 @@
         quotes.setGraph(payload.graph);
         window.kgReady = true;
       } else if (payload.type === 'state') {
-        // The operator's density applies to every surface, touchscreen
+        // The operator's term cap applies to every surface, touchscreen
         // included — it just has no counterpart to reflect there any more.
-        view.setMinMentions(payload.state.min_mentions);
+        view.setMaxTerms(payload.state.max_terms);
         // Route the operator's mode through the autonomy guard on the touch
         // surface: applying it directly would snatch the view away from a
         // visitor mid-gesture. Everywhere else it applies immediately.

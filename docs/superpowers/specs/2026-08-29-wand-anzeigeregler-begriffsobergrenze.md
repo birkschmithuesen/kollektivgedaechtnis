@@ -29,47 +29,64 @@ Echtes Frontend, `out/sim19c/sim.db` (60 Personen, 163 Begriffe), Chromium
 | `min_mentions` | Begriffe | Schrift px | Label-Kollisionen | Labels auf Portraits |
 |---|---|---|---|---|
 | 1 (Standard) | **163** | 16,1 | **56** | **51** |
-| 2 | 49 | **4,0** | 0 | 0 |
+| 2 | 49 | 4,0 ⚠️ | 0 | 0 |
 | 3 | 26 | 11,5 | 0 | 0 |
 | 4 | 16 | 16,8 | 0 | 0 |
 
-Drei Befunde:
+⚠️ **Die Schriftgrößen-Spalte dieser Tabelle ist unzuverlässig** (erkannt
+2026-08-29 bei der Nachprüfung, §7). Der Messlauf öffnete die Fixture-Datenbank
+in place statt über eine Scratch-Kopie und wartete eine feste Zeit statt auf das
+Fertig-Signal des Layouts — dadurch konnte eine eingefrorene Kamera-Ansicht aus
+einem vorherigen Lauf mitgemessen werden. Die saubere Wiederholung ergibt für
+`min_mentions=2` **9,5 px** statt 4,0 px. Die Spalten **Begriffe,
+Label-Kollisionen und Labels auf Portraits sind davon nicht betroffen** — sie
+zählen den Zustand des Graphen, nicht die Kamera, und tragen den Befund unten.
+
+Zwei Befunde:
 
 1. **Der Standardwert produziert eine unlesbare Wand.** Bei 60 Personen und
    `min_mentions=1` überlappen 56 Label-Paare, 51 Labels liegen auf
    Portraits. Am Ausstellungstag tritt das ab etwa 40 Interviews ein.
+   **Das ist der tragende Befund dieser Spec.**
 2. **Der Regler springt zu grob.** Ein Klick von 1 auf 2 wirft 114 von 163
    Begriffen weg — zwei Drittel der Wand.
-3. **Er tut nicht verlässlich, wofür er da ist.** Bei `min_mentions=2` sind es
-   weniger Begriffe, aber die Schrift ist mit **4 px kleiner** als bei 163
-   Begriffen (16 px): Die Kamera zoomt heraus, weil die verbliebenen Begriffe
-   weit gestreut liegen. Weniger Begriffe ≠ bessere Lesbarkeit.
+
+Ein dritter Befund stand hier ursprünglich („weniger Begriffe ergeben kleinere
+Schrift, die Kamera zoomt heraus") und ist **widerlegt** — siehe §7. Er wird
+bewusst nicht stillschweigend gelöscht: Er war das Argument, das am
+plausibelsten klang und am wenigsten geprüft war.
 
 **Die vorgeschlagene Regel** (Obergrenze, stärkste Begriffe zuerst; gemessen
-mit denselben 60 Personen):
+mit denselben 60 Personen). Diese Tabelle ist am 2026-08-29 **sauber
+nachgemessen** worden — Scratch-Kopie der Datenbank, Wartezeit auf das
+`layoutPending`-Signal statt auf die Uhr:
 
 | Obergrenze | Schrift px | Label-Kollisionen | Labels auf Portraits | Fläche |
 |---|---|---|---|---|
-| 20 | 16,5 | 1 | 4 | 8,9 % |
-| 26 | 13,0 | 2 | 9 | 8,7 % |
-| 32 | 14,7 | 2 | 3 | 11,9 % |
-| 40 | 14,3 | 1 | 7 | 14,6 % |
-| 49 | 12,4 | 5 | 7 | 15,1 % |
-| 60 | 10,3 | 1 | 2 | 15,5 % |
+| 20 | 17,2 | 0 | 0 | 9,3 % |
+| 26 | 15,8 | 0 | 0 | 10,6 % |
+| 32 | 13,8 | 0 | 0 | 11,1 % |
+| 40 | 12,5 | 0 | 0 | 12,7 % |
+| 49 | 10,0 | 0 | 0 | 12,2 % |
+| 60 | 7,5 | 0 | 0 | 11,2 % |
 
-Der Unterschied zum heutigen Regler ist deutlich: **Über den ganzen Bereich
-bleiben die Kollisionen einstellig** (1–5 statt 56), weil die Kamera bei einer
-gedeckelten, dichteren Auswahl nicht so weit herauszoomen muss. Die Schrift
-sinkt gleichmäßig von 16,5 px auf 10,3 px, statt zu springen.
+Der Unterschied zum heutigen Regler ist eindeutig: **Über den ganzen Bereich
+bis 60 Begriffe gibt es keine einzige Kollision** — gegenüber 56 Label-Paaren
+und 51 Labels auf Portraits beim Standardwert `min_mentions=1`. Die Schrift
+sinkt gleichmäßig und vorhersagbar von 17,2 px auf 7,5 px, statt zu springen.
+Die Obergrenze ist damit ein Regler, der genau eine Größe steuert: die
+Lesbarkeit.
 
 **Umrechnung auf die Wand** (65″, 16:9 → 144 cm Bildbreite, 1920 px):
 
-| Schrift px | Versalhöhe | lesbar bis ca. |
-|---|---|---|
-| 10,3 | 5,4 mm | 1,4 m |
-| 12,4 | 6,5 mm | 1,6 m |
-| 14,3 | 7,5 mm | 1,9 m |
-| 16,5 | 8,7 mm | 2,2 m |
+| Obergrenze | Schrift px | Versalhöhe | lesbar bis ca. |
+|---|---|---|---|
+| 20 | 17,2 | 9,0 mm | 2,3 m |
+| 26 | 15,8 | 8,3 mm | 2,1 m |
+| 32 | 13,8 | 7,2 mm | 1,8 m |
+| 40 | 12,5 | 6,6 mm | 1,6 m |
+| 49 | 10,0 | 5,2 mm | 1,3 m |
+| 60 | 7,5 | 3,9 mm | 1,0 m |
 
 ⚠️ Diese Umrechnung ist **eine Abschätzung** (Faustregel ~1 mm Versalhöhe pro
 2,5 m Lesedistanz) und setzt eine 65″-Fläche voraus. Die tatsächliche
@@ -155,14 +172,38 @@ gelöscht** — Löschungen entscheidet Birk.
 
 ## 7. Offene Punkte für die Umsetzung
 
-- **Flackern beim Übergang.** Wenn ein Begriff die Obergrenze verlässt,
-  verschwindet er von der Wand; kommt eine Nennung dazu, kehrt er zurück. Bei
-  Begriffen an der Grenze kann das hin- und herspringen. Eine Hysterese (ein
-  ausgeblendeter Begriff kehrt erst zurück, wenn er deutlich über der Grenze
-  liegt) oder eine Mindeststandzeit wäre zu prüfen. **Messen, nicht raten.**
-- **Der Zoom-Effekt aus §2, Befund 3** ist nicht verstanden: Warum wird die
-  Schrift bei *weniger* Begriffen kleiner? Vermutung: Die Kamera rahmt alle
-  sichtbaren Knoten ein, und verstreute Begriffe zwingen zu mehr Abstand. Falls
-  das stimmt, hilft die Obergrenze doppelt — sie hält die Auswahl auch
-  räumlich dichter. **Vor dem Bauen verifizieren.**
+- **Flackern beim Übergang — gemessen (2026-08-29).** `sim.dream_calibrate.prefix_graph`
+  über die 60 Interviews von Lauf 19c, Auswahlregel bei jedem Schritt neu
+  angewendet: **3,5 bis 5,2 Sichtbarkeits-Wechsel pro Interview**, über den
+  ganzen getesteten Obergrenzen-Bereich (20/32/45/60) — deutlich über der
+  Schwelle "selten" (< 1 pro Interview). Der größte Teil davon ist normale
+  Fluktuation durch neue Einmal-Nennungen (Median-Abstand zwischen
+  wiederholten Wechseln eines Begriffs: 7 Interviews), aber echtes
+  Sofort-Zucken (ein Begriff verschwindet und kehrt im **nächsten** Interview
+  zurück) kam mit rund 0,3 Fällen pro Interview trotzdem vor. Eine reine
+  Rang-Hysterese (Puffer, wie weit ein Begriff die Grenze unterschreiten muss)
+  half kaum (bei Obergrenze 32: 4,42 → 2,80 Wechsel/Schritt selbst mit einem
+  Puffer von 15) — der Rang eines Einmal-Begriffs sinkt strukturell mit jedem
+  neuen Konkurrenten und erholt sich nie von selbst, das kann ein Puffer nicht
+  auffangen. **Gebaut: eine Mindeststandzeit** von 3 Graph-Aktualisierungen
+  (`MIN_STAND_REVISIONS`, `frontend/static/projection.js`) — ein einmal
+  gezeigter Begriff bleibt mindestens so lange sichtbar, unabhängig vom Rang,
+  außer der Operator ändert die Obergrenze selbst (das wirkt sofort, ohne
+  Rücksicht auf fremde Standzeiten). Das trifft die Aufgabe direkter als ein
+  Rangpuffer, weil es weder das Ersterscheinen verzögert noch veraltete
+  Einmal-Nennungen unnötig festhält.
+- **Der Zoom-Effekt aus §2, Befund 3 — geklärt, nicht bestätigt (2026-08-29).**
+  Die Vermutung (Kamera rahmt alle sichtbaren Knoten ein, verstreute Begriffe
+  zwingen zu mehr Abstand) wurde mit einer sauberen, isolierten Messung
+  **nicht bestätigt**: `min_mentions=1` (163 Begriffe) settelte bei 3,9 px
+  Schrift / Zoom 0,4191, `min_mentions=2` (49 Begriffe) bei 9,5 px / Zoom
+  0,6563 — die erwartete Richtung (weniger Begriffe → größere Schrift), nicht
+  die in §2 berichtete. Der wahrscheinlichste Grund für die widersprüchliche
+  Originalzahl: die Messung lief ohne Scratch-Kopie der Datenbank
+  (`sim.prerender._served(db)` ohne `scratch=`) und mit fester Wartezeit statt
+  auf das echte Fertig-Signal (`layoutPending === false`) — beides Fallen, in
+  die ein Nachbau-Versuch selbst zunächst hineinlief (siehe
+  `sim/probes/wall_legibility.py`, jetzt mit Scratch-Kopie). Die Obergrenzen-
+  Idee steht trotzdem: Das eigentliche, unabhängig gemessene Problem (163
+  Begriffe → 56 Label-Kollisionen, §2 Befund 1) ist davon unberührt.
 - Die Stufenwerte des Reglers (§4) vor Ort am echten Beamer festlegen.

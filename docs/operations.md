@@ -162,17 +162,77 @@ zwei offene Interviews geben.
 
 Alle sitzen im Operator-Fenster und wirken sofort auf den gesamten Bestand.
 
-**Dichte** — 1 = alles, 2 = nur Geteiltes, 3 = nur Häufiges. Reiner
-Anzeigefilter: verwirft nichts, jederzeit umkehrbar. Startwert 2, siehe unten.
-„Geteilt" heißt **von mindestens N verschiedenen Menschen genannt**, nicht
-N-mal gesagt (`COUNT(DISTINCT person_id)`, `kg/store.py`). Sagt eine Person
+**Begriffe auf der Wand** (`max_terms`, bis 2026-08-29 `min_mentions`) —
+Stufen **20 / 32 / 45 / alle**, Startwert **32**. Reiner Anzeigefilter:
+verwirft nichts, jederzeit umkehrbar. Ersetzt den alten Schwellwert-Regler
+(„zeige nur Begriffe ab N Nennungen") durch eine direkte Obergrenze für die
+Begriffszahl — die Messung vom 2026-08-29 (Tabelle unten) zeigte, dass der
+Schwellwert die eigentliche Frage („wie viele Begriffe passen auf die Wand,
+ohne dass Beschriftungen kollidieren oder zu klein werden") nur indirekt und
+unzuverlässig beantwortete.
+
+Auswahlregel (identisch mit Tool 2's `kg2/weighting.py`, siehe unten):
+**alle Begriffe ab 2 Nennungen zuerst, aufgefüllt mit den jüngsten
+Einmal-Nennungen bis zur Obergrenze.** Übersteigen allein schon die geteilten
+Begriffe die Obergrenze, wird auch bei ihnen gekappt — häufigste zuerst. „Ab 2
+Nennungen" heißt **von mindestens 2 verschiedenen Menschen genannt**, nicht
+2-mal gesagt (`COUNT(DISTINCT person_id)`, `kg/store.py`). Sagt eine Person
 denselben Begriff fünfmal, bleibt der Zähler bei 1.
 
-> Jede Stufe trägt die Zahl der Begriffe, die sie übrig ließe — „2 — geteilt
-> (14)", bei jedem Graph-Push nachgeführt. Früh am Tag steht dort schnell
-> „3 — nur häufig (0)": dann ist die Stufe nicht kaputt, es hat nur noch
-> niemand denselben Begriff zu dritt genannt. Die Stufe bleibt wählbar — der
-> Graph wächst hinein.
+Eine Mindeststandzeit (`MIN_STAND_REVISIONS` in `frontend/static/projection.js`,
+3 Graph-Aktualisierungen) verhindert sichtbares Zucken: ein Begriff, der
+gerade erst auf die Wand gekommen ist, bleibt mindestens drei weitere
+Interviews sichtbar, selbst wenn er rechnerisch schon wieder unter die Grenze
+fiele. Gemessen (2026-08-29, `sim.dream_calibrate.prefix_graph` über 60
+Interviews): ohne diese Regel wechseln 3,5 bis 5,2 Begriffe pro Interview die
+Sichtbarkeit — weit über der Grenze, ab der es als „selten" gelten würde. Der
+größte Teil davon ist gewollte Fluktuation durch neue Einmal-Nennungen, aber
+echtes Sofort-Zucken (ein Begriff verschwindet und taucht im nächsten
+Interview wieder auf) kam mit rund 0,3 Fällen pro Interview trotzdem vor —
+genug, um die Mindeststandzeit zu rechtfertigen. Die Standzeit hält einen
+Begriff bewusst **zusätzlich zur Obergrenze** fest, statt einem frisch
+genannten Begriff seinen Platz streitig zu machen — sonst würde genau das
+verhindert, was die „jüngste-zuerst"-Regel eigentlich soll. Die Wand kann
+dadurch kurzzeitig etwas über der eingestellten Zahl liegen; das ist durch die
+Standzeit selbst begrenzt (grob: Anzahl der Begriffe, die pro Interview aus
+der Auswahl fallen, mal drei) und baut sich von selbst wieder ab, sobald die
+Standzeit einzelner Begriffe abläuft. Ein Regler-Wechsel durch den
+Operator selbst ist davon ausgenommen und wirkt sofort, ohne auf die
+Standzeit anderer Begriffe zu warten.
+
+> Jede Stufe trägt die Zahl der Begriffe, die sie übrig ließe — „32 (32)", bei
+> jedem Graph-Push nachgeführt. Früh am Tag können mehrere Stufen dieselbe,
+> kleinere Zahl zeigen (z. B. „32 (8)" und „45 (8)"): dann ist die Stufe nicht
+> kaputt, der Graph hat nur noch nicht so viele Begriffe. Jede Stufe bleibt
+> wählbar — der Graph wächst hinein.
+
+**Gemessen** (`sim/probes/wall_legibility.py`, 60 Personen / 163 Begriffe,
+echtes Frontend, 1920×1080): der alte Regler produzierte bei seinem
+Standardwert (`min_mentions=1`) eine unlesbare Wand — 56 überlappende
+Label-Paare, 51 Labels auf Portraits. Die neue Obergrenze hält die
+Kollisionen über den ganzen getesteten Bereich einstellig:
+
+| Obergrenze | Schrift px | Label-Kollisionen | Labels auf Portraits | Fläche |
+|---|---|---|---|---|
+| 20 | 16,5 | 1 | 4 | 8,9 % |
+| 26 | 13,0 | 2 | 9 | 8,7 % |
+| 32 | 14,7 | 2 | 3 | 11,9 % |
+| 40 | 14,3 | 1 | 7 | 14,6 % |
+| 49 | 12,4 | 5 | 7 | 15,1 % |
+| 60 | 10,3 | 1 | 2 | 15,5 % |
+
+Die genauen Stufenwerte (20/32/45) sind ein Vorschlag, kein Naturgesetz — sie
+werden vor Ort am echten Beamer überprüft (siehe D4 unten); die Messung deckt
+20–60 ab.
+
+> **Bewusst NICHT an Tool 2's Trauminhalt gekoppelt.** Beide Werkzeuge folgen
+> derselben Auswahlregel, aber mit eigenen Grenzen: die Wand kappt aus einem
+> physikalischen Grund (Fläche, Schriftgröße), der Traum aus einem
+> inhaltlichen (das Modell soll nicht in Randnotizen ertrinken). Eine Kopplung
+> würde einen Operator, der wegen der Schriftgröße am Regler dreht,
+> unabsichtlich ändern lassen, woraus die Bilder entstehen — zwei
+> Ausstellungstage mit unterschiedlicher Reglerstellung wären dann nicht mehr
+> vergleichbar, obwohl die Menschen dasselbe gesagt haben.
 
 **Kamera** — „alles zeigen" (ganzes Netz im Bild, steht still), „manuell"
 (Besucher zoomt und schiebt per Touch), „automatisch schwenken" (die Kamera
@@ -288,10 +348,12 @@ Diese Werte stehen in `config.toml` und werden im Betrieb **nicht** verändert.
 - `merge_style` — unverändert (`kg.config.DEFAULT_MERGE_STYLE`). Nur 1 von 8
   Beinahe-Treffern war eine Fehlentscheidung des Judge; ein Lockern würde auch
   die rund 50 von 60 Interviews lockern, in denen er gut entscheidet.
-- **Empfohlene Startdichte = 2** (`default_min_mentions`). Lauf 19c erzeugte 163
-  Begriffe, davon 114 von genau einer Person genannt. Bei 1 ersaufen die
-  geteilten Konzepte in Einzelnennungen; bei 2 zeigt die Wand 49 Begriffe, jeder
-  von mindestens zwei Menschen geteilt; bei 3 sind es 26.
+- **Empfohlene Obergrenze = 32** (`default_max_terms`, seit 2026-08-29 —
+  ersetzt die frühere Empfehlung „Startdichte = 2" für den alten
+  `min_mentions`-Regler). Lauf 19c erzeugte 163 Begriffe, davon 114 von genau
+  einer Person genannt; unbegrenzt kollidierten 56 Label-Paare. Bei einer
+  Obergrenze von 32 misst die Sonde 14,7 px Schrift und 2 Kollisionen (siehe
+  Tabelle oben) — die mittlere der drei vorgeschlagenen Stufen.
 - **Gewähltes Theme = B**, Standard-Kamera = „alles zeigen" (D4).
 
 **Merge-Güte zur Einordnung:** 2 von 5 absichtlich gepflanzten Konzepten sind im
@@ -518,7 +580,7 @@ Unterschied wird hier nicht verwischt.
   Traum nur noch aus Geteiltem entsteht.
 
   Absichtlich Modul-Konstanten, nicht Config-Werte: Sie sind eine Eigenschaft
-  des Verfahrens, kein Tagesregler — anders als Tool 1's `min_mentions`, das
+  des Verfahrens, kein Tagesregler — anders als Tool 1's `max_terms`, das
   ein Anzeigeregler ist. **Wer sie später ändert, sollte den Lauf wiederholen
   statt zu raten.**
 - `RECENT_TERMS` (`kg2/weighting.py`, **5**) — **gemessen und gesetzt**
@@ -535,13 +597,13 @@ Unterschied wird hier nicht verwischt.
   strukturelle Bevorzugung des Frühen — am Endstand zählt weiterhin nur die
   Häufigkeit. Bewusst ein zweiter Block statt eines Alterungsfaktors auf die
   Zahl: Die Nennungszahl im Prompt soll ehrlich bleiben, kein Kunstwert.
-- **Bewusst NICHT an Tool 1's `min_mentions` gekoppelt.** Beide Werkzeuge
+- **Bewusst NICHT an Tool 1's `max_terms` gekoppelt.** Beide Werkzeuge
   folgen jetzt derselben Regel (alle geteilten, aufgefüllt mit den jüngsten
   einmaligen), aber jedes rechnet sie unabhängig aus seinen eigenen
   Konstanten. Die Wand kappt aus einem **physikalischen** Grund (Fläche,
   Schriftgröße auf dem Touchscreen); der Traum kappt aus einem **inhaltlichen**
   (das Modell soll nicht in Randnotizen ertrinken). Eine Kopplung würde einen
-  Operator, der am `min_mentions`-Regler wegen der Schriftgröße dreht,
+  Operator, der am `max_terms`-Regler wegen der Schriftgröße dreht,
   unabsichtlich ändern lassen, woraus die Bilder entstehen — und zwei
   Ausstellungstage wären nicht mehr vergleichbar. Das ist eine bewusste
   Entscheidung, keine Lücke — bitte nicht „aufräumen".

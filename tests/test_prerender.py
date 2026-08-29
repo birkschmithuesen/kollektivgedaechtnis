@@ -106,11 +106,14 @@ def test_a_smaller_net_reaches_the_wall_larger(tmp_path, seeded):
         assert max(coverage["width_fraction_with_labels"], coverage["height_fraction_with_labels"]) > 0.85
 
 
-def test_the_density_dial_shows_the_same_graph_at_three_thresholds(tmp_path, seeded):
-    # The SAME graph at min_mentions 1/2/3, through the real display-filter
-    # path (window.kgView.setMinMentions -> render() -> graph-model.js
-    # visibleGraph), never a second renderer.
-    shots = _render(tmp_path, seeded, include_density_series=True, min_mentions_values=(1, 2, 3))
+def test_the_density_dial_shows_the_same_graph_at_three_caps(tmp_path, seeded):
+    # The SAME graph at three term caps, through the real display-filter path
+    # (window.kgView.setMaxTerms -> render() -> graph-model.js visibleGraph),
+    # never a second renderer. 23/3/1 are this seeded graph's own tier
+    # boundaries (all terms, then only the 3 shared ones, then only the single
+    # most-mentioned one) -- chosen so the caps reproduce exactly the term
+    # sets the old min_mentions thresholds 1/2/3 used to.
+    shots = _render(tmp_path, seeded, include_density_series=True, max_terms_values=(23, 3, 1))
 
     terms = [s.coverage["term_nodes"] for s in shots]
     edges = [s.coverage["edges"] for s in shots]
@@ -126,7 +129,7 @@ def test_raising_the_dial_re_lays_the_net_out_instead_of_leaving_holes(tmp_path,
     # terms were hidden (93% -> 73% of the canvas width on the seeded
     # 50-person graph). Now each step migrates: the survivors must have MOVED,
     # and the canvas must still be full.
-    shots = _render(tmp_path, seeded, include_density_series=True, min_mentions_values=(1, 3))
+    shots = _render(tmp_path, seeded, include_density_series=True, max_terms_values=(23, 1))
 
     loose, tight = (_placement_by_id(s.coverage) for s in shots)
     shared = set(loose) & set(tight)
@@ -294,10 +297,10 @@ def _sequences(tmp_path, seeded, names, **kwargs):
 def test_a_sequence_is_a_sortable_directory_of_1920x1080_frames(tmp_path, seeded):
     # Birk's brief: dense enough to become video, zero-padded, sortable, one
     # directory per sequence so it can be globbed cleanly.
-    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",))
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-999-to-20",))
 
     frames = sorted(sequence.directory.glob("*.png"))
-    assert sequence.directory.name == "seq-dial-1-to-2"
+    assert sequence.directory.name == "seq-dial-999-to-20"
     assert [f.name for f in frames] == [f"frame-{i:04d}.png" for i in range(1, SEQUENCE_FRAMES + 1)]
     assert sequence.frames == SEQUENCE_FRAMES
     for frame in frames:
@@ -309,7 +312,7 @@ def test_a_sequence_covers_the_whole_glide_and_settles(tmp_path, seeded):
     # The two halves of "the whole transition plus a settled tail": every
     # frame of the glide is a different picture (a cut would repeat the old
     # one and then the new one), and the tail does not move at all.
-    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",))
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-999-to-20",))
 
     frames = [f.read_bytes() for f in sorted(sequence.directory.glob("*.png"))]
     glide = int(SEQUENCE_GLIDE_MS / (1000 / FPS)) + 1
@@ -333,8 +336,8 @@ def test_two_cold_runs_produce_the_same_motion(tmp_path, seeded):
     # node positions, identical label offsets, identical measured label boxes
     # and identical zoom, but ~0.5% of pixels differing in a handful of
     # captions, each within 0.2px of the other's ink centroid.
-    first = _sequences(tmp_path / "a", seeded, ("dial-1-to-2",))
-    second = _sequences(tmp_path / "b", seeded, ("dial-1-to-2",))
+    first = _sequences(tmp_path / "a", seeded, ("dial-999-to-20",))
+    second = _sequences(tmp_path / "b", seeded, ("dial-999-to-20",))
 
     for one, two in zip(first, second):
         assert json.loads((one.directory / "motion.json").read_text()) == json.loads(
@@ -342,10 +345,15 @@ def test_two_cold_runs_produce_the_same_motion(tmp_path, seeded):
         )
 
 
-def test_lowering_the_dial_brings_the_hidden_terms_back(tmp_path, seeded):
+def test_raising_the_dial_brings_the_hidden_terms_back(tmp_path, seeded):
     # The harder direction, and the one that used to re-shuffle: the sequence
     # has to START at the tighter setting and END with more terms on the wall.
-    (sequence,) = _sequences(tmp_path, seeded, ("dial-2-to-1",))
+    #
+    # Named for RAISING the dial since 2026-08-29: the dial is now `max_terms`
+    # (how many labels fit on the wall), so more terms means a HIGHER number.
+    # Under the old `min_mentions` dial — a threshold on mention count — the
+    # same direction meant lowering it, hence the previous name.
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-20-to-999",))
 
     before, after = (
         int(n) for n in re.search(r"(\d+) term nodes before, (\d+) after", sequence.description).groups()
@@ -368,7 +376,7 @@ def test_a_new_person_arrives_over_sse_and_is_filmed(tmp_path, seeded):
 def test_the_sequences_run_the_walls_own_glide_by_default(tmp_path, seeded):
     # Birk's brief is explicit: the real 2.5s, not the 8s the still series
     # slowed it to, because the speed is what he is judging.
-    sequences = _sequences(tmp_path, seeded, ("dial-1-to-2",), glide_ms=WALL_MIGRATION_MS)
+    sequences = _sequences(tmp_path, seeded, ("dial-999-to-20",), glide_ms=WALL_MIGRATION_MS)
 
     assert sequences[0].glide_ms == WALL_MIGRATION_MS
     assert sequences[0].frames == int(round((WALL_MIGRATION_MS + SEQUENCE_TAIL_MS) / (1000 / FPS))) + 1
@@ -376,8 +384,8 @@ def test_the_sequences_run_the_walls_own_glide_by_default(tmp_path, seeded):
 
 @pytest.mark.skipif(find_ffmpeg() is None, reason="no ffmpeg on this host")
 def test_a_sequence_encodes_to_a_playable_mp4(tmp_path, seeded):
-    (sequence,) = _sequences(tmp_path, seeded, ("dial-1-to-2",), encode=True)
+    (sequence,) = _sequences(tmp_path, seeded, ("dial-999-to-20",), encode=True)
 
     assert sequence.mp4 is not None and sequence.mp4.exists()
-    assert sequence.mp4.name == "seq-dial-1-to-2.mp4"
+    assert sequence.mp4.name == "seq-dial-999-to-20.mp4"
     assert sequence.mp4.stat().st_size > 0

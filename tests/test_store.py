@@ -109,7 +109,7 @@ def test_concurrent_pipeline_and_operator_writes_do_not_corrupt_state(store):
         i = 0
         try:
             while not stop.is_set():
-                store.set_setting("min_mentions", str(i % 5 + 1))
+                store.set_setting("max_terms", str(i % 5 + 1))
                 store.set_hidden("person:does-not-exist", i % 2 == 0)
                 store.save_positions({f"pos-{tag}": (float(i), float(i))})
                 i += 1
@@ -150,7 +150,7 @@ def test_concurrent_pipeline_and_operator_writes_do_not_corrupt_state(store):
     positions = store.get_positions()
     assert "pos-a" in positions
     assert "pos-b" in positions
-    assert store.get_setting("min_mentions", "unset") in {"1", "2", "3", "4", "5"}
+    assert store.get_setting("max_terms", "unset") in {"1", "2", "3", "4", "5"}
 
 
 def test_person_lifecycle(store):
@@ -272,19 +272,19 @@ def test_merge_decisions_are_persisted(store):
 
 
 def test_settings_round_trip_with_default(store):
-    assert store.get_setting("min_mentions", "1") == "1"
-    store.set_setting("min_mentions", "2")
-    assert store.get_setting("min_mentions", "1") == "2"
+    assert store.get_setting("max_terms", "1") == "1"
+    store.set_setting("max_terms", "2")
+    assert store.get_setting("max_terms", "1") == "2"
 
 
 def test_set_setting_default_seeds_once_and_never_clobbers(store):
     """Startup seeds the configured density; an operator's live change wins."""
-    store.set_setting_default("min_mentions", "3")
-    assert store.get_setting("min_mentions", "1") == "3"
+    store.set_setting_default("max_terms", "3")
+    assert store.get_setting("max_terms", "1") == "3"
 
-    store.set_setting("min_mentions", "1")  # operator turns the dial down
-    store.set_setting_default("min_mentions", "3")  # next restart
-    assert store.get_setting("min_mentions", "1") == "1"
+    store.set_setting("max_terms", "1")  # operator turns the dial down
+    store.set_setting_default("max_terms", "3")  # next restart
+    assert store.get_setting("max_terms", "1") == "1"
 
 
 def test_transaction_commits_all_writes_together_on_clean_exit(store):

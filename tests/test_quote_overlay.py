@@ -10,7 +10,7 @@ import pytest
 
 GRAPH = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 99,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "created_at": 1,
          "x": 100, "y": 100},

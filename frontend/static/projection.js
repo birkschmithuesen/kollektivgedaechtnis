@@ -1,6 +1,12 @@
 import { newNodeIds, toCytoscape, visibleGraph } from './graph-model.js';
 import { Camera } from './camera.js';
 
+// Matches kg/config.py's Config.default_max_terms -- only relevant before the
+// first real state push ever arrives.
+const DEFAULT_MAX_TERMS = 32;
+// See the hysteresis comment in createGraphView() for what this guards.
+const MIN_STAND_REVISIONS = 3;
+
 function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
@@ -710,8 +716,20 @@ export function createGraphView(
   // packing options can be set.
   if (cy.layoutUtilities) cy.layoutUtilities({ desiredAspectRatio: CANVAS_ASPECT, componentSpacing: 80 });
   const camera = new Camera(cy);
-  let lastGraph = { nodes: [], edges: [], min_mentions: 1 };
-  let minMentions = 1;
+  let lastGraph = { nodes: [], edges: [], max_terms: DEFAULT_MAX_TERMS };
+  let maxTerms = DEFAULT_MAX_TERMS;
+  // Hysteresis (spec §7: measured 2026-08-29 -- raw churn is far above "less
+  // than one change per interview", but the specific case the spec worries
+  // about, a term vanishing and reappearing on the VERY NEXT interview, is
+  // narrower and is what this targets). A term that made it onto the wall
+  // stays for at least MIN_STAND_REVISIONS more graph updates, regardless of
+  // rank, so a visitor's own just-said term does not get yanked away before
+  // they have stepped back from the wall. `graphRevision` only advances on a
+  // genuinely new graph (`update()`), never on a dial change alone -- an
+  // operator lowering the cap is a deliberate override and must act at once,
+  // not wait out another term's grace period.
+  let graphRevision = 0;
+  const standSince = new Map();
   // True while a migration is running (computation AND glide). Tests and the
   // pre-render wait on this instead of guessing a timeout.
   let layoutPending = false;
@@ -750,9 +768,19 @@ export function createGraphView(
       rerenderQueued = true;
       return;
     }
-    const view = visibleGraph(lastGraph, minMentions);
+    const keepTermIds = new Set(
+      [...standSince.keys()].filter((id) => graphRevision - standSince.get(id) < MIN_STAND_REVISIONS),
+    );
+    const view = visibleGraph(lastGraph, maxTerms, keepTermIds);
     const wanted = new Set(view.nodes.map((n) => n.id).concat(view.edges.map((e) => e.id)));
     const present = cy.elements().map((el) => el.id());
+
+    // Bookkeeping for the grace list above: a term newly on the wall starts
+    // its clock, one that dropped off (cap, hide, or deletion -- `view`
+    // already excludes all three) loses its place in it.
+    const visibleTermIds = new Set(view.nodes.filter((n) => n.type === 'term').map((n) => n.id));
+    for (const id of visibleTermIds) if (!standSince.has(id)) standSince.set(id, graphRevision);
+    for (const id of [...standSince.keys()]) if (!visibleTermIds.has(id)) standSince.delete(id);
 
     cy.nodes().forEach((n) => lastSeen.set(n.id(), { ...n.position() }));
 
@@ -851,13 +879,18 @@ export function createGraphView(
       return labelOverlapStats;
     },
     update(graph, value) {
+      graphRevision += 1;
       lastGraph = graph;
-      if (value !== undefined) minMentions = value;
-      else if (graph.min_mentions) minMentions = graph.min_mentions;
+      if (value !== undefined) maxTerms = value;
+      else if (graph.max_terms) maxTerms = graph.max_terms;
       render();
     },
-    setMinMentions(value) {
-      minMentions = value;
+    setMaxTerms(value) {
+      maxTerms = value;
+      // The operator's dial is a deliberate, immediate override -- it must
+      // not wait out another term's grace period (see the hysteresis comment
+      // above `graphRevision`).
+      standSince.clear();
       render();
     },
     declutterLabels() {

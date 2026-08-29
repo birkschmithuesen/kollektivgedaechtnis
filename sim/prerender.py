@@ -15,15 +15,15 @@ library, not a hand-rolled pass. Three series answer that:
 1. **Fill the screen** — the same seeded graph at 5 / 20 / 50 persons, each
    filling the canvas with type scaled to match. The evidence for "always
    readable, never overcrowded".
-2. **The density dial**, again at min_mentions 1/2/3, but now with the
+2. **The term-count cap**, again at 75/50/31 terms, but now with the
    re-layout: after hiding terms the survivors have SPREAD OUT into the freed
    space instead of sitting in their old holes. Canvas fill and overlap counts
    are reported per setting so the change against the third round is
    measurable.
 3. **The migration itself** — a PNG cannot show motion, so one transition
-   (the dial going 1 -> 2) is shot as a numbered sequence of frames taken at
-   intervals through the animation. Nodes caught in mid-flight are the proof
-   that it is a glide and not a cut.
+   (the dial going from "alle" to its strictest step) is shot as a numbered
+   sequence of frames taken at intervals through the animation. Nodes caught
+   in mid-flight are the proof that it is a glide and not a cut.
 
 The theme series (a/c), the camera series and the test pattern stay
 regenerable behind flags; theme B is Birk's settled choice and the default.
@@ -271,7 +271,7 @@ START_MIGRATION = """
     }
     if (window.kgView.layoutPending) requestAnimationFrame(watch);
   };
-  window.kgView.setMinMentions(value);
+  window.kgView.setMaxTerms(value);
   requestAnimationFrame(watch);
 }
 """
@@ -389,10 +389,14 @@ def _open_projection(page, base_url: str, theme: str, migration_ms: int | None =
 
 THEME = "b"  # Birk's settled choice (third pre-render review)
 FILL_SIZES = (5, 20, 50)
-DENSITY_MIN_MENTIONS = (1, 2, 3)
-# The dial step shot as a migration. 1 -> 2 removes the most terms of the
-# three steps, so it is the transition with the most visible motion.
-MIGRATION_FROM, MIGRATION_TO = 1, 2
+DENSITY_MAX_TERMS = (75, 50, 31)  # the seeded 50-person graph's own tier boundaries: all 75 terms, then only the 50 shared (>=2 mentions), then only the 31 said >=3 times.
+# The dial step shot as a migration: "alle" down to the operator dial's own
+# strictest proposed step (spec 2026-08-29 §4). Deliberately not tied to
+# DENSITY_MAX_TERMS above -- this constant also drives the migration series
+# over this module's OWN small test fixtures (tests/test_prerender.py), which
+# have far fewer terms than the 50-person production graph, so it needs a cap
+# low enough to remove something real on either.
+MIGRATION_FROM, MIGRATION_TO = 999, 20
 # Fractions of the animation at which the frames are taken. The last one is
 # not a fraction at all — it waits for the real end-of-migration signal, so
 # the closing frame is the settled picture and not a near-miss.
@@ -636,7 +640,7 @@ def _capture_sequence(
 
 
 def _set_dial(page, value: int) -> None:
-    page.evaluate(f"() => window.kgView.setMinMentions({value})")
+    page.evaluate(f"() => window.kgView.setMaxTerms({value})")
     page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
 
 
@@ -683,30 +687,30 @@ def _fill_shots(page, dbs: dict[int, Path], out_dir: Path, theme: str, scratch: 
     return shots
 
 
-def _density_shots(page, base_url: str, out_dir: Path, theme: str, min_mentions_values) -> list[Shot]:
+def _density_shots(page, base_url: str, out_dir: Path, theme: str, max_terms_values) -> list[Shot]:
     """The dial's own series, through the real display-filter path
-    (window.kgView.setMinMentions -> render() -> graph-model.js visibleGraph),
+    (window.kgView.setMaxTerms -> render() -> graph-model.js visibleGraph),
     never a second, special-case renderer that filters the graph data itself.
 
     Unlike the third round, each step now re-lays the net out: hiding terms
     frees space and the survivors migrate into it."""
     shots: list[Shot] = []
     _open_projection(page, base_url, theme)
-    first = min_mentions_values[0]
-    for value in min_mentions_values:
-        page.evaluate(f"() => window.kgView.setMinMentions({value})")
+    first = max_terms_values[0]
+    for value in max_terms_values:
+        page.evaluate(f"() => window.kgView.setMaxTerms({value})")
         # Every dial step is a graph change now, so it runs a full migration.
         # Wait for the real end-of-migration signal, never a fixed timeout.
         page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
         page.wait_for_timeout(300)  # let the settled frame paint
         data = page.evaluate(MEASURE)
-        # The filename carries the REAL remaining count, not the threshold
-        # alone — a filename must tell Birk what he is looking at without
-        # opening the file.
+        # The filename carries the REAL remaining count, not the cap alone
+        # — a filename must tell Birk what he is looking at without opening
+        # the file.
         qualifier = "all-" if value == first else ""
-        stem = f"theme-{theme}-min-mentions-{value}-{qualifier}{data['term_nodes']}-terms"
+        stem = f"theme-{theme}-max-terms-{value}-{qualifier}{data['term_nodes']}-terms"
         description = (
-            f"Density dial at min_mentions={value}: {data['term_nodes']} term nodes, "
+            f"Term cap at max_terms={value}: {data['term_nodes']} term nodes, "
             f"{data['person_nodes']} persons, {data['edges']} edges on the wall — and the "
             "net re-distributed into the space the hidden terms freed, rather than "
             "keeping its old holes."
@@ -728,7 +732,7 @@ def _migration_shots(page, base_url: str, out_dir: Path, theme: str, duration_ms
     """
     shots: list[Shot] = []
     _open_projection(page, base_url, theme, migration_ms=duration_ms)
-    page.evaluate(f"() => window.kgView.setMinMentions({MIGRATION_FROM})")
+    page.evaluate(f"() => window.kgView.setMaxTerms({MIGRATION_FROM})")
     page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
 
     page.evaluate(START_MIGRATION, MIGRATION_TO)
@@ -775,7 +779,7 @@ def _migration_shots(page, base_url: str, out_dir: Path, theme: str, duration_ms
     return shots
 
 
-SEQUENCES = ("dial-1-to-2", "dial-2-to-1", "new-person")
+SEQUENCES = ("dial-999-to-20", "dial-20-to-999", "new-person")
 
 # A working ffmpeg on this host, named by Birk in the fifth brief. It is the
 # LAST candidate `find_ffmpeg` tries, after $KG_FFMPEG, $PATH and the
@@ -832,16 +836,19 @@ def _dial_sequence(page, served, out_dir, theme, frm, to, fps, glide_ms, tail_ms
     from dataclasses import replace
 
     _open_projection(page, served.base_url, theme, migration_ms=glide_ms)
-    if frm != 1:
+    if frm != MIGRATION_FROM:
         # Getting TO the starting state is setup, not the transition being
         # filmed, so it runs before the clock is taken and is not captured.
+        # `MIGRATION_FROM` is the "show everything" end of the dial, which is
+        # where the projection already opens — under the old `min_mentions`
+        # dial that value was 1, hence the literal that used to stand here.
         _set_dial(page, frm)
     before = page.evaluate(MEASURE)
     sequence = _capture_sequence(
         page,
         out_dir,
         f"dial-{frm}-to-{to}",
-        trigger=lambda: page.evaluate(f"() => window.kgView.setMinMentions({to})"),
+        trigger=lambda: page.evaluate(f"() => window.kgView.setMaxTerms({to})"),
         fps=fps,
         glide_ms=glide_ms,
         tail_ms=tail_ms,
@@ -854,7 +861,7 @@ def _dial_sequence(page, served, out_dir, theme, frm, to, fps, glide_ms, tail_ms
     return replace(
         sequence,
         description=(
-            f"The density dial moving min_mentions {frm} -> {to} on the seeded "
+            f"The term cap moving max_terms {frm} -> {to} on the seeded "
             f"{before['person_nodes']}-person net: {before['term_nodes']} term nodes before, "
             f"{after['term_nodes']} after — {moved} {verb}. Every node moves, none jumps."
         ),
@@ -963,7 +970,7 @@ def render_series(
     include_testpattern: bool = False,
     include_camera_views: bool = False,
     camera_theme: str = THEME,
-    min_mentions_values: tuple[int, ...] = DENSITY_MIN_MENTIONS,
+    max_terms_values: tuple[int, ...] = DENSITY_MAX_TERMS,
     migration_ms: int = MIGRATION_SHOT_MS,
 ) -> list[Shot]:
     """Render every requested series into `out_dir`.
@@ -987,7 +994,7 @@ def render_series(
             shots.extend(_fill_shots(page, dbs, out_dir, theme, scratch))
         if include_density_series:
             with _served(full, scratch / "density") as served:
-                shots.extend(_density_shots(page, served.base_url, out_dir, theme, min_mentions_values))
+                shots.extend(_density_shots(page, served.base_url, out_dir, theme, max_terms_values))
         if include_migration_series:
             with _served(full, scratch / "migration") as served:
                 shots.extend(_migration_shots(page, served.base_url, out_dir, theme, migration_ms))

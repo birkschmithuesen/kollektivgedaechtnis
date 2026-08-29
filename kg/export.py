@@ -48,7 +48,7 @@ def build_graph(store) -> dict:
     return {
         "version": 1,
         "generated_at": time.time(),
-        "min_mentions": int(store.get_setting("min_mentions", "1")),
+        "max_terms": int(store.get_setting("max_terms", "1")),
         "nodes": nodes,
         "edges": [
             {"id": e.id, "source": e.person_id, "target": e.term_id} for e in store.list_edges()

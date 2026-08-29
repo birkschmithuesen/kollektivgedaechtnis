@@ -289,7 +289,7 @@ def seed_graph(data_dir: Path, persons: int = 50, seed: int = 20260814) -> Path:
         with store.transaction():
             for spec in person_specs(persons, seed):
                 write_person(store, cfg, spec)
-            store.set_setting("min_mentions", "1")
+            store.set_setting("max_terms", "999")  # "alle" -- seeded dbs open showing everything
     finally:
         store.close()
 

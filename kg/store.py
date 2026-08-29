@@ -452,7 +452,7 @@ class Store:
     def set_setting_default(self, key: str, value: str) -> None:
         """Seed a setting only if it has never been set.
 
-        Startup uses this to apply the calibrated `default_min_mentions` without
+        Startup uses this to apply the calibrated `default_max_terms` without
         overwriting a dial the operator turned before the crash (spec 7, 10.5).
         """
         self.conn.execute(

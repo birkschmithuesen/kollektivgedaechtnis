@@ -4,10 +4,10 @@ import pytest
 
 GRAPH_1 = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 99,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 100, "y": 100},
-        {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 1, "hidden": False, "x": None, "y": None},
+        {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 1, "created_at": 1.0, "hidden": False, "x": None, "y": None},
     ],
     "edges": [{"id": "e1", "source": "p1", "target": "t1"}],
     "quotes": [],
@@ -15,11 +15,11 @@ GRAPH_1 = {
 
 GRAPH_2 = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 99,
     "nodes": GRAPH_1["nodes"]
     + [
         {"id": "p2", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None},
-        {"id": "t2", "type": "term", "label": "Bodenpreise", "mentions": 1, "hidden": False, "x": None, "y": None},
+        {"id": "t2", "type": "term", "label": "Bodenpreise", "mentions": 1, "created_at": 2.0, "hidden": False, "x": None, "y": None},
     ],
     "edges": GRAPH_1["edges"] + [{"id": "e2", "source": "p2", "target": "t2"}],
     "quotes": [],
@@ -28,7 +28,7 @@ GRAPH_2 = {
 # Every node placed — what the server hands back after a restart (spec 10.5).
 GRAPH_1_PLACED = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 99,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 100, "y": 100},
         {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 1, "hidden": False, "x": 400, "y": 250},
@@ -52,8 +52,8 @@ def wait_for_layout(page):
     page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
 
 
-def update(page, graph, min_mentions=1):
-    page.evaluate("(args) => window.kgView.update(args[0], args[1])", [graph, min_mentions])
+def update(page, graph, max_terms=99):
+    page.evaluate("(args) => window.kgView.update(args[0], args[1])", [graph, max_terms])
     wait_for_layout(page)
 
 
@@ -121,7 +121,7 @@ def _unplaced_net(persons=8, terms_per_person=4, term_pool=12):
         for i in range(persons)
         for j in range(terms_per_person)
     ]
-    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+    return {"version": 1, "max_terms": 99, "nodes": nodes, "edges": edges, "quotes": []}
 
 
 CANVAS_ASPECT = 1920 / 1080
@@ -236,7 +236,7 @@ THEME_RING_WIDTH = {"a": "5px", "b": "7px", "c": "10px"}
 
 ONE_PERSON = {
     "version": 1,
-    "min_mentions": 1,
+    "max_terms": 99,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": 0, "y": 0},
         {
@@ -331,15 +331,18 @@ def test_unknown_theme_falls_back_and_still_renders(page, static_server):
     assert page.evaluate("window.kgView.cy.nodes().length") == len(ONE_PERSON["nodes"])
 
 
-def test_raising_the_dial_removes_terms_and_lowering_it_brings_them_back(view):
+def test_lowering_the_cap_removes_a_term_and_raising_it_brings_it_back(view):
     update(view, GRAPH_2)
 
-    view.evaluate("window.kgView.setMinMentions(2)")
+    # Both terms tie on mentions (1 each); the cap keeps the newer one (t2)
+    # and drops the older (t1) -- the selection rule's recency tie-break.
+    view.evaluate("window.kgView.setMaxTerms(1)")
     wait_for_layout(view)
 
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 0
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 1
     assert view.evaluate("window.kgView.cy.$('#p1').length") == 1
-    view.evaluate("window.kgView.setMinMentions(1)")
+    view.evaluate("window.kgView.setMaxTerms(99)")
     wait_for_layout(view)
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
     assert view.evaluate("window.kgView.cy.$('#p1').length") == 1
@@ -369,7 +372,7 @@ def _dense_net(persons=50, terms=75, edges_per_person=5):
     """The density and label mix that first showed the label collisions this
     module exists to fix (Birk's 3rd pre-render review: 50 persons, 75
     distinct long German term labels, ~250 edges, on a 1920x1080 wall).
-    Mentions cycle 1-2-3 so raising min_mentions removes some terms, not all
+    Mentions cycle 1-2-3 so lowering max_terms removes some terms, not all
     of them, which is what the redeclutter-on-filter-change test needs."""
     nodes = [
         {"id": f"p{i}", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}
@@ -391,7 +394,7 @@ def _dense_net(persons=50, terms=75, edges_per_person=5):
         for i in range(persons)
         for j in range(edges_per_person)
     ]
-    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+    return {"version": 1, "max_terms": 99, "nodes": nodes, "edges": edges, "quotes": []}
 
 
 def test_count_label_overlaps_detects_overlapping_labels_and_person_collisions(page, static_server):
@@ -580,7 +583,7 @@ def _crowded_persons_net(persons=20, terms=3, edges_per_person=3):
         for i in range(persons)
         for j in range(edges_per_person)
     ]
-    return {"version": 1, "min_mentions": 1, "nodes": nodes, "edges": edges, "quotes": []}
+    return {"version": 1, "max_terms": 99, "nodes": nodes, "edges": edges, "quotes": []}
 
 
 def test_the_settled_net_leaves_no_person_disc_lying_on_another(view):
@@ -627,8 +630,8 @@ def test_declutter_never_hands_back_a_worse_net_than_it_was_given(view):
     assert after["labelsOnPersons"] <= before["labelsOnPersons"]
 
 
-def test_lowering_the_dial_lets_the_returning_terms_rejoin_without_jumping(view):
-    # Raising min_mentions REMOVES term nodes from cy, so lowering it again
+def test_lowering_the_cap_lets_the_returning_terms_rejoin_without_jumping(view):
+    # Lowering max_terms REMOVES term nodes from cy, so raising it again
     # re-adds them. In a session whose positions the server has not yet
     # persisted back into the graph data those nodes carry x/y null, so
     # without `lastSeen` they would start from the origin — and the migration
@@ -638,9 +641,9 @@ def test_lowering_the_dial_lets_the_returning_terms_rejoin_without_jumping(view)
     update(view, _dense_net())
     before = positions(view)
 
-    view.evaluate("() => window.kgView.setMinMentions(3)")
+    view.evaluate("() => window.kgView.setMaxTerms(25)")
     wait_for_layout(view)
-    view.evaluate("() => window.kgView.setMinMentions(1)")
+    view.evaluate("() => window.kgView.setMaxTerms(99)")
     wait_for_layout(view)
 
     after = positions(view)
@@ -651,15 +654,16 @@ def test_lowering_the_dial_lets_the_returning_terms_rejoin_without_jumping(view)
     assert correlation > 0.8
 
 
-def test_raising_the_dial_spreads_the_net_into_the_freed_space(view):
+def test_lowering_the_cap_spreads_the_net_into_the_freed_space(view):
     # The whole point of the 2026-08-14 spec change. Before it, hiding terms
     # left the survivors sitting in their old holes and the picture shrank:
     # measured on the seeded graph, the node cloud went from 93% of the canvas
-    # width at min_mentions=1 to 73% at min_mentions=3. Now the net
-    # re-distributes, so the freed space is used, not left empty.
+    # width at min_mentions=1 to 73% at min_mentions=3 (the old, threshold-based
+    # dial). Now the net re-distributes, so the freed space is used, not left
+    # empty -- same mechanism, now driven by the term-count cap.
     update(view, _dense_net())
 
-    view.evaluate("() => window.kgView.setMinMentions(3)")
+    view.evaluate("() => window.kgView.setMaxTerms(25)")
     wait_for_layout(view)
 
     covered = view.evaluate(
@@ -683,7 +687,7 @@ def test_the_net_glides_into_its_new_arrangement_instead_of_cutting_to_it(view):
     view.evaluate(
         """() => {
              const cy = window.kgView.cy;
-             window.kgView.setMinMentions(2);
+             window.kgView.setMaxTerms(30);
              const ids = cy.nodes().map((n) => n.id()).sort();
              window.__samples = [];
              const sample = () => {
@@ -715,16 +719,16 @@ def test_the_net_glides_into_its_new_arrangement_instead_of_cutting_to_it(view):
     )
 
 
-def test_raising_min_mentions_redeclutters_and_lowers_overlap_count(view):
+def test_lowering_max_terms_redeclutters_and_lowers_overlap_count(view):
     # Removing labels only ever helps decluttering (fewer boxes to collide),
     # and render() must take that free win on every filter change, not just
-    # on a from-scratch placement — a min_mentions change adds no new nodes
-    # and so runs no layout at all.
+    # on a from-scratch placement — a max_terms change adds no new nodes and
+    # so runs no layout at all.
     update(view, _dense_net())
     before = view.evaluate("() => window.kgView.labelOverlapStats.after")
     before_term_count = view.evaluate("() => window.kgView.cy.nodes('.term').length")
 
-    view.evaluate("window.kgView.setMinMentions(2)")
+    view.evaluate("window.kgView.setMaxTerms(30)")
     wait_for_layout(view)
 
     after = view.evaluate("() => window.kgView.labelOverlapStats.after")
@@ -863,3 +867,61 @@ def test_type_grows_as_the_net_shrinks(page, static_server):
 
     assert scales[5]["font"] > scales[20]["font"] > scales[50]["font"]
     assert scales[5]["disc"] > scales[20]["disc"] > scales[50]["disc"]
+
+
+# --- Hysteresis: minimum stand time (spec 2026-08-29 §7) -------------------
+#
+# Measured churn without it: 3.5-5.2 visibility changes per interview, far
+# above "less than one per interview". A term that just dropped off the cap
+# stays on the wall for MIN_STAND_REVISIONS more graph updates regardless of
+# rank -- additively, on top of the cap, never by blocking a fresher term's
+# first appearance (graph-model.js's own docstring has the reasoning).
+
+
+def _term(term_id, mentions, created_at):
+    return {
+        "id": term_id, "type": "term", "label": term_id, "mentions": mentions,
+        "hidden": False, "created_at": created_at, "x": None, "y": None,
+    }
+
+
+def _hysteresis_graph(*specs):
+    terms = [_term(*spec) for spec in specs]
+    nodes = [{"id": "p1", "type": "person", "portrait": "", "hidden": False, "x": None, "y": None}] + terms
+    edges = [{"id": f"e-{t['id']}", "source": "p1", "target": t["id"]} for t in terms]
+    return {"version": 1, "max_terms": 99, "nodes": nodes, "edges": edges, "quotes": []}
+
+
+def test_a_dropped_term_survives_its_grace_period_then_leaves(view):
+    # Cap fixed at 2 throughout; only the term pool changes. t2 (1 mention,
+    # older) loses its natural slot the moment t3 (1 mention, newer) appears,
+    # but must not vanish immediately.
+    update(view, _hysteresis_graph(("t1", 5, 1), ("t2", 1, 2)), max_terms=2)
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 1
+
+    grown = _hysteresis_graph(("t1", 5, 1), ("t2", 1, 2), ("t3", 1, 3))
+    update(view, grown, max_terms=2)  # revision 2: t2 outranked by t3, held by grace
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 1
+    assert view.evaluate("window.kgView.cy.$('#t3').length") == 1
+
+    update(view, grown, max_terms=2)  # revision 3: still within the grace window
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 1
+
+    update(view, grown, max_terms=2)  # revision 4: grace lapsed
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 0
+    assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
+    assert view.evaluate("window.kgView.cy.$('#t3').length") == 1
+
+
+def test_an_operators_cap_change_is_immediate_not_smoothed_by_grace(view):
+    # The dial is a deliberate override: it must not wait out another term's
+    # grace period. Same setup as above, but the cap is LOWERED by the
+    # operator (setMaxTerms) instead of a new graph arriving.
+    update(view, _hysteresis_graph(("t1", 5, 1), ("t2", 1, 2)), max_terms=2)
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 1
+
+    view.evaluate("() => window.kgView.setMaxTerms(1)")
+    wait_for_layout(view)
+
+    assert view.evaluate("window.kgView.cy.$('#t2').length") == 0
+    assert view.evaluate("window.kgView.cy.$('#t1').length") == 1

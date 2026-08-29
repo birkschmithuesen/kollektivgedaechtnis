@@ -142,7 +142,7 @@ def test_the_committed_artefact_and_the_live_exporter_agree_on_the_key_set(tmp_p
 def test_graph_json_is_complete_state_with_no_delta_mechanism():
     """Spec §13(1). A `changed`/`removed`/`since` key would mean Tool 2's poll
     is no longer sufficient and the whole §4.1 design has to be revisited."""
-    assert set(REAL_GRAPH) == {"version", "generated_at", "min_mentions", "nodes", "edges", "quotes"}
+    assert set(REAL_GRAPH) == {"version", "generated_at", "max_terms", "nodes", "edges", "quotes"}
 
 
 def test_hidden_stays_in_the_payload():

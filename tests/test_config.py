@@ -46,7 +46,7 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
 
     assert cfg.llm_model == "claude-opus-5"
     assert cfg.llm_effort == "high"
-    assert cfg.default_min_mentions == 1
+    assert cfg.default_max_terms == 32
     # Run 19c: 5 was too narrow — in 7 of 8 near-misses the concept's own node
     # sat at rank 7-56 in the candidate pool and never reached the judge.
     assert cfg.merge_neighbours == 12
