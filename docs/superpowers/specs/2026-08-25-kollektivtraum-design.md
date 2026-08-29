@@ -198,9 +198,33 @@ is itself a displayed artefact and must be readable on its own.
 - **Hidden nodes are excluded.** `hidden: true` is the operator's emergency exit
   on the wall (Tool 1 spec §8); something pulled from the wall must not
   reappear in the dream.
-- **`min_mentions` is NOT applied.** That dial is the wall's legibility filter,
-  not a statement about what was said. The dream reads everything — the
-  weighting already handles prominence.
+- **Term selection, revised 2026-08-28/29.** The original rule was
+  „`min_mentions` is NOT applied — the dream reads everything, the weighting
+  already handles prominence." That is superseded. The dream now takes **all
+  shared terms (≥2 mentions), topped up with the newest single mentions on a
+  gliding budget** that shrinks to zero as the shared terms grow
+  (`SINGLE_MENTION_BUDGET`/`SHARED_TERMS_SATURATION`, `kg2/weighting.py`), plus
+  a separate „Zuletzt gesagt" block carrying the `RECENT_TERMS` newest terms
+  regardless of count. Reason: Birk wants the picture built from what more than
+  one person said, without losing the interview that just finished.
+
+  **Tool 1's wall dial remains uncoupled from this.** Since 2026-08-29 that
+  dial is `max_terms` (how many labels fit on the wall) rather than
+  `min_mentions`, and both tools now follow the *same selection rule* with
+  their own limits — but the wall's limit must never steer the dream's content.
+  An operator raising the cap because the type got small would otherwise
+  silently change what the images are made of, and two exhibition days would
+  stop being comparable. See
+  `docs/superpowers/specs/2026-08-29-wand-anzeigeregler-begriffsobergrenze.md` §5.
+
+- **Quotes are no longer part of the material (2026-08-28).** They were the
+  bulk of it — 117 quotes, 76 % of the block at 60 persons. On the wall only
+  the *terms* are visible; a quote appears only when a visitor taps a portrait.
+  Building three quarters of the image prompt from something invisible in the
+  room breaks the link between the two screens — the same argument §10 uses to
+  reject graph-driven style. `Material.quotes` still exists and
+  `render_material(include_quotes=True)` still renders them, for the
+  side-by-side comparison run only.
 
 **Contradiction as construction principle (retired 2026-08-28).** The
 original design instructed the model to locate the two most distant positions

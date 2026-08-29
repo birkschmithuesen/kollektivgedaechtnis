@@ -1,5 +1,30 @@
 # Kollektivtraum — Tool 2 Implementation Plan
 
+> ## ⚠️ ERLEDIGT UND TEILWEISE ÜBERHOLT — historisches Bauprotokoll
+>
+> Alle 18 Tasks sind gebaut und abgenommen (`.superpowers/sdd/progress.md`:
+> „TOOL 2 COMPLETE"). Die offenen Checkboxen unten sind **Bauhistorie, keine
+> offene Arbeit** — sie wurden beim Abarbeiten nie abgehakt.
+>
+> **Mehrere Festlegungen in diesem Plan gelten nicht mehr.** Er beschreibt den
+> Stand vom 2026-08-25; am 2026-08-28/29 wurden auf Birks Entscheidung hin
+> geändert:
+>
+> | Steht hier noch | Gilt heute |
+> |---|---|
+> | „`min_mentions` is NOT applied — the dream reads everything" | Gleitende Auswahl: alle geteilten Begriffe + jüngste Einmal-Nennungen |
+> | Widerspruchs-Klausel, `contradiction_min_persons = 6` | Ersatzlos gestrichen, dafür Belegbarkeits-Klausel |
+> | Satzlänge ~20–40 Wörter | Ein Hauptsatz, max. 16 Wörter, kein Komma |
+> | Leitfrage im Stufe-1-Prompt | Nicht mehr im Prompt, steuert nur die Überschrift |
+> | Zitate im Materialblock | Entfernt (waren 76 % des Blocks) |
+> | Bildprompt = Motiv + Register | Fünf Bausteine, englisch, mit `mood`/`tension` |
+> | `default_min_mentions` (Tool 1) | `default_max_terms` |
+>
+> **Verbindlich sind stattdessen:** `docs/superpowers/specs/2026-08-25-kollektivtraum-design.md`
+> (nachgezogen), `docs/operations.md` (kalibrierte Werte) und
+> `docs/HANDOFF-2026-08-29.md` (aktueller Stand). Dieses Dokument nur noch
+> lesen, um zu verstehen, **warum** etwas ursprünglich so gebaut wurde.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the screen that stands beside the graph wall and, whenever Tool 1 has absorbed a new interview, condenses the whole current graph into one German sentence and one image — keeping every earlier dream of the day visible as a strip beneath.
