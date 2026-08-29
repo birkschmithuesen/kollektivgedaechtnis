@@ -17,6 +17,7 @@ import pytest
 from kg2.imagegen import (
     MOOD_LIGHT,
     TENSION_COHERENCE,
+    TENSION_SOURCE_TEMPLATE,
     ImageError,
     build_image_prompt,
     decode_image,
@@ -30,6 +31,17 @@ REGISTER = (
     "frame, a single photograph."
 )
 SENTENCE = "Concrete dreams of the forest, and the forest sends an invoice."
+#: What stage 1 delivers as `image_description` since 2026-08-29: the same
+#: scene as the wall sentence, at length — materials, surfaces, arrangement.
+DESCRIPTION = (
+    "A slab of raw grey concrete stands upright in a clearing, its formwork "
+    "seams still visible and its edges chipped. Thin birch trunks press "
+    "against it on three sides, their bark peeling in papery strips. At the "
+    "base of the slab a printed invoice lies face up on wet moss, its paper "
+    "swollen and curling at the corners."
+)
+#: A `tension_source`: the two concrete things that contradict each other.
+TENSION_SOURCE = "restoring an existing façade while billing it as new construction"
 
 
 def png_bytes() -> bytes:
@@ -68,31 +80,154 @@ def response_with(data: bytes, mime: str = "image/png") -> dict:
     }
 
 
-# -- the prompt: five blocks, English, in order ------------------------------
+# -- the prompt: the blocks, English, in order -------------------------------
 
 
-def test_the_prompt_is_five_blocks_in_order_sentence_first():
+def test_the_prompt_is_the_documented_blocks_in_order_motif_first():
     """Doc's own template order: [Subject] + [Action]... first, register and
-    format last (google/gemini-3-pro-image prompting guide). The English
-    sentence is the motif and must be the subject, not the register."""
-    prompt = build_image_prompt(SENTENCE, mood=4, tension=5, register=REGISTER, aspect_ratio="16:9")
+    format last (google/gemini-3-pro-image prompting guide). The motif is the
+    subject and must come first, not the register."""
+    prompt = build_image_prompt(
+        DESCRIPTION, mood=4, tension=5, register=REGISTER, aspect_ratio="16:9"
+    )
 
     positions = [
-        prompt.index(SENTENCE),
+        prompt.index(DESCRIPTION),
         prompt.index(MOOD_LIGHT[4]),
         prompt.index(TENSION_COHERENCE[5]),
         prompt.index(REGISTER),
         prompt.index("16:9"),
     ]
     assert positions == sorted(positions)
-    assert prompt.index(SENTENCE) == 0
+    assert prompt.index(DESCRIPTION) == 0
+
+
+def test_the_motif_is_the_long_description_not_the_wall_sentence():
+    """Befund B (Birk, 2026-08-29, on five rendered images): the 16-word wall
+    sentence gave the image model almost nothing — Google's guidance for this
+    model asks for a scene described narratively. The literal translation is
+    still recorded (spec §5.3) but is no longer what the image is built on."""
+    prompt = build_image_prompt(
+        DESCRIPTION,
+        sentence_en=SENTENCE,
+        sentence="Beton träumt vom Wald.",
+        mood=3, tension=3, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    assert prompt.startswith(DESCRIPTION)
+    # The short forms are not smuggled in alongside it: one motif, not three.
+    assert SENTENCE not in prompt
+    assert "Beton träumt vom Wald." not in prompt
+
+
+def test_the_motif_falls_back_to_the_english_sentence():
+    """A field stage 1 failed to fill must never cost a dream (spec §8). The
+    literal translation is a worse motif than the description and a far
+    better one than nothing."""
+    prompt = build_image_prompt(
+        "", sentence_en=SENTENCE, sentence="Beton träumt vom Wald.",
+        mood=3, tension=3, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    assert prompt.startswith(SENTENCE)
+
+
+def test_the_motif_falls_back_to_the_german_sentence_as_a_last_resort():
+    """The last rung: a German motif renders worse than an English one — it
+    renders, which is what matters at 14:00 on an exhibition day."""
+    prompt = build_image_prompt(
+        "", sentence_en="", sentence="Beton träumt vom Wald.",
+        mood=3, tension=3, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    assert prompt.startswith("Beton träumt vom Wald.")
+
+
+def test_the_motif_fallback_treats_whitespace_and_none_as_missing():
+    """`None` is what a NULL column out of dreams.sqlite3 looks like (rows
+    from before 2026-08-29), and "   " is what a model leaves behind. Both
+    mean the same thing here and must not become the motif."""
+    prompt = build_image_prompt(
+        "   ", sentence_en=None, sentence="Beton träumt vom Wald.",
+        mood=3, tension=3, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    assert prompt.startswith("Beton träumt vom Wald.")
+
+
+def test_the_tension_block_names_the_concrete_contradiction():
+    """Befund A (Birk, 2026-08-29): TENSION_COHERENCE sets the DEGREE of
+    coherence and names nothing, so a model told only „two different
+    qualities sit side by side" invents which two — it painted a clean and a
+    dirty robot arm where the real friction was renovating vs. billing as new
+    build. The material's own contradiction now travels with the scale."""
+    prompt = build_image_prompt(
+        DESCRIPTION, tension_source=TENSION_SOURCE,
+        mood=3, tension=3, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    # The fixed scale is untouched...
+    assert TENSION_COHERENCE[3] in prompt
+    # ...and the concrete contradiction stands with it, in the same block.
+    assert TENSION_SOURCE in prompt
+    block = next(b for b in prompt.split("\n\n") if TENSION_COHERENCE[3] in b)
+    assert TENSION_SOURCE in block
+    assert block.index(TENSION_COHERENCE[3]) < block.index(TENSION_SOURCE)
+
+
+def test_the_concrete_contradiction_is_a_separate_sentence_after_the_scale():
+    """Appended, never substituted into the fixed wording: the scale keeps
+    deciding HOW hard the two things collide, and stage 1 only says WHAT they
+    are. A model-written phrase must not gain control of the coherence
+    degree — that is the one variable the history strip holds constant."""
+    prompt = build_image_prompt(
+        DESCRIPTION, tension_source=TENSION_SOURCE,
+        mood=3, tension=4, register=REGISTER, aspect_ratio="16:9",
+    )
+
+    expected = (
+        f"{TENSION_COHERENCE[4]} "
+        f"{TENSION_SOURCE_TEMPLATE.format(source=TENSION_SOURCE)}."
+    )
+    assert expected in prompt
+
+
+def test_an_empty_tension_source_leaves_the_block_exactly_as_it_was():
+    """Material without a real contradiction must not have one invented for
+    it (kg2/condense.py's evidence clause) — and then nothing at all is added
+    here, byte for byte the pre-2026-08-29 behaviour."""
+    with_source = build_image_prompt(
+        DESCRIPTION, tension_source="", mood=2, tension=4,
+        register=REGISTER, aspect_ratio="16:9",
+    )
+    without_argument = build_image_prompt(
+        DESCRIPTION, mood=2, tension=4, register=REGISTER, aspect_ratio="16:9"
+    )
+
+    assert with_source == without_argument
+    block = next(b for b in with_source.split("\n\n") if TENSION_COHERENCE[4] in b)
+    assert block == TENSION_COHERENCE[4]
+
+
+def test_a_whitespace_only_tension_source_counts_as_none():
+    """Same reason as the motif's fallback: "   " and None are what an empty
+    field really looks like coming out of a model or a NULL column."""
+    for empty in ("   ", None):
+        prompt = build_image_prompt(
+            DESCRIPTION, tension_source=empty, mood=2, tension=4,
+            register=REGISTER, aspect_ratio="16:9",
+        )
+        block = next(b for b in prompt.split("\n\n") if TENSION_COHERENCE[4] in b)
+        assert block == TENSION_COHERENCE[4]
 
 
 def test_the_aspect_ratio_is_landscape_and_stated():
     """Spec §5.2: matching the 65″ screen. Googles own example states the
     ratio in the prompt text too, even though it is also a parameter — not
     documented whether the chat/completions path forwards the parameter."""
-    prompt = build_image_prompt(SENTENCE, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9")
+    prompt = build_image_prompt(
+        DESCRIPTION, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9"
+    )
 
     assert "16:9" in prompt
     assert "landscape" in prompt.lower()
@@ -102,7 +237,9 @@ def test_the_register_is_appended_verbatim():
     """Spec §5.2: held in config as a style suffix, never model-chosen, never
     graph-driven. The history strip is a measurement series and exactly one
     variable may change — and that is the material."""
-    prompt = build_image_prompt(SENTENCE, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9")
+    prompt = build_image_prompt(
+        DESCRIPTION, mood=3, tension=3, register=REGISTER, aspect_ratio="16:9"
+    )
 
     assert REGISTER in prompt
 
@@ -112,15 +249,19 @@ def test_two_calls_with_the_same_mood_and_tension_produce_the_same_boilerplate()
     must get identical wording for those blocks, or the strip would show
     formulation noise instead of material drift (docs/operations.md finding
     on prompt order, an analogous concern)."""
-    a = build_image_prompt("Satz A.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
-    b = build_image_prompt("Satz B.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
+    a = build_image_prompt("Szene A.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
+    b = build_image_prompt("Szene B.", mood=2, tension=4, register=REGISTER, aspect_ratio="16:9")
 
-    assert a.replace("Satz A.", "X") == b.replace("Satz B.", "X")
+    assert a.replace("Szene A.", "X") == b.replace("Szene B.", "X")
 
 
 def test_a_different_mood_changes_only_the_mood_block():
-    warm = build_image_prompt(SENTENCE, mood=5, tension=3, register=REGISTER, aspect_ratio="16:9")
-    cold = build_image_prompt(SENTENCE, mood=1, tension=3, register=REGISTER, aspect_ratio="16:9")
+    warm = build_image_prompt(
+        DESCRIPTION, mood=5, tension=3, register=REGISTER, aspect_ratio="16:9"
+    )
+    cold = build_image_prompt(
+        DESCRIPTION, mood=1, tension=3, register=REGISTER, aspect_ratio="16:9"
+    )
 
     assert warm != cold
     assert MOOD_LIGHT[5] in warm
@@ -129,8 +270,12 @@ def test_a_different_mood_changes_only_the_mood_block():
 
 
 def test_a_different_tension_changes_only_the_tension_block():
-    calm = build_image_prompt(SENTENCE, mood=3, tension=1, register=REGISTER, aspect_ratio="16:9")
-    torn = build_image_prompt(SENTENCE, mood=3, tension=5, register=REGISTER, aspect_ratio="16:9")
+    calm = build_image_prompt(
+        DESCRIPTION, mood=3, tension=1, register=REGISTER, aspect_ratio="16:9"
+    )
+    torn = build_image_prompt(
+        DESCRIPTION, mood=3, tension=5, register=REGISTER, aspect_ratio="16:9"
+    )
 
     assert calm != torn
     assert TENSION_COHERENCE[1] in calm
@@ -167,6 +312,88 @@ def test_tension_formulations_name_nothing_concrete():
 def test_mood_and_tension_formulations_are_english():
     for text in list(MOOD_LIGHT.values()) + list(TENSION_COHERENCE.values()):
         assert "der " not in text.lower() and "und " not in text.lower()
+
+
+#: Words that turn a prompt line into an instruction to LEAVE SOMETHING OUT —
+#: the pattern Google's „Semantic Negative Prompts" guidance advises against
+#: for this model, and the one commit a0a545d removed from all 25
+#: combinations („Not a painting, not an illustration, …", „no warmth
+#: anywhere").
+#:
+#: Two deliberate absences from this list, both matching how a0a545d itself
+#: counted:
+#:
+#: * „neither" — TENSION_COHERENCE[4] ends „…both fully real, neither one
+#:   dominant". That balances two things that ARE in the frame; it removes
+#:   nothing, which is why that commit counted the stage as clean.
+#: * „free of" — the register's „Every surface in the frame is free of
+#:   writing" is named in that same commit as the ONE formulation that was
+#:   already right (a state the surface is in, not a thing to omit).
+#:
+#: Matched as whole words, so „nowhere" and „nothing" — which name a quality
+#: rather than rule one out — do not trip it.
+_NEGATIONS = (
+    "no", "not", "never", "without", "avoid", "exclude", "omit",
+    "don't", "doesn't", "isn't", "won't", "aren't",
+)
+
+
+def _negations_in(text: str) -> list[str]:
+    lowered = f" {text.lower()} "
+    return [
+        word for word in _NEGATIONS
+        if any(f" {word}{tail}" in lowered for tail in (" ", ",", ".", ";"))
+    ]
+
+
+def test_the_negation_check_would_catch_the_wording_that_was_removed():
+    """The guard's own guard. Two real strings from before commit a0a545d —
+    if `_negations_in` stops flagging these, the tests below are vacuous and
+    would pass on a prompt that had regressed all the way back."""
+    assert _negations_in("no warmth anywhere in the frame")
+    assert _negations_in("Not a painting, not an illustration.")
+    # ...and it does not fire on the wordings that were kept.
+    assert _negations_in("coming from nowhere in particular") == []
+    assert _negations_in("both fully real, neither one dominant") == []
+
+
+def test_every_fixed_prompt_block_stays_free_of_negations():
+    """Google's „Semantic Negative Prompts" guidance for this exact model
+    (ai.google.dev/gemini-api/docs/interactions/image-generation): describe
+    the scene you want instead of negating the one you don't. Decided
+    2026-08-29 (commit a0a545d) after eight negations were found in the
+    prompt; that commit checked all 25 mood/tension combinations by hand and
+    recorded the result in its message only. This is that check, automated,
+    so the next edit cannot lose it silently.
+
+    `TENSION_SOURCE_TEMPLATE` (added 2026-08-29) is in scope for the same
+    reason as the two scales: it is fixed wording this module owns."""
+    for name, text in (
+        [(f"MOOD_LIGHT[{k}]", v) for k, v in MOOD_LIGHT.items()]
+        + [(f"TENSION_COHERENCE[{k}]", v) for k, v in TENSION_COHERENCE.items()]
+        + [("TENSION_SOURCE_TEMPLATE", TENSION_SOURCE_TEMPLATE)]
+    ):
+        found = _negations_in(text)
+        assert not found, f"{name} negates instead of describing: {found} in {text!r}"
+
+
+def test_all_25_mood_tension_combinations_stay_free_of_negations():
+    """The combinations, not just the parts: a0a545d's own claim was about
+    all 25, and a future edit could introduce a negation only in a pairing —
+    or in the joint the tension source is attached at."""
+    for mood in range(1, 6):
+        for tension in range(1, 6):
+            prompt = build_image_prompt(
+                "Ein Motiv.", mood=mood, tension=tension,
+                tension_source=TENSION_SOURCE,
+                register="Ein Register.", aspect_ratio="16:9",
+            )
+            # The motif, the register and the format line come from the
+            # caller and from config2.toml — this checks what THIS module
+            # fixes, which is blocks two and three.
+            fixed = "\n\n".join(prompt.split("\n\n")[1:3])
+            found = _negations_in(fixed)
+            assert not found, f"mood={mood} tension={tension} negates: {found}"
 
 
 # -- decoding ---------------------------------------------------------------

@@ -32,27 +32,58 @@ There is deliberately NO retry (spec §8). A failed render abandons the dream,
 the current image stays up, and the next trigger tries again — that is „ride it
 out", and it is also what keeps a conference-wifi outage from tripling the bill.
 
-## The image prompt (revised 2026-08-28): English prose, five blocks
+## The image prompt (revised 2026-08-28, extended 2026-08-29): English prose
 
 The whole prompt is now English (the wall stays German) and connected prose,
 not a keyword list — Google's own guidance for this exact model is explicit:
 „A simple list of keywords won't cut it; you need to describe the scene
 narratively." (`ai.google.dev/gemini-api/docs/interactions/image-generation`,
 and the „ultimate prompting guide for nano banana"). `build_image_prompt`
-below assembles five blocks in the documented order, `[Subject] + [Action] +
+below assembles the blocks in the documented order, `[Subject] + [Action] +
 [Location] + [Composition] + [Style]`:
 
-1. **The English sentence** — stage 1's `sentence_en`, the motif. Variable,
-   changes every dream.
+1. **The motif** — stage 1's `image_description`: 3-4 sentences of English
+   prose about the scene, naming materials, surfaces, light on the objects,
+   spatial arrangement and scale. Variable, changes every dream. Falls back to
+   `sentence_en`, then to `sentence`, if the field is empty (see
+   `build_image_prompt` for why a missing field may never cost a dream).
 2. **Mood** — from `MOOD_LIGHT`, one of five FIXED formulations chosen by
    stage 1's `mood` (1-5). Fixed wording, not model-phrased, so two dreams at
    the same mood produce identical wording here — otherwise the strip would
    show formulation noise instead of material drift.
 3. **Tension** — from `TENSION_COHERENCE`, same discipline, keyed by
-   stage 1's `tension` (1-5).
+   stage 1's `tension` (1-5), and — when stage 1 named one — followed by the
+   concrete contradiction from `tension_source` in one further sentence.
 4. **Register** — `DreamConfig.visual_register`, fixed all day (unchanged
    rule from above).
 5. **Format** — aspect ratio and orientation, fixed.
+
+Blocks 2, 4 and 5 are invariant per value; block 1 always varies; block 3
+varies only in its optional second sentence. Everything the image model is
+told therefore comes from exactly two places: the fixed scales here, and the
+material via stage 1.
+
+**Why the motif is no longer the 16-word wall sentence (Birk, 2026-08-29,
+measured on five rendered images in `out/tagesverlauf/`).** Stage 1's
+`sentence_en` is a LITERAL translation — its prompt forbids embellishment,
+because it is the honest counterpart of what visitors read on the wall. That
+made it a poor motif: 16 words, one clause, nothing about materials or
+arrangement, in direct contradiction to Google's „describe the scene
+narratively". `image_description` is the same scene written for the image
+model instead of for the wall. The wall sentence itself is UNCHANGED and
+stays 16 words — it is measured against legibility in passing, not against
+image quality, and the two must not be traded against each other.
+
+**Why the tension block now carries a concrete contradiction.** The
+`TENSION_COHERENCE` wordings are deliberately contentless: they set the
+DEGREE of coherence, never its subject. But a model told only „two different
+qualities sit side by side" has to invent WHICH two — and it does. Handed the
+sentence about robots spraying concrete onto an existing façade while billing
+it as new construction, it painted two robot arms, one clean and one dirty:
+a contradiction it made up, because the real one („renovating" against
+„billing as new build") was never in the prompt. `tension_source` supplies
+that, and only that: the fixed scale still decides how hard the two things
+collide, the material now decides what they are.
 
 **Mood formulations describe ONLY light and colour — Birk's explicit
 constraint.** A formulation like „used objects, traces of life" is already
@@ -157,21 +188,86 @@ TENSION_COHERENCE: dict[int, str] = {
 }
 
 
+#: How stage 1's `tension_source` is attached to the fixed wording above.
+#: Deliberately a SEPARATE sentence, appended after the scale's own: the fixed
+#: text keeps deciding HOW hard the two things collide, and this one only
+#: names WHAT they are. Substituting it into the scale itself would give a
+#: model-written phrase control over the coherence degree, which is exactly
+#: the variable the history strip holds constant.
+#:
+#: The wording is neutral about the frame's degree of coherence on purpose, so
+#: it reads correctly behind all five stages — behind stage 1's „everything
+#: belongs together" as much as behind stage 5's „two realities fused". It
+#: names the two things and leaves how far apart they sit to the scale above.
+#:
+#: Positively phrased, like everything else in this module: it states what the
+#: frame holds rather than ruling anything out, and `tension_source` itself is
+#: prompted for as an affirmative clause („restoring an existing façade while
+#: billing it as new construction"), never as „not …".
+TENSION_SOURCE_TEMPLATE = (
+    "Concretely, the two things the frame holds together are these: {source}"
+)
+
+
 def build_image_prompt(
-    sentence_en: str, *, mood: int, tension: int, register: str, aspect_ratio: str
+    image_description: str | None,
+    *,
+    mood: int,
+    tension: int,
+    register: str,
+    aspect_ratio: str,
+    sentence_en: str | None = "",
+    sentence: str | None = "",
+    tension_source: str | None = "",
 ) -> str:
-    """Five blocks, in the documented order (module docstring): subject
-    (the English sentence) first, mood, tension, register, format last.
+    """The documented block order (module docstring): subject (the motif)
+    first, mood, tension, register, format last.
 
     Order matters: a prompt that opens with lighting instructions gets an
-    image about lighting. The sentence is the subject; everything after it is
+    image about lighting. The motif is the subject; everything after it is
     how the subject is rendered.
+
+    **Three fallbacks for the motif, in this order:** `image_description`,
+    then `sentence_en`, then `sentence`. A field stage 1 failed to fill must
+    never cost a dream — spec §8's whole stance is to ride imperfection out —
+    and each step down is still a description of the same scene, only shorter
+    and (at the last step) in German. A German motif renders worse than an
+    English one; it renders, which is what matters at 14:00 on an exhibition
+    day. Callers that have only one of the three may pass just that one.
+
+    `tension_source` is optional in the strictest sense: when it is empty the
+    tension block is exactly what it was before 2026-08-29, because material
+    without a real contradiction must not have one invented for it, here no
+    more than in stage 1.
     """
+    # `or` rather than a chain of ifs: every one of the three can arrive as
+    # "" (the dataclass default), as None (a NULL column read straight out of
+    # dreams.sqlite3), or as whitespace the model left behind, and all three
+    # mean the same thing here — nothing usable. Stripping is what turns "  "
+    # into a falsy value, so it is done before the choice, not after it.
+    motif = (
+        (image_description or "").strip()
+        or (sentence_en or "").strip()
+        or (sentence or "").strip()
+    )
+
+    tension_block = TENSION_COHERENCE.get(tension, TENSION_COHERENCE[3])
+    source = (tension_source or "").strip()
+    if source:
+        # One sentence, appended — see TENSION_SOURCE_TEMPLATE for why it is
+        # not substituted into the fixed wording. The trailing period is added
+        # here rather than demanded of the model: stage 1 is asked for a
+        # clause, and a clause does not come with one.
+        tension_block = (
+            f"{tension_block} "
+            f"{TENSION_SOURCE_TEMPLATE.format(source=source.rstrip('.'))}."
+        )
+
     return "\n\n".join(
         [
-            sentence_en,
+            motif,
             MOOD_LIGHT.get(mood, MOOD_LIGHT[3]),
-            TENSION_COHERENCE.get(tension, TENSION_COHERENCE[3]),
+            tension_block,
             register,
             f"Aspect ratio {aspect_ratio}, landscape orientation, a single photograph.",
         ]

@@ -56,13 +56,22 @@ def setup(tmp_path, **overrides):
     return cfg, DreamStore.open(cfg.db_path)
 
 
-def good_condense(sentence="Der Beton träumt von Wald.", sentence_en=None, mood=3, tension=3):
+def good_condense(
+    sentence="Der Beton träumt von Wald.",
+    sentence_en=None,
+    image_description="A slab of grey concrete stands in a clearing of thin birch trunks.",
+    tension_source="restoring an existing façade while billing it as new construction",
+    mood=3,
+    tension=3,
+):
     from kg2.condense import CondenseResult
 
     def fn(llm, material):
         return CondenseResult(
             prompt="P", sentence=sentence,
             sentence_en=sentence_en if sentence_en is not None else sentence,
+            image_description=image_description,
+            tension_source=tension_source,
             mood=mood, tension=tension,
         )
 
@@ -115,6 +124,82 @@ def test_the_image_lands_at_images_slash_dream_id_png(tmp_path):
 
     assert dream.image_path == "d1.png"
     assert (cfg.image_dir / "d1.png").read_bytes() == png_bytes()
+    store.close()
+
+
+def test_everything_stage_1_produced_is_recorded_including_the_image_channel(tmp_path):
+    """Spec §5.3: what was sent is what is stored. Since 2026-08-29 stage 1
+    returns two more texts than the wall needs — the longer description the
+    image is built on and the material's own contradiction — and both are
+    part of the record, not scratch values thrown away after the render."""
+    cfg, store = setup(tmp_path)
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=1.0,
+        condense_fn=good_condense(
+            sentence="Der Beton träumt von Wald.",
+            sentence_en="Concrete dreams of the forest.",
+            image_description="A slab of grey concrete stands among thin birch trunks.",
+            tension_source="renovating a façade while billing it as new construction",
+        ),
+        render_fn=good_render(),
+    )
+
+    assert dream.sentence == "Der Beton träumt von Wald."
+    assert dream.sentence_en == "Concrete dreams of the forest."
+    assert dream.image_description == "A slab of grey concrete stands among thin birch trunks."
+    assert dream.tension_source == "renovating a façade while billing it as new construction"
+    store.close()
+
+
+def test_the_image_prompt_is_built_from_the_description_and_the_contradiction(tmp_path):
+    """The two findings of 2026-08-29, end to end: the image model is given
+    the longer description as its motif (Befund B) and is told what the
+    contradiction actually is instead of inventing one (Befund A). Asserted
+    on `stage2_prompt`, which is by definition what was sent (spec §5.3)."""
+    cfg, store = setup(tmp_path)
+    sent = []
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=1.0,
+        condense_fn=good_condense(
+            sentence="Der Beton träumt von Wald.",
+            sentence_en="Concrete dreams of the forest.",
+            image_description="A slab of grey concrete stands among thin birch trunks.",
+            tension_source="renovating a façade while billing it as new construction",
+        ),
+        render_fn=lambda prompt, **kwargs: (sent.append(prompt), png_bytes())[1],
+    )
+
+    assert dream.stage2_prompt.startswith(
+        "A slab of grey concrete stands among thin birch trunks."
+    )
+    assert "renovating a façade while billing it as new construction" in dream.stage2_prompt
+    # The literal wall translation is recorded but is no longer the motif.
+    assert "Concrete dreams of the forest." not in dream.stage2_prompt
+    assert sent == [dream.stage2_prompt]  # what was recorded is what was sent
+    store.close()
+
+
+def test_a_dream_without_the_new_fields_still_renders(tmp_path):
+    """The failure that must never happen: a stage 1 that returned neither a
+    description nor a contradiction still produces an image, because
+    `build_image_prompt` falls back to the English sentence (spec §8)."""
+    cfg, store = setup(tmp_path)
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=1.0,
+        condense_fn=good_condense(
+            sentence="Der Beton träumt von Wald.",
+            sentence_en="Concrete dreams of the forest.",
+            image_description="",
+            tension_source="",
+        ),
+        render_fn=good_render(),
+    )
+
+    assert dream.status == "done"
+    assert dream.stage2_prompt.startswith("Concrete dreams of the forest.")
     store.close()
 
 

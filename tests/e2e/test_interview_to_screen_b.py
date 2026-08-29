@@ -280,6 +280,15 @@ def test_an_interview_becomes_a_dream_and_an_image_on_screen_b(tmp_path):
         assert dream.status == "done"
         assert dream.sentence and dream.sentence.strip()
         assert dream.sentence_en and dream.sentence_en.strip()
+        # The image channel (2026-08-29): the longer description the picture
+        # is actually built from. `tension_source` is deliberately NOT
+        # asserted non-empty — material without a real contradiction must
+        # leave it blank, and this fixture's material may well be such a case.
+        assert dream.image_description and dream.image_description.strip()
+        assert len(dream.image_description.split()) > len(dream.sentence_en.split()), (
+            "the image description must be RICHER than the 16-word wall "
+            "sentence — that is the whole point of the second field"
+        )
         assert sentences == [dream.sentence], (
             "the display must be told the sentence before the image exists "
             "(spec §6) — that announcement is what the typewriter builds on"
@@ -310,10 +319,12 @@ def test_an_interview_becomes_a_dream_and_an_image_on_screen_b(tmp_path):
         expected = ".png" if data.startswith(b"\x89PNG") else ".jpg"
         assert image_file.suffix == expected
 
-        # The image prompt is the five documented blocks, English, with the
-        # register appended — the fixed part of the measurement series.
+        # The image prompt is the documented blocks, English, with the
+        # register appended — the fixed part of the measurement series. The
+        # motif is the long description, not the literal wall translation
+        # (2026-08-29, kg2/imagegen.py).
         assert dream.stage2_prompt
-        assert dream.sentence_en in dream.stage2_prompt
+        assert dream.image_description in dream.stage2_prompt
         assert dream_cfg.visual_register in dream.stage2_prompt
         assert dream_cfg.image_aspect_ratio in dream.stage2_prompt
         assert renders[0] == dream.stage2_prompt, (
@@ -392,5 +403,7 @@ def test_an_interview_becomes_a_dream_and_an_image_on_screen_b(tmp_path):
     print("\n--- Probedurchlauf, eine Kette ---")
     print("Satz  :", dream.sentence)
     print("EN    :", dream.sentence_en)
+    print("Motiv :", dream.image_description)
+    print("Wider.:", dream.tension_source or "— (kein Widerspruch im Material)")
     print(f"mood  : {dream.mood}   tension: {dream.tension}")
     print("Bild  :", image_file.resolve(), f"({len(data) // 1024} KB)")

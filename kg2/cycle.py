@@ -122,14 +122,24 @@ def run_dream(
             prompt=result.prompt,
             sentence=result.sentence,
             sentence_en=result.sentence_en,
+            image_description=result.image_description,
+            tension_source=result.tension_source,
             mood=result.mood,
             tension=result.tension,
             model=cfg.condense_model,
         )
         _announce(on_sentence, result.sentence)
 
+        # Every field stage 1 produced, not just the motif: build_image_prompt
+        # owns the fallback order between them (image_description ->
+        # sentence_en -> sentence), so a stage 1 that filled only some of them
+        # still yields a prompt here, and this function keeps no opinion about
+        # which one won.
         image_prompt = build_image_prompt(
-            result.sentence_en,
+            result.image_description,
+            sentence_en=result.sentence_en,
+            sentence=result.sentence,
+            tension_source=result.tension_source,
             mood=result.mood,
             tension=result.tension,
             register=cfg.visual_register,
