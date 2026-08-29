@@ -111,4 +111,8 @@ uv run python -m sim.dream_calibrate --help   # Kalibrierläufe für Tool 2
 
 ## Lizenz
 
-[MIT](LICENSE) — Birk Schmithüsen / ArtesMobiles.
+[MIT](LICENSE) — Copyright (c) 2026 Birk Schmithüsen.
+
+Das gilt auch für das Material unter `sim/`: die 60 Interviews sind von einem
+Sprachmodell erzeugt, die 16 Portraits von einem Bildmodell — es sind keine
+realen Personen und keine realen Aussagen darin.
