@@ -143,13 +143,27 @@ beschreibst, ist das Licht AN EINEM DING — ein Glanz auf nassem Beton, ein \
 Schatten unter einer Kante —, nicht die Stimmung des Bildes. Auch hier gilt \
 die Belegbarkeit: nur was sich auf die gelieferten Begriffe stützt.
 
-WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der benennt, \
-welche zwei konkreten Dinge aus dem Material einander widersprechen. Er wird \
-in Stufe 2 hinter einen einleitenden Satz gehängt und muss deshalb ein \
-Halbsatz bleiben, kein ganzer Satz und ohne Punkt am Ende — zum Beispiel \
-„restoring an existing façade while billing it as new construction\". Wenn im \
-Material kein echter Widerspruch liegt, lass dieses Feld leer — ein \
-erfundener Widerspruch ist schlechter als keiner.
+WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der den \
+Widerspruch aus dem Material als etwas SICHTBARES benennt. Er wird in Stufe 2 \
+hinter einen einleitenden Satz gehängt und muss deshalb ein Halbsatz bleiben, \
+kein ganzer Satz und ohne Punkt am Ende.
+
+ENTSCHEIDEND: Ein Bildmodell kann keinen Vorgang und keine Absicht zeigen, nur \
+Dinge im Raum. Nenne deshalb zwei GEGENSTÄNDE, ORTE ODER MENSCHLICHE HANDLUNGEN, \
+die man beide gleichzeitig fotografieren könnte, nicht zwei Begriffe oder \
+Verfahren. Übersetze den abstrakten Widerspruch in das, woran man ihn sähe.
+- Schlecht (unsichtbar): „gathering opinions while decisions are made from \
+above\" — „von oben entschieden\" hat kein Aussehen.
+- Gut (sichtbar): „a wall of coloured dots stuck on by many hands, and four \
+people at a round table behind glass signing the finished plan\"
+- Schlecht (unsichtbar): „restoring an existing façade while billing it as new \
+construction\"
+- Gut (sichtbar): „workers patching old brickwork by hand, beside a printed \
+invoice board showing new-build prices\"
+
+Beide Hälften müssen im Material belegt sein. Wenn dort kein echter Widerspruch \
+liegt, lass dieses Feld leer — ein erfundener Widerspruch ist schlechter als \
+keiner.
 
 EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
 - mood: Wie blicken die Menschen in diesem Material auf die Zukunft? \

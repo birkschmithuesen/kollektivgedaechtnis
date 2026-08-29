@@ -196,7 +196,44 @@ def test_the_prompt_asks_which_two_things_contradict_each_other():
     system = build_condense_system()
 
     assert "WIDERSPRUCH" in system
-    assert "widersprechen" in system
+    assert "Widerspruch aus dem Material" in system
+
+
+def test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one():
+    """Befund A2 (Birk, 2026-08-29, am dritten Bild des neuen Aufbaus).
+
+    Die erste Fassung verlangte „welche zwei konkreten Dinge einander
+    widersprechen" und gab als Beispiel „restoring an existing façade while
+    billing it as new construction". Das Modell hat gehorcht — und lieferte
+    „gathering opinions while decisions are made from above". Beides sind
+    VORGÄNGE, keine Anblicke: „von oben entschieden" hat kein Aussehen, und im
+    Bild war davon folgerichtig nichts zu sehen.
+
+    Der Fehler saß im Beispiel, nicht im Modell: ein abstraktes Vorbild
+    erzeugt abstrakte Antworten. Ein Bildmodell kann nur Dinge im Raum zeigen,
+    also muss Stufe 1 den Widerspruch übersetzen, bevor Stufe 2 ihn bekommt —
+    „vier Menschen am runden Tisch unterschreiben den fertigen Plan" statt
+    „von oben entschieden".
+
+    Geprüft wird die Eigenschaft, nicht der Wortlaut: dass der Prompt
+    Sichtbarkeit verlangt UND ein sichtbares Beispiel mitliefert. Ein
+    abstraktes Gegenbeispiel allein genügt nicht — das Modell ahmt das
+    Positivbeispiel nach.
+    """
+    system = build_condense_system()
+
+    # Die Anweisung selbst.
+    assert "SICHTBARES" in system or "sichtbar" in system.lower()
+    # Die Begründung, warum: ein Bildmodell zeigt keine Vorgänge.
+    assert "Vorgang" in system
+    # Ein Positivbeispiel, an dem sich das Modell orientieren kann, und ein
+    # Negativbeispiel, das den Fehler benennt.
+    assert "Gut (sichtbar)" in system
+    assert "Schlecht (unsichtbar)" in system
+    # Das konkrete Gegenbeispiel aus Birks Befund muss als schlecht markiert
+    # sein — es stand vorher als Vorbild da.
+    schlecht = system[system.index("Schlecht (unsichtbar)"):]
+    assert "decisions are made from above" in schlecht
 
 
 def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
