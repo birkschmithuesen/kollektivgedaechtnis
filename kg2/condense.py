@@ -135,6 +135,16 @@ Materialien, Oberflächen, wie das Licht auf den Dingen liegt, wie die Dinge im 
 Raum zueinander stehen, wie groß sie im Verhältnis zueinander sind. Diese \
 Fassung ist das Bildmotiv für Stufe 2.
 
+BEIDE SEITEN INS BILD: Wenn das Material sowohl Zuversichtliches als auch \
+Beunruhigendes hergibt, müssen BEIDE in der Bildbeschreibung vorkommen, und \
+zwar gleich groß und gleich konkret — die zuversichtliche Seite nicht als \
+Randnotiz hinter dem Verfall. Zeige den Zustand der Dinge so, wie das Material \
+ihn hergibt: Was intakt, benutzt, gepflegt oder neu gemacht ist, gehört \
+genauso hinein wie was bröckelt, leersteht oder versiegelt ist. Ein Bild, das \
+nur den Verfall zeigt, obwohl die Menschen auch von Gelingendem gesprochen \
+haben, gibt das Material falsch wieder — und eines, das nur Gelingendes zeigt, \
+ebenso.
+
 WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
 zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
 keine Kamera-, Objektiv-, Film- oder Stilangabe. Beides steht in Stufe 2 \
@@ -147,6 +157,16 @@ WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der den \
 Widerspruch aus dem Material als etwas SICHTBARES benennt. Er wird in Stufe 2 \
 hinter einen einleitenden Satz gehängt und muss deshalb ein Halbsatz bleiben, \
 kein ganzer Satz und ohne Punkt am Ende.
+
+WELCHE ZWEI HÄLFTEN: Suche im Material die STÄRKSTE ZUVERSICHTLICHE und die \
+STÄRKSTE BEUNRUHIGTE Aussage und stelle beide nebeneinander. Nicht irgendein \
+Gegensatzpaar, sondern die beiden äußeren Enden dessen, was die Menschen \
+tatsächlich gesagt haben — das ist der Widerspruch, der den Tag trägt. Die \
+zuversichtliche Hälfte muss dabei genauso konkret und genauso groß im Bild \
+sein wie die beunruhigte; ein Bild, in dem nur der Verfall zu sehen ist und \
+die Hoffnung als Randnotiz, gibt das Material falsch wieder. Findet sich zu \
+einer der beiden Seiten nichts Belegbares, lass das Feld lieber leer, als die \
+fehlende Seite zu erfinden.
 
 ENTSCHEIDEND: Ein Bildmodell kann keinen Vorgang und keine Absicht zeigen, nur \
 Dinge im Raum. Nenne deshalb zwei GEGENSTÄNDE, ORTE ODER MENSCHLICHE HANDLUNGEN, \

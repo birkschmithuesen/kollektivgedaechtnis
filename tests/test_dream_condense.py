@@ -236,6 +236,45 @@ def test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one():
     assert "decisions are made from above" in schlecht
 
 
+def test_the_prompt_demands_both_poles_of_the_material_in_the_picture():
+    """Birks Vorgabe (2026-08-29), nachdem ihm das dritte Bild zu düster war:
+    Stufe 1 soll „falls möglich das stärkste positive und negative aus dem
+    Graphen rausholen und beides zusammen darstellen".
+
+    Die Diagnose davor: Der düstere Ton kam NICHT aus dem mood-Baustein (der
+    macht nur das Licht kühl), sondern aus dem Motiv — bröckelnder Putz,
+    kellerlose Platte, zugebauter Freiraum. Das Material trägt beides, aber
+    die Bildbeschreibung hatte keinen Grund, die zuversichtliche Seite
+    mitzunehmen, und der Widerspruch war nur „irgendein Gegensatzpaar".
+
+    Zwei Stellen müssen es tragen, deshalb zwei Prüfungen: die
+    Bildbeschreibung (beide Seiten gleich groß im Bild) und der Widerspruch
+    (die beiden ÄUSSEREN Enden, nicht ein beliebiges Paar).
+
+    Die Ehrlichkeitsklausel ist Teil der Regel und wird mitgeprüft: Fehlt eine
+    Seite im Material, wird sie nicht erfunden — sonst wäre aus „das Material
+    ehrlich abbilden" ein „das Bild schönen" geworden, also derselbe Fehler
+    mit umgekehrtem Vorzeichen.
+    """
+    system = build_condense_system()
+
+    # 1. Die Bildbeschreibung muss beide Seiten tragen.
+    assert "BEIDE SEITEN INS BILD" in system
+    beschreibung = system[system.index("BEIDE SEITEN INS BILD"):]
+    assert "gleich groß" in beschreibung
+    # Der Zustand der Dinge ist die Stellschraube, nicht die Lichtstimmung.
+    assert "intakt" in beschreibung
+
+    # 2. Der Widerspruch spannt die äußeren Enden auf, nicht irgendein Paar.
+    assert "WELCHE ZWEI HÄLFTEN" in system
+    haelften = system[system.index("WELCHE ZWEI HÄLFTEN"):]
+    assert "STÄRKSTE ZUVERSICHTLICHE" in haelften
+    assert "STÄRKSTE BEUNRUHIGTE" in haelften
+
+    # 3. Nichts erfinden, wenn eine Seite fehlt.
+    assert "erfinden" in haelften
+
+
 def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
     """kg2/imagegen.py hangs `tension_source` behind a sentence of its own and
     adds the full stop itself. A field that arrived as a whole sentence would
