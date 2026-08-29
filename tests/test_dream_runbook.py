@@ -93,15 +93,27 @@ def test_the_min_interval_floor_finding_is_stated_plainly():
     assert "480" in section  # the day's actual cadence at 60 interviews / 8h
 
 
-def test_the_unvalidated_value_is_marked_as_not_calibrated():
-    """SINGLE_MENTION_BUDGET/SHARED_TERMS_SATURATION (kg2/weighting.py) are
-    the module's provisional start values, not a calibration result yet. The
-    runbook must not dress them up as one."""
+def test_the_gliding_constants_state_how_their_values_came_about():
+    """SINGLE_MENTION_BUDGET/SHARED_TERMS_SATURATION were provisional until
+    2026-08-28, when `sim.dream_calibrate terms` was run over 4 graph sizes x
+    3 N x 3 X. The finding was that the choice is inert above ~30 persons and
+    makes no readable difference below — so the values are SET, with the
+    measurement as the evidence that setting them is legitimate.
+
+    That distinction is the thing worth guarding: a reader must be able to
+    tell 'measured, and the measurement said it does not matter' from both
+    'calibrated to an optimum' and 'guessed'. Either dressing-up loses the
+    reason and invites someone to re-tune the value blind.
+    """
     section = tool2_section()
     idx = section.index("SINGLE_MENTION_BUDGET")
-    # Somewhere near its first mention, the text must say it is unconfirmed.
-    nearby = section[idx : idx + 800]
-    assert "noch nicht kalibriert" in nearby.lower() or "nicht kalibriert" in nearby.lower()
+    nearby = section[idx : idx + 1600]
+    # The run that produced the finding must be named next to the values...
+    assert "calibrate-terms" in nearby or "dream_calibrate terms" in nearby
+    # ...and the finding itself must be there, not just the claim of a run.
+    assert "wirkungslos" in nearby.lower() or "kein qualitätsunterschied" in nearby.lower()
+    # ...and it must not read as an optimum somebody dialled in.
+    assert "gesetzt" in nearby.lower()
 
 
 @pytest.mark.parametrize(

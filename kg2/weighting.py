@@ -83,9 +83,21 @@ class Material:
     quotes: list[str]
 
 
-# vorläufig — die endgültigen Werte kommen aus dem Kalibrierlauf
-# (`sim.dream_calibrate terms`) und werden von Birk entschieden, siehe
-# docs/operations.md, „Kalibrierte Werte (Tool 2)".
+# Gefahren am 2026-08-28 (`sim.dream_calibrate terms`,
+# `out/calibrate-terms.txt`): vier Graphgrößen × N ∈ {10, 20, 30} × X ∈ {15,
+# 25, 40}, 36 echte Stufe-1-Läufe. Befund: Ab 30 Personen ist die Wahl
+# WIRKUNGSLOS — dort liegen 25 bzw. 49 geteilte Begriffe vor, also über jedem
+# geprüften X, und es kommen ohnehin null Einmal-Nennungen mehr durch. Ein
+# Unterschied entsteht nur bei 3 und 10 Personen, und dort war unter allen
+# neun Kombinationen kein Qualitätsunterschied lesbar (die Sätze sind
+# durchweg brauchbar, sie greifen nur andere Randbegriffe auf).
+#
+# Deshalb bewusst NICHT weiter kalibriert: Die Werte sind gesetzt, nicht
+# gemessen, weil die Messung gezeigt hat, dass es hier nichts zu messen gibt.
+# N=20 ist die Mitte des geprüften Bereichs; X=25 ist die Zahl geteilter
+# Begriffe, die der reale Graph bei 30 Personen erreicht — also etwa zur
+# Tagesmitte, ab wann der Traum nur noch aus Geteiltem entsteht.
+# Wer sie später ändert, sollte den Lauf wiederholen statt zu raten.
 SINGLE_MENTION_BUDGET = 20  # N
 SHARED_TERMS_SATURATION = 25  # X
 

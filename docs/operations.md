@@ -464,9 +464,11 @@ unter `data_dir` nennt.
 
 ### Kalibrierte Werte (Tool 2)
 
-Diese Werte stehen in `config2.toml`. Zwei sind tatsächlich kalibriert, einer
-ist ein Startwert aus der Spec, der noch nicht am generierten Material
-überprüft wurde. Der Unterschied wird hier nicht verwischt.
+Diese Werte stehen teils in `config2.toml`, teils als Modul-Konstanten im Code
+(dort, wo sie eine Eigenschaft des Verfahrens sind und kein Tagesregler). Alle
+unten genannten sind inzwischen an generiertem Material gemessen; wo ein Wert
+gesetzt statt feinkalibriert ist, steht das ausdrücklich dabei — der
+Unterschied wird hier nicht verwischt.
 
 - `min_interval_s` = **240** — kalibriert (`sim.dream_calibrate floor`,
   Simulationslauf 2026, kein Modell nötig, reine Arithmetik über den
@@ -494,19 +496,35 @@ ist ein Startwert aus der Spec, der noch nicht am generierten Material
 - `poll_interval_s` = **5** — bei diesem Mindestabstand ist eine
   Erkennungsverzögerung von 5 s unsichtbar (Spec §4.1).
 - `SINGLE_MENTION_BUDGET` / `SHARED_TERMS_SATURATION` (`kg2/weighting.py`,
-  vorläufig **20** / **25**) — **noch nicht kalibriert.** Das sind die zwei
-  Parameter der gleitenden Begriffsauswahl, die seit 2026-08-28 die alte
-  Widerspruchsklausel-Ära-Regel ersetzt: alle geteilten Begriffe (≥2
+  **20** / **25**) — **gemessen und bewusst gesetzt** (2026-08-28,
+  `sim.dream_calibrate terms`, `out/calibrate-terms.txt`). Das sind die zwei
+  Parameter der gleitenden Begriffsauswahl: alle geteilten Begriffe (≥2
   Nennungen) laufen immer mit, dazu höchstens `SINGLE_MENTION_BUDGET`
   Einmal-Nennungen — die jüngsten zuerst —, wobei dieses Budget linear auf 0
   schrumpft, während die Zahl der geteilten Begriffe von 0 auf
-  `SHARED_TERMS_SATURATION` wächst. Absichtlich Modul-Konstanten, nicht
-  Config-Werte: sie sind eine Eigenschaft des Verfahrens, kein Tagesregler —
-  anders als Tool 1's `min_mentions`, das ein Anzeigeregler ist. Ob 20/25 die
-  richtigen Werte sind, sagt erst der Lauf unten in „Offene Entscheidungen".
-- `RECENT_TERMS` (`kg2/weighting.py`, vorläufig **5**) — **noch nicht
-  kalibriert.** Zweite, von der Gewichtung unabhängige Achse (hinzugefügt
-  2026-08-29, `.task-recency.md`): ein eigener Block „Zuletzt gesagt" im
+  `SHARED_TERMS_SATURATION` wächst.
+
+  **Der Befund des Laufs ist, dass es hier wenig zu entscheiden gibt:** 36
+  echte Stufe-1-Läufe über vier Graphgrößen × N ∈ {10, 20, 30} × X ∈ {15, 25,
+  40}. Ab 30 Personen ist die Wahl **wirkungslos** — dort liegen 25 bzw. 49
+  geteilte Begriffe vor, also über jedem geprüften X, und es kommen ohnehin
+  null Einmal-Nennungen mehr durch. Ein Unterschied entsteht nur bei 3 und 10
+  Personen, und dort war unter allen neun Kombinationen kein
+  Qualitätsunterschied lesbar; die Sätze sind durchweg brauchbar und greifen
+  nur andere Randbegriffe auf. Die Werte sind daher **gesetzt statt
+  feinkalibriert**, mit der Messung als Beleg, dass das zulässig ist: N=20 ist
+  die Mitte des geprüften Bereichs, X=25 die Zahl geteilter Begriffe, die der
+  reale Graph bei 30 Personen erreicht — also etwa zur Tagesmitte, ab wann der
+  Traum nur noch aus Geteiltem entsteht.
+
+  Absichtlich Modul-Konstanten, nicht Config-Werte: Sie sind eine Eigenschaft
+  des Verfahrens, kein Tagesregler — anders als Tool 1's `min_mentions`, das
+  ein Anzeigeregler ist. **Wer sie später ändert, sollte den Lauf wiederholen
+  statt zu raten.**
+- `RECENT_TERMS` (`kg2/weighting.py`, **5**) — **gemessen und gesetzt**
+  (2026-08-29, `sim.dream_calibrate recency`, `out/calibrate-recency.txt`).
+  Zweite, von der Gewichtung unabhängige Achse: ein eigener Block „Zuletzt
+  gesagt" im
   Prompt, mit den `RECENT_TERMS` jüngsten Begriffen nach `created_at` — aus
   geteilten UND einmaligen Begriffen zusammen, unverändert in ihrer
   Nennungszahl. Grund: Ein Begriff, der im gerade fertigen Interview zum
@@ -576,24 +594,63 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Punkt D) — das ist jetzt eine reine Textentscheidung, kein Kalibrierlauf.
 
 2. **Gleitende Begriffsauswahl** (`SINGLE_MENTION_BUDGET` /
-   `SHARED_TERMS_SATURATION`, `kg2/weighting.py`) — **Lauf erledigt**,
-   Entscheidung offen. Ergebnis: `out/calibrate-terms.txt`, vier Größen je
-   mehrere N/X-Kombinationen, mit der Zahl der tatsächlich im Prompt
-   gelandeten geteilten und einmaligen Begriffe.
+   `SHARED_TERMS_SATURATION`, `kg2/weighting.py`) — **ENTSCHIEDEN am
+   2026-08-28: 20 / 25.** Der Lauf hat gezeigt, dass die Wahl ab 30 Personen
+   wirkungslos ist und darunter keinen lesbaren Qualitätsunterschied macht;
+   die Werte sind deshalb gesetzt statt feinkalibriert. Vollständige
+   Begründung oben bei „Kalibrierte Werte (Tool 2)", Rohdaten in
+   `out/calibrate-terms.txt`.
 
    ```bash
+   # gefahren am 2026-08-28; Wiederholung nur nötig, wenn jemand die Werte ändern will:
    export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
    uv run python -m sim.dream_calibrate terms | tee out/calibrate-terms.txt
    ```
 
 3. **Skala für Stimmung und Spannung** (`mood`/`tension`, `kg2/condense.py`)
-   — **Lauf erledigt**, Entscheidung offen. Vier gebaute Extreme (frei
-   erfundenes Material) je dreimal durch Stufe 1 geschickt, dazu der reale
-   Graph in vier Größen. Ergebnis: `out/calibrate-mood.txt`.
+   — **ENTSCHIEDEN am 2026-08-29: beide bleiben.**
+
+   `mood` war bereits im ersten Lauf sauber: 5 / 3 / 3 / 1 über vier gebaute
+   Extreme, dreimal reproduziert (`out/calibrate-mood.txt`).
+
+   `tension` war im ersten Lauf **ungültig getestet** und musste nachgeholt
+   werden. Der alte Testfall „eindeutig negativ, zerstritten" bestand aus
+   Begriffen, die alle in dieselbe negative Richtung zeigten (Schimmel,
+   Räumungsbescheide, abgesagte Versprechen) — einhellig negativ, aber gerade
+   **kein** Widerspruch. Dass `tension` dort nur 2 lieferte, war korrekt; der
+   Test hatte die falsche Größe konstruiert.
+
+   Der Nachtest (`sim.dream_calibrate tension`, `out/calibrate-tension.txt`)
+   entkoppelt beide Achsen in einem 2×2-Raster und beantwortet die eigentliche
+   Frage — reagiert `tension` auf Widersprüchlichkeit oder läuft es nur mit
+   `mood` mit?
+
+   | | einig | zerstritten |
+   |---|---|---|
+   | **positiv** | A: tension 1, 1, 1 | **B: tension 5, 5, 5** |
+   | **negativ** | C: tension 2, 2, 2 | D: tension 4, 2, 4 |
+
+   - Widerspruchs-Achse: einig **1,50** → zerstritten **4,17** = **+2,67**
+   - Stimmungs-Achse: positiv **3,00** → negativ **2,67** = **−0,33**
+
+   Der Widerspruchs-Effekt ist rund **achtmal so groß** wie der
+   Stimmungs-Effekt und sogar gegenläufig. Entscheidend ist Fall B, der im
+   ersten Testmaterial ganz fehlte: durchweg optimistische, aber unvereinbare
+   Begriffe erzeugen bei mittlerer Stimmung (`mood=3`) den **höchsten**
+   `tension`-Wert überhaupt. `tension` misst also Widerspruch, nicht Stimmung.
+
+   Zwei Einschränkungen, bewusst festgehalten: Fall D streute einmal auf 2
+   statt 4 (drei von vier Fällen sind exakt reproduzierbar, einer nicht), und
+   am **realen** Graphen liegen die Werte eng — `tension` 3/4/4/4 und `mood`
+   3/2/3/2 über die vier Größen, über je drei Wiederholungen stabil. Die Skala
+   ist korrekt, bewegt sich am echten Material aber nur in einem schmalen
+   Band.
 
    ```bash
+   # beide gefahren; Wiederholung nur nötig, wenn die Fragen im Prompt sich ändern:
    export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
-   uv run python -m sim.dream_calibrate mood | tee out/calibrate-mood.txt
+   uv run python -m sim.dream_calibrate mood    | tee out/calibrate-mood.txt
+   uv run python -m sim.dream_calibrate tension | tee out/calibrate-tension.txt
    ```
 
 4. **Zitate im Material** (`include_quotes`, `kg2/weighting.py::render_material`)
@@ -609,12 +666,21 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    ```
 
 5. **Aktualitätsblock „Zuletzt gesagt"** (`RECENT_TERMS`,
-   `kg2/weighting.py::render_material`) — **Lauf erledigt** (2026-08-29,
-   `.task-recency.md`), Entscheidung offen. Zeigt, ob der Block überhaupt
-   erkennbar neuere Begriffe in den Satz zieht. Ergebnis, je Graphgröße ein
-   Satzpaar ohne/mit Block: `out/calibrate-recency.txt`.
+   `kg2/weighting.py::render_material`) — **ENTSCHIEDEN am 2026-08-29: bleibt,
+   `RECENT_TERMS` = 5.** Der Lauf (`out/calibrate-recency.txt`, je Graphgröße
+   ein Satzpaar ohne/mit Block) zeigt die Wirkung in **allen vier Größen**:
+   Der Satz greift jeweils einen der fünf jüngsten Begriffe auf, der ohne den
+   Block nicht vorkam — bei 30 Personen „Bürgerversammlung als Pflichttermin",
+   bei 60 „Bestandsbaum auf Grundstück". Ohne Block bleiben es dieselben
+   Vormittagsthemen.
+
+   `RECENT_TERMS` = 5 ist gesetzt, nicht feinkalibriert: Der Block ist ein
+   Akzent neben der Gewichtung, kein zweiter Themenblock. Wird die Zahl
+   deutlich größer, konkurriert er mit der Gewichtung, die er gerade nicht
+   aufheben soll.
 
    ```bash
+   # gefahren am 2026-08-29:
    export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
    uv run python -m sim.dream_calibrate recency | tee out/calibrate-recency.txt
    ```
