@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 from pathlib import Path
 from typing import Literal
 
@@ -13,6 +14,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from kg.export import build_graph, write_graph_json
+
+# Windows resolves MIME types from the registry, where HKCR\.js is routinely
+# "text/plain". Starlette's StaticFiles asks `mimetypes` and therefore serves
+# our ES modules as text/plain, and Chromium refuses them outright: "Expected a
+# JavaScript module script but the server responded with a MIME type of
+# text/plain". The page then loads, styles fine and stays EMPTY -- no error,
+# no missing file, just no script. Observed on the exhibition machine
+# 2026-08-29; harmless no-op on Linux, where the mapping is already correct.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
