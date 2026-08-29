@@ -19,6 +19,10 @@ window.cyStub = {
     // that here, so a zoom factor is always applied to a fresh fit and never
     // compounds with the level a previous call left behind.
     this._zoom = 1;
+    // A real fit re-centres, i.e. it moves the pan as well. Recorded here as
+    // a plain assignment (not via pan(), which would add a call) so that the
+    // tests asserting exact call sequences keep reading the same.
+    this._pan = {x: 0, y: 0};
     if (b === undefined) this.calls.push(['fit', a]);
     else this.calls.push(['fit', a.stubName, b]);
   },
@@ -318,3 +322,167 @@ def test_fit_and_pan_modes_disable_panning_zooming_and_grabbing(camera):
         assert camera.evaluate("window.cyStub._panningEnabled") is False, mode
         assert camera.evaluate("window.cyStub._zoomingEnabled") is False, mode
         assert camera.evaluate("window.cyStub._autoungrabify") is True, mode
+
+
+# --- Handing the view back from the visitor to the automatic mode ------------
+#
+# Birk at the station, 2026-08-29: after the 30 s idle timeout the touchscreen
+# SNAPPED into the automatic view. The camera has to travel there instead — the
+# visitor's abandoned close-up and the automatic view are two ends of one move.
+
+
+def _visitor_leaves_a_close_up(camera, mode):
+    """Somebody pans and zooms by hand, then lets go and the timeout fires."""
+    camera.evaluate("window.cam.setMode('manual')")
+    camera.evaluate("window.cyStub._zoom = 4; window.cyStub._pan = {x: 700, y: 400};")
+    camera.evaluate(f"window.cam.setMode('{mode}')")
+
+
+def _view_samples(camera, count, dt=0.1):
+    return camera.evaluate(
+        """([count, dt]) => {
+             const seen = [];
+             for (let i = 0; i < count; i++) {
+                 window.cam.step(dt);
+                 seen.push({x: window.cyStub._pan.x, y: window.cyStub._pan.y,
+                            zoom: window.cyStub._zoom});
+             }
+             return seen;
+           }""",
+        [count, dt],
+    )
+
+
+@pytest.mark.parametrize("mode", ["fit", "pan"])
+def test_leaving_manual_does_not_move_the_view_in_the_same_frame(camera, mode):
+    """The mode flips at once; the picture has not gone anywhere yet.
+
+    Both ways back matter: the operator may have the wall on 'fit' or on 'pan'
+    when a visitor's 30 s run out, and the fallback lands on whichever it is.
+    """
+    _visitor_leaves_a_close_up(camera, mode)
+    assert camera.evaluate("window.cam.mode") == mode
+    assert camera.evaluate("window.cyStub._zoom") == 4
+    assert camera.evaluate("window.cyStub._pan") == {"x": 700, "y": 400}
+
+
+@pytest.mark.parametrize("mode", ["fit", "pan"])
+def test_pan_and_zoom_both_approach_the_automatic_view_step_by_step(camera, mode):
+    """Not one frame, not zoom-only: the whole view travels.
+
+    A visitor who pinched in deep is the normal case, so animating the pan and
+    letting the zoom jump would still read as a snap.
+    """
+    _visitor_leaves_a_close_up(camera, mode)
+    target = camera.evaluate("({...window.cam.handoverTarget})")
+    samples = _view_samples(camera, 10)  # 1 s, still inside the handover
+
+    zooms = [4.0] + [s["zoom"] for s in samples]
+    xs = [700.0] + [s["x"] for s in samples]
+    moved = 0
+    # No frame may carry the bulk of the distance — that IS the snap. Asserted
+    # per axis so an animated pan with a jumping zoom does not pass either.
+    for axis, start, goal in ((zooms, 4.0, target["zoom"]), (xs, 700.0, target["x"])):
+        span = abs(goal - start)
+        if span == 0:
+            # In 'pan' mode the traversal keeps the visitor's pan and only
+            # changes the zoom; the pan target then differs from where the
+            # visitor left it solely through the zoom's anchor at the viewport
+            # centre, which the cy stub does not model. Nothing to assert here.
+            continue
+        moved += 1
+        biggest = max(abs(b - a) for a, b in zip(axis, axis[1:]))
+        assert biggest < 0.3 * span, f"one frame moved {biggest} of {span}: {axis}"
+        # And one-way: a handover must not overshoot and come back.
+        signs = {b > a for a, b in zip(axis, axis[1:]) if abs(b - a) > 1e-9}
+        assert len(signs) <= 1, axis
+    # Guard against the assertions above quietly emptying out: on the way back
+    # to 'fit' the frame re-centres, so both axes have a distance to travel.
+    assert moved == (2 if mode == "fit" else 1)
+
+
+def _run_the_handover_to_the_end(camera):
+    """Step until it lands, and report how long it took."""
+    return camera.evaluate(
+        """() => {
+             let frames = 0;
+             while (window.cam.handoverTarget && frames < 2000) {
+                 window.cam.step(0.02);
+                 frames += 1;
+             }
+             return frames * 0.02;
+           }"""
+    )
+
+
+@pytest.mark.parametrize("mode", ["fit", "pan"])
+def test_the_handover_lands_exactly_on_the_automatic_view(camera, mode):
+    """It is a handover, not a drift: it ends where the hard jump used to."""
+    _visitor_leaves_a_close_up(camera, mode)
+    target = camera.evaluate("({...window.cam.handoverTarget})")
+    seconds = _run_the_handover_to_the_end(camera)
+    assert camera.evaluate("window.cyStub._zoom") == pytest.approx(target["zoom"])
+    assert camera.evaluate("window.cyStub._pan.x") == pytest.approx(target["x"])
+    assert camera.evaluate("window.cyStub._pan.y") == pytest.approx(target["y"])
+    # In the order of a leg of the tour (~5 s) rather than of a cut: long
+    # enough to read as one movement, short enough that the next visitor does
+    # not watch the wall unwind somebody else's pinch.
+    assert 0.5 < seconds < 3.0, seconds
+
+
+def test_after_the_handover_a_fit_wall_stands_still_again(camera):
+    """'fit' is a still picture; only the handover was ever allowed to move."""
+    _visitor_leaves_a_close_up(camera, "fit")
+    _run_the_handover_to_the_end(camera)
+    landed = camera.evaluate("({x: window.cyStub._pan.x, zoom: window.cyStub._zoom})")
+    _view_samples(camera, 20)
+    assert camera.evaluate("window.cyStub._pan.x") == landed["x"]
+    assert camera.evaluate("window.cyStub._zoom") == landed["zoom"]
+
+
+def test_the_handover_eases_instead_of_running_at_a_constant_speed(camera):
+    """Same feel as a leg of the tour: cosine in, cosine out."""
+    _visitor_leaves_a_close_up(camera, "fit")
+    xs = [700.0] + [s["x"] for s in _view_samples(camera, 15)]
+    deltas = [abs(b - a) for a, b in zip(xs, xs[1:])]
+    moving = [d for d in deltas if d > 1e-9]
+    assert moving[0] < max(moving)
+    assert moving[-1] < max(moving)
+
+
+def test_a_visitor_touching_mid_handover_gets_the_view_back_immediately(camera):
+    """The case that happens all day in an exhibition.
+
+    A half-run handover that keeps running would work against the hand that
+    just grabbed the wall, so `manual` has to drop it on the spot.
+    """
+    _visitor_leaves_a_close_up(camera, "pan")
+    _view_samples(camera, 4)  # mid-flight
+    camera.evaluate("window.cam.setMode('manual')")
+    assert camera.evaluate("window.cam.handoverTarget") is None
+    held = camera.evaluate("({x: window.cyStub._pan.x, zoom: window.cyStub._zoom})")
+    _view_samples(camera, 10)
+    assert camera.evaluate("window.cyStub._pan.x") == held["x"]
+    assert camera.evaluate("window.cyStub._zoom") == held["zoom"]
+
+
+def test_the_automatic_tour_only_starts_once_the_handover_has_landed(camera):
+    """One writer on the viewport at a time — no traversal under the handover."""
+    _visitor_leaves_a_close_up(camera, "pan")
+    _view_samples(camera, 4)
+    assert camera.evaluate("window.cam.roamState.phase") == "dwell"
+    assert camera.evaluate("window.cam.roamState.elapsed") == 0
+
+
+def test_an_operator_fit_still_frames_in_a_single_frame(camera):
+    """The pre-render's contract: `setMode('fit')` places the frame at once.
+
+    sim/prerender.py shoots a screenshot right after setting a camera view, so
+    the hard framing has to stay the behaviour everywhere but the way out of a
+    visitor's hands.
+    """
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cyStub._zoom = 4; window.cyStub._pan = {x: 700, y: 400};")
+    camera.evaluate("window.cam.setMode('fit')")
+    assert camera.evaluate("window.cyStub._zoom") == 1
+    assert camera.evaluate("window.cam.handoverTarget") is None

@@ -381,6 +381,13 @@ Lokal heißt: Der Wechsel wird **nicht** an den Server gemeldet. `camera_mode`
 ist globaler Zustand — ein POST würde Fläche C im Plenumssaal mit auf
 „manuell" ziehen, wo niemand etwas anfassen kann.
 
+Der Rückweg nach den 30 s ist seit 2026-08-29 eine **Fahrt, kein Sprung**: Die
+Kamera zieht in rund 1,5 s aus der stehengelassenen Nahansicht (Ausschnitt und
+Zoom gemeinsam) in die Ansicht der Automatik und fährt von dort weiter. Vorher
+schnappte das Bild in einem Bild um. Fasst jemand während dieser 1,5 s wieder
+an, gehört die Wand sofort wieder der Hand — die angefangene Fahrt bricht ab.
+„Übersicht" bleibt dagegen unmittelbar: ein Knopfdruck soll sofort antworten.
+
 > **Die Dichte gehört dem Operator, nicht dem Gast** (Birk, 2026-08-26). Bis
 > dahin standen die drei Dichte-Knöpfe mit am Touchscreen und posteten
 > `/api/min_mentions` — mit der Begründung, *wohin die Kamera schaut* sei lokal,

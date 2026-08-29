@@ -28,6 +28,18 @@ const ROAM = {
   // traversal should dwell where sharing actually happened. Degree 1 nodes are
   // still reachable, just far less often.
   degreeBias: 2.0,
+  // Handing the view back: how long the camera takes to travel from the
+  // close-up a visitor left behind to the view the automatic mode wants.
+  //
+  // Deliberately shorter than a leg (5200 ms) and in the same breath longer
+  // than a cut: this is not part of the journey, it is the wall taking over
+  // after 30 s of nobody touching it, and the next person walking up should
+  // find it already moving rather than still unwinding somebody else's pinch.
+  //
+  // NOT scaled by the operator's speed slider, unlike travel and dwell. The
+  // slider sets the pace of the tour; a quarter-speed setting must not leave a
+  // visitor's abandoned close-up on the wall for six seconds.
+  handoverMs: 1500,
 };
 
 /** Ease in and out — no abrupt starts, no arrivals that slam to a halt.
@@ -38,6 +50,18 @@ const ROAM = {
  * but perceptible on a 65" screen at close range. */
 function easeInOut(t) {
   return 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
+}
+
+/** Interpolate a magnification: equal steps in RATIO, not in difference.
+ *
+ * Zoom is a factor, and the eye reads factors. A linear ramp from 4x to 1x
+ * spends its first half between 4x and 2.5x — a sixth of the way back in
+ * perceived terms — and then rushes the rest, which looks like the camera
+ * hesitating and then falling. Falls back to linear for unusable levels
+ * rather than producing NaN: a wall must degrade, never stop rendering. */
+function lerpZoom(from, to, t) {
+  if (!(from > 0) || !(to > 0)) return from + (to - from) * t;
+  return from * Math.pow(to / from, t);
 }
 
 /** Keep a speed inside [0.25, 1], treating anything unusable as full speed.
@@ -86,6 +110,8 @@ export class Camera {
     // passes nothing and gets Math.random.
     this._random = random;
     this._roam = null;
+    // The way back out of a visitor's hands, see _startHandover().
+    this._handover = null;
     // 1 = the tuned speed (ROAM.travelMs/dwellMs), 0.25 = a quarter of it, i.e.
     // four times as long per leg. Clamped rather than validated-and-thrown: a
     // bad value must slow the wall down, never stop it rendering.
@@ -144,12 +170,23 @@ export class Camera {
 
   setMode(mode) {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
+    const previous = this._mode;
     this._mode = mode;
     this._applyInteractivity(mode);
-    if (mode === 'fit') this._frame();
     // Entering pan starts a fresh traversal; leaving it drops the state so a
     // later return does not resume a leg whose target may no longer exist.
     this._roam = mode === 'pan' ? { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 } : null;
+    // Every mode change ends a handover in flight. The load-bearing case is a
+    // visitor touching the wall while it is travelling back: `manual` has to
+    // be theirs in that same frame, and a half-run handover still writing
+    // pan/zoom would work against the hand that just grabbed it.
+    this._handover = null;
+    // Leaving manual is the one transition somebody is watching from a metre
+    // away — it is their own view being taken back. Everywhere else the hard
+    // framing stays: the operator's push, a graph change, and above all the
+    // pre-render, which shoots a screenshot right after setting a view.
+    if (previous === 'manual' && mode !== 'manual') this._startHandover();
+    else if (mode === 'fit') this._frame();
   }
 
   setZoomFactor(factor) {
@@ -158,7 +195,12 @@ export class Camera {
     this._zoomFactor = factor;
     // Manual is the visitor's mode: re-framing under their hands would fight
     // them. Every other mode is driven, so it re-frames at the new level.
-    if (changed && this._mode !== 'manual') this._frame();
+    if (!changed || this._mode === 'manual') return;
+    // A new level moves the destination. Steer the handover onto it instead of
+    // framing hard underneath it — a hard frame mid-flight is the snap all
+    // over again, and the next step() would drag the view back out of it.
+    if (this._handover) this._handover.to = this._automaticView();
+    else this._frame();
   }
 
   /** Point the camera at a subset — one cluster instead of the whole net.
@@ -189,7 +231,11 @@ export class Camera {
   }
 
   onGraphChanged() {
-    if (this._mode === 'fit') this._frame();
+    // Same reason as in setZoomFactor: an interview arriving during the 1.5 s
+    // handover moves the destination, so the handover is redirected rather
+    // than overwritten.
+    if (this._handover) this._handover.to = this._automaticView();
+    else if (this._mode === 'fit') this._frame();
     // A target that just left the graph (density raised, term hidden) must not
     // strand the traversal mid-leg pointing at nothing.
     if (this._roam && this._roam.targetId && this.cy.getElementById(this._roam.targetId).empty()) {
@@ -222,10 +268,83 @@ export class Camera {
     return candidates[candidates.length - 1];
   }
 
+  /** The view a handover is travelling to, or null when none is in flight. */
+  get handoverTarget() {
+    return this._handover ? { ...this._handover.to } : null;
+  }
+
+  /** Begin the travel from the view the visitor left to the automatic one. */
+  _startHandover() {
+    this._handover = {
+      elapsed: 0,
+      from: { x: this.cy.pan().x, y: this.cy.pan().y, zoom: this.cy.zoom() },
+      to: this._automaticView(),
+    };
+  }
+
+  /** Where the automatic mode wants the viewport — measured, not derived.
+   *
+   * It performs the HARD framing this mode does, reads the result off the
+   * viewport and puts the visitor's view straight back. Computing the numbers
+   * a second time instead would be a second implementation of _frame() and of
+   * the traversal's opening zoom, free to drift away from the ones the wall
+   * actually uses; this way the handover can only ever land where the old
+   * jump landed. */
+  _automaticView() {
+    const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
+    if (this._mode === 'fit') {
+      this._frame();
+    } else {
+      // Pan mode does not re-frame: its opening dwell holds the pan where it
+      // is and puts the zoom on the calibrated travel level, about the
+      // viewport centre — which carries the pan with it. Reproduced by simply
+      // doing it, at clock 0, where the breathing wave is exactly zero and the
+      // first step() will therefore continue from the same level.
+      this._applyZoom(this._breathingZoom(this._travelLevel(), 0));
+    }
+    const to = { x: this.cy.pan().x, y: this.cy.pan().y, zoom: this.cy.zoom() };
+    this.cy.zoom(before.zoom);
+    this.cy.pan(before.pan);
+    return to;
+  }
+
+  /** One frame of the handover, on the same clock as the tour.
+   *
+   * Cytoscape's cy.animate() was the obvious alternative and is the wrong tool
+   * here: it drives itself from its own requestAnimationFrame, so it would be
+   * a second writer on this viewport next to the step() loop that is already
+   * running — and the traversal's breathing zoom writes every single frame.
+   * Two writers per frame is the kind of bug that surfaces later as jitter.
+   * Sharing step()'s dt also means a test can drive the handover, and that a
+   * visitor's touch cancels it by dropping one object. */
+  _advanceHandover(dtMs) {
+    const handover = this._handover;
+    handover.elapsed += dtMs;
+    const t = Math.min(1, handover.elapsed / ROAM.handoverMs);
+    // The same cosine as a leg of the tour, so the handover and the travel it
+    // hands over to feel like one movement.
+    const eased = easeInOut(t);
+    const { from, to } = handover;
+    this.cy.zoom(t >= 1 ? to.zoom : lerpZoom(from.zoom, to.zoom, eased));
+    this.cy.pan(
+      t >= 1
+        ? { x: to.x, y: to.y }
+        : { x: from.x + (to.x - from.x) * eased, y: from.y + (to.y - from.y) * eased },
+    );
+    if (t >= 1) this._handover = null;
+  }
+
   step(dtSeconds) {
+    const dtMs = dtSeconds * 1000;
+    // The handover owns the viewport until it lands: letting the traversal
+    // write pan and zoom in the same frame is exactly the two-writer problem
+    // the handover avoids by not being a cy.animate().
+    if (this._handover) {
+      this._advanceHandover(dtMs);
+      return;
+    }
     if (this._mode !== 'pan') return;
     if (!this._roam) this._roam = { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 };
-    const dtMs = dtSeconds * 1000;
     const roam = this._roam;
     roam.clock += dtMs;
     roam.elapsed += dtMs;
