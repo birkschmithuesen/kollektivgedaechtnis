@@ -147,6 +147,74 @@ dort nicht. Nicht untersucht und bewusst nicht behoben (Birk) — die Wand läuf
 auf Chromium, und ein zweiter Renderer wäre eine Fehlerquelle mehr ohne
 Gegenwert. Wer die Station über Firefox kontrolliert, prüft nicht die Station.
 
+## Beide Werkzeuge zusammen starten
+
+Der vollständige Ablauf für einen Ausstellungstag mit Wand **und** Screen B.
+Die Reihenfolge ist eine Empfehlung, keine Abhängigkeit: die beiden Werkzeuge
+kennen sich nur über `graph.json`, und jedes läuft weiter, wenn das andere
+ausfällt (Spec §9). Tool 1 zuerst zu starten spart nur die erste
+Fehlermeldung.
+
+**Wo läuft was?** Tool 1 auf dem Ausstellungsrechner (Beamer, Touchscreen,
+Telegram, STT), Tool 2 auf einer eigenen kleinen Maschine daneben. Beide auf
+einer Kiste ist möglich — die Ports (8800/8810) und die Datenverzeichnisse
+(`data/` vs. `dream-data/`) kollidieren nicht — und für einen Probedurchlauf
+genau richtig. Vor Ort trennt sie, dass ein Absturz des einen den anderen
+nicht mitnimmt.
+
+**1. Auf dem Ausstellungsrechner: Tool 1.**
+
+```bash
+export ANTHROPIC_API_KEY=... KG_TELEGRAM_TOKEN=... OPENROUTER_API_KEY=...
+./scripts/start.sh
+```
+
+Damit die Traum-Maschine überhaupt herankommt, muss in `config.toml`
+`server_host = "0.0.0.0"` stehen (siehe „Netzwerk für Screen B und Screen C").
+Der Core druckt beim Start drei URLs mit der **aufgelösten** Adresse — die
+dritte ist die, die gleich in `config2.toml` gehört.
+
+**2. Netz prüfen, von der Traum-Maschine aus.** Nicht überspringen: ein `curl`
+auf dem Ausstellungsrechner selbst gelingt auch bei falschem Bind und beweist
+deshalb nichts.
+
+```bash
+# auf der Traum-Maschine:
+curl -s http://<gedruckte-adresse>:8800/graph.json | head -c 200
+```
+
+**3. Auf der Traum-Maschine: `tool1_url` eintragen und Tool 2 starten.**
+
+```bash
+cp config2.example.toml config2.toml      # einmalig
+# tool1_url auf die Adresse aus Schritt 1 setzen
+export ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=...
+./scripts/start-dream.sh
+```
+
+Das Skript prüft die Adresse aus `config2.toml` und **sagt, was es findet** —
+aber es wartet nicht darauf. Ist Tool 1 nicht erreichbar, kommt Screen B
+trotzdem hoch und träumt von selbst weiter, sobald Tool 1 antwortet. Das ist
+Absicht: ein Tool 1, das um 14 Uhr neu gestartet werden muss, darf nicht auch
+den zweiten Schirm mitreißen.
+
+Wie `scripts/start.sh` startet es Watcher, Server und die beiden
+Browser-Fenster (Screen B im Kiosk-Modus, Operator als normales Fenster) und
+fährt jeden Teil nach einem Absturz wieder hoch. Liegt Screen B nicht rechts
+neben dem Panel: `KG2_DREAM_POS=<x>,<y> ./scripts/start-dream.sh`.
+
+**4. Gegenprobe, dass die Kette wirklich steht.** Ein Interview führen (oder
+im Operator-Fenster von Tool 2 „Jetzt träumen" drücken). Innerhalb von
+`poll_interval_s` + Modellzeit erscheint auf Screen B erst der Satz, dann das
+Bild. Bleibt es aus: Tabelle „Wenn etwas ausfällt" unten.
+
+**Was der Probedurchlauf kostet.** Pro Traum ein Anthropic-Aufruf (Satz) und
+ein Bildaufruf (≈ 0,139 USD, gemessen). 10–15 Interviews sind also 1,40–2,10
+USD. Ein voller Ausstellungstag mit ~40 Träumen ≈ 5,55 USD.
+
+**Beim zweiten Tag** vorher `dream-data/` leeren — siehe „Neuer
+Ausstellungstag", sonst öffnet Tag 2 mit den Träumen von Tag 1 im Streifen.
+
 ## Ein Interview
 
 1. Foto per Telegram → Personenknoten mit Portrait erscheint sofort.

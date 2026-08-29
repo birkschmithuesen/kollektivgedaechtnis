@@ -80,8 +80,12 @@ visual_register = "A photograph taken with a camera on real film or a real senso
 condense_model = "claude-opus-5"
 condense_effort = "high"
 
-# Vertrag NOCH NICHT VERIFIZIERT — siehe docs/dream-image-contract.md, vor der
-# Ausstellung einmal mit echtem OPENROUTER_API_KEY sondieren.
+# Vertrag VERIFIZIERT am 2026-08-26 gegen den echten Endpunkt (drei Aufrufe,
+# alle HTTP 200) — siehe docs/dream-image-contract.md. Die Request-Form hat
+# sich bestätigt; drei Abweichungen in der Response sind dort dokumentiert und
+# im Code berücksichtigt (zwei identische Bilder statt einem, content = None,
+# Bildformat variiert pro Aufruf zwischen PNG und JPEG). Eine erneute
+# Sondierung ist NICHT nötig und kostet ≈ 0,14 USD.
 image_model = "google/gemini-3-pro-image"
 image_url = "https://openrouter.ai/api/v1/chat/completions"
 image_aspect_ratio = "16:9"

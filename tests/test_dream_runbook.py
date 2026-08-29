@@ -233,6 +233,82 @@ def test_every_command_the_runbook_names_really_exists(claim, evidence):
     assert token in Path(evidence).read_text(encoding="utf-8")
 
 
+# -- the joint start (Handoff 2026-08-29 §4.3) ---------------------------------
+#
+# The two tools had a runbook section each and none for running them together,
+# which is what a Probedurchlauf actually needs. These guard the section that
+# closed that gap — and, more importantly, guard that it keeps describing
+# something that exists.
+
+
+def joint_start_section() -> str:
+    start = RUNBOOK.index("## Beide Werkzeuge zusammen starten")
+    return RUNBOOK[start : RUNBOOK.index("## Ein Interview", start)]
+
+
+def test_the_runbook_describes_starting_both_tools_together():
+    """Both tools have their own section; the Probedurchlauf needs the
+    ORDER between them, which is the thing that was missing."""
+    assert "## Beide Werkzeuge zusammen starten" in RUNBOOK
+
+
+@pytest.mark.parametrize(
+    "script",
+    ["scripts/start.sh", "scripts/start-dream.sh"],
+)
+def test_the_joint_start_names_launchers_that_exist(script):
+    section = joint_start_section()
+    assert script in section, f"{script} is not named in the joint-start section"
+    path = Path(script)
+    assert path.exists(), f"the runbook tells the operator to run a missing {script}"
+    assert path.stat().st_mode & 0o111, f"{script} is not executable"
+
+
+def test_the_dream_launcher_requires_both_keys_up_front():
+    """A missing key must fail at 09:00, not as a silently failed dream at
+    10:00 — the same discipline scripts/start.sh already holds."""
+    launcher = Path("scripts/start-dream.sh").read_text(encoding="utf-8")
+    for key in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
+        assert f'"${{{key}:?' in launcher, f"{key} is not checked before startup"
+
+
+def test_the_dream_launcher_does_not_block_on_tool_1():
+    """Spec §9's independence, as an executable property rather than a claim:
+    Tool 2 must come up whether or not Tool 1 answers. A launcher that waited
+    would mean restarting Tool 1 at 14:00 also takes screen B down — and
+    screen B holding its last dream through a Tool 1 outage is the designed
+    behaviour, not a degradation."""
+    launcher = Path("scripts/start-dream.sh").read_text(encoding="utf-8")
+    # It checks...
+    assert "graph.json" in launcher
+    # ...and says so in both directions...
+    assert "erreichbar" in launcher
+    assert "NICHT erreichbar" in launcher
+    # ...but never exits on the unreachable branch. The only `exit 1` may be
+    # the missing-config one, which is a genuine precondition.
+    unreachable = launcher[launcher.index("NICHT erreichbar") :]
+    assert "exit 1" not in unreachable, (
+        "the launcher gives up when Tool 1 is absent; Tool 2 must start anyway"
+    )
+    assert "die beiden Werkzeuge" in joint_start_section() or "Abhängigkeit" in joint_start_section()
+
+
+def test_the_joint_start_states_the_cross_machine_check_direction():
+    """The same pitfall as everywhere else: a curl on the exhibition machine
+    proves nothing about the bind."""
+    section = joint_start_section()
+    assert "Traum-Maschine" in section
+    assert "graph.json" in section
+
+
+def test_the_joint_start_names_the_probedurchlauf_cost():
+    """Birk approves spending per run; the number has to be in the document he
+    reads before starting one, not only in the contract document."""
+    section = joint_start_section()
+    assert "0,139" in section or "0.139" in section
+    assert "USD" in section
+
+
 def test_the_cross_machine_check_is_run_from_the_other_box():
     """The pitfall CR-1 names: a curl on the server succeeds even when the bind
     is wrong, and therefore proves nothing."""
