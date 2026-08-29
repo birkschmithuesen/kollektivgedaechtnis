@@ -9,6 +9,7 @@ from kg2.weighting import (
     build_material,
     render_material,
     select_marginal,
+    select_recent,
 )
 
 
@@ -363,6 +364,111 @@ def test_select_marginal_keeps_the_most_recent_single_mentions():
     selected = select_marginal(material, budget=1, saturation=25)
 
     assert [w.label for w in selected] == ["Neues Detail"]
+
+
+# -- the recency block ("Zuletzt gesagt") ------------------------------------
+
+
+def test_recent_terms_are_drawn_from_shared_and_marginal_alike():
+    """The core case: a young term with exactly ONE mention shows up here even
+    though it would never make it into the main block by frequency alone —
+    the recency axis is independent of the weighting axis."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), person("p3"),
+             term("t1", "Altes Thema", 3, created_at=1.0),
+             term("t2", "Neues Detail", 1, created_at=99.0)],
+            [("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p1", "t2")],
+        )
+    )
+
+    selected = select_recent(material, count=2)
+
+    assert [w.label for w in selected] == ["Neues Detail", "Altes Thema"]
+
+
+def test_recent_terms_break_ties_on_created_at_by_label():
+    """Same created_at: label is the deterministic second key, same discipline
+    as select_marginal (spec §5.3)."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), person("p3"),
+             term("t1", "Zebra", 1, created_at=5.0),
+             term("t2", "Anfang", 1, created_at=5.0),
+             term("t3", "Mitte", 1, created_at=5.0)],
+            [("p1", "t1"), ("p2", "t2"), ("p3", "t3")],
+        )
+    )
+
+    selected = select_recent(material, count=3)
+
+    assert [w.label for w in selected] == ["Anfang", "Mitte", "Zebra"]
+
+
+def test_select_recent_respects_the_count():
+    material = build_material(
+        graph(
+            [person(f"p{i}") for i in range(5)]
+            + [term(f"t{i}", f"term-{i}", 1, created_at=float(i)) for i in range(5)],
+            [(f"p{i}", f"t{i}") for i in range(5)],
+        )
+    )
+
+    assert len(select_recent(material, count=2)) == 2
+    assert len(select_recent(material, count=0)) == 0
+
+
+def test_render_includes_the_recency_block():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), person("p3"),
+             term("t1", "Altes Thema", 3, created_at=1.0),
+             term("t2", "Neues Detail", 1, created_at=99.0)],
+            [("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p1", "t2")],
+        )
+    )
+
+    text = render_material(material)
+
+    assert "Zuletzt gesagt" in text
+    assert "Neues Detail" in text
+
+
+def test_a_shared_term_may_reappear_in_the_recency_block():
+    """The point of the second block: a term already in the main block gets
+    doubly emphasised by showing up again here."""
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), term("t1", "Holzbau", 2, created_at=50.0)],
+            [("p1", "t1"), ("p2", "t1")],
+        )
+    )
+
+    text = render_material(material, recent_terms=1)
+
+    assert text.count("Holzbau") == 2
+
+
+def test_render_omits_the_recency_block_when_material_is_empty():
+    material = build_material(graph([], []))
+
+    text = render_material(material)
+
+    assert text == ""
+    assert "Zuletzt gesagt" not in text
+
+
+def test_render_is_deterministic_across_two_calls():
+    material = build_material(
+        graph(
+            [person("p1"), person("p2"), person("p3"),
+             term("t1", "Altes Thema", 3, created_at=1.0),
+             term("t2", "Neues Detail", 1, created_at=99.0)],
+            [("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p1", "t2")],
+        )
+    )
+
+    assert render_material(material) == render_material(material)
 
 
 # -- malformed payloads -------------------------------------------------------

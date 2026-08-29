@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from kg2.weighting import (
+    RECENT_TERMS,
     SHARED_TERMS_SATURATION,
     SINGLE_MENTION_BUDGET,
     Material,
@@ -134,16 +135,18 @@ def build_condense_prompt(
     include_quotes: bool = False,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
+    recent_terms: int = RECENT_TERMS,
 ) -> str:
-    """`single_mention_budget`/`shared_terms_saturation` only exist so
-    `sim.dream_calibrate terms` can try other N/X values (kg2/weighting.py's
-    gliding formula) without duplicating this function; production always
-    uses the module defaults."""
+    """`single_mention_budget`/`shared_terms_saturation`/`recent_terms` only
+    exist so `sim.dream_calibrate terms`/`recency` can try other values
+    (kg2/weighting.py's gliding formula and recency block) without
+    duplicating this function; production always uses the module defaults."""
     rendered = render_material(
         material,
         include_quotes=include_quotes,
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
+        recent_terms=recent_terms,
     )
     return f"{rendered}\n\n--- ENDE MATERIAL ---\n\nAntworte mit genau einem Satz."
 
@@ -221,6 +224,7 @@ def condense(
     include_quotes: bool = False,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
+    recent_terms: int = RECENT_TERMS,
 ) -> CondenseResult:
     """One call. Errors propagate — `kg2.cycle` owns the failure policy (§8)."""
     system = build_condense_system()
@@ -229,6 +233,7 @@ def condense(
         include_quotes=include_quotes,
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
+        recent_terms=recent_terms,
     )
 
     result = llm.parse(system=system, user=user, output_model=DreamSentence)

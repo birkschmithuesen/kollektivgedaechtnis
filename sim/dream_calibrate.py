@@ -3,7 +3,7 @@
 The same discipline Tool 1's density values were produced under (T1§14.4 and
 run-19c): run it, read the output, write the answer into `docs/operations.md`.
 
-Five sub-commands (`questions` and `contradiction` were retired 2026-08-28
+Six sub-commands (`questions` and `contradiction` were retired 2026-08-28
 along with the guiding-question prompt slot and the contradiction clause —
 see kg2/condense.py):
 
@@ -28,6 +28,11 @@ see kg2/condense.py):
 * `quotes` — a side-by-side with/without quotes in the material (spec §5.1's
               revised default is without), so the cost of leaving them out is
               visible before it is final.
+* `recency`— a side-by-side with/without the „Zuletzt gesagt" block
+              (`kg2.weighting.RECENT_TERMS`, added 2026-08-29, task brief
+              `.task-recency.md`): does the block actually pull newer terms
+              into the sentence, or does the weighted block drown it out
+              regardless?
 * `floor`  — arithmetic, no LLM. The floor is a question about the day's
               cadence, not about the model.
 
@@ -44,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kg2.condense import condense
-from kg2.weighting import build_material, select_marginal
+from kg2.weighting import RECENT_TERMS, build_material, select_marginal, select_recent
 
 FIXTURE = Path(__file__).resolve().parent / "data" / "graph-19c.json"
 
@@ -492,6 +497,36 @@ def run_quotes(graph: dict, cfg) -> None:
         print()
 
 
+def run_recency(graph: dict, cfg) -> None:
+    """Side-by-side with/without the „Zuletzt gesagt" block — analogous to
+    `run_quotes` above. `recent_terms=0` switches the block off entirely
+    (kg2/weighting.py::render_material); `RECENT_TERMS` is the module
+    default. The question is not "does the sentence change" (it almost always
+    will, stage 1 is not deterministic) but whether the RECENT terms printed
+    below actually turn up in the "mit" sentence and not in the "ohne" one."""
+    llm = _llm(cfg)
+    print(
+        "Je Graphgröße ein Satzpaar: ohne Aktualitätsblock und mit „Zuletzt "
+        "gesagt' (kg2.weighting.RECENT_TERMS jüngste Begriffe, aus geteilten "
+        "und einmaligen) im selben Material.\n"
+    )
+    for size in SIZES:
+        material = build_material(prefix_graph(graph, size))
+        recent = select_recent(material)
+        print(
+            f"=== {size} Menschen, jüngste Begriffe: "
+            + (", ".join(w.label for w in recent) if recent else "keine")
+        )
+        for recent_terms in (0, RECENT_TERMS):
+            label = "mit Aktualitätsblock " if recent_terms else "ohne Aktualitätsblock"
+            try:
+                result = condense(llm, material, recent_terms=recent_terms)
+                print(f"  {label}: {result.sentence}")
+            except Exception as exc:
+                print(f"  {label}: FEHLER — {exc}")
+        print()
+
+
 def run_floor(args) -> None:
     rows = floor_table(args.interviews, args.hours * 3600, tuple(args.floors))
     print(
@@ -514,7 +549,7 @@ def main() -> None:
     from kg2.config import load_dream_config
 
     parser = argparse.ArgumentParser(prog="sim.dream_calibrate")
-    parser.add_argument("mode", choices=("terms", "mood", "tension", "quotes", "floor"))
+    parser.add_argument("mode", choices=("terms", "mood", "tension", "quotes", "recency", "floor"))
     parser.add_argument("--graph", default=str(FIXTURE))
     parser.add_argument("--config", default=None)
     parser.add_argument("--interviews", type=int, default=60)
@@ -534,8 +569,10 @@ def main() -> None:
         run_mood(graph, cfg)
     elif args.mode == "tension":
         run_tension(graph, cfg)
-    else:
+    elif args.mode == "quotes":
         run_quotes(graph, cfg)
+    else:
+        run_recency(graph, cfg)
 
 
 if __name__ == "__main__":

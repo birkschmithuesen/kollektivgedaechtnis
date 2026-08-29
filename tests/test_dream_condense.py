@@ -182,9 +182,16 @@ def test_the_user_message_includes_quotes_when_asked():
 
 def test_the_user_message_accepts_calibration_overrides_for_the_gliding_formula():
     """`sim.dream_calibrate terms` needs to try other N/X combinations without
-    duplicating build_condense_prompt."""
-    generous = build_condense_prompt(material(), single_mention_budget=20, shared_terms_saturation=25)
-    strict = build_condense_prompt(material(), single_mention_budget=0, shared_terms_saturation=25)
+    duplicating build_condense_prompt. `recent_terms=0` isolates this from the
+    independent recency block (kg2/weighting.py), which draws from marginal
+    terms regardless of the single-mention budget — that overlap is by design,
+    not something this test is about."""
+    generous = build_condense_prompt(
+        material(), single_mention_budget=20, shared_terms_saturation=25, recent_terms=0
+    )
+    strict = build_condense_prompt(
+        material(), single_mention_budget=0, shared_terms_saturation=25, recent_terms=0
+    )
 
     assert "Sickerfähige Beläge" in generous
     assert "Sickerfähige Beläge" not in strict

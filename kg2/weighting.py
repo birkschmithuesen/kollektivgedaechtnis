@@ -31,6 +31,23 @@ Four rules, each with a reason that has to survive a later edit:
   from drowning in footnotes — and is a property of the condensing procedure,
   not a knob either tool's operator turns.
 
+* **A second axis: recency (added 2026-08-29).** The blocks above rank purely
+  by final mention count, which encodes no order in time — at the end of the
+  day seven mentions are seven mentions, whichever interview said the
+  seventh one last, and a term that started late still catches up as more
+  people repeat it. That is NOT what today's prompt gets wrong. The problem
+  is a DELAY effect: at the moment THIS dream is rendered, a term that was
+  first said in the interview that just finished has whatever count it has
+  accumulated so far — usually one or two — and cannot compete with a term
+  that has been repeated all morning. The dream can therefore fail to react
+  to the interview that produced it, which the two screens standing side by
+  side make visible. The fix chosen (2026-08-29, over multiplying the count
+  by an aging factor — rejected because it would put an invented number in
+  the prompt instead of the honest one) is `select_recent`/the „Zuletzt
+  gesagt" block below: a second, independent block, unchanged mention counts,
+  drawn from shared AND marginal terms alike so a just-said single mention
+  that could never out-weigh the count-based block still gets to appear.
+
 One thing the spec does not spell out and the code must: the payload's
 `mentions` counts edges from hidden persons too, so it is RECOMPUTED here from
 the surviving edges. Reading it off the node would leave a hidden visitor's
@@ -71,6 +88,11 @@ class Material:
 # docs/operations.md, „Kalibrierte Werte (Tool 2)".
 SINGLE_MENTION_BUDGET = 20  # N
 SHARED_TERMS_SATURATION = 25  # X
+
+#: How many of the newest terms go into the „Zuletzt gesagt" block (module
+#: docstring). Deliberately small: an accent, not a second theme list — too
+#: many and it competes with the weighting it is not meant to override.
+RECENT_TERMS = 5
 
 
 def _empty_material() -> Material:
@@ -198,12 +220,32 @@ def select_marginal(
     return newest_first[:allowed]
 
 
+def select_recent(material: Material, *, count: int = RECENT_TERMS) -> list[TermWeight]:
+    """The terms behind the „Zuletzt gesagt" block (module docstring).
+
+    Drawn from `shared` AND `marginal` together — the recency axis is
+    independent of the weighting axis, so a term that just entered the graph
+    with a single mention belongs here exactly as much as one repeated all
+    day. `shared` and `marginal` never overlap (a term is one or the other by
+    construction), so this cannot itself produce a duplicate; the same term
+    reappearing in BOTH this block and the weighted block above is expected,
+    not a bug — it is how one gets doubly emphasised.
+    """
+    if count <= 0:
+        return []
+    newest_first = sorted(
+        material.shared + material.marginal, key=lambda w: (-w.created_at, w.label)
+    )
+    return newest_first[:count]
+
+
 def render_material(
     material: Material,
     *,
     include_quotes: bool = False,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
+    recent_terms: int = RECENT_TERMS,
 ) -> str:
     """The German block that goes into stage 1's user message.
 
@@ -214,9 +256,11 @@ def render_material(
     strip is what makes drift visible. Single mentions ARE limited, by
     `select_marginal` above — on purpose, see the module docstring.
 
-    `single_mention_budget`/`shared_terms_saturation` default to this module's
-    constants and only exist as parameters so `sim.dream_calibrate terms` can
-    try other values without duplicating this function.
+    `single_mention_budget`/`shared_terms_saturation`/`recent_terms` default
+    to this module's constants and only exist as parameters so
+    `sim.dream_calibrate terms`/`recency` can try other values (including 0,
+    to switch the recency block off for comparison) without duplicating this
+    function.
     """
     blocks: list[str] = []
 
@@ -236,6 +280,15 @@ def render_material(
             "Randnotizen — jede davon hat genau ein Mensch gesagt. Das sind "
             "Detail und Beiwerk, nicht Thema. Sie dürfen im Bild vorkommen, "
             "aber klein und am Rand:\n" + lines
+        )
+
+    recent = select_recent(material, count=recent_terms)
+    if recent:
+        lines = "\n".join(f"  {w.label}" for w in recent)
+        blocks.append(
+            "Zuletzt gesagt — die jüngsten Begriffe aus den letzten Interviews, "
+            "unabhängig davon wie oft sie insgesamt genannt wurden. Mindestens "
+            "einer davon soll im Bild vorkommen:\n" + lines
         )
 
     if include_quotes and material.quotes:

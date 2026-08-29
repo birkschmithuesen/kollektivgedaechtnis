@@ -504,6 +504,19 @@ ist ein Startwert aus der Spec, der noch nicht am generierten Material
   Config-Werte: sie sind eine Eigenschaft des Verfahrens, kein Tagesregler —
   anders als Tool 1's `min_mentions`, das ein Anzeigeregler ist. Ob 20/25 die
   richtigen Werte sind, sagt erst der Lauf unten in „Offene Entscheidungen".
+- `RECENT_TERMS` (`kg2/weighting.py`, vorläufig **5**) — **noch nicht
+  kalibriert.** Zweite, von der Gewichtung unabhängige Achse (hinzugefügt
+  2026-08-29, `.task-recency.md`): ein eigener Block „Zuletzt gesagt" im
+  Prompt, mit den `RECENT_TERMS` jüngsten Begriffen nach `created_at` — aus
+  geteilten UND einmaligen Begriffen zusammen, unverändert in ihrer
+  Nennungszahl. Grund: Ein Begriff, der im gerade fertigen Interview zum
+  ersten Mal fällt, hat zu diesem Zeitpunkt noch kaum Nennungen und kann über
+  die Gewichtung allein nicht durchdringen, obwohl die interviewte Person
+  meist noch vor dem Schirm steht und die Kausalität zwischen Interview und
+  Traum sichtbar sein soll. Das ist ein **Verzögerungseffekt**, keine
+  strukturelle Bevorzugung des Frühen — am Endstand zählt weiterhin nur die
+  Häufigkeit. Bewusst ein zweiter Block statt eines Alterungsfaktors auf die
+  Zahl: Die Nennungszahl im Prompt soll ehrlich bleiben, kein Kunstwert.
 - **Bewusst NICHT an Tool 1's `min_mentions` gekoppelt.** Beide Werkzeuge
   folgen jetzt derselben Regel (alle geteilten, aufgefüllt mit den jüngsten
   einmaligen), aber jedes rechnet sie unabhängig aus seinen eigenen
@@ -529,11 +542,11 @@ weitgehend dieselben.
 
 ### Offene Entscheidungen
 
-**Stand 2026-08-28:** Die Läufe für 2.–5. und 8. sind **gefahren**, die
+**Stand 2026-08-29:** Die Läufe für 2.–6. und 9. sind **gefahren**, die
 Ergebnisse liegen als Dateien vor. Punkt 1 braucht seit dem Umbau keinen Lauf
 mehr (reine Textentscheidung, siehe dort). Was jetzt noch offen ist, sind
 Birks Entscheidungen an diesem Material — nicht mehr die Beschaffung des
-Materials. Punkt 7 (40-Bilder-Serie) hängt unverändert an 5. und 6.
+Materials. Punkt 8 (40-Bilder-Serie) hängt unverändert an 6. und 7.
 
 Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
 `config2.example.toml` trägt weiterhin nur vorläufige Startwerte.
@@ -595,7 +608,18 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    uv run python -m sim.dream_calibrate quotes | tee out/calibrate-quotes.txt
    ```
 
-5. **Bildregister** (`visual_register`) — **gerendert**, Wahl offen.
+5. **Aktualitätsblock „Zuletzt gesagt"** (`RECENT_TERMS`,
+   `kg2/weighting.py::render_material`) — **Lauf erledigt** (2026-08-29,
+   `.task-recency.md`), Entscheidung offen. Zeigt, ob der Block überhaupt
+   erkennbar neuere Begriffe in den Satz zieht. Ergebnis, je Graphgröße ein
+   Satzpaar ohne/mit Block: `out/calibrate-recency.txt`.
+
+   ```bash
+   export ANTHROPIC_BASE_URL=http://127.0.0.1:28764; export ANTHROPIC_API_KEY=proxy
+   uv run python -m sim.dream_calibrate recency | tee out/calibrate-recency.txt
+   ```
+
+6. **Bildregister** (`visual_register`) — **gerendert**, Wahl offen.
    Vier Bilder in `out/register1/`, plus eine 2×2-Kontaktkarte
    `out/register1/UEBERSICHT-4-register.png`. Alle PNG 1376 × 768 (16:9).
 
@@ -611,7 +635,7 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Regel einmal gebrochen hat — das kann Zufall eines Laufs sein, sollte aber
    vor der 40-Bilder-Serie bewusst sein.
 
-6. **Modus des Verlaufsstreifens** — **entschieden von Birk am 2026-08-26**,
+7. **Modus des Verlaufsstreifens** — **entschieden von Birk am 2026-08-26**,
    an den gerenderten Vergleichen. Sechs Dateien in
    `out/dream-strip-comparison/` (Dateinamen tragen den Modus), dazu zwei
    gestapelte Vergleichskarten `UEBERSICHT-20-traeume.png` und
@@ -636,8 +660,8 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    die Anzeige; `dreams.sqlite3` bleibt vollständig, und ein Hochsetzen macht
    ältere Träume wieder sichtbar.
 
-7. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
-   Register **und** Streifenmodus aus 5. und 6., damit die 40 echten Bilder
+8. **Die 40-Bilder-Vorab-Serie** — **noch nicht gefahren**, bewusst: braucht
+   Register **und** Streifenmodus aus 6. und 7., damit die 40 echten Bilder
    nicht an einer noch unfertigen Anzeige verschwendet werden.
 
    ```bash
@@ -647,7 +671,7 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Braucht `OPENROUTER_API_KEY`, 40 Bildaufrufe — **≈ 5,55 USD** (gemessen,
    siehe Kostenkorrektur oben), ein sichtbarer, bewusster Kostenposten.
 
-8. **Vertrag des Bild-Endpunkts** — **erledigt am 2026-08-26.**
+9. **Vertrag des Bild-Endpunkts** — **erledigt am 2026-08-26.**
    `docs/dream-image-contract.md` ist verifiziert: Request-Form bestätigt,
    zwei Abweichungen dokumentiert (`images` hat zwei pixelidentische Einträge;
    `message.content` ist `None`). `kg2/imagegen.py` wurde entsprechend
