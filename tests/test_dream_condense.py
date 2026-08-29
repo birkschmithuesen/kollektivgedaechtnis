@@ -22,11 +22,20 @@ class FakeLLM:
         self,
         sentence="Der Beton träumt vom Wald.",
         sentence_en="The concrete dreams of the forest.",
+        image_description=(
+            "A slab of raw grey concrete stands in a clearing of thin birch "
+            "trunks. Its formwork seams are still visible and moss has taken "
+            "the lower edge. A printed invoice lies face up on the wet ground "
+            "beside it, swollen and curling at the corners."
+        ),
+        tension_source="restoring an existing façade while billing it as new construction",
         mood=3,
         tension=3,
     ):
         self.sentence = sentence
         self.sentence_en = sentence_en
+        self.image_description = image_description
+        self.tension_source = tension_source
         self.mood = mood
         self.tension = tension
         self.calls: list[tuple[str, str]] = []
@@ -36,6 +45,8 @@ class FakeLLM:
         return output_model(
             sentence=self.sentence,
             sentence_en=self.sentence_en,
+            image_description=self.image_description,
+            tension_source=self.tension_source,
             mood=self.mood,
             tension=self.tension,
         )
@@ -134,12 +145,82 @@ def test_the_prompt_asks_for_one_short_main_clause():
 
 
 def test_the_prompt_asks_for_a_literal_english_translation():
-    """The English sentence is the motif fed to stage 2 (spec §5.2); the
-    German one stays on the wall. It must be a translation, not a rewrite."""
+    """The English sentence is the honest counterpart of what stands on the
+    wall and is kept with it (spec §5.3). It must be a translation, not a
+    rewrite — since 2026-08-29 it is no longer the image motif on its own,
+    which is exactly why it may stay literal."""
     system = build_condense_system()
 
     assert "Englisch" in system
     assert "wörtlich" in system.lower()
+
+
+def test_the_prompt_asks_for_a_longer_image_description():
+    """Befund B (Birk, 2026-08-29): the 16-word wall sentence gave the image
+    model almost nothing, while Google's guidance for this exact model asks
+    for a scene described narratively. The prompt must ask for length, and
+    for what makes a scene visible."""
+    system = build_condense_system()
+
+    assert "BILDBESCHREIBUNG" in system
+    # Length, named as a number so nobody can read „ausführlich" as one line.
+    assert "50" in system and "80" in system
+    # The concrete things the description is supposed to carry.
+    for asked_for in ("Materialien", "Oberflächen", "Licht"):
+        assert asked_for in system
+
+
+def test_the_prompt_says_the_wall_sentence_and_the_image_are_the_same_scene():
+    """The one way this could go wrong in the room: two different pictures,
+    one on the wall in German and another on the screen. They are one scene
+    described at two lengths, and the prompt has to say so outright."""
+    system = build_condense_system()
+
+    assert "DERSELBEN Szene" in system
+
+
+def test_the_prompt_keeps_mood_and_camera_instructions_out_of_the_description():
+    """Stage 2 fixes the light (MOOD_LIGHT) and the register itself; a second
+    source for either would fight it and make the five mood stages
+    indistinguishable (kg2/imagegen.py's module docstring)."""
+    system = build_condense_system()
+
+    assert "Lichtstimmung" in system
+    assert "Kamera" in system
+
+
+def test_the_prompt_asks_which_two_things_contradict_each_other():
+    """Befund A (Birk, 2026-08-29): TENSION_COHERENCE names no content, so
+    the image model invented a contradiction of its own. Stage 1 has the
+    material and must name the real one."""
+    system = build_condense_system()
+
+    assert "WIDERSPRUCH" in system
+    assert "widersprechen" in system
+
+
+def test_the_prompt_allows_an_empty_contradiction():
+    """The evidence clause again: material without a real contradiction must
+    not have one invented for it. An invented tension source would be worse
+    than none, because it would be rendered as if it were true."""
+    system = build_condense_system()
+
+    assert "leer" in system.lower()
+
+
+def test_the_form_section_still_governs_only_the_german_wall_sentence():
+    """Birk's explicit decision (2026-08-29): the wall stays 16 words, one
+    main clause, no comma — measured against legibility in passing, not
+    against image quality. The longer text is a SECOND field, never a
+    loosening of this one."""
+    system = build_condense_system()
+
+    form = system.split("FORM:")[1].split("\n\n")[0]
+    assert str(SENTENCE_MAX_WORDS) in form
+    assert "Hauptsatz" in form
+    assert "OHNE" in form and "Komma" in form
+    # The image description's length must not have leaked into FORM.
+    assert "50" not in form and "80" not in form
 
 
 def test_the_prompt_asks_for_mood_and_tension():
@@ -357,10 +438,99 @@ def test_condense_falls_back_to_german_when_english_is_only_whitespace(caplog):
     assert result.sentence_en == "Der Beton träumt."
 
 
-def test_the_output_model_has_exactly_the_four_fields():
+# -- image description and tension source (2026-08-29) -----------------------
+
+
+def test_condense_returns_the_image_description_and_the_tension_source():
+    """Both are new fields from the SAME call as the sentence (spec §5.3 —
+    everything needed to explain a dream is recorded together)."""
+    llm = FakeLLM(
+        image_description="A concrete slab leans against a birch trunk.",
+        tension_source="restoring a façade while billing it as new construction",
+    )
+
+    result = condense(llm, material())
+
+    assert result.image_description == "A concrete slab leans against a birch trunk."
+    assert result.tension_source == "restoring a façade while billing it as new construction"
+
+
+def test_an_empty_image_description_is_logged_and_left_empty_not_raised():
+    """Same policy as sentence_en: a missing field degrades the image, it
+    does not fail the dream (spec §8). Stage 2 falls back on its own
+    (kg2/imagegen.py::build_image_prompt), so nothing is substituted here."""
+    result = condense(FakeLLM(image_description=""), material())
+
+    assert result.image_description == ""
+    assert result.sentence_en  # ...and the fallback stage 2 will use is there
+
+
+def test_an_empty_image_description_warns_because_it_should_not_happen(caplog):
+    with caplog.at_level("WARNING"):
+        condense(FakeLLM(image_description="   "), material())
+
+    assert "image description" in caplog.text
+
+
+def test_a_truncated_image_description_is_dropped_and_logged_not_raised(caplog):
+    """`_is_truncated` is applied here too, but its verdict costs only the
+    richer prompt — falling back to the literal translation is far better
+    than letting a spliced-in fragment reach the image model, and better
+    still than losing the dream."""
+    with caplog.at_level("WARNING"):
+        result = condense(
+            FakeLLM(image_description="A slab of concrete stands in a G\ndie clearing."),
+            material(),
+        )
+
+    assert result.image_description == ""
+    assert result.sentence == "Der Beton träumt vom Wald."  # the dream survives
+    assert "truncated" in caplog.text
+
+
+def test_an_empty_tension_source_is_silent_because_it_is_a_legitimate_answer(caplog):
+    """Material without a real contradiction must not have one invented for
+    it — the prompt asks for the field to be left empty in that case. A
+    warning here would train whoever reads the log to ignore the line."""
+    with caplog.at_level("WARNING"):
+        result = condense(FakeLLM(tension_source=""), material())
+
+    assert result.tension_source == ""
+    assert caplog.text == ""
+
+
+def test_a_whitespace_only_tension_source_is_also_silent(caplog):
+    with caplog.at_level("WARNING"):
+        result = condense(FakeLLM(tension_source="   "), material())
+
+    assert result.tension_source == ""
+    assert caplog.text == ""
+
+
+def test_a_truncated_tension_source_is_dropped_and_logged_not_raised(caplog):
+    with caplog.at_level("WARNING"):
+        result = condense(FakeLLM(tension_source="renovating a façade while\nbill"), material())
+
+    assert result.tension_source == ""
+    assert result.sentence == "Der Beton träumt vom Wald."
+    assert "tension source" in caplog.text
+
+
+def test_the_image_description_is_stripped_of_wrapping_quotes():
+    """Same `_clean` as the sentence: the prompt's own examples are quoted
+    and a model echoes the quoting back (kg/merging.py, commit 1016421)."""
+    result = condense(FakeLLM(image_description='"A slab of concrete stands alone."'), material())
+
+    assert result.image_description == "A slab of concrete stands alone."
+
+
+def test_the_output_model_has_exactly_the_six_fields():
     """Anything else in the schema is something the model can spend effort on
-    instead of the sentence."""
-    assert set(DreamSentence.model_fields) == {"sentence", "sentence_en", "mood", "tension"}
+    instead of the sentence. Six since 2026-08-29: the two new ones carry the
+    image channel, which the 16-word wall sentence cannot (kg2/imagegen.py)."""
+    assert set(DreamSentence.model_fields) == {
+        "sentence", "sentence_en", "image_description", "tension_source", "mood", "tension",
+    }
 
 
 # -- against the real thing -------------------------------------------------

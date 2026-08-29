@@ -12,6 +12,40 @@ THIS output, not stage 2's prompt: the image prompt is a technical artefact
 with style boilerplate, and showing it would put lighting instructions on the
 wall (spec §5.2).
 
+## What one call returns, and why it is four texts and not one (2026-08-29)
+
+The wall gets ONE of these; stage 2 gets the others. The split exists because
+the two channels are measured against different things, and a single text
+cannot serve both:
+
+* `sentence` — the wall. Exactly as before: one German main clause, at most
+  `SENTENCE_MAX_WORDS` words, no comma. Measured against legibility in
+  passing (36 words = 4 lines = ~11 s), and explicitly NOT touched by any of
+  what follows. The FORM section of the prompt applies to this field alone.
+* `sentence_en` — the literal English counterpart of that same wall sentence.
+  Kept and persisted because it is the honest translation of what a visitor
+  read; it is no longer stage 2's motif on its own, only a fallback for it.
+* `image_description` — the motif for stage 2: 3-4 sentences of English prose
+  on the SAME scene, at length. Google's guidance for this exact image model
+  is explicit that a narrative description beats a terse line
+  (`ai.google.dev/gemini-api/docs/interactions/image-generation`), and the
+  16-word wall sentence gave the model almost nothing to work with (Birk,
+  2026-08-29, on five rendered images in `out/tagesverlauf/`). It names
+  materials, surfaces, light ON the objects, spatial arrangement and scale —
+  and deliberately NOT the overall mood/lighting or any camera/style
+  instruction, because stage 2 already fixes those in its own blocks and two
+  sources for one instruction fight each other.
+* `tension_source` — one short English clause naming WHICH two things in the
+  material contradict each other. Stage 2's `TENSION_COHERENCE` wording is
+  intentionally contentless (it sets the DEGREE of coherence, not its
+  subject), so without this the image model invented a contradiction of its
+  own: handed „Roboter sprühen Beton auf eine unsexy Bestandsfassade und
+  berechnen ihr Honorar nach Neubau" it painted one clean and one dirty robot
+  arm, having no way to know the real friction was „renovating" against
+  „billing as new build". This field may legitimately be EMPTY — material
+  without a real contradiction must not have one invented for it, which is
+  the same evidence clause as above.
+
 Two decisions from 2026-08-28, both replacing an earlier mechanism rather than
 adding to it:
 
@@ -89,8 +123,32 @@ Vorbeigehen in einem Blick erfassbar sein.
 
 ÜBERSETZUNG: Liefere zusätzlich denselben Satz als wörtliche Übersetzung ins \
 Englische — keine inhaltliche Veränderung, keine Ausschmückung, dieselbe \
-Satzform. Diese englische Fassung ist das Bildmotiv für Stufe 2, nicht der \
-deutsche Satz.
+Satzform. Sie ist die ehrliche englische Entsprechung des Wandsatzes und wird \
+mit ihm zusammen aufbewahrt.
+
+BILDBESCHREIBUNG: Liefere zusätzlich eine ausführlichere englische \
+Beschreibung DERSELBEN Szene, die auch der deutsche Satz zeigt — keine zweite, \
+andere Szene daneben. Der Wandsatz und diese Beschreibung sind dasselbe Bild, \
+einmal knapp und einmal ausführlich. Zusammenhängende Prosa, drei bis vier \
+Sätze, ungefähr 50 bis 80 Wörter. Benenne, was konkret zu sehen ist: \
+Materialien, Oberflächen, wie das Licht auf den Dingen liegt, wie die Dinge im \
+Raum zueinander stehen, wie groß sie im Verhältnis zueinander sind. Diese \
+Fassung ist das Bildmotiv für Stufe 2.
+
+WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
+zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
+keine Kamera-, Objektiv-, Film- oder Stilangabe. Beides steht in Stufe 2 \
+bereits fest und würde sich mit deiner Fassung schlagen. Das Licht, das du \
+beschreibst, ist das Licht AN EINEM DING — ein Glanz auf nassem Beton, ein \
+Schatten unter einer Kante —, nicht die Stimmung des Bildes. Auch hier gilt \
+die Belegbarkeit: nur was sich auf die gelieferten Begriffe stützt.
+
+WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der benennt, \
+welche zwei konkreten Dinge aus dem Material einander widersprechen. Er muss \
+hinter „The tension here comes from \" passen, zum Beispiel „restoring an \
+existing façade while billing it as new construction\". Wenn im Material kein \
+echter Widerspruch liegt, lass dieses Feld leer — ein erfundener Widerspruch \
+ist schlechter als keiner.
 
 EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
 - mood: Wie blicken die Menschen in diesem Material auf die Zukunft? \
@@ -103,6 +161,8 @@ EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
 class DreamSentence(BaseModel):
     sentence: str
     sentence_en: str
+    image_description: str
+    tension_source: str
     mood: int
     tension: int
 
@@ -113,11 +173,28 @@ class CondenseResult:
     #: without the prompt that produced it cannot be explained afterwards.
     prompt: str
     sentence: str
-    #: Literal English translation of `sentence` — the motif fed to stage 2
-    #: (kg2/imagegen.py). Falls back to `sentence` if the model left it empty.
-    #: Defaulted (not `""`) only so a hand-written test fake that does not
-    #: care about translation/mood/tension can still construct one directly.
+    #: Literal English translation of `sentence` — the honest English
+    #: counterpart of what stands on the wall, kept and persisted alongside
+    #: it. Since 2026-08-29 it is no longer the image motif on its own:
+    #: `image_description` is (see kg2/imagegen.py's module docstring), and
+    #: this is only its last-but-one fallback. Falls back to `sentence` if the
+    #: model left it empty. Defaulted (not `""`) only so a hand-written test
+    #: fake that does not care about translation/mood/tension can still
+    #: construct one directly.
     sentence_en: str = ""
+    #: The motif fed to stage 2 (kg2/imagegen.py): 3-4 sentences of English
+    #: prose describing the SAME scene as `sentence`, only at length — what is
+    #: materially visible, not how it is lit or photographed (those two blocks
+    #: are stage 2's own and would collide). Empty when the model returned
+    #: nothing usable; stage 2 then falls back, and never fails for it.
+    image_description: str = ""
+    #: One short English clause naming the two concrete things from the
+    #: material that contradict each other, e.g. „restoring an existing façade
+    #: while billing it as new construction". Legitimately EMPTY: material
+    #: without a real contradiction must not have one invented for it (the
+    #: same evidence clause that governs the sentence). Stage 2 uses it to
+    #: qualify its fixed tension wording — see kg2/imagegen.py.
+    tension_source: str = ""
     #: 1-5, how the material looks at the future. Clamped after the call.
     mood: int = 3
     #: 1-5, how far the material's statements diverge. NOT absurdity — see
@@ -254,6 +331,44 @@ def condense(
         log.warning("stage 1 returned no English sentence; falling back to the German one")
         sentence_en = sentence
 
+    # `image_description` and `tension_source`, added 2026-08-29, are cleaned
+    # the same way but NEVER rejected — unlike `sentence`/`sentence_en` above,
+    # a defect here degrades the image rather than destroying the dream, and
+    # stage 2's fallback chain (kg2/imagegen.py::build_image_prompt) already
+    # covers an empty value. Dropping a broken field to "" therefore costs a
+    # richer prompt and nothing else; raising would cost the whole dream, and
+    # spec §8 is explicit about riding imperfection out.
+    #
+    # `_is_truncated` is applied here too even though it was written for the
+    # one-clause wall sentence. Its trade-off changes shape but not sign: a
+    # multi-sentence description could in principle carry a legitimate
+    # newline, so this may occasionally discard a usable description — but the
+    # only consequence is a fall back to `sentence_en`, which is the honest
+    # translation anyway. A genuinely spliced-in fragment reaching the image
+    # model would be the worse outcome of the two.
+    image_description = _clean(result.image_description or "")
+    if image_description and _is_truncated(image_description):
+        log.warning(
+            "stage 1 image description looks truncated/corrupted; falling back: %r",
+            image_description,
+        )
+        image_description = ""
+    if not image_description:
+        log.warning(
+            "stage 1 returned no image description; stage 2 falls back to the English sentence"
+        )
+
+    # No warning when this one is empty: „no contradiction in the material" is
+    # the legitimate, prompted-for answer (the evidence clause forbids
+    # inventing one), and warning about it would train whoever reads the log
+    # to ignore the line that matters.
+    tension_source = _clean(result.tension_source or "")
+    if tension_source and _is_truncated(tension_source):
+        log.warning(
+            "stage 1 tension source looks truncated/corrupted; dropping it: %r", tension_source
+        )
+        tension_source = ""
+
     mood = _clamp_1_to_5(int(result.mood), "mood")
     tension = _clamp_1_to_5(int(result.tension), "tension")
 
@@ -272,6 +387,8 @@ def condense(
         prompt=f"{system}\n\n--- USER ---\n\n{user}",
         sentence=sentence,
         sentence_en=sentence_en,
+        image_description=image_description,
+        tension_source=tension_source,
         mood=mood,
         tension=tension,
     )

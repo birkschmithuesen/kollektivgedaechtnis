@@ -45,6 +45,8 @@ def _row(row: sqlite3.Row) -> Dream:
         stage1_prompt=row["stage1_prompt"],
         sentence=row["sentence"],
         sentence_en=row["sentence_en"],
+        image_description=row["image_description"],
+        tension_source=row["tension_source"],
         mood=row["mood"],
         tension=row["tension"],
         stage2_prompt=row["stage2_prompt"],
@@ -158,13 +160,35 @@ class DreamStore:
         sentence: str,
         model: str,
         sentence_en: str | None = None,
+        image_description: str | None = None,
+        tension_source: str | None = None,
         mood: int | None = None,
         tension: int | None = None,
     ) -> None:
+        """Everything stage 1 produced, in one statement.
+
+        All of the optional parameters default to None, and None is written
+        as SQL NULL — which readers already treat as „not available" (see
+        `_row` and kg2/db.py's column comments). That is what lets a caller
+        that has no `image_description`/`tension_source` (a seeded row, an old
+        test fake) keep working unchanged, and it is the same NULL an
+        untouched row from before 2026-08-29 carries.
+        """
         self.conn.execute(
-            "UPDATE dream SET stage1_prompt=?, sentence=?, sentence_en=?, mood=?,"
+            "UPDATE dream SET stage1_prompt=?, sentence=?, sentence_en=?,"
+            " image_description=?, tension_source=?, mood=?,"
             " tension=?, condense_model=? WHERE id=?",
-            (prompt, sentence, sentence_en, mood, tension, model, dream_id),
+            (
+                prompt,
+                sentence,
+                sentence_en,
+                image_description,
+                tension_source,
+                mood,
+                tension,
+                model,
+                dream_id,
+            ),
         )
         self.conn.commit()
 

@@ -34,10 +34,25 @@ CREATE TABLE IF NOT EXISTS dream (
     absorbed_persons   TEXT NOT NULL DEFAULT '[]',
     stage1_prompt      TEXT,
     sentence           TEXT,
-    -- Literal English translation of `sentence` — the motif fed to stage 2
-    -- (kg2/imagegen.py). NULL for rows written before 2026-08-28; readers
-    -- must treat that the same as "no translation available".
+    -- Literal English translation of `sentence` — the honest English
+    -- counterpart of what stood on the wall. NULL for rows written before
+    -- 2026-08-28; readers must treat that the same as "no translation
+    -- available". Since 2026-08-29 it is no longer stage 2's motif on its
+    -- own, only the fallback for `image_description` below.
     sentence_en        TEXT,
+    -- The motif actually fed to stage 2 (kg2/imagegen.py): 3-4 sentences of
+    -- English prose about the same scene as `sentence`, at length. Added
+    -- 2026-08-29, additively and WITHOUT a migration — the same treatment
+    -- sentence_en/mood/tension got on 2026-08-28. NULL for every row written
+    -- before that date, and legitimately NULL for a dream whose stage 1
+    -- returned nothing usable here; readers treat NULL as "not available"
+    -- and fall back, never as an error.
+    image_description  TEXT,
+    -- One short English clause naming which two things in the material
+    -- contradict each other. NULL like the column above for old rows — and
+    -- legitimately empty even on a brand-new row: material without a real
+    -- contradiction must not have one invented for it (kg2/condense.py).
+    tension_source     TEXT,
     -- 1-5, both from the same stage-1 call as `sentence` (kg2/condense.py).
     -- NULL for rows written before 2026-08-28.
     mood               INTEGER,

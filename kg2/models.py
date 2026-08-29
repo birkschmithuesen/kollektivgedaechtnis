@@ -31,9 +31,22 @@ class Dream:
     absorbed_persons: list[str] = field(default_factory=list)
     stage1_prompt: str | None = None
     sentence: str | None = None
-    #: Literal English translation of `sentence` — stage 2's motif. None for
-    #: rows from before 2026-08-28, or a genuinely failed dream.
+    #: Literal English translation of `sentence` — the honest counterpart of
+    #: what stood on the wall. None for rows from before 2026-08-28, or a
+    #: genuinely failed dream. Since 2026-08-29 no longer stage 2's motif on
+    #: its own, only the fallback for `image_description`.
     sentence_en: str | None = None
+    #: The motif stage 2 actually rendered from: several sentences of English
+    #: prose about the same scene as `sentence` (kg2/imagegen.py). None for
+    #: rows from before 2026-08-29 and for a dream whose stage 1 returned
+    #: nothing usable — a reader falls back rather than treating it as an
+    #: error.
+    image_description: str | None = None
+    #: One short English clause naming the two things in the material that
+    #: contradict each other. None under the same conditions as above, and
+    #: legitimately empty on a perfectly good dream: material without a real
+    #: contradiction must not have one invented for it.
+    tension_source: str | None = None
     #: 1-5, produced in the same stage-1 call as `sentence`. None under the
     #: same conditions as `sentence_en`.
     mood: int | None = None

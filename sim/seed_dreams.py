@@ -109,8 +109,11 @@ def seed_dreams(data_dir, count: int, images, *, start_at=START_AT, sentences=No
         # mood/tension cycle through the whole 1-5 range across the seeded day
         # so a strip built from this corpus exercises every image-prompt
         # stage — not just whatever a single fixed value would produce.
-        # sentence_en is left equal to the (German) seeded sentence: nothing
-        # here calls the image model, so no prompt is ever built from it.
+        # sentence_en is left equal to the (German) seeded sentence, and
+        # image_description/tension_source are left out entirely (NULL):
+        # nothing here calls the image model, so no prompt is ever built from
+        # any of them, and a seeded row is then also the cheapest live check
+        # that a row with NULLs in the 2026-08-29 columns still reads back.
         store.set_stage1(
             dream.id,
             prompt="(seeded — no model call)",

@@ -14,7 +14,8 @@ def open_store(tmp_path) -> DreamStore:
 
 def make_dream(
     store, *, at: float, persons=("p1",), sentence="Ein Satz.", image="a.png",
-    sentence_en="A sentence.", mood=3, tension=3,
+    sentence_en="A sentence.", image_description="A long description.",
+    tension_source="a while b", mood=3, tension=3,
 ):
     dream = store.create_dream(
         created_at=at,
@@ -27,6 +28,7 @@ def make_dream(
     )
     store.set_stage1(
         dream.id, prompt="S1", sentence=sentence, sentence_en=sentence_en,
+        image_description=image_description, tension_source=tension_source,
         mood=mood, tension=tension, model="claude-opus-5",
     )
     store.set_stage2_prompt(dream.id, prompt="S2", model="google/gemini-3-pro-image")
@@ -53,6 +55,8 @@ def test_a_finished_dream_carries_every_field_the_record_needs(tmp_path):
     assert dream.stage1_prompt == "S1"
     assert dream.sentence == "Ein Satz."
     assert dream.sentence_en == "A sentence."
+    assert dream.image_description == "A long description."
+    assert dream.tension_source == "a while b"
     assert dream.mood == 3
     assert dream.tension == 3
     assert dream.stage2_prompt == "S2"
@@ -78,6 +82,59 @@ def test_a_row_with_no_english_sentence_or_mood_or_tension_stays_readable(tmp_pa
     assert dream.sentence_en is None
     assert dream.mood is None
     assert dream.tension is None
+    store.close()
+
+
+def test_a_row_with_no_image_description_or_tension_source_stays_readable(tmp_path):
+    """The 2026-08-29 columns are additive and NULL for every earlier row —
+    the same treatment sentence_en/mood/tension got, and no migration
+    (docs: „neue Spalten additiv, NULL für Altbestand"). A reader must treat
+    NULL as „not available" and fall back, never as an error."""
+    store = open_store(tmp_path)
+
+    dream = store.create_dream(
+        created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
+        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+    )
+
+    assert dream.image_description is None
+    assert dream.tension_source is None
+    store.close()
+
+
+def test_a_stage1_call_that_omits_the_new_fields_still_writes_the_row(tmp_path):
+    """A caller with nothing to put in the new columns (sim/seed_dreams.py, a
+    test fake) must keep working unchanged — NULL is written, which is the
+    same value an untouched old row carries, and the strip still renders."""
+    store = open_store(tmp_path)
+    dream = store.create_dream(
+        created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
+        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+    )
+
+    store.set_stage1(dream.id, prompt="S1", sentence="Ein Satz.", model="claude-opus-5")
+
+    stored = store.get_dream(dream.id)
+    assert stored.sentence == "Ein Satz."
+    assert stored.image_description is None
+    assert stored.tension_source is None
+    store.close()
+
+
+def test_an_empty_tension_source_is_stored_as_empty_not_as_missing(tmp_path):
+    """„No contradiction in the material" is a real answer stage 1 gives
+    (kg2/condense.py), and it is recorded as such: an empty string, which the
+    row tells apart from the NULL of a row whose column was never filled."""
+    store = open_store(tmp_path)
+
+    answered_none = make_dream(store, at=1.0, tension_source="")
+    never_filled = store.create_dream(
+        created_at=2.0, graph_generated_at=1.0, person_count=1, term_count=1,
+        edge_count=1, guiding_question="Q", absorbed_persons=["p2"],
+    )
+
+    assert answered_none.tension_source == ""
+    assert never_filled.tension_source is None
     store.close()
 
 
