@@ -144,11 +144,12 @@ Schatten unter einer Kante —, nicht die Stimmung des Bildes. Auch hier gilt \
 die Belegbarkeit: nur was sich auf die gelieferten Begriffe stützt.
 
 WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der benennt, \
-welche zwei konkreten Dinge aus dem Material einander widersprechen. Er muss \
-hinter „The tension here comes from \" passen, zum Beispiel „restoring an \
-existing façade while billing it as new construction\". Wenn im Material kein \
-echter Widerspruch liegt, lass dieses Feld leer — ein erfundener Widerspruch \
-ist schlechter als keiner.
+welche zwei konkreten Dinge aus dem Material einander widersprechen. Er wird \
+in Stufe 2 hinter einen einleitenden Satz gehängt und muss deshalb ein \
+Halbsatz bleiben, kein ganzer Satz und ohne Punkt am Ende — zum Beispiel \
+„restoring an existing façade while billing it as new construction\". Wenn im \
+Material kein echter Widerspruch liegt, lass dieses Feld leer — ein \
+erfundener Widerspruch ist schlechter als keiner.
 
 EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
 - mood: Wie blicken die Menschen in diesem Material auf die Zukunft? \

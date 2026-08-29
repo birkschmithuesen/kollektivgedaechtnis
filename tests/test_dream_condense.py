@@ -199,6 +199,17 @@ def test_the_prompt_asks_which_two_things_contradict_each_other():
     assert "widersprechen" in system
 
 
+def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
+    """kg2/imagegen.py hangs `tension_source` behind a sentence of its own and
+    adds the full stop itself. A field that arrived as a whole sentence would
+    read as two sentences run together in the prompt that is actually sent,
+    so the shape is asked for here rather than repaired there."""
+    system = build_condense_system()
+
+    assert "Halbsatz" in system
+    assert "ohne Punkt" in system
+
+
 def test_the_prompt_allows_an_empty_contradiction():
     """The evidence clause again: material without a real contradiction must
     not have one invented for it. An invented tension source would be worse
