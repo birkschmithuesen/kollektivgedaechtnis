@@ -65,8 +65,17 @@ guiding_question = "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"
 # NOCH NACHZUSCHÄRFEN: der genaue Wortlaut der Machart selbst. Bisherige
 # deutsche Muster wirkten auf Birk „runtergekommen"; gesucht ist derselbe
 # Fotorealismus in freundlicherem Ton.
+#
+# WORTLAUT-REGEL (Birk, 2026-08-29): durchgehend POSITIV formuliert. Googles
+# „Semantic Negative Prompts" gilt nicht nur für die Schriftfreiheit, sondern
+# für den ganzen Text — die frühere Fassung schleppte aus der deutschen
+# Vorlage „Not a painting, not an illustration, not an architectural
+# rendering" mit, also drei Verneinungen hintereinander, genau das Muster,
+# von dem die Doku abrät. Was das Bild sein SOLL, ist beschreibbar; was es
+# nicht sein soll, folgt daraus. Wer hier etwas ergänzt: kein „no …", kein
+# „not a …", sondern die gewünschte Eigenschaft benennen.
 # Varianten rendern mit: uv run python -m sim.dream_register --out out/registerN
-visual_register = "Photographic, high detail, credible light, the look of a genuine photograph. Not a painting, not an illustration, not an architectural rendering. Shot from eye level with a normal focal length and natural depth of field. Every surface in the frame is free of writing: no signs, no labels, no lettering. A single photograph, not a collage or a multi-panel composition."
+visual_register = "A photograph taken with a camera on real film or a real sensor, with the grain, tonal range and small imperfections that come from an actual exposure. Shot from eye level with a normal focal length and natural depth of field. Every surface in the frame is free of writing, bare of signs, labels and lettering. One single photographic frame, whole and uncut."
 
 condense_model = "claude-opus-5"
 condense_effort = "high"

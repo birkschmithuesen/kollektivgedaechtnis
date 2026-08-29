@@ -118,13 +118,21 @@ def image_extension(data: bytes) -> str:
 #: Fixed wording, keyed 1 (coldest/most negative) to 5 (warmest/most
 #: positive) — see the module docstring for why these describe ONLY light and
 #: colour, never objects, people, or state.
+#:
+#: Phrased POSITIVELY throughout, per Google's „Semantic Negative Prompts"
+#: guidance (ai.google.dev/gemini-api/docs/interactions/image-generation):
+#: describe the intended scene rather than negating an unwanted one. Earlier
+#: wordings said things like „no warmth anywhere in the frame"; a negation is
+#: a weaker instruction to this model than naming the quality that IS there,
+#: so „cold" is stated outright instead. Anyone editing these: name the light
+#: you want, do not rule out the light you don't.
 MOOD_LIGHT: dict[int, str] = {
     1: "The light is cold and flat, coming from nowhere in particular, with "
-       "grey-blue colours and no warmth anywhere in the frame.",
+       "grey-blue colours throughout the frame.",
     2: "The light is cool and low, with muted, slightly desaturated colours "
        "and soft grey shadows.",
-    3: "The light is neutral and even, with balanced, ordinary colours and no "
-       "strong emotional cast.",
+    3: "The light is neutral and even, with balanced, ordinary colours and a "
+       "plain, matter-of-fact cast.",
     4: "The light is warm and gentle, with soft golden colours and a mild, "
        "inviting glow.",
     5: "The light is warm and low, coming from one side, with long soft "
@@ -134,17 +142,18 @@ MOOD_LIGHT: dict[int, str] = {
 #: Fixed wording, keyed 1 (everything coheres) to 5 (physically impossible) —
 #: describes only the DEGREE of coherence, names nothing concrete. See the
 #: module docstring for why this is not "absurdity" as a whole scale.
+#: Positively phrased for the same reason as MOOD_LIGHT above.
 TENSION_COHERENCE: dict[int, str] = {
     1: "Everything in the frame belongs together, forming one calm and "
        "coherent whole.",
     2: "The scene is coherent, with only a faint sense of something slightly "
        "out of place.",
-    3: "Two different qualities sit side by side in the frame, not fully "
-       "resolved into one.",
+    3: "Two different qualities sit side by side in the frame, each keeping "
+       "its own character.",
     4: "Two clearly incompatible qualities occupy the same frame at once, "
        "both fully real, neither one dominant.",
-    5: "The frame holds something physically impossible, as if two "
-       "realities were fused into one that could not actually coexist.",
+    5: "The frame holds something physically impossible, as if two realities "
+       "had been fused into a single one.",
 }
 
 
