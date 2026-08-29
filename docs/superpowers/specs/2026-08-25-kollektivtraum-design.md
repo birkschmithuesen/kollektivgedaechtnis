@@ -255,19 +255,58 @@ reading direction the material may not contain — the same failure mode the
 contradiction clause had. `DreamConfig.guiding_question` still exists but
 steers only the on-screen headline (`kg2/server.py`) from here on.
 
+**Stage 1 returns four texts, not one (extended 2026-08-29).** Besides
+`sentence` (the wall) and `sentence_en` (its literal translation), the same
+call now returns `image_description` and `tension_source`, both English and
+both for stage 2 only. **The wall sentence and its form target above are
+UNCHANGED** — they are measured against legibility in passing, not against
+image quality, and Birk's decision of 2026-08-29 is explicit that the two
+must not be traded against each other. What changed is that stage 2 stopped
+being fed the wall's 16 words as its only material:
+
+- `image_description` — the SAME scene as the wall sentence, described at
+  length: 3-4 sentences, ~50-80 words, naming materials, surfaces, light on
+  the objects, spatial arrangement and scale. Deliberately carries no
+  mood/lighting and no camera/style instruction, because stage 2 fixes both
+  in its own blocks (§5.2) and two sources for one instruction fight. The
+  evidence clause governs it exactly as it governs the sentence.
+- `tension_source` — one short English clause naming which two concrete
+  things in the material contradict each other. **May legitimately be
+  empty**: material without a real contradiction must not have one invented
+  for it, the same rule that retired the contradiction clause above.
+
 **Model:** `claude-opus-5`, same as Tool 1's extraction. One model to reason
 about, one credential, and it is the model the merge judge is already tuned on.
 
 ### 5.2 Stage 2 — sentence → image
 
-The English sentence (`sentence_en`, a literal translation of the German one
-produced in the SAME stage-1 call) becomes an image prompt and is rendered.
-**Revised 2026-08-28: the whole image prompt is English prose, five blocks in
-order** (`kg2/imagegen.py::build_image_prompt`): the English sentence (motif),
-mood (from `mood`, five FIXED light/colour formulations), tension (from
-`tension`, five FIXED coherence formulations — see brainstorm §10's revision),
-the register, and the format. English and connected prose rather than a
-keyword list per Google's own guidance for this model.
+The English motif becomes an image prompt and is rendered.
+**Revised 2026-08-28: the whole image prompt is English prose, in the order**
+(`kg2/imagegen.py::build_image_prompt`): the motif, mood (from `mood`, five
+FIXED light/colour formulations), tension (from `tension`, five FIXED
+coherence formulations — see brainstorm §10's revision), the register, and
+the format. English and connected prose rather than a keyword list per
+Google's own guidance for this model.
+
+**Extended 2026-08-29, after Birk read five real images (`out/tagesverlauf/`).
+Two findings, both fixed at the source rather than in the fixed wording:**
+
+- *The motif was too thin.* It was `sentence_en` — a LITERAL translation of a
+  16-word wall sentence, forbidden by its own prompt from embellishing. That
+  is the opposite of what Google's guidance asks of this model. The motif is
+  now stage 1's `image_description` (§5.1), with `sentence_en` and then
+  `sentence` as fallbacks: a field stage 1 failed to fill must never cost a
+  dream (§8), and every fallback still describes the same scene.
+- *The tension was unexplained.* `TENSION_COHERENCE` sets the DEGREE of
+  coherence and names nothing, so a model told only „two different qualities
+  sit side by side" invents which two — handed the sentence about robots
+  spraying concrete onto an existing façade while billing it as new
+  construction, it painted one clean and one dirty robot arm. The five fixed
+  formulations are UNCHANGED; when `tension_source` is non-empty, one further
+  sentence naming the material's real contradiction is APPENDED after it.
+  Appended, never substituted: the scale keeps deciding how hard the two
+  things collide, the material only decides what they are. Empty
+  `tension_source` leaves the block exactly as it was.
 
 - **Fixed visual register (machart only)** (brainstorm §10), set in the
   morning like the guiding question. Held in config as a style suffix
@@ -292,10 +331,17 @@ reproducibility and shown only in the operator UI.
 ### 5.3 Reproducibility
 
 Per dream, persisted: id, timestamp, the graph's `generated_at` it was built
-from, person/term/edge counts, stage 1 prompt + sentence, stage 2 prompt, model
-names, image path, discarded flag. This is the house rule (SOUL: file +
-parameters + machine-readable record) and it is what makes a post-festival
-retrospective possible at all.
+from, person/term/edge counts, stage 1 prompt + sentence (plus its English
+translation, the image description the picture was built from, the material's
+contradiction, and mood/tension), stage 2 prompt, model names, image path,
+discarded flag. This is the house rule (SOUL: file + parameters +
+machine-readable record) and it is what makes a post-festival retrospective
+possible at all.
+
+New columns are added additively and WITHOUT a migration: NULL for every
+earlier row, and readers treat NULL as „not available" and fall back. That is
+how `sentence_en`/`mood`/`tension` arrived on 2026-08-28 and how
+`image_description`/`tension_source` arrived on 2026-08-29.
 
 ## 6. Screen B — the display
 
