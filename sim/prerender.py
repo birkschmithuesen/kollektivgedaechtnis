@@ -201,14 +201,20 @@ MEASURE = """
     // The single "canvas fill" number Birk asked for in the fourth brief.
     area_fraction_with_labels: (withLabels.w * withLabels.h) / (cy.width() * cy.height()),
     nodes_in_frame: inFrame / nodes.length,
-    // Model-unit type and disc sizes are constants of the theme; what reaches
-    // the wall is that constant times the zoom, and THAT is the number the
-    // fill-the-screen requirement is about. Both are reported: the seventh
-    // brief asks for the model size AND the effective size, and since each
-    // ladder variant is now laid out for itself the two no longer differ by a
-    // shared factor.
+    // Model-unit type is a constant of the theme; what reaches the wall is
+    // that constant times the zoom, and THAT is the number the fill-the-screen
+    // requirement is about. Both are reported: the seventh brief asks for the
+    // model size AND the effective size, and since each ladder variant is now
+    // laid out for itself the two no longer differ by a shared factor.
+    //
+    // The DISC is the exception since 2026-08-29: its size on the wall is set
+    // in rendered pixels and its model size is whatever that works out to at
+    // this zoom, so the model number reported here is the one the PLACEMENT
+    // reasons in (the theme's --person-size) and person_px_on_wall is no
+    // longer it times the zoom — it is the operator's setting, at every zoom
+    // and every net size.
     label_size_model: term ? Number(term.numericStyle('font-size')) : null,
-    person_size_model: person ? Number(person.numericStyle('width')) : null,
+    person_size_model: window.kgView.placementPersonSize,
     label_px_on_wall: term ? Number(term.numericStyle('font-size')) * cy.zoom() : null,
     person_px_on_wall: person ? Number(person.numericStyle('width')) * cy.zoom() : null,
     // The front end's own overlap count, not a second one computed here —
@@ -679,8 +685,10 @@ def _fill_shots(page, dbs: dict[int, Path], out_dir: Path, theme: str, scratch: 
                     f"Fill the screen at {persons} persons / {data['term_nodes']} terms: "
                     f"labels reach the wall at {data['label_px_on_wall']:.0f}px and person discs "
                     f"at {data['person_px_on_wall']:.0f}px. Nothing in the theme changed between "
-                    "these three shots — the viewport fit scales model-unit type and node sizes "
-                    "with it, so a smaller net simply comes out larger.",
+                    "these three shots — the viewport fit scales model-unit type with it, so a "
+                    "smaller net comes out with larger type. The portraits deliberately do not "
+                    "follow it any more (2026-08-29): they hold the operator's size in rendered "
+                    "pixels, the same at 5 persons as at 50.",
                     data,
                 )
             )
@@ -1087,7 +1095,8 @@ def _print_shot(shot: Shot) -> None:
     print(
         "    on the wall: {term_nodes} term nodes, {person_nodes} persons, "
         "{edges} edges; labels {label_px_on_wall:.0f}px ({label_size_model:.0f}px model type), "
-        "discs {person_px_on_wall:.0f}px ({person_size_model:.0f}px model)".format(**shot.coverage)
+        "discs {person_px_on_wall:.0f}px ({person_size_model:.0f}px model in the "
+        "placement)".format(**shot.coverage)
     )
     stats = shot.coverage.get("label_overlap_stats")
     if stats:

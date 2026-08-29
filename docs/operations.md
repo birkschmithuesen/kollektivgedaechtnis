@@ -318,6 +318,31 @@ in „manuell" nicht, weil dort die Hand des Besuchers führt.
 > dazu. Für eine sichtbare Fahrt mindestens ~1,5× (gemessen: bei 1,5× sind
 > 66 % der Knoten im Bild, bei 2× noch 37 %).
 
+**Porträtgröße** — stufenloser Regler **40 px bis 260 px**, Startwert
+**120 px**. Er setzt, wie groß ein Porträtkreis auf der Wand erscheint, in
+echten Bildschirmpixeln: gleich groß bei einer Person wie bei sechzig, und
+unabhängig davon, wie weit der Zoom danebensteht. Anlass (Birk, 2026-08-29, an
+der Station beobachtet): bei einer einzelnen Person füllte das Porträt den
+ganzen Schirm. Gemessen vor der Änderung, ein Mensch und ein Begriff auf
+1920×1080: 367 px (Thema a) bzw. 450 px (Thema b) — gegen 29 px bei fünfzig
+Personen. Die Schrift folgt weiter dem alten Prinzip (Modelleinheiten mal
+Zoom) und wird mit wachsendem Netz kleiner; ausgenommen sind nur die Porträts.
+
+> **Der Regler ändert die Platzierung nicht.** Das Layout rechnet unverändert
+> mit der Modellgröße des Themas (`--person-size`) und weiß nichts von der
+> eingestellten Bildschirmgröße. Auf einer vollen Wand werden die Porträts
+> damit größer gezeichnet, als das Layout angenommen hat, und können sich
+> berühren. Gemessen am 50-Personen-Netz (2026-08-29), Paare sich berührender
+> Porträts von 1225 möglichen: 9 bei 40 px, 62 bei 80 px, 108 bei 120 px, 268
+> bei 260 px; bei 20 Personen 0 / 3 / 13 / 34. Wenn sich die Kreise stapeln,
+> ist der Regler nach links das Mittel — die Platzierung selbst mitzuziehen
+> wäre ein eigener Umbau.
+
+> **Nicht dasselbe wie Zoom.** Der Zoom wählt den Ausschnitt (wie viel vom Netz
+> auf der Wand steht), die Porträtgröße die Größe der Gesichter darin. Beide
+> wirken unabhängig: ein Zoomzug lässt die Porträts unverändert groß, ein Zug
+> an der Porträtgröße ändert den Ausschnitt nicht.
+
 **Tempo** — Geschwindigkeit der automatischen Fahrt, 1/1 bis 1/4. Rechter
 Anschlag ist das Tempo, auf das die Bewegung abgestimmt wurde; nach links wird
 sie bis auf ein Viertel gedehnt (gemessen: 5,2 s → 20,9 s pro Etappe). Es gibt
@@ -325,7 +350,8 @@ bewusst keine Einstellung, die schneller läuft. Ein Reglerzug wirkt ab der
 **nächsten** Etappe — eine laufende neu zu skalieren würde die Kamera springen
 lassen.
 
-> **Kamera, Zoom und Tempo werden vor Ort am echten Screen eingestellt**
+> **Kamera, Zoom, Porträtgröße und Tempo werden vor Ort am echten Screen
+> eingestellt**
 > (Entscheidung D4). Die Vorab-Renderings beantworten die Lesbarkeitsfrage,
 > nicht die Frage nach Beamer, Wand und Raumtiefe. Richtwerte aus der Serie bei
 > 50 Personen: 1× ergibt ~13 px Schrift auf 1920 Pixel Wandbreite, 2× ergibt
@@ -393,8 +419,9 @@ Wieder einblenden ist derselbe Knopf.
 
 **Was ein Neustart erhält:** alle Personen, Begriffe, Kanten, Zitate, die
 Knotenpositionen (die Wand steht danach exakt wie vorher), die vom Operator
-gesetzte Dichte, der Kameramodus und der Zoom — und ein Interview, das beim
-Absturz noch lief, bleibt offen und lässt sich normal beenden.
+gesetzte Dichte, der Kameramodus, der Zoom und die Porträtgröße — und ein
+Interview, das beim Absturz noch lief, bleibt offen und lässt sich normal
+beenden.
 
 ## Kalibrierte Werte (Simulationslauf 19c, 60 Interviews)
 

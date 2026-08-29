@@ -67,7 +67,43 @@ function style() {
 // simultaneously the answer to "how big should a node be": three nodes fit at
 // a high zoom and come out large, a hundred fit at a low zoom and come out
 // small. There is no fixed on-screen scale to become unreadable or overcrowded.
+//
+// The PORTRAIT DISCS are the one deliberate exception, since 2026-08-29. See
+// the portrait-size block in createGraphView() for what that costs and how it
+// is kept from feeding back into everything else.
 const PADDING = 60;
+
+// How large a portrait is on the wall, in RENDERED pixels, until the operator
+// says otherwise. Birk, live at the station: with a single person on the wall
+// the model-unit sizing filled the whole screen with one face ("die müssen
+// immer dieselbe Größe haben, die Porträtkreise"). Measured on the unchanged
+// renderer at 1920x1080, one person and one term: 367px at theme a, 450px at
+// theme b — against 29px at fifty persons.
+//
+// 120px is a tenth of the wall's height: plainly a portrait rather than a
+// backdrop when one person stands alone, and still a face rather than a dot
+// at fifty. It sits in the lower half of the operator's 40-260px range on
+// purpose — the placement does not know about this size (see below), so a
+// generous default would crowd a full wall before anyone had touched a
+// control. The exact value is an on-site judgement like the zoom next to it.
+const DEFAULT_PORTRAIT_SIZE = 120;
+
+// Re-size the discs only when the zoom has moved by more than this fraction.
+//
+// A style write per zoom frame is NOT free, which is why this threshold
+// exists. Measured 2026-08-29 in Chromium on the seeded 50-person net: one
+// batched width/height/border-width write across 50 person nodes costs 2.8ms
+// (mean over 200 writes; themes a and b within 0.2ms of each other) — a sixth
+// of a 16.7ms frame, spent on nothing else but resizing discs. And the
+// automatic tour changes the zoom on EVERY frame (camera.js's breathing, ±6%
+// over 42s), so an unthrottled version would pay it continuously, all day,
+// for a size change of about 0.015% per frame that no one can see.
+//
+// At 1% a disc is off its target size by at most a pixel in a hundred, and a
+// whole breathing cycle costs ~24 writes instead of ~2500. Operator changes
+// and camera fits bypass the threshold entirely (`force`), so the one case
+// where the size really does jump is never throttled.
+const PORTRAIT_ZOOM_TOLERANCE = 0.01;
 
 /** The layout. fcose, from the library, not a hand-rolled force pass.
  *
@@ -155,11 +191,19 @@ const SEED_RADIUS = 140;
 // is a pure function of the node's index.
 const GOLDEN_ANGLE = 2.39996;
 
-function runLayout(cy, options) {
+/** Run a layout to completion.
+ *
+ * `around` wraps the START of the run, not the whole run: a layout with
+ * `fit: true` resolves its target viewport synchronously inside run()
+ * (cytoscape's animate() calls getFitViewport there and then), so that is
+ * where the portrait discs have to be back at their placement size — see
+ * createGraphView(). The default is the plain call.
+ */
+function runLayout(cy, options, around = (run) => run()) {
   return new Promise((resolve) => {
     const layout = cy.layout(options);
     layout.one('layoutstop', resolve);
-    layout.run();
+    around(() => layout.run());
   });
 }
 
@@ -683,26 +727,37 @@ function settleLabels(cy) {
  * an animation — what a visitor sees is one continuous migration, from the
  * arrangement that was on the wall to the arrangement that fills it.
  */
-async function migrate(cy, { fit, duration, onGlideStart = () => {} }) {
+async function migrate(
+  cy,
+  { fit, duration, onGlideStart = () => {}, atPlacementSize, atPlacementSizeAsync },
+) {
   const nodes = cy.nodes().sort(byId);
   const from = nodes.map((node) => ({ ...node.position() }));
 
   // Label offsets are geometry too, and stale ones (sized for the old, denser
   // arrangement) would measurably mislead the separation pass.
   resetLabelOffsets(cy);
-  await runLayout(cy, LAYOUT);
-  settlePlacement(cy);
+  // The whole computation runs at the placement size. It is also the only
+  // stretch of this function where that is invisible: fcose's `proof` quality
+  // blocks the main thread outright (see nextFrame() above), so the browser
+  // never paints a frame with the discs at anything but their wall size.
+  await atPlacementSizeAsync(async () => {
+    await runLayout(cy, LAYOUT);
+    settlePlacement(cy);
+  });
 
   const to = new Map(nodes.map((node) => [node.id(), { ...node.position() }]));
   nodes.forEach((node, index) => node.position(from[index]));
   await nextFrame();
   onGlideStart();
-  await runLayout(cy, {
-    ...MIGRATION,
-    animationDuration: duration,
-    fit,
-    positions: (node) => to.get(node.id()),
-  });
+  await runLayout(
+    cy,
+    { ...MIGRATION, animationDuration: duration, fit, positions: (node) => to.get(node.id()) },
+    // Only the start: this fit's target must come from the placement, but the
+    // glide itself is 2.5 painted seconds during which the discs hold their
+    // size on the wall like everywhere else.
+    (run) => atPlacementSize(run),
+  );
 }
 
 export function createGraphView(
@@ -715,7 +770,108 @@ export function createGraphView(
   // back to constructing one). Doing it here, once, is also the only place the
   // packing options can be set.
   if (cy.layoutUtilities) cy.layoutUtilities({ desiredAspectRatio: CANVAS_ASPECT, componentSpacing: 80 });
-  const camera = new Camera(cy);
+
+  // --- Portrait size on the wall (Birk, 2026-08-29) ----------------------
+  //
+  // A portrait must reach the wall at the SAME size whether one person is on
+  // it or sixty, and whatever the camera's zoom is doing. Cytoscape has no
+  // rendered-pixel node size, so the disc's model width is re-derived from
+  // the live zoom instead: width * zoom == portraitSize, always.
+  //
+  // The part that needs care is that this could easily become circular. The
+  // camera sizes the zoom by fitting the net, and the fit measures the very
+  // discs whose size then follows from that zoom. Left alone, that loop does
+  // not converge: with a single portrait on the wall each fit multiplies the
+  // zoom by roughly (canvas height - padding) / portraitSize — a factor of 8
+  // at the default — and a handful of graph updates would blow the viewport
+  // away entirely. It is not a stability problem to be damped, either: a lone
+  // disc of constant screen size can NEVER satisfy "fill the viewport", so
+  // there is no fit for the fit to find.
+  //
+  // So the screen size is strictly a DISPLAY property, applied on top of a
+  // placement that knows nothing about it: every pass that computes or scores
+  // geometry (fcose, settlePlacement, declutterLabels, countLabelOverlaps)
+  // and every viewport fit runs at the theme's own --person-size, in model
+  // units, exactly as before. A fit is therefore still a pure function of the
+  // node positions, and every measurement this repo has ever taken of the
+  // placement still means what it meant.
+  //
+  // The price, stated plainly because it is visible on the wall: at high
+  // person counts the discs are drawn LARGER than the placement assumed (at
+  // fifty persons the wall went from 29px discs to the configured size), and
+  // the placement has no idea. Measured 2026-08-29 on the seeded 50-person
+  // net, portrait pairs whose discs touch on screen: 9 at 40px, 62 at 80px,
+  // 108 at the 120px default, 268 at 260px — against 1225 pairs in total, and
+  // 0 before the change. At 20 persons the same series reads 0 / 3 / 13 / 34.
+  // The operator's slider is the lever for that; teaching the PLACEMENT about
+  // the display size is the real fix and is a brief of its own (it reopens
+  // the feedback above from the other side, since a disc that is larger in
+  // model units spreads the net and so lowers the zoom).
+  const placementPersonSize = Number(cssVar('--person-size', '96'));
+  // The ring is not a constant but a RATIO of the disc: the themes tune the
+  // two together (theme a 5 on 56, theme c 10 on 100), so a resized portrait
+  // has to keep the proportion or it gets a frame from another drawing.
+  const ringRatio = Number(cssVar('--ring-width', '5')) / placementPersonSize;
+  let portraitSize = DEFAULT_PORTRAIT_SIZE;
+  let sizedForZoom = 0;
+  // Re-entrant on purpose: settle() holds the placement size across a call
+  // that fits the camera, which holds it again.
+  let placementDepth = 0;
+
+  function applyPortraitSize(force = false) {
+    if (placementDepth > 0) return;
+    const zoom = cy.zoom();
+    if (!(zoom > 0)) return;
+    if (!force && Math.abs(zoom - sizedForZoom) < sizedForZoom * PORTRAIT_ZOOM_TOLERANCE) return;
+    sizedForZoom = zoom;
+    const width = portraitSize / zoom;
+    cy.batch(() => {
+      cy.nodes('.person').style({ width, height: width, 'border-width': width * ringRatio });
+    });
+  }
+
+  function enterPlacementSize() {
+    // Removing the bypass (rather than writing the theme's number back) keeps
+    // a later theme swap working through the normal cascade — same reason
+    // resetLabelOffsets() removes rather than sets.
+    if (placementDepth === 0) cy.nodes('.person').removeStyle('width height border-width');
+    placementDepth += 1;
+  }
+
+  function leavePlacementSize() {
+    placementDepth -= 1;
+    if (placementDepth === 0) applyPortraitSize(true);
+  }
+
+  /** Run `fn` with the discs back at the placement's model size.
+   *
+   * Safe by construction for the synchronous callers, which is all of them
+   * bar the migration: nothing awaits between removing the style bypass and
+   * restoring it, so the browser never gets a frame in which to paint the
+   * intermediate state.
+   */
+  function atPlacementSize(fn) {
+    enterPlacementSize();
+    try {
+      return fn();
+    } finally {
+      leavePlacementSize();
+    }
+  }
+
+  /** The same, for the one caller that has to await inside it. */
+  async function atPlacementSizeAsync(fn) {
+    enterPlacementSize();
+    try {
+      return await fn();
+    } finally {
+      leavePlacementSize();
+    }
+  }
+
+  cy.on('zoom', () => applyPortraitSize());
+
+  const camera = new Camera(cy, { fitWith: (fit) => atPlacementSize(fit) });
   let lastGraph = { nodes: [], edges: [], max_terms: DEFAULT_MAX_TERMS };
   let maxTerms = DEFAULT_MAX_TERMS;
   // Hysteresis (spec §7: measured 2026-08-29 -- raw churn is far above "less
@@ -821,10 +977,13 @@ export function createGraphView(
     const restoring = present.length === 0 && view.nodes.length > 0 && placed.size === view.nodes.length;
     const changed = toAdd.length > 0 || removedCount > 0;
 
-    const settle = () => {
-      labelOverlapStats = settleLabels(cy);
-      camera.onGraphChanged();
-    };
+    // Both halves are placement work: settleLabels() measures label boxes
+    // against person discs, and onGraphChanged() may fit the camera.
+    const settle = () =>
+      atPlacementSize(() => {
+        labelOverlapStats = settleLabels(cy);
+        camera.onGraphChanged();
+      });
 
     if (!changed || restoring) {
       settle();
@@ -839,6 +998,8 @@ export function createGraphView(
       onGlideStart: () => {
         gliding = true;
       },
+      atPlacementSize,
+      atPlacementSizeAsync,
     })
       .catch((error) => console.warn('layout migration failed', error))
       .then(() => {
@@ -878,6 +1039,16 @@ export function createGraphView(
     get labelOverlapStats() {
       return labelOverlapStats;
     },
+    /** The portrait's size on the wall, in rendered pixels. */
+    get portraitSize() {
+      return portraitSize;
+    },
+    /** The model size the PLACEMENT reasons in — the theme's --person-size.
+     * Reported by the pre-render alongside the size that reaches the wall,
+     * which is `portraitSize` and no longer this number times the zoom. */
+    get placementPersonSize() {
+      return placementPersonSize;
+    },
     update(graph, value) {
       graphRevision += 1;
       lastGraph = graph;
@@ -893,14 +1064,28 @@ export function createGraphView(
       standSince.clear();
       render();
     },
+    /** How large a portrait is on the wall, in rendered pixels. Takes effect
+     * at once, like the operator's other dials. A value that is not a usable
+     * size is ignored rather than thrown on: this runs an unattended wall,
+     * and a bad state push must never stop it rendering. */
+    setPortraitSize(pixels) {
+      const size = Number(pixels);
+      if (!(size > 0)) return;
+      portraitSize = size;
+      applyPortraitSize(true);
+    },
+    // Both of these weigh label boxes against the person discs, so they run at
+    // the placement's model size rather than at what the discs are drawn at
+    // (see the portrait-size block above). resetLabelOffsets() below does not:
+    // it touches nothing but the labels' own margins.
     declutterLabels() {
-      declutterLabels(cy);
+      atPlacementSize(() => declutterLabels(cy));
     },
     resetLabelOffsets() {
       resetLabelOffsets(cy);
     },
     labelOverlaps() {
-      return countLabelOverlaps(cy);
+      return atPlacementSize(() => countLabelOverlaps(cy));
     },
   };
 }

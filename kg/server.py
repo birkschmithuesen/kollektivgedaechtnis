@@ -59,6 +59,16 @@ class CameraZoom(BaseModel):
     factor: float = Field(ge=1.0, le=4.0)
 
 
+class PortraitSize(BaseModel):
+    # In RENDERED pixels on the wall, not model units — that is the whole
+    # point of the control (frontend/static/projection.js). Bounds from Birk's
+    # brief (2026-08-29): below 40px a portrait is a dot on a 1920px wall,
+    # above 260px a handful of faces crowd everything else off it. Bounded on
+    # both sides for the same reason as the zoom next to it: whatever a stray
+    # value does, it must not be able to leave an unattended wall unusable.
+    pixels: float = Field(ge=40.0, le=260.0)
+
+
 class Point(BaseModel):
     x: float
     y: float
@@ -82,6 +92,12 @@ def current_state(store) -> dict:
         # tour down is a room-and-audience judgement, like the zoom next to it,
         # so it belongs to the operator rather than to a constant.
         "camera_speed": float(store.get_setting("camera_speed", "1")),
+        # How large a portrait is on the wall, in rendered pixels, whatever the
+        # zoom is doing (Birk, 2026-08-29: "die müssen immer dieselbe Größe
+        # haben, die Porträtkreise"). The default matches projection.js's
+        # DEFAULT_PORTRAIT_SIZE, so a station that has never been touched shows
+        # the same wall whether or not this setting exists yet.
+        "portrait_size": float(store.get_setting("portrait_size", "120")),
         "stt_connected": store.get_setting("stt_connected", "0") == "1",
         "interview": None
         if person is None
@@ -162,6 +178,17 @@ def create_app(store, cfg, bus) -> FastAPI:
         # Display-only, exactly like camera_zoom: it changes how long the tour
         # dwells and travels, never what is extracted or merged.
         store.set_setting("camera_speed", str(payload.factor))
+        broadcast_state(store, bus)
+        return {"ok": True}
+
+    @app.post("/api/portrait_size")
+    def api_portrait_size(payload: PortraitSize) -> dict:
+        # Display-only, like the two camera controls above: it changes how big
+        # a face is drawn, never what is extracted, merged or shown.
+        # Deliberately independent of camera_zoom — that one chooses the
+        # SECTION of the net on the wall, this one the size of the portraits
+        # inside it, and turning either must leave the other alone.
+        store.set_setting("portrait_size", str(payload.pixels))
         broadcast_state(store, bus)
         return {"ok": True}
 

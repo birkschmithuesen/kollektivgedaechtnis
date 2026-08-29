@@ -91,6 +91,39 @@ def test_camera_zoom_round_trips_and_defaults_to_the_whole_net(client):
     assert client.get("/api/state").json()["camera_zoom"] == 2.0
 
 
+def test_portrait_size_round_trips_and_survives_a_restart(client):
+    # An untouched station reports projection.js's own default, so the wall
+    # looks the same whether or not this setting has ever been written.
+    assert client.get("/api/state").json()["portrait_size"] == 120.0
+
+    assert client.post("/api/portrait_size", json={"pixels": 180}).status_code == 200
+    assert client.get("/api/state").json()["portrait_size"] == 180.0
+    # It is a stored setting like camera_zoom, so it comes back after a crash
+    # (spec 10.5) — the same store, re-read, is what a restart does.
+    assert client.store.get_setting("portrait_size", "120") == "180.0"
+
+    # Below 40px a portrait is a dot on a 1920px wall, above 260px a handful of
+    # faces crowd everything else off it.
+    assert client.post("/api/portrait_size", json={"pixels": 10}).status_code == 422
+    assert client.post("/api/portrait_size", json={"pixels": 1000}).status_code == 422
+    assert client.get("/api/state").json()["portrait_size"] == 180.0
+
+
+def test_the_portrait_size_and_the_camera_zoom_do_not_touch_each_other(client):
+    # Two different controls (Birk's brief, 2026-08-29): the zoom chooses the
+    # section of the net on the wall, the portrait size how big the faces in it
+    # are drawn. Both must keep working independently.
+    client.post("/api/camera_zoom", json={"factor": 2.5})
+    client.post("/api/portrait_size", json={"pixels": 60})
+
+    state = client.get("/api/state").json()
+    assert (state["camera_zoom"], state["portrait_size"]) == (2.5, 60.0)
+
+    client.post("/api/camera_zoom", json={"factor": 1.5})
+    state = client.get("/api/state").json()
+    assert (state["camera_zoom"], state["portrait_size"]) == (1.5, 60.0)
+
+
 def test_positions_are_persisted_so_the_layout_never_reshuffles(client):
     term_id = client.store.list_terms()[0].id
 

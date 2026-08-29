@@ -13,6 +13,7 @@ let lastState = {
   camera_mode: 'fit',
   camera_zoom: 1,
   camera_speed: 1,
+  portrait_size: 120,
   stt_connected: false,
   interview: null,
 };
@@ -102,6 +103,8 @@ function render(graph, state) {
   showZoomValue(state.camera_zoom ?? 1);
   document.getElementById('camera-speed').value = String(state.camera_speed ?? 1);
   showSpeedValue(state.camera_speed ?? 1);
+  document.getElementById('portrait-size').value = String(state.portrait_size ?? 120);
+  showPortraitSizeValue(state.portrait_size ?? 120);
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
   document.getElementById('interview').textContent = state.interview
     ? 'Interview läuft'
@@ -163,6 +166,24 @@ document.getElementById('camera-zoom').addEventListener('change', (event) =>
   post('/api/camera_zoom', { factor: Number(event.target.value) }),
 );
 
+/** The portrait's size on the wall, in the unit the operator is choosing in:
+ * pixels of the projected image, whole ones ("120 px").
+ *
+ * No fraction and no multiplier, because this control is not relative to
+ * anything — unlike the zoom, which multiplies a fit, this IS the size, and it
+ * stays that size at every zoom and at every number of people on the wall. */
+function showPortraitSizeValue(pixels) {
+  const value = Math.round(Number(pixels) || 120);
+  document.getElementById('portrait-size-value').textContent = `${value} px`;
+}
+
+document.getElementById('portrait-size').addEventListener('input', (event) =>
+  showPortraitSizeValue(event.target.value),
+);
+document.getElementById('portrait-size').addEventListener('change', (event) =>
+  post('/api/portrait_size', { pixels: Number(event.target.value) }),
+);
+
 /** The tour's pace as a plain fraction — "1/1", "1/2", "1/4".
  *
  * Not a percentage and not seconds: the operator is choosing "half as fast",
@@ -192,6 +213,7 @@ let state = {
   camera_mode: 'fit',
   camera_zoom: 1,
   camera_speed: 1,
+  portrait_size: 120,
   stt_connected: false,
   interview: null,
 };

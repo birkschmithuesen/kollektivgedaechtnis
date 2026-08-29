@@ -100,7 +100,11 @@ def test_a_smaller_net_reaches_the_wall_larger(tmp_path, seeded):
 
     small, large = shots[0].coverage, shots[-1].coverage
     assert small["label_px_on_wall"] > large["label_px_on_wall"]
-    assert small["person_px_on_wall"] > large["person_px_on_wall"]
+    # The portraits are the exception since 2026-08-29 and now hold ONE size
+    # on the wall (Birk, live at the station: a single person's portrait filled
+    # the screen). Asserted here too, so the fill series cannot quietly go back
+    # to sizing faces by how many of them there are.
+    assert small["person_px_on_wall"] == pytest.approx(large["person_px_on_wall"], rel=0.02)
     # And both still fill the canvas, which is the other half of the claim.
     for coverage in (small, large):
         assert max(coverage["width_fraction_with_labels"], coverage["height_fraction_with_labels"]) > 0.85
@@ -229,7 +233,10 @@ def test_a_ladder_shot_reports_its_model_sizes_and_all_three_overlap_counts(tmp_
     (shot,) = _render(tmp_path, seeded, themes=("a",))
 
     assert shot.coverage["label_size_model"] == 22  # theme-a's --label-size
-    assert shot.coverage["person_size_model"] == 56  # theme-a's --person-size
+    # theme-a's --person-size. Since 2026-08-29 this is the size the PLACEMENT
+    # reasons in, not what the disc is drawn at — the drawn size is
+    # person_px_on_wall and is the operator's setting.
+    assert shot.coverage["person_size_model"] == 56
     stats = shot.coverage["label_overlap_stats"]
     for side in ("before", "after"):
         assert set(stats[side]) == {"labelPairs", "labelsOnPersons", "personPairs"}

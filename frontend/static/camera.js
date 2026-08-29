@@ -53,10 +53,28 @@ function clampRoamSpeed(value) {
 }
 
 export class Camera {
-  constructor(cy, { panSpeed = 18, padding = 60, zoomFactor = 1, roamSpeed = 1, random = Math.random } = {}) {
+  constructor(
+    cy,
+    {
+      panSpeed = 18,
+      padding = 60,
+      zoomFactor = 1,
+      roamSpeed = 1,
+      random = Math.random,
+      fitWith = (fit) => fit(),
+    } = {},
+  ) {
     this.cy = cy;
     this.panSpeed = panSpeed;
     this.padding = padding;
+    // Every viewport fit this camera performs goes through here. The
+    // projection passes a wrapper that first puts the portrait discs back to
+    // their placement size: since 2026-08-29 a disc's model size is derived
+    // from the zoom (projection.js), and a fit that measured THOSE discs
+    // would be computing the zoom from a size that is computed from the zoom
+    // — with a single portrait on the wall that has no solution at all. The
+    // default is the plain call, so a Camera used on its own is unchanged.
+    this._fitWith = fitWith;
     // 1 = the whole net in frame. >1 = that many times tighter, i.e. only
     // 1/factor of the net's width is on the wall. Fit-all is illegible at 50
     // persons (pre-render series, 2026-08-14), so the zoom level is a setting
@@ -149,11 +167,11 @@ export class Camera {
    * pre-render shoots for the close view. It deliberately does not change the
    * mode: the interaction rules stay whatever the operator set. */
   focus(eles, padding = this.padding) {
-    this.cy.fit(eles, padding);
+    this._fitWith(() => this.cy.fit(eles, padding));
   }
 
   _frame() {
-    this.cy.fit(this.padding);
+    this._fitWith(() => this.cy.fit(this.padding));
     if (this._zoomFactor === 1) return;
     // Zoom about the middle of the viewport, so the net stays centred on the
     // wall instead of drifting towards the model origin.
@@ -251,7 +269,7 @@ export class Camera {
   _travelLevel() {
     if (this._roamBaseLevel === undefined || this._roamBaseFactor !== this._zoomFactor) {
       const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
-      this.cy.fit(this.padding);
+      this._fitWith(() => this.cy.fit(this.padding));
       this._roamBaseLevel = this.cy.zoom() * this._zoomFactor;
       this._roamBaseFactor = this._zoomFactor;
       this.cy.zoom(before.zoom);

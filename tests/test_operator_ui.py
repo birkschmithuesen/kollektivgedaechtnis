@@ -21,6 +21,7 @@ STATE = {
     "max_terms": 2,
     "camera_mode": "pan",
     "camera_zoom": 2,
+    "portrait_size": 150,
     "stt_connected": True,
     "interview": None,
 }
@@ -241,6 +242,58 @@ def test_a_zoomed_in_value_carries_no_warning(ui):
            }"""
     )
     assert ui.eval_on_selector("#camera-zoom-value", "el => el.textContent") == "1,60×"
+
+
+def test_the_portrait_slider_reflects_state_and_posts_on_release(ui):
+    """The control for Birk's 2026-08-29 finding: with one person on the wall
+    the portrait filled the screen. It sets a size in rendered pixels, which
+    the wall then holds at any zoom and any number of people."""
+    assert ui.eval_on_selector("#portrait-size", "el => el.value") == "150"
+    assert ui.eval_on_selector("#portrait-size-value", "el => el.textContent") == "150 px"
+
+    before = ui.evaluate("window.kgFetches.length")
+    ui.evaluate(
+        """() => {
+             const el = document.getElementById('portrait-size');
+             el.value = '90';
+             el.dispatchEvent(new Event('input', { bubbles: true }));
+           }"""
+    )
+    # Dragging only moves the read-out: a POST per pixel would push a state
+    # broadcast to every SSE client dozens of times per second.
+    assert ui.eval_on_selector("#portrait-size-value", "el => el.textContent") == "90 px"
+    assert ui.evaluate("window.kgFetches.length") == before
+
+    ui.evaluate(
+        """() => {
+             document
+               .getElementById('portrait-size')
+               .dispatchEvent(new Event('change', { bubbles: true }));
+           }"""
+    )
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/portrait_size", {"pixels": 90}]
+
+
+def test_the_portrait_slider_cannot_post_a_value_the_server_would_reject(ui):
+    """Range mirrors PortraitSize's own bound (ge=40.0, le=260.0)."""
+    assert ui.eval_on_selector("#portrait-size", "el => [el.min, el.max, el.type]") == [
+        "40",
+        "260",
+        "range",
+    ]
+
+
+def test_the_portrait_size_is_independent_of_the_zoom_control(ui):
+    """Two different things (Birk's brief): the zoom picks the section of the
+    net on the wall, the portrait size how big the faces in it are drawn. A
+    state push that changes one must leave the other's control alone."""
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "camera_zoom": 3.5}],
+    )
+
+    assert ui.eval_on_selector("#camera-zoom", "el => el.value") == "3.5"
+    assert ui.eval_on_selector("#portrait-size", "el => el.value") == "150"
 
 
 def test_the_speed_slider_only_goes_down_from_the_tuned_pace(ui):

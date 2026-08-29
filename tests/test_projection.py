@@ -232,7 +232,11 @@ THEME_LABEL_SIZE = {
     "c": "44px",
 }
 
-THEME_RING_WIDTH = {"a": "5px", "b": "7px", "c": "10px"}
+# The themes' --ring-width over their --person-size. A RATIO rather than the
+# declared px value since 2026-08-29: the disc is sized in rendered pixels now
+# and the ring follows it proportionally, so what has to survive the theme swap
+# is the proportion the theme was drawn at, not one of the two numbers.
+THEME_RING_RATIO = {"a": 5 / 56, "b": 7 / 76, "c": 10 / 100}
 
 ONE_PERSON = {
     "version": 1,
@@ -271,10 +275,21 @@ def test_theme_query_param_reaches_the_baked_cytoscape_style(page, static_server
         page.evaluate("(g) => window.kgView.update(g, 1)", ONE_PERSON)
         wait_for_layout(page)
         sizes[theme] = page.evaluate("window.kgView.cy.$('#t1').style('font-size')")
-        rings[theme] = page.evaluate("window.kgView.cy.$('#p1').style('border-width')")
+        rings[theme] = page.evaluate(
+            """() => {
+                 const person = window.kgView.cy.$('#p1');
+                 return (
+                   Number(person.numericStyle('border-width')) /
+                   Number(person.numericStyle('width'))
+                 );
+               }"""
+        )
 
     assert sizes == THEME_LABEL_SIZE
-    assert rings == THEME_RING_WIDTH
+    # Both theme tokens at once: the ratio can only come out right if
+    # --ring-width AND --person-size were read from the theme that `?theme=`
+    # asked for, which is the load-order bug this test exists for.
+    assert rings == pytest.approx(THEME_RING_RATIO, rel=0.01)
 
 
 def test_every_graph_theme_paints_pure_black_and_pure_white(page, static_server):
@@ -817,10 +832,14 @@ def test_the_kept_passes_still_beat_fcoses_own_label_handling(page, static_serve
 # "Node size and font size must adapt so the graph ALWAYS fills the screen
 # without overcrowding. Two or three nodes -> everything large. A hundred
 # nodes -> everything small. Never a fixed scale that eventually becomes
-# unreadable." Nothing in this repo scales type: everything is sized in MODEL
-# units, and the viewport fit does the scaling for free. These tests pin that
-# down, because a stray `min-zoomed-font-size` or a rendered-pixel node size
-# would silently break it and no other test would notice.
+# unreadable." Nothing in this repo scales type: TYPE is sized in MODEL units,
+# and the viewport fit does the scaling for free. These tests pin that down,
+# because a stray `min-zoomed-font-size` would silently break it and no other
+# test would notice.
+#
+# The portrait discs are the one deliberate exception since 2026-08-29 — they
+# hold a constant size on the wall instead (see the portrait-size block at the
+# end of this module).
 
 
 def _rendered_scale(page):
@@ -866,7 +885,12 @@ def test_type_grows_as_the_net_shrinks(page, static_server):
         scales[persons] = _rendered_scale(page)
 
     assert scales[5]["font"] > scales[20]["font"] > scales[50]["font"]
-    assert scales[5]["disc"] > scales[20]["disc"] > scales[50]["disc"]
+    # The discs deliberately do NOT follow the type any more (Birk, 2026-08-29):
+    # they are pinned to a size in rendered pixels, so the same portrait reaches
+    # the wall the same size whether it is one face or fifty. Asserted here as
+    # well as in the portrait block below, because this is the test that would
+    # otherwise quietly re-establish the old, zoom-following behaviour.
+    assert scales[5]["disc"] == pytest.approx(scales[50]["disc"], rel=0.02)
 
 
 # --- Hysteresis: minimum stand time (spec 2026-08-29 §7) -------------------
@@ -925,3 +949,163 @@ def test_an_operators_cap_change_is_immediate_not_smoothed_by_grace(view):
 
     assert view.evaluate("window.kgView.cy.$('#t2').length") == 0
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
+
+
+# --- Portraits keep one size on the wall (Birk, 2026-08-29) ----------------
+#
+# Observed live at the station, with a single person on the wall: the portrait
+# filled the whole screen. Measured on the unchanged renderer at 1920x1080,
+# one person and one term: the disc reached the wall at 367px (theme a) and
+# 450px (theme b) — a third of the canvas height, and growing with every zoom
+# step the operator adds. "Die müssen immer dieselbe Größe haben, die
+# Porträtkreise."
+#
+# So the disc is now the ONE thing on this wall measured in rendered pixels
+# rather than in model units. Everything else — type, term dots, edge widths —
+# keeps the model-unit sizing the block above pins down.
+
+# projection.js's DEFAULT_PORTRAIT_SIZE. Duplicated on purpose: a test that
+# imported the constant would pass no matter what it was changed to.
+DEFAULT_PORTRAIT_PX = 120
+
+# What the rendered bounding box adds on top of the disc: the ring (theme-a's
+# --ring-width 5 on --person-size 56, kept as a RATIO when the disc is
+# resized) plus Cytoscape's own 1 model px of box expansion per side. So a
+# 120px portrait measures ~131px + 2*zoom across, never the disc size alone.
+THEME_A_RING_RATIO = 5 / 56
+PORTRAIT_BOX_SLACK = 1.25
+
+
+def _portrait(page):
+    """The first portrait's size as a viewer would measure it on the wall."""
+    return page.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             const node = cy.nodes('.person')[0];
+             return {
+               zoom: cy.zoom(),
+               // renderedBoundingBox is what actually lands on the wall,
+               // ring and all.
+               box: node.renderedBoundingBox().w,
+               disc: Number(node.numericStyle('width')) * cy.zoom(),
+               ring: Number(node.numericStyle('border-width')) * cy.zoom(),
+             };
+           }"""
+    )
+
+
+def test_a_single_portrait_does_not_fill_the_screen(view):
+    # The reported defect, as a measurement. One person on the wall used to
+    # come out at 412px across (theme a, this graph, measured 2026-08-29).
+    update(view, ONE_PERSON)
+
+    portrait = _portrait(view)
+
+    assert portrait["box"] <= DEFAULT_PORTRAIT_PX * PORTRAIT_BOX_SLACK
+    assert portrait["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+
+
+def test_a_portrait_is_the_same_size_alone_as_it_is_among_fifty(page, static_server):
+    # The actual proof of "immer dieselbe Größe": the same renderer, the same
+    # theme, one portrait and then fifty. Before the change these measured
+    # 450px and 29px respectively (theme b, 2026-08-29).
+    sizes = {}
+    for label, graph in (
+        ("one", ONE_PERSON),
+        ("twenty", _dense_net(persons=20, terms=30)),
+        ("fifty", _dense_net(persons=50, terms=75)),
+    ):
+        page.goto(f"{static_server}/frontend/projection.html?theme=b")
+        page.wait_for_function("window.kgView !== undefined")
+        update(page, graph)
+        sizes[label] = _portrait(page)
+
+    # The zooms really are far apart — otherwise this would pass for the wrong
+    # reason (nothing to compensate for in the first place).
+    assert sizes["one"]["zoom"] > 10 * sizes["fifty"]["zoom"]
+    for measured in sizes.values():
+        assert measured["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+        assert measured["box"] <= DEFAULT_PORTRAIT_PX * PORTRAIT_BOX_SLACK
+
+
+def test_a_portrait_keeps_its_size_when_the_operator_zooms(view):
+    # The zoom slider frames the wall; it is not a portrait-size control. Two
+    # different things, both of which have to keep working (the camera really
+    # zooms, the portrait really does not grow).
+    update(view, _dense_net(persons=20, terms=30))
+    before = _portrait(view)
+
+    view.evaluate("() => window.kgView.camera.setZoomFactor(3)")
+
+    after = _portrait(view)
+    assert after["zoom"] > 2 * before["zoom"]
+    assert after["disc"] == pytest.approx(before["disc"], rel=0.02)
+
+
+def test_the_ring_scales_with_the_portrait_it_sits_on(view):
+    # Everything that hangs on the disc optically has to follow it, or a
+    # resized portrait gets a ring from a different drawing.
+    update(view, ONE_PERSON)
+    before = _portrait(view)
+    assert before["ring"] == pytest.approx(before["disc"] * THEME_A_RING_RATIO, rel=0.05)
+
+    view.evaluate("() => window.kgView.setPortraitSize(240)")
+
+    after = _portrait(view)
+    assert after["disc"] == pytest.approx(240, rel=0.02)
+    assert after["ring"] == pytest.approx(after["disc"] * THEME_A_RING_RATIO, rel=0.05)
+
+
+def test_the_portrait_size_takes_effect_at_once_like_the_other_dials(view):
+    update(view, _dense_net(persons=20, terms=30))
+
+    view.evaluate("() => window.kgView.setPortraitSize(60)")
+    small = _portrait(view)
+    view.evaluate("() => window.kgView.setPortraitSize(200)")
+    large = _portrait(view)
+
+    assert small["disc"] == pytest.approx(60, rel=0.02)
+    assert large["disc"] == pytest.approx(200, rel=0.02)
+
+
+def test_repeated_fits_never_run_the_portrait_size_away(view):
+    # The trap this design has to avoid. The disc's model size is derived from
+    # the zoom, and the camera derives the zoom from a fit over the discs — a
+    # naive implementation feeds back into itself, and with a single portrait
+    # on the wall it does not converge at all (each fit multiplies the zoom by
+    # ~8, and within a handful of graph updates the wall is gone). The
+    # placement and every fit therefore run at the theme's MODEL size, which
+    # makes a fit a pure function of the node positions.
+    update(view, ONE_PERSON)
+    first = _portrait(view)
+
+    for _ in range(5):
+        view.evaluate("() => window.kgView.camera.setMode('fit')")
+
+    after = _portrait(view)
+    assert after["zoom"] == pytest.approx(first["zoom"], rel=0.02)
+    assert after["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+
+
+def test_the_placement_still_reasons_in_the_themes_model_units(view):
+    # The screen-constant size is a DISPLAY property. If it leaked into the
+    # placement, the layout would size a disc from the zoom, the fit would size
+    # the zoom from the layout, and the net would drift a little further apart
+    # (or together) on every single graph update — the same feedback the test
+    # above rules out for the camera. So the passes that compute positions, and
+    # the overlap count that scores them, still see the theme's --person-size.
+    update(view, _dense_net(persons=20, terms=30))
+
+    # render-harness.html is pinned to theme-a: --person-size 56. What the disc
+    # is DRAWN at is not that any more (that is the whole point) ...
+    drawn = view.evaluate("() => Number(window.kgView.cy.nodes('.person')[0].numericStyle('width'))")
+    assert drawn != pytest.approx(56, rel=0.02)
+
+    # ... while the placement's own measurement still is, which is what keeps
+    # this net as clean as it was before the change.
+    assert view.evaluate("() => window.kgView.placementPersonSize") == 56
+    assert view.evaluate("() => window.kgView.labelOverlaps()") == {
+        "labelPairs": 0,
+        "labelsOnPersons": 0,
+        "personPairs": 0,
+    }
