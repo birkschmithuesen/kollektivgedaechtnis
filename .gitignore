@@ -6,3 +6,10 @@ out/
 .env
 sim/data/runs/
 dream-data/
+
+# Auftragsbriefe an delegierte Coding-Agenten (.task-*.md). Bewusst untracked:
+# sie sind Arbeitsmaterial fuer EINEN Auftrag, nicht Projektdokumentation --
+# was von ihnen bleiben soll, steht danach in der Spec, im Runbook oder im
+# Commit. Wuerden sie mitlaufen, waere nach kurzer Zeit nicht mehr
+# unterscheidbar, welcher Brief noch gilt und welcher laengst abgearbeitet ist.
+.task-*.md
