@@ -3,7 +3,11 @@ import pytest
 GRAPH = {
     "max_terms": 2,
     "nodes": [
-        {"id": "p1", "type": "person", "portrait": "", "hidden": False, "created_at": 2},
+        # Two persons: p1 the newer one and carrying a term, p2 older, hidden
+        # and with nothing attached — the shape of the test portrait from the
+        # morning's setup that Birk could not get off the wall (2026-08-30).
+        {"id": "p1", "type": "person", "portrait": "/portraits/p1.jpg", "hidden": False, "created_at": 2},
+        {"id": "p2", "type": "person", "portrait": "/portraits/p2.jpg", "hidden": True, "created_at": 1},
         {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 2, "hidden": False, "created_at": 3},
         {"id": "t2", "type": "term", "label": "Unfug", "mentions": 1, "hidden": True, "created_at": 4},
         # Below the cap and NOT hidden: the wall is filtering it out, so the
@@ -12,7 +16,7 @@ GRAPH = {
         # Above the cap: the most-mentioned term, so it always wins a slot.
         {"id": "t4", "type": "term", "label": "Ziegel", "mentions": 3, "hidden": False, "created_at": 6},
     ],
-    "edges": [],
+    "edges": [{"id": "e1", "source": "p1", "target": "t1"}],
     "quotes": [{"id": "q1", "person_id": "p1", "text": "Wir bauen zu viel."}],
 }
 # max_terms=2: ranked by mentions then recency, only Ziegel (3) and Holzbau (2)
@@ -48,12 +52,14 @@ def ui(page, static_server):
 
 
 def test_entries_are_listed_alphabetically_with_one_hide_button_each(ui):
-    labels = ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)")
+    labels = ui.eval_on_selector_all(".entry.term .label", "els => els.map(e => e.textContent)")
     # "Aussenwand" (1 mention, visible) is below the cap at max_terms=2 and is
     # therefore absent; the rest is A-Z, not newest-first.
     assert labels == ["Holzbau", "Unfug", "Ziegel"]
-    assert ui.eval_on_selector_all(".entry button.hide", "els => els.length") == 3
-    assert ui.eval_on_selector_all(".entry button", "els => els.length") == 3  # no approve/edit
+    # One button per row and nothing else on it — no approve, no edit.
+    entries = ui.eval_on_selector_all(".entry", "els => els.length")
+    assert ui.eval_on_selector_all(".entry button.hide", "els => els.length") == entries
+    assert ui.eval_on_selector_all(".entry button", "els => els.length") == entries
 
 
 def test_terms_below_the_cap_are_not_listed(ui):
@@ -76,7 +82,7 @@ def test_lowering_the_cap_shortens_the_list(ui):
         "(args) => window.kgOperator.render(args[0], args[1])",
         [GRAPH, {**STATE, "max_terms": 1}],
     )
-    labels = ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)")
+    labels = ui.eval_on_selector_all(".entry.term .label", "els => els.map(e => e.textContent)")
     # Only "Ziegel" (3 mentions) clears a cap of 1; "Unfug" stays because it is hidden.
     assert labels == ["Unfug", "Ziegel"]
 
@@ -86,18 +92,110 @@ def test_hidden_entries_are_marked_and_offer_unhide(ui):
     assert ui.eval_on_selector("#entry-t2 button.hide", "el => el.textContent") == "einblenden"
 
 
+def test_persons_are_listed_and_show_their_portrait(ui):
+    """Birk, 2026-08-30: a test portrait stayed on the wall with no way to get
+    it off. The server took `person:<id>` all along; only the control was
+    missing. A person carries no label, so the portrait IS the identification.
+    """
+    assert ui.eval_on_selector_all(".entry.person", "els => els.length") == 2
+    assert (
+        ui.eval_on_selector("#entry-p1 img.portrait", "el => el.getAttribute('src')")
+        == "/portraits/p1.jpg"
+    )
+    assert ui.eval_on_selector("#entry-p1 button.hide", "el => el.textContent") == "ausblenden"
+
+
+def test_a_person_row_says_when_it_was_recorded_and_what_it_carries(ui):
+    """Two portraits of the same room look alike; the recording time and the
+    number of terms behind them do not. "keine Begriffe" is what a portrait
+    from the morning's setup looks like."""
+    import re
+
+    assert re.fullmatch(
+        r"Person \d{2}:\d{2}", ui.eval_on_selector("#entry-p1 .label", "el => el.textContent")
+    )
+    assert ui.eval_on_selector("#entry-p1 .meta", "el => el.textContent") == "1 Begriff"
+    assert ui.eval_on_selector("#entry-p2 .meta", "el => el.textContent") == "keine Begriffe"
+
+
+def test_persons_come_first_newest_first(ui):
+    """Persons head the list: they are few (one per interview), the term cap
+    never touches them, and the reason to reach for this list is nearly always
+    the portrait that just appeared."""
+    order = ui.eval_on_selector_all(".entry", "els => els.map(e => e.id)")
+    assert order[:2] == ["entry-p1", "entry-p2"]  # p1 recorded after p2
+    assert all(entry.startswith("entry-t") for entry in order[2:])
+
+
+def test_the_term_cap_never_hides_a_person_from_the_list(ui):
+    """`max_terms` caps terms. Every person is on the wall always, so every
+    person must stay reachable here — at any setting of the dial."""
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "max_terms": 1}],
+    )
+    assert ui.eval_on_selector_all(".entry.person", "els => els.length") == 2
+
+
+def test_a_hidden_person_stays_in_the_list_and_offers_the_way_back(ui):
+    """Same reason as for a hidden term: the row IS the undo. Dropping it would
+    make "ausblenden" a one-way door for a person."""
+    assert ui.eval_on_selector("#entry-p2", "el => el.classList.contains('hidden')") is True
+    assert ui.eval_on_selector("#entry-p2 button.hide", "el => el.textContent") == "einblenden"
+
+
+def test_clicking_a_persons_button_posts_the_person_id(ui):
+    ui.click("#entry-p1 button.hide")
+    assert ui.evaluate("window.kgFetches[0]") == [
+        "/api/hidden",
+        {"node_id": "person:p1", "hidden": True},
+    ]
+
+    ui.click("#entry-p2 button.hide")
+    assert ui.evaluate("window.kgFetches.at(-1)") == [
+        "/api/hidden",
+        {"node_id": "person:p2", "hidden": False},
+    ]
+
+
 def test_clicking_hide_posts_the_flag(ui):
     ui.click("#entry-t1 button.hide")
     assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
 
 
 def test_the_density_dial_reflects_state_and_posts_changes(ui):
-    # A real option value this time (20/32/45/999 are the markup's own),
+    # A real option value this time (the markup's own steps),
     # independent of the small GRAPH fixture's own content above.
     ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "max_terms": 32}])
     assert ui.eval_on_selector("#max-terms", "el => el.value") == "32"
     ui.select_option("#max-terms", "45")
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/max_terms", {"value": 45}]
+
+
+def test_the_density_dial_reaches_past_45_without_jumping_to_all(ui):
+    """Birk at the real graph, 2026-08-30: „45 reicht mir nicht, aber immer
+    alle geht auch nicht."
+
+    The steps are a proposal that gets set on site (operator.html's own
+    comment), and the gap between 45 and „alle" was the whole upper half of a
+    full day: a 60-person graph carries 131 terms, so anyone wanting more than
+    45 had to jump straight to everything. Guarded as a PROPERTY — that
+    intermediate steps exist above 45 and below „alle" — rather than as a list
+    of numbers, so tuning them on site does not break the test.
+    """
+    steps = ui.eval_on_selector_all(
+        "#max-terms option", "els => els.map(el => Number(el.value))"
+    )
+    dazwischen = [s for s in steps if 45 < s < 999]
+    assert len(dazwischen) >= 3, f"keine Zwischenstufen über 45: {steps}"
+    assert max(dazwischen) >= 110, "die Obergrenze bleibt unter einem vollen Tag"
+
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
+    ui.select_option("#max-terms", str(dazwischen[0]))
+    assert ui.evaluate("window.kgFetches.at(-1)") == [
+        "/api/max_terms",
+        {"value": dazwischen[0]},
+    ]
 
 
 def _term_node(i, created_at, mentions=1, hidden=False):
@@ -140,7 +238,10 @@ def test_each_density_step_says_how_many_terms_it_would_leave_on_the_wall(ui):
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(25), {**STATE, "max_terms": 32}]
     )
-    assert _density_options(ui) == ["20 (20)", "32 (25)", "45 (25)", "alle (25)"]
+    assert _density_options(ui) == [
+        "20 (20)", "32 (25)", "45 (25)", "60 (25)", "80 (25)",
+        "110 (25)", "150 (25)", "alle (25)",
+    ]
 
 
 def test_the_counts_follow_every_graph_push(ui):
@@ -151,7 +252,10 @@ def test_the_counts_follow_every_graph_push(ui):
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(26), {**STATE, "max_terms": 32}]
     )
-    assert _density_options(ui) == ["20 (20)", "32 (26)", "45 (26)", "alle (26)"]
+    assert _density_options(ui) == [
+        "20 (20)", "32 (26)", "45 (26)", "60 (26)", "80 (26)",
+        "110 (26)", "150 (26)", "alle (26)",
+    ]
 
 
 def test_early_steps_honestly_report_the_graph_the_wall_has_not_grown_into_yet(ui):
@@ -161,7 +265,10 @@ def test_early_steps_honestly_report_the_graph_the_wall_has_not_grown_into_yet(u
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])", [_counts_graph(5), {**STATE, "max_terms": 32}]
     )
-    assert _density_options(ui) == ["20 (5)", "32 (5)", "45 (5)", "alle (5)"]
+    assert _density_options(ui) == [
+        "20 (5)", "32 (5)", "45 (5)", "60 (5)", "80 (5)",
+        "110 (5)", "150 (5)", "alle (5)",
+    ]
     assert ui.eval_on_selector_all("#max-terms option[disabled]", "els => els.length") == 0
 
 
@@ -406,7 +513,7 @@ def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_workin
     # subsequent request still fires normally. All four terms qualify at
     # max_terms=32 -- this test rendered with that cap so the select's value
     # would match a real option (see the render() call at the top).
-    assert ui.eval_on_selector_all(".entry .label", "els => els.map(e => e.textContent)") == [
+    assert ui.eval_on_selector_all(".entry.term .label", "els => els.map(e => e.textContent)") == [
         "Aussenwand",
         "Holzbau",
         "Unfug",
