@@ -9,6 +9,11 @@ select { font: inherit; padding: 0.2rem; }
 .entry .label { flex: 1; }
 .entry .meta { color: #8b8b96; }
 .entry.hidden .label { text-decoration: line-through; color: #7a7a85; }
+/* A person has no label, so the portrait does the identifying. Thumbnail-sized
+   on purpose: enough to recognise a face at arm's length on the operator
+   laptop, not so much that the list turns into a contact sheet. */
+.entry .portrait { width: 2.5rem; height: 2.5rem; object-fit: cover; border-radius: 2px; background: #2a2a33; }
+.entry.hidden .portrait { opacity: 0.35; }
 button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
 
 /* Continuous zoom. Wide enough that 1.00-4.00 can be hit precisely with a

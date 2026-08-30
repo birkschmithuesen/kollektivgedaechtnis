@@ -441,6 +441,13 @@ Zwei Warnungen aus dem Handbuch, die den Aufbau betreffen:
 „ausblenden" neben einem Eintrag im Operator-UI. Kein Löschen, kein Bearbeiten.
 Wieder einblenden ist derselbe Knopf.
 
+Das gilt seit 2026-08-30 **auch für Personen**, nicht nur für Begriffe: Die
+Personen stehen oben in derselben Liste, mit Vorschaubild, Aufnahmezeit und
+Begriffszahl (das Testporträt vom Aufbau erkennt man an „keine Begriffe"),
+neueste zuerst. Der Begriffsregler filtert sie nicht — jede Person ist immer
+auf der Wand, also ist auch immer ihre Zeile da. Ausgeblendete Einträge
+bleiben in der Liste stehen; sie sind der einzige Weg zurück.
+
 ## Wenn etwas ausfällt
 
 | Symptom | Bedeutung | Maßnahme |

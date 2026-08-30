@@ -36,22 +36,58 @@ function post(url, body) {
     });
 }
 
-function entryRow(node) {
+/** How a person reads in the list. They carry no label — only a portrait and
+ * the moment the photo was taken (`created_at`, the interview's start).
+ *
+ * The portrait is the identification; the time is what tells two portraits of
+ * the same room apart, and it is the one thing an operator standing at the
+ * station can match against their own clock ("the one from just before three").
+ * Hours and minutes, nothing finer: seconds are noise at this resolution. */
+function personLabel(node) {
+  const seconds = Number(node.created_at);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'Person';
+  const time = new Date(seconds * 1000).toLocaleTimeString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Person ${time}`;
+}
+
+/** The second identifying mark: how many terms hang off this person.
+ *
+ * "keine Begriffe" is exactly what a test portrait from the morning's setup
+ * looks like (nobody spoke to it) — the case Birk could not get off the wall
+ * on 2026-08-30. It is also the honest answer while an interview is still
+ * being condensed, so it must not read as an error. */
+function termCountText(count) {
+  if (count === 0) return 'keine Begriffe';
+  return count === 1 ? '1 Begriff' : `${count} Begriffe`;
+}
+
+function entryRow(node, termCounts) {
   const item = document.createElement('li');
-  item.className = `entry ${node.hidden ? 'hidden' : ''}`.trim();
+  item.className = `entry ${node.type} ${node.hidden ? 'hidden' : ''}`.trim();
   item.id = `entry-${node.id}`;
 
-  // render() only ever passes term nodes here (see the filter below), so
-  // this has no person branch to fall into — kept simple on purpose rather
-  // than handling a case that can't occur.
+  if (node.type === 'person' && node.portrait) {
+    const portrait = document.createElement('img');
+    portrait.className = 'portrait';
+    portrait.src = node.portrait;
+    // Decorative in this row: the text next to it already names the person and
+    // the time, and no screen reader is at the station anyway.
+    portrait.alt = '';
+    item.appendChild(portrait);
+  }
+
   const label = document.createElement('span');
   label.className = 'label';
-  label.textContent = node.label;
+  label.textContent = node.type === 'person' ? personLabel(node) : node.label;
   item.appendChild(label);
 
   const meta = document.createElement('span');
   meta.className = 'meta';
-  meta.textContent = `${node.mentions}×`;
+  meta.textContent =
+    node.type === 'person' ? termCountText(termCounts.get(node.id) || 0) : `${node.mentions}×`;
   item.appendChild(meta);
 
   const button = document.createElement('button');
@@ -112,20 +148,44 @@ function render(graph, state) {
 
   const list = document.getElementById('entries');
   list.replaceChildren();
+
+  // How many terms each person carries, for their row's meta text. One pass
+  // over the edges; every edge in this graph runs person -> term.
+  const termCounts = new Map();
+  for (const edge of graph.edges || []) {
+    termCounts.set(edge.source, (termCounts.get(edge.source) || 0) + 1);
+  }
+
+  // Persons first, newest recording first. Two reasons for the order, both
+  // about reaching a row without hunting for it: the cap below never applies
+  // to persons (every person is on the wall, always — so filtering them by
+  // `max_terms` would hide a row for a node that is demonstrably visible), and
+  // the reason to open this list is nearly always the portrait that just
+  // appeared. A day's persons are one per interview, so the block stays short
+  // enough that the setup's test portrait is still findable at its foot.
+  // Terms keep their own A-Z order below, unchanged.
+  const persons = graph.nodes
+    .filter((node) => node.type === 'person')
+    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
   // Same cap the wall applies, so the list offers an action only where that
   // action has a visible effect. Deliberately NOT visibleGraph(): that one
   // also drops hidden nodes, which is right for the wall and fatal here — the
   // hidden entry IS the way back, and a list that dropped it would make
-  // "ausblenden" a one-way door with no matching "einblenden". Also
-  // deliberately without the wall's own hysteresis grace list: this list
-  // answers "what would the cap alone show", not "what does the wall happen
-  // to still be holding onto right now".
+  // "ausblenden" a one-way door with no matching "einblenden". That holds for
+  // a hidden person just as much as for a hidden term. Also deliberately
+  // without the wall's own hysteresis grace list: this list answers "what
+  // would the cap alone show", not "what does the wall happen to still be
+  // holding onto right now".
   const terms = graph.nodes.filter((node) => node.type === 'term');
   const visibleTermIds = selectVisibleTermIds(terms, state.max_terms);
-  terms
+  const visibleTerms = terms
     .filter((node) => node.hidden || visibleTermIds.has(node.id))
-    .sort((a, b) => a.label.localeCompare(b.label, 'de'))
-    .forEach((node) => list.appendChild(entryRow(node)));
+    .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+
+  for (const node of [...persons, ...visibleTerms]) {
+    list.appendChild(entryRow(node, termCounts));
+  }
 }
 
 function showTranscript(text) {
