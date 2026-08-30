@@ -420,11 +420,19 @@ ist globaler Zustand — ein POST würde Fläche C im Plenumssaal mit auf
 „manuell" ziehen, wo niemand etwas anfassen kann.
 
 Der Rückweg nach den 30 s ist seit 2026-08-29 eine **Fahrt, kein Sprung**: Die
-Kamera zieht in rund 1,5 s aus der stehengelassenen Nahansicht (Ausschnitt und
+Kamera zieht in **5 s** aus der stehengelassenen Nahansicht (Ausschnitt und
 Zoom gemeinsam) in die Ansicht der Automatik und fährt von dort weiter. Vorher
-schnappte das Bild in einem Bild um. Fasst jemand während dieser 1,5 s wieder
+schnappte das Bild in einem Bild um. Fasst jemand während dieser 5 s wieder
 an, gehört die Wand sofort wieder der Hand — die angefangene Fahrt bricht ab.
 „Übersicht" bleibt dagegen unmittelbar: ein Knopfdruck soll sofort antworten.
+
+> Die Dauer stand zunächst auf 1,5 s, hergeleitet aus der Etappenlänge
+> (5,2 s): Die Übernahme sollte nicht wie ein Teil der Fahrt wirken. Am
+> echten Beamer trägt das Argument nicht — bei 1,5 s wirkt die Übernahme
+> immer noch wie ein Ruck statt wie eine Wand, die ruhig weitermacht, und es
+> ist der eine Übergang, den das Publikum aus dem Stillstand heraus ansieht
+> (Birk, 2026-08-30). Jetzt praktisch eine volle Etappe — genau das ist der
+> Zweck: Es soll aussehen, als liefe die Tour einfach weiter.
 
 > **Die Dichte gehört dem Operator, nicht dem Gast** (Birk, 2026-08-26). Bis
 > dahin standen die drei Dichte-Knöpfe mit am Touchscreen und posteten
