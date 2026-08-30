@@ -31,6 +31,11 @@ Optionen:
     Anderes Bildmodell als das aus der Config (Modellvergleich). Der Prompt
     bleibt Wort für Wort derselbe.
 
+``--graph <datei.json>``
+    Anderer Graph als der Vorgabe-Fixture. Gebraucht, sobald ein neues
+    Interviewkorpus einen neuen Graphen ergeben hat — sonst rendert die Sonde
+    stillschweigend weiter auf dem alten Material.
+
 ``--ohne-kanaele``
     Lässt mood und tension WEG: der Prompt besteht dann nur aus Motiv,
     Register und Format. Der Radikaltest — er beantwortet, ob die beiden
@@ -178,6 +183,7 @@ def main() -> int:
     modell_wahl: str | None = None
     mit_kanaelen = True
     nur: int | None = None
+    graph_datei = FIXTURE
     stellungen: list[str] = []
     i = 0
     while i < len(argumente):
@@ -187,6 +193,9 @@ def main() -> int:
             i += 2
         elif a == "--modell":
             modell_wahl = argumente[i + 1]
+            i += 2
+        elif a == "--graph":
+            graph_datei = Path(argumente[i + 1])
             i += 2
         elif a == "--nur":
             nur = int(argumente[i + 1])
@@ -228,7 +237,8 @@ def main() -> int:
         api_key=cfg.anthropic_api_key,
     )
 
-    graph = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    graph = json.loads(graph_datei.read_text(encoding="utf-8"))
+    print(f"Graph: {graph_datei}")
     fertig = []
 
     # Stufe 1 aus dem Cache, wenn es ihn gibt: Bildvergleiche taugen nur, wenn

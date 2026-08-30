@@ -123,20 +123,20 @@ def _json_aus(roh: str) -> dict:
     return json.loads(roh)
 
 
-def begriffe_bei(personen: int, top: int) -> list[tuple[str, int]]:
+def begriffe_bei(personen: int, top: int, graph_datei: Path = FIXTURE) -> list[tuple[str, int]]:
     """Die meistgenannten Begriffe des Materials zu diesem Zeitpunkt.
 
     Genau der Ausschnitt, den Stufe 1 gesehen hat — sonst wird gegen Begriffe
     gemessen, die zu diesem Zeitpunkt noch niemand gesagt hatte.
     """
-    graph = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    graph = json.loads(graph_datei.read_text(encoding="utf-8"))
     teil = prefix_graph(graph, personen)
     terme = [n for n in teil["nodes"] if n.get("type") == "term"]
     terme.sort(key=lambda n: -n.get("mentions", 0))
     return [(n["label"], n.get("mentions", 0)) for n in terme[:top]]
 
 
-def messe(ordner: Path, top: int = 10) -> list[dict]:
+def messe(ordner: Path, top: int = 10, graph_datei: Path = FIXTURE) -> list[dict]:
     ergebnisse: list[dict] = []
     for md in sorted(ordner.glob("*.md")):
         bild = next(
@@ -172,7 +172,7 @@ def messe(ordner: Path, top: int = 10) -> list[dict]:
         ).strip()
 
         # Zweiter Aufruf: kein Bild mehr. Nur Text gegen Text.
-        begriffe = begriffe_bei(personen, top)
+        begriffe = begriffe_bei(personen, top, graph_datei)
         urteil = _json_aus(
             _post(
                 {
@@ -228,9 +228,14 @@ def main() -> None:
         i = argumente.index("--top")
         top = int(argumente[i + 1])
         del argumente[i : i + 2]
+    graph_datei = FIXTURE
+    if "--graph" in argumente:
+        i = argumente.index("--graph")
+        graph_datei = Path(argumente[i + 1])
+        del argumente[i : i + 2]
     ordner = Path(argumente[0])
 
-    ergebnisse = messe(ordner, top)
+    ergebnisse = messe(ordner, top, graph_datei)
     (ordner / "_rueckkopplung.json").write_text(
         json.dumps(ergebnisse, indent=2, ensure_ascii=False), encoding="utf-8"
     )

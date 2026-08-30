@@ -1,0 +1,3306 @@
+{
+  "version": 1,
+  "generated_at": 1788104095.2746873,
+  "max_terms": 1,
+  "nodes": [
+    {
+      "id": "p1",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700000000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p2",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700000300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p3",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700000600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p4",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700000900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p5",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700001200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p6",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700001500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p7",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700001800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p8",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700002100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p9",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700002400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p10",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700002700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p11",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700003000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p12",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700003300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p13",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700003600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p14",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700003900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p15",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700004200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p16",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700004500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p17",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700004800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p18",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700005100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p19",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700005400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p20",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700005700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p21",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700006000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p22",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700006300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p23",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700006600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p24",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700006900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p25",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700007200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p26",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700007500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p27",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700007800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p28",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700008100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p29",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700008400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p30",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700008700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p31",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700009000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p32",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700009300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p33",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700009600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p34",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700009900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p35",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700010200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p36",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700010500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p37",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700010800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p38",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700011100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p39",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700011400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p40",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700011700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p41",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700012000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p42",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700012300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p43",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700012600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p44",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700012900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p45",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700013200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p46",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700013500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p47",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700013800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p48",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700014100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p49",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700014400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p50",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700014700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p51",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700015000.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p52",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700015300.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p53",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700015600.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p54",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700015900.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p55",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700016200.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p56",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700016500.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p57",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700016800.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p58",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700017100.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p59",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700017400.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "p60",
+      "type": "person",
+      "portrait": null,
+      "created_at": 1700017700.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t1",
+      "type": "term",
+      "label": "Baustellenlärm",
+      "mentions": 1,
+      "created_at": 1700000180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t2",
+      "type": "term",
+      "label": "Betonsprühende Drohnen",
+      "mentions": 2,
+      "created_at": 1700000180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t3",
+      "type": "term",
+      "label": "Haftungsgetriebene Normenspirale",
+      "mentions": 5,
+      "created_at": 1700000480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t4",
+      "type": "term",
+      "label": "Ladungssicherungs-Analogie",
+      "mentions": 1,
+      "created_at": 1700000480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t5",
+      "type": "term",
+      "label": "Vierhundert Stellungnahmen",
+      "mentions": 1,
+      "created_at": 1700000480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t6",
+      "type": "term",
+      "label": "Neugeschriebene Holzbaunorm",
+      "mentions": 1,
+      "created_at": 1700000480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t7",
+      "type": "term",
+      "label": "Digitaler Zwilling im Genehmigungsverfahren",
+      "mentions": 2,
+      "created_at": 1700000480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t10",
+      "type": "term",
+      "label": "Gestaffelte Beteiligungstiefe",
+      "mentions": 5,
+      "created_at": 1700000780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t11",
+      "type": "term",
+      "label": "Politikverdrossenheit im Kleinen",
+      "mentions": 1,
+      "created_at": 1700000780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t8",
+      "type": "term",
+      "label": "Beteiligung in der Bedarfsermittlung",
+      "mentions": 7,
+      "created_at": 1700000780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t12",
+      "type": "term",
+      "label": "Verein als Eigentümer",
+      "mentions": 2,
+      "created_at": 1700001080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t13",
+      "type": "term",
+      "label": "Treppenhausgespräche",
+      "mentions": 1,
+      "created_at": 1700001080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t14",
+      "type": "term",
+      "label": "Geteilte Verantwortung",
+      "mentions": 4,
+      "created_at": 1700001080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t15",
+      "type": "term",
+      "label": "Weniger Blech",
+      "mentions": 1,
+      "created_at": 1700001080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t16",
+      "type": "term",
+      "label": "Bautechnische Standards",
+      "mentions": 2,
+      "created_at": 1700001380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t17",
+      "type": "term",
+      "label": "Normen-Inventur",
+      "mentions": 7,
+      "created_at": 1700001380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t19",
+      "type": "term",
+      "label": "Planungswerkstätten über Wochen",
+      "mentions": 5,
+      "created_at": 1700001680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t20",
+      "type": "term",
+      "label": "Unbequeme Mehrheiten",
+      "mentions": 1,
+      "created_at": 1700001680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t21",
+      "type": "term",
+      "label": "Frisches Steinbruchmaterial",
+      "mentions": 1,
+      "created_at": 1700001980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t22",
+      "type": "term",
+      "label": "Beton aus Abbruch nebenan",
+      "mentions": 3,
+      "created_at": 1700001980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t23",
+      "type": "term",
+      "label": "Widersprüchliche Gutachten",
+      "mentions": 3,
+      "created_at": 1700002280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t24",
+      "type": "term",
+      "label": "Stellplatzverordnung",
+      "mentions": 3,
+      "created_at": 1700002280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t25",
+      "type": "term",
+      "label": "Maschinenlesbare Normen",
+      "mentions": 3,
+      "created_at": 1700002280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t26",
+      "type": "term",
+      "label": "Schweigende Mehrheit",
+      "mentions": 3,
+      "created_at": 1700002580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t28",
+      "type": "term",
+      "label": "Nachverdichtung im Bestandsquartier",
+      "mentions": 2,
+      "created_at": 1700002580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t29",
+      "type": "term",
+      "label": "Ländlicher Leerstand",
+      "mentions": 4,
+      "created_at": 1700002880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t30",
+      "type": "term",
+      "label": "Neubau auf grüner Wiese",
+      "mentions": 2,
+      "created_at": 1700002880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t31",
+      "type": "term",
+      "label": "Zugewachsene Gärten",
+      "mentions": 1,
+      "created_at": 1700002880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t32",
+      "type": "term",
+      "label": "Geförderte Altbausanierung",
+      "mentions": 2,
+      "created_at": 1700002880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t33",
+      "type": "term",
+      "label": "Zwanzigtausend DIN-Normen",
+      "mentions": 5,
+      "created_at": 1700003180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t34",
+      "type": "term",
+      "label": "Brandschutz aus Unglücken",
+      "mentions": 4,
+      "created_at": 1700003180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t35",
+      "type": "term",
+      "label": "Radikale Genehmigungsverfahren",
+      "mentions": 3,
+      "created_at": 1700003180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t36",
+      "type": "term",
+      "label": "Verbindliche Bürgerentscheide",
+      "mentions": 2,
+      "created_at": 1700003480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t37",
+      "type": "term",
+      "label": "Zu schmaler Gehweg",
+      "mentions": 1,
+      "created_at": 1700003480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t38",
+      "type": "term",
+      "label": "Klare Leitplanken",
+      "mentions": 2,
+      "created_at": 1700003480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t39",
+      "type": "term",
+      "label": "Zubetonierte Flächen",
+      "mentions": 4,
+      "created_at": 1700003780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t40",
+      "type": "term",
+      "label": "Experimentierklauseln",
+      "mentions": 4,
+      "created_at": 1700004080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t41",
+      "type": "term",
+      "label": "Lernfähige Norm",
+      "mentions": 1,
+      "created_at": 1700004080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t42",
+      "type": "term",
+      "label": "Gutachten für Holzverbindung",
+      "mentions": 1,
+      "created_at": 1700004080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t43",
+      "type": "term",
+      "label": "Nimby-Problem",
+      "mentions": 1,
+      "created_at": 1700004380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t44",
+      "type": "term",
+      "label": "Ergebnisoffene Ideenfindung",
+      "mentions": 1,
+      "created_at": 1700004380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t45",
+      "type": "term",
+      "label": "Betondruck schichtweise",
+      "mentions": 1,
+      "created_at": 1700004680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t46",
+      "type": "term",
+      "label": "Handwerker-Warteschleifen",
+      "mentions": 1,
+      "created_at": 1700004680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t47",
+      "type": "term",
+      "label": "Dreijährige Einfamilienhaus-Baustelle",
+      "mentions": 1,
+      "created_at": 1700004680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t48",
+      "type": "term",
+      "label": "Rohbau in einer Woche",
+      "mentions": 1,
+      "created_at": 1700004680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t49",
+      "type": "term",
+      "label": "Abstandsflächenregelungen",
+      "mentions": 2,
+      "created_at": 1700004980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t50",
+      "type": "term",
+      "label": "Baustillstand durch Reset",
+      "mentions": 1,
+      "created_at": 1700004980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t51",
+      "type": "term",
+      "label": "Blockadeprinzip",
+      "mentions": 3,
+      "created_at": 1700005280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t52",
+      "type": "term",
+      "label": "Balanceakt lokaler Selbstbestimmung",
+      "mentions": 1,
+      "created_at": 1700005280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t53",
+      "type": "term",
+      "label": "Gemeinsames Bauen",
+      "mentions": 1,
+      "created_at": 1700005580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t54",
+      "type": "term",
+      "label": "Isoliertes Wohnen",
+      "mentions": 1,
+      "created_at": 1700005580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t55",
+      "type": "term",
+      "label": "Sechzehn Bauordnungen",
+      "mentions": 2,
+      "created_at": 1700005880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t56",
+      "type": "term",
+      "label": "Bürokratie erzeugt Bürokratie",
+      "mentions": 1,
+      "created_at": 1700005880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t57",
+      "type": "term",
+      "label": "Genehmigungsfähigkeit im Kopf",
+      "mentions": 1,
+      "created_at": 1700005880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t58",
+      "type": "term",
+      "label": "Bürgerräte",
+      "mentions": 1,
+      "created_at": 1700006180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t59",
+      "type": "term",
+      "label": "Technische Wahrheit",
+      "mentions": 2,
+      "created_at": 1700006180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t60",
+      "type": "term",
+      "label": "Stadt, die sich selbst recycelt",
+      "mentions": 1,
+      "created_at": 1700006480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t61",
+      "type": "term",
+      "label": "Haus als umgebautes Möbelstück",
+      "mentions": 1,
+      "created_at": 1700006480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t62",
+      "type": "term",
+      "label": "Abrissdeponie",
+      "mentions": 1,
+      "created_at": 1700006480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t63",
+      "type": "term",
+      "label": "Autofreie Sitzecken",
+      "mentions": 2,
+      "created_at": 1700006480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t64",
+      "type": "term",
+      "label": "Mitentscheiden statt Mitreden",
+      "mentions": 3,
+      "created_at": 1700007080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t65",
+      "type": "term",
+      "label": "Expertise des Alltags",
+      "mentions": 2,
+      "created_at": 1700007080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t66",
+      "type": "term",
+      "label": "Pseudo-Abstimmung vor Baubeginn",
+      "mentions": 16,
+      "created_at": 1700007080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t67",
+      "type": "term",
+      "label": "Leerstehende Straßenzüge",
+      "mentions": 1,
+      "created_at": 1700007380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t68",
+      "type": "term",
+      "label": "Weniger Neubau",
+      "mentions": 1,
+      "created_at": 1700007380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t69",
+      "type": "term",
+      "label": "Gebäudetyp E",
+      "mentions": 1,
+      "created_at": 1700007680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t70",
+      "type": "term",
+      "label": "Veraltete Prüfverfahren",
+      "mentions": 1,
+      "created_at": 1700007680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t71",
+      "type": "term",
+      "label": "Kantonaler Holzbau",
+      "mentions": 1,
+      "created_at": 1700007680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t72",
+      "type": "term",
+      "label": "Beteiligungsschieflage",
+      "mentions": 1,
+      "created_at": 1700007980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t73",
+      "type": "term",
+      "label": "Offene Erde",
+      "mentions": 2,
+      "created_at": 1700008280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t74",
+      "type": "term",
+      "label": "Sommerliche Kühlung",
+      "mentions": 1,
+      "created_at": 1700008280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t75",
+      "type": "term",
+      "label": "DIN-Normen streichen",
+      "mentions": 3,
+      "created_at": 1700008580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t76",
+      "type": "term",
+      "label": "Regelwerk statt Entwerfen",
+      "mentions": 1,
+      "created_at": 1700008580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t77",
+      "type": "term",
+      "label": "Nachwachsendes Gestrüpp",
+      "mentions": 1,
+      "created_at": 1700008580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t78",
+      "type": "term",
+      "label": "Bebauungsplan aus der Amtsstube",
+      "mentions": 3,
+      "created_at": 1700008880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t79",
+      "type": "term",
+      "label": "Planer als Dienstleister",
+      "mentions": 1,
+      "created_at": 1700008880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t80",
+      "type": "term",
+      "label": "Mauernde Maschinenarme",
+      "mentions": 1,
+      "created_at": 1700009180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t81",
+      "type": "term",
+      "label": "Sedimentgestein aus Regeln",
+      "mentions": 2,
+      "created_at": 1700009480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t82",
+      "type": "term",
+      "label": "Drei Nachweise pro Fenstereinbau",
+      "mentions": 1,
+      "created_at": 1700009480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t83",
+      "type": "term",
+      "label": "Normen-Entrümpelung",
+      "mentions": 2,
+      "created_at": 1700009480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t84",
+      "type": "term",
+      "label": "Formelle und informelle Beteiligung",
+      "mentions": 2,
+      "created_at": 1700009780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t85",
+      "type": "term",
+      "label": "Stimme künftiger Bewohner",
+      "mentions": 2,
+      "created_at": 1700009780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t86",
+      "type": "term",
+      "label": "Häuser wie Excel-Tabellen",
+      "mentions": 1,
+      "created_at": 1700010080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t87",
+      "type": "term",
+      "label": "Rendite ferner Investoren",
+      "mentions": 1,
+      "created_at": 1700010080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t88",
+      "type": "term",
+      "label": "Ortswissen der Anwohner",
+      "mentions": 2,
+      "created_at": 1700010080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t89",
+      "type": "term",
+      "label": "Ordnerberge im Bauvorhaben",
+      "mentions": 1,
+      "created_at": 1700010380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t90",
+      "type": "term",
+      "label": "Doppelte Strategie",
+      "mentions": 1,
+      "created_at": 1700010380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t91",
+      "type": "term",
+      "label": "Chaos in den Bauämtern",
+      "mentions": 1,
+      "created_at": 1700010380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t92",
+      "type": "term",
+      "label": "Vetorecht für Anwohner",
+      "mentions": 1,
+      "created_at": 1700010680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t93",
+      "type": "term",
+      "label": "Fassadenfarbe als Detailentscheidung",
+      "mentions": 1,
+      "created_at": 1700010680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t94",
+      "type": "term",
+      "label": "Verzicht auf Neukauf",
+      "mentions": 1,
+      "created_at": 1700010980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t95",
+      "type": "term",
+      "label": "Widersprüchliche Fluchtwegvorschriften",
+      "mentions": 1,
+      "created_at": 1700011280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t96",
+      "type": "term",
+      "label": "Phase Null",
+      "mentions": 1,
+      "created_at": 1700011580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t97",
+      "type": "term",
+      "label": "Planerin als Übersetzerin",
+      "mentions": 1,
+      "created_at": 1700011580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t98",
+      "type": "term",
+      "label": "Zehnjährige Radwegdebatte",
+      "mentions": 2,
+      "created_at": 1700011580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t100",
+      "type": "term",
+      "label": "Altbauten mit Geschichte",
+      "mentions": 1,
+      "created_at": 1700011880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t99",
+      "type": "term",
+      "label": "Tankstelle als Treffpunkt",
+      "mentions": 1,
+      "created_at": 1700011880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t101",
+      "type": "term",
+      "label": "Turm aus Vorschriften",
+      "mentions": 1,
+      "created_at": 1700012180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t102",
+      "type": "term",
+      "label": "Radikaler Impuls",
+      "mentions": 1,
+      "created_at": 1700012180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t103",
+      "type": "term",
+      "label": "Schrittweise Umsetzung",
+      "mentions": 1,
+      "created_at": 1700012180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t104",
+      "type": "term",
+      "label": "Werkzeuge statt Urteile",
+      "mentions": 1,
+      "created_at": 1700012480.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t105",
+      "type": "term",
+      "label": "Flächenverbrauch",
+      "mentions": 1,
+      "created_at": 1700012780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t106",
+      "type": "term",
+      "label": "Zielorientierte Normkultur",
+      "mentions": 1,
+      "created_at": 1700013080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t107",
+      "type": "term",
+      "label": "Zustimmung im Einzelfall",
+      "mentions": 1,
+      "created_at": 1700013080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t108",
+      "type": "term",
+      "label": "Hybrides Holzhochhaus",
+      "mentions": 1,
+      "created_at": 1700013080.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t109",
+      "type": "term",
+      "label": "Aufsuchende Beteiligung",
+      "mentions": 1,
+      "created_at": 1700013380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t110",
+      "type": "term",
+      "label": "Leitbild einer Stadt",
+      "mentions": 1,
+      "created_at": 1700013380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t111",
+      "type": "term",
+      "label": "Gewählte Gremien",
+      "mentions": 1,
+      "created_at": 1700013380.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t112",
+      "type": "term",
+      "label": "Bäume auf Dächern",
+      "mentions": 1,
+      "created_at": 1700013680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t113",
+      "type": "term",
+      "label": "Autofreie Straßen",
+      "mentions": 1,
+      "created_at": 1700013680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t114",
+      "type": "term",
+      "label": "Baustelle ohne Kräne",
+      "mentions": 1,
+      "created_at": 1700013680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t115",
+      "type": "term",
+      "label": "Stadt wie ein Wald",
+      "mentions": 1,
+      "created_at": 1700013680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t116",
+      "type": "term",
+      "label": "Bereinigungskommission",
+      "mentions": 1,
+      "created_at": 1700013980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t117",
+      "type": "term",
+      "label": "Bewusster Schnitt",
+      "mentions": 1,
+      "created_at": 1700013980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t118",
+      "type": "term",
+      "label": "Mitbestimmung auf Quartiersebene",
+      "mentions": 1,
+      "created_at": 1700014280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t119",
+      "type": "term",
+      "label": "Worst-Case-Kultur",
+      "mentions": 1,
+      "created_at": 1700014880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t120",
+      "type": "term",
+      "label": "Kollision Brandschutz Barrierefreiheit",
+      "mentions": 1,
+      "created_at": 1700014880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t121",
+      "type": "term",
+      "label": "Haftungssicherheit für Handwerksbetriebe",
+      "mentions": 1,
+      "created_at": 1700014880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t122",
+      "type": "term",
+      "label": "Aufenthaltsqualität von Plätzen",
+      "mentions": 1,
+      "created_at": 1700015180.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t123",
+      "type": "term",
+      "label": "Historisch gewachsener Ballast",
+      "mentions": 2,
+      "created_at": 1700015780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t124",
+      "type": "term",
+      "label": "Typengenehmigung",
+      "mentions": 1,
+      "created_at": 1700015780.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t125",
+      "type": "term",
+      "label": "Performative Bauordnung",
+      "mentions": 1,
+      "created_at": 1700016680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t126",
+      "type": "term",
+      "label": "Digitale Bauantragsprüfung",
+      "mentions": 1,
+      "created_at": 1700016680.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t127",
+      "type": "term",
+      "label": "Autogerechte Stadt",
+      "mentions": 1,
+      "created_at": 1700016980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t128",
+      "type": "term",
+      "label": "Zirkulärer Planungsprozess",
+      "mentions": 1,
+      "created_at": 1700016980.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t129",
+      "type": "term",
+      "label": "Überschwemmung nach Starkregen",
+      "mentions": 1,
+      "created_at": 1700017280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t130",
+      "type": "term",
+      "label": "Grün zwischen Häusern",
+      "mentions": 1,
+      "created_at": 1700017280.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t131",
+      "type": "term",
+      "label": "Doppelte Prüfverfahren",
+      "mentions": 1,
+      "created_at": 1700017580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t132",
+      "type": "term",
+      "label": "Haftungsfrage",
+      "mentions": 1,
+      "created_at": 1700017580.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t133",
+      "type": "term",
+      "label": "Fertiger Investorenplan",
+      "mentions": 1,
+      "created_at": 1700017880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "t134",
+      "type": "term",
+      "label": "Grün gegen Parkplätze",
+      "mentions": 1,
+      "created_at": 1700017880.0,
+      "hidden": false,
+      "x": null,
+      "y": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "p1",
+      "target": "t1"
+    },
+    {
+      "id": "e2",
+      "source": "p1",
+      "target": "t2"
+    },
+    {
+      "id": "e3",
+      "source": "p2",
+      "target": "t3"
+    },
+    {
+      "id": "e4",
+      "source": "p2",
+      "target": "t4"
+    },
+    {
+      "id": "e5",
+      "source": "p2",
+      "target": "t5"
+    },
+    {
+      "id": "e6",
+      "source": "p2",
+      "target": "t6"
+    },
+    {
+      "id": "e7",
+      "source": "p2",
+      "target": "t7"
+    },
+    {
+      "id": "e10",
+      "source": "p3",
+      "target": "t10"
+    },
+    {
+      "id": "e11",
+      "source": "p3",
+      "target": "t11"
+    },
+    {
+      "id": "e138",
+      "source": "p3",
+      "target": "t66"
+    },
+    {
+      "id": "e8",
+      "source": "p3",
+      "target": "t8"
+    },
+    {
+      "id": "e12",
+      "source": "p4",
+      "target": "t12"
+    },
+    {
+      "id": "e13",
+      "source": "p4",
+      "target": "t13"
+    },
+    {
+      "id": "e14",
+      "source": "p4",
+      "target": "t14"
+    },
+    {
+      "id": "e15",
+      "source": "p4",
+      "target": "t15"
+    },
+    {
+      "id": "e16",
+      "source": "p5",
+      "target": "t17"
+    },
+    {
+      "id": "e17",
+      "source": "p5",
+      "target": "t16"
+    },
+    {
+      "id": "e73",
+      "source": "p5",
+      "target": "t35"
+    },
+    {
+      "id": "e139",
+      "source": "p6",
+      "target": "t66"
+    },
+    {
+      "id": "e20",
+      "source": "p6",
+      "target": "t19"
+    },
+    {
+      "id": "e21",
+      "source": "p6",
+      "target": "t20"
+    },
+    {
+      "id": "e22",
+      "source": "p6",
+      "target": "t8"
+    },
+    {
+      "id": "e23",
+      "source": "p7",
+      "target": "t22"
+    },
+    {
+      "id": "e24",
+      "source": "p7",
+      "target": "t21"
+    },
+    {
+      "id": "e25",
+      "source": "p8",
+      "target": "t23"
+    },
+    {
+      "id": "e26",
+      "source": "p8",
+      "target": "t17"
+    },
+    {
+      "id": "e27",
+      "source": "p8",
+      "target": "t24"
+    },
+    {
+      "id": "e28",
+      "source": "p8",
+      "target": "t25"
+    },
+    {
+      "id": "e141",
+      "source": "p9",
+      "target": "t66"
+    },
+    {
+      "id": "e29",
+      "source": "p9",
+      "target": "t26"
+    },
+    {
+      "id": "e30",
+      "source": "p9",
+      "target": "t19"
+    },
+    {
+      "id": "e32",
+      "source": "p9",
+      "target": "t8"
+    },
+    {
+      "id": "e33",
+      "source": "p9",
+      "target": "t28"
+    },
+    {
+      "id": "e34",
+      "source": "p10",
+      "target": "t29"
+    },
+    {
+      "id": "e35",
+      "source": "p10",
+      "target": "t30"
+    },
+    {
+      "id": "e36",
+      "source": "p10",
+      "target": "t31"
+    },
+    {
+      "id": "e37",
+      "source": "p10",
+      "target": "t32"
+    },
+    {
+      "id": "e38",
+      "source": "p11",
+      "target": "t33"
+    },
+    {
+      "id": "e39",
+      "source": "p11",
+      "target": "t17"
+    },
+    {
+      "id": "e40",
+      "source": "p11",
+      "target": "t34"
+    },
+    {
+      "id": "e41",
+      "source": "p11",
+      "target": "t35"
+    },
+    {
+      "id": "e140",
+      "source": "p12",
+      "target": "t66"
+    },
+    {
+      "id": "e43",
+      "source": "p12",
+      "target": "t36"
+    },
+    {
+      "id": "e44",
+      "source": "p12",
+      "target": "t37"
+    },
+    {
+      "id": "e45",
+      "source": "p12",
+      "target": "t38"
+    },
+    {
+      "id": "e46",
+      "source": "p13",
+      "target": "t39"
+    },
+    {
+      "id": "e47",
+      "source": "p14",
+      "target": "t40"
+    },
+    {
+      "id": "e48",
+      "source": "p14",
+      "target": "t41"
+    },
+    {
+      "id": "e49",
+      "source": "p14",
+      "target": "t3"
+    },
+    {
+      "id": "e50",
+      "source": "p14",
+      "target": "t23"
+    },
+    {
+      "id": "e51",
+      "source": "p14",
+      "target": "t42"
+    },
+    {
+      "id": "e52",
+      "source": "p15",
+      "target": "t19"
+    },
+    {
+      "id": "e53",
+      "source": "p15",
+      "target": "t43"
+    },
+    {
+      "id": "e54",
+      "source": "p15",
+      "target": "t8"
+    },
+    {
+      "id": "e55",
+      "source": "p15",
+      "target": "t28"
+    },
+    {
+      "id": "e56",
+      "source": "p15",
+      "target": "t44"
+    },
+    {
+      "id": "e57",
+      "source": "p16",
+      "target": "t45"
+    },
+    {
+      "id": "e58",
+      "source": "p16",
+      "target": "t46"
+    },
+    {
+      "id": "e59",
+      "source": "p16",
+      "target": "t47"
+    },
+    {
+      "id": "e60",
+      "source": "p16",
+      "target": "t48"
+    },
+    {
+      "id": "e61",
+      "source": "p17",
+      "target": "t24"
+    },
+    {
+      "id": "e62",
+      "source": "p17",
+      "target": "t49"
+    },
+    {
+      "id": "e63",
+      "source": "p17",
+      "target": "t23"
+    },
+    {
+      "id": "e64",
+      "source": "p17",
+      "target": "t33"
+    },
+    {
+      "id": "e65",
+      "source": "p17",
+      "target": "t50"
+    },
+    {
+      "id": "e142",
+      "source": "p18",
+      "target": "t66"
+    },
+    {
+      "id": "e68",
+      "source": "p18",
+      "target": "t36"
+    },
+    {
+      "id": "e69",
+      "source": "p18",
+      "target": "t51"
+    },
+    {
+      "id": "e70",
+      "source": "p18",
+      "target": "t52"
+    },
+    {
+      "id": "e71",
+      "source": "p19",
+      "target": "t53"
+    },
+    {
+      "id": "e72",
+      "source": "p19",
+      "target": "t54"
+    },
+    {
+      "id": "e74",
+      "source": "p20",
+      "target": "t33"
+    },
+    {
+      "id": "e75",
+      "source": "p20",
+      "target": "t55"
+    },
+    {
+      "id": "e76",
+      "source": "p20",
+      "target": "t56"
+    },
+    {
+      "id": "e77",
+      "source": "p20",
+      "target": "t57"
+    },
+    {
+      "id": "e78",
+      "source": "p20",
+      "target": "t35"
+    },
+    {
+      "id": "e79",
+      "source": "p21",
+      "target": "t10"
+    },
+    {
+      "id": "e80",
+      "source": "p21",
+      "target": "t8"
+    },
+    {
+      "id": "e81",
+      "source": "p21",
+      "target": "t58"
+    },
+    {
+      "id": "e82",
+      "source": "p21",
+      "target": "t59"
+    },
+    {
+      "id": "e83",
+      "source": "p22",
+      "target": "t22"
+    },
+    {
+      "id": "e84",
+      "source": "p22",
+      "target": "t60"
+    },
+    {
+      "id": "e85",
+      "source": "p22",
+      "target": "t61"
+    },
+    {
+      "id": "e86",
+      "source": "p22",
+      "target": "t62"
+    },
+    {
+      "id": "e87",
+      "source": "p22",
+      "target": "t63"
+    },
+    {
+      "id": "e89",
+      "source": "p24",
+      "target": "t65"
+    },
+    {
+      "id": "e90",
+      "source": "p24",
+      "target": "t64"
+    },
+    {
+      "id": "e91",
+      "source": "p24",
+      "target": "t66"
+    },
+    {
+      "id": "e92",
+      "source": "p25",
+      "target": "t67"
+    },
+    {
+      "id": "e93",
+      "source": "p25",
+      "target": "t68"
+    },
+    {
+      "id": "e94",
+      "source": "p25",
+      "target": "t29"
+    },
+    {
+      "id": "e95",
+      "source": "p26",
+      "target": "t3"
+    },
+    {
+      "id": "e96",
+      "source": "p26",
+      "target": "t14"
+    },
+    {
+      "id": "e97",
+      "source": "p26",
+      "target": "t69"
+    },
+    {
+      "id": "e98",
+      "source": "p26",
+      "target": "t70"
+    },
+    {
+      "id": "e99",
+      "source": "p26",
+      "target": "t71"
+    },
+    {
+      "id": "e100",
+      "source": "p27",
+      "target": "t66"
+    },
+    {
+      "id": "e101",
+      "source": "p27",
+      "target": "t19"
+    },
+    {
+      "id": "e102",
+      "source": "p27",
+      "target": "t14"
+    },
+    {
+      "id": "e103",
+      "source": "p27",
+      "target": "t72"
+    },
+    {
+      "id": "e104",
+      "source": "p27",
+      "target": "t59"
+    },
+    {
+      "id": "e105",
+      "source": "p28",
+      "target": "t39"
+    },
+    {
+      "id": "e106",
+      "source": "p28",
+      "target": "t73"
+    },
+    {
+      "id": "e107",
+      "source": "p28",
+      "target": "t74"
+    },
+    {
+      "id": "e108",
+      "source": "p29",
+      "target": "t75"
+    },
+    {
+      "id": "e109",
+      "source": "p29",
+      "target": "t76"
+    },
+    {
+      "id": "e110",
+      "source": "p29",
+      "target": "t3"
+    },
+    {
+      "id": "e111",
+      "source": "p29",
+      "target": "t34"
+    },
+    {
+      "id": "e112",
+      "source": "p29",
+      "target": "t77"
+    },
+    {
+      "id": "e114",
+      "source": "p30",
+      "target": "t78"
+    },
+    {
+      "id": "e115",
+      "source": "p30",
+      "target": "t79"
+    },
+    {
+      "id": "e116",
+      "source": "p30",
+      "target": "t65"
+    },
+    {
+      "id": "e117",
+      "source": "p30",
+      "target": "t8"
+    },
+    {
+      "id": "e143",
+      "source": "p30",
+      "target": "t66"
+    },
+    {
+      "id": "e118",
+      "source": "p31",
+      "target": "t80"
+    },
+    {
+      "id": "e119",
+      "source": "p32",
+      "target": "t81"
+    },
+    {
+      "id": "e120",
+      "source": "p32",
+      "target": "t40"
+    },
+    {
+      "id": "e121",
+      "source": "p32",
+      "target": "t33"
+    },
+    {
+      "id": "e122",
+      "source": "p32",
+      "target": "t82"
+    },
+    {
+      "id": "e123",
+      "source": "p32",
+      "target": "t83"
+    },
+    {
+      "id": "e124",
+      "source": "p33",
+      "target": "t84"
+    },
+    {
+      "id": "e125",
+      "source": "p33",
+      "target": "t10"
+    },
+    {
+      "id": "e126",
+      "source": "p33",
+      "target": "t51"
+    },
+    {
+      "id": "e127",
+      "source": "p33",
+      "target": "t85"
+    },
+    {
+      "id": "e128",
+      "source": "p34",
+      "target": "t86"
+    },
+    {
+      "id": "e129",
+      "source": "p34",
+      "target": "t87"
+    },
+    {
+      "id": "e130",
+      "source": "p34",
+      "target": "t88"
+    },
+    {
+      "id": "e131",
+      "source": "p34",
+      "target": "t63"
+    },
+    {
+      "id": "e132",
+      "source": "p34",
+      "target": "t85"
+    },
+    {
+      "id": "e133",
+      "source": "p35",
+      "target": "t89"
+    },
+    {
+      "id": "e134",
+      "source": "p35",
+      "target": "t34"
+    },
+    {
+      "id": "e135",
+      "source": "p35",
+      "target": "t75"
+    },
+    {
+      "id": "e136",
+      "source": "p35",
+      "target": "t90"
+    },
+    {
+      "id": "e137",
+      "source": "p35",
+      "target": "t91"
+    },
+    {
+      "id": "e144",
+      "source": "p36",
+      "target": "t66"
+    },
+    {
+      "id": "e145",
+      "source": "p36",
+      "target": "t92"
+    },
+    {
+      "id": "e146",
+      "source": "p36",
+      "target": "t8"
+    },
+    {
+      "id": "e147",
+      "source": "p36",
+      "target": "t93"
+    },
+    {
+      "id": "e148",
+      "source": "p36",
+      "target": "t64"
+    },
+    {
+      "id": "e149",
+      "source": "p37",
+      "target": "t22"
+    },
+    {
+      "id": "e150",
+      "source": "p37",
+      "target": "t94"
+    },
+    {
+      "id": "e151",
+      "source": "p38",
+      "target": "t40"
+    },
+    {
+      "id": "e152",
+      "source": "p38",
+      "target": "t24"
+    },
+    {
+      "id": "e153",
+      "source": "p38",
+      "target": "t95"
+    },
+    {
+      "id": "e154",
+      "source": "p38",
+      "target": "t55"
+    },
+    {
+      "id": "e155",
+      "source": "p38",
+      "target": "t17"
+    },
+    {
+      "id": "e156",
+      "source": "p39",
+      "target": "t96"
+    },
+    {
+      "id": "e157",
+      "source": "p39",
+      "target": "t66"
+    },
+    {
+      "id": "e158",
+      "source": "p39",
+      "target": "t97"
+    },
+    {
+      "id": "e159",
+      "source": "p39",
+      "target": "t98"
+    },
+    {
+      "id": "e160",
+      "source": "p39",
+      "target": "t26"
+    },
+    {
+      "id": "e161",
+      "source": "p40",
+      "target": "t29"
+    },
+    {
+      "id": "e162",
+      "source": "p40",
+      "target": "t30"
+    },
+    {
+      "id": "e163",
+      "source": "p40",
+      "target": "t99"
+    },
+    {
+      "id": "e164",
+      "source": "p40",
+      "target": "t100"
+    },
+    {
+      "id": "e165",
+      "source": "p41",
+      "target": "t101"
+    },
+    {
+      "id": "e166",
+      "source": "p41",
+      "target": "t3"
+    },
+    {
+      "id": "e167",
+      "source": "p41",
+      "target": "t102"
+    },
+    {
+      "id": "e168",
+      "source": "p41",
+      "target": "t103"
+    },
+    {
+      "id": "e169",
+      "source": "p41",
+      "target": "t32"
+    },
+    {
+      "id": "e170",
+      "source": "p42",
+      "target": "t78"
+    },
+    {
+      "id": "e171",
+      "source": "p42",
+      "target": "t66"
+    },
+    {
+      "id": "e172",
+      "source": "p42",
+      "target": "t104"
+    },
+    {
+      "id": "e173",
+      "source": "p42",
+      "target": "t51"
+    },
+    {
+      "id": "e174",
+      "source": "p43",
+      "target": "t105"
+    },
+    {
+      "id": "e175",
+      "source": "p43",
+      "target": "t39"
+    },
+    {
+      "id": "e176",
+      "source": "p44",
+      "target": "t106"
+    },
+    {
+      "id": "e177",
+      "source": "p44",
+      "target": "t107"
+    },
+    {
+      "id": "e178",
+      "source": "p44",
+      "target": "t108"
+    },
+    {
+      "id": "e179",
+      "source": "p44",
+      "target": "t25"
+    },
+    {
+      "id": "e180",
+      "source": "p45",
+      "target": "t109"
+    },
+    {
+      "id": "e181",
+      "source": "p45",
+      "target": "t84"
+    },
+    {
+      "id": "e182",
+      "source": "p45",
+      "target": "t26"
+    },
+    {
+      "id": "e183",
+      "source": "p45",
+      "target": "t110"
+    },
+    {
+      "id": "e184",
+      "source": "p45",
+      "target": "t111"
+    },
+    {
+      "id": "e185",
+      "source": "p46",
+      "target": "t2"
+    },
+    {
+      "id": "e186",
+      "source": "p46",
+      "target": "t112"
+    },
+    {
+      "id": "e187",
+      "source": "p46",
+      "target": "t113"
+    },
+    {
+      "id": "e188",
+      "source": "p46",
+      "target": "t114"
+    },
+    {
+      "id": "e189",
+      "source": "p46",
+      "target": "t115"
+    },
+    {
+      "id": "e190",
+      "source": "p47",
+      "target": "t116"
+    },
+    {
+      "id": "e191",
+      "source": "p47",
+      "target": "t17"
+    },
+    {
+      "id": "e192",
+      "source": "p47",
+      "target": "t34"
+    },
+    {
+      "id": "e193",
+      "source": "p47",
+      "target": "t7"
+    },
+    {
+      "id": "e194",
+      "source": "p47",
+      "target": "t117"
+    },
+    {
+      "id": "e195",
+      "source": "p48",
+      "target": "t66"
+    },
+    {
+      "id": "e196",
+      "source": "p48",
+      "target": "t118"
+    },
+    {
+      "id": "e197",
+      "source": "p48",
+      "target": "t64"
+    },
+    {
+      "id": "e198",
+      "source": "p49",
+      "target": "t12"
+    },
+    {
+      "id": "e199",
+      "source": "p50",
+      "target": "t119"
+    },
+    {
+      "id": "e200",
+      "source": "p50",
+      "target": "t17"
+    },
+    {
+      "id": "e201",
+      "source": "p50",
+      "target": "t120"
+    },
+    {
+      "id": "e202",
+      "source": "p50",
+      "target": "t75"
+    },
+    {
+      "id": "e203",
+      "source": "p50",
+      "target": "t121"
+    },
+    {
+      "id": "e204",
+      "source": "p51",
+      "target": "t66"
+    },
+    {
+      "id": "e205",
+      "source": "p51",
+      "target": "t14"
+    },
+    {
+      "id": "e206",
+      "source": "p51",
+      "target": "t10"
+    },
+    {
+      "id": "e207",
+      "source": "p51",
+      "target": "t122"
+    },
+    {
+      "id": "e208",
+      "source": "p53",
+      "target": "t33"
+    },
+    {
+      "id": "e209",
+      "source": "p53",
+      "target": "t17"
+    },
+    {
+      "id": "e210",
+      "source": "p53",
+      "target": "t123"
+    },
+    {
+      "id": "e211",
+      "source": "p53",
+      "target": "t49"
+    },
+    {
+      "id": "e212",
+      "source": "p53",
+      "target": "t124"
+    },
+    {
+      "id": "e213",
+      "source": "p54",
+      "target": "t66"
+    },
+    {
+      "id": "e214",
+      "source": "p54",
+      "target": "t38"
+    },
+    {
+      "id": "e215",
+      "source": "p54",
+      "target": "t98"
+    },
+    {
+      "id": "e216",
+      "source": "p54",
+      "target": "t88"
+    },
+    {
+      "id": "e217",
+      "source": "p55",
+      "target": "t29"
+    },
+    {
+      "id": "e218",
+      "source": "p56",
+      "target": "t81"
+    },
+    {
+      "id": "e219",
+      "source": "p56",
+      "target": "t125"
+    },
+    {
+      "id": "e220",
+      "source": "p56",
+      "target": "t126"
+    },
+    {
+      "id": "e221",
+      "source": "p56",
+      "target": "t25"
+    },
+    {
+      "id": "e222",
+      "source": "p56",
+      "target": "t40"
+    },
+    {
+      "id": "e223",
+      "source": "p57",
+      "target": "t10"
+    },
+    {
+      "id": "e224",
+      "source": "p57",
+      "target": "t66"
+    },
+    {
+      "id": "e225",
+      "source": "p57",
+      "target": "t127"
+    },
+    {
+      "id": "e226",
+      "source": "p57",
+      "target": "t19"
+    },
+    {
+      "id": "e227",
+      "source": "p57",
+      "target": "t128"
+    },
+    {
+      "id": "e228",
+      "source": "p58",
+      "target": "t39"
+    },
+    {
+      "id": "e229",
+      "source": "p58",
+      "target": "t129"
+    },
+    {
+      "id": "e230",
+      "source": "p58",
+      "target": "t130"
+    },
+    {
+      "id": "e231",
+      "source": "p58",
+      "target": "t73"
+    },
+    {
+      "id": "e232",
+      "source": "p59",
+      "target": "t131"
+    },
+    {
+      "id": "e233",
+      "source": "p59",
+      "target": "t83"
+    },
+    {
+      "id": "e234",
+      "source": "p59",
+      "target": "t16"
+    },
+    {
+      "id": "e235",
+      "source": "p59",
+      "target": "t132"
+    },
+    {
+      "id": "e236",
+      "source": "p59",
+      "target": "t123"
+    },
+    {
+      "id": "e237",
+      "source": "p60",
+      "target": "t66"
+    },
+    {
+      "id": "e238",
+      "source": "p60",
+      "target": "t133"
+    },
+    {
+      "id": "e239",
+      "source": "p60",
+      "target": "t78"
+    },
+    {
+      "id": "e240",
+      "source": "p60",
+      "target": "t134"
+    }
+  ],
+  "quotes": [
+    {
+      "id": "q1",
+      "person_id": "p1",
+      "text": "Weniger Baustellenlärm, Maschinen, die den Beton dann selber aufsprühen, so Drohnen halt."
+    },
+    {
+      "id": "q2",
+      "person_id": "p2",
+      "text": "Kein Politiker kann sagen: Ich habe jetzt Paragraph fünfzehn Absatz drei b gestrichen. Das bringt ihm keine Schlagzeile. Aber ein radikaler Bruch, der bringt Schlagzeilen."
+    },
+    {
+      "id": "q3",
+      "person_id": "p3",
+      "text": "Die entscheidende Frage ist nicht, wer entscheidet, sondern wann – und wie strukturiert die Ebenen der Entscheidung voneinander getrennt werden."
+    },
+    {
+      "id": "q4",
+      "person_id": "p4",
+      "text": "Das gibt's ja heute kaum noch: Jeder macht seine Tür zu und fertig."
+    },
+    {
+      "id": "q5",
+      "person_id": "p5",
+      "text": "Ich widerspreche mir gerade ein bisschen selber, aber ich glaube, beides stimmt irgendwie: Man braucht mutige Einschnitte an manchen Stellen — aber komplett bei null anfangen, das traue ich mich nicht."
+    },
+    {
+      "id": "q6",
+      "person_id": "p6",
+      "text": "Alibi-Bürgerbeteiligung, wo man zwei Stellwände aufstellt und drei bunte Klebepunkte verteilen lässt und dann sagt: Wir haben ja beteiligt. Das ist Show, das ist reine Feigenblattpolitik."
+    },
+    {
+      "id": "q7",
+      "person_id": "p7",
+      "text": "Ich fände es gut, wenn man den ganzen alten Schutt von abgerissenen Häusern einfach wieder neu anmischt und daraus was Neues macht, statt immer alles frisch aus dem Steinbruch zu holen."
+    },
+    {
+      "id": "q8",
+      "person_id": "p8",
+      "text": "Leute, die noch nie ein Bauamt von innen gesehen haben, reden von radikalem Bruch."
+    },
+    {
+      "id": "q9",
+      "person_id": "p9",
+      "text": "Ob ein Fundament trägt oder nicht trägt, das entscheidet sich nicht demokratisch, das ist einfach Physik. Aber wie ein Quartier sich anfühlen soll, das ist eine politische Frage."
+    },
+    {
+      "id": "q10",
+      "person_id": "p10",
+      "text": "Warum baut man neu, wenn man doch das Alte einfach herrichten könnte? Ich fänd's schön, wenn diese Dörfer in zwanzig Jahren nicht mehr aussehen wie Geisterdörfer."
+    },
+    {
+      "id": "q11",
+      "person_id": "p11",
+      "text": "Ich tendiere doch eher zum schrittweisen Entrümpeln, auch wenn das total unsexy klingt und keine Schlagzeilen macht."
+    },
+    {
+      "id": "q12",
+      "person_id": "p12",
+      "text": "Die Bürger müssen mitgenommen werden — mitgenommen wie ein Kind, das man zum Arzt schleppt. Die Leute, die dort wohnen, sind doch keine Bittsteller, die SIND die Stadt."
+    },
+    {
+      "id": "q13",
+      "person_id": "p13",
+      "text": "Dass nicht mehr alles zubetoniert wird. Jeder popelige Parkplatz wird gleich asphaltiert – das müsste anders sein."
+    },
+    {
+      "id": "q14",
+      "person_id": "p14",
+      "text": "So wie wir das jetzt machen, das ist kein Entrümpeln, das ist eher ein Verschieben von Rumpel von einer Ecke in die andere."
+    },
+    {
+      "id": "q15",
+      "person_id": "p15",
+      "text": "Jeder will bezahlbaren Wohnraum, aber bitte nicht direkt vor der eigenen Tür."
+    },
+    {
+      "id": "q16",
+      "person_id": "p16",
+      "text": "Da steht so eine Maschine auf dem Grundstück und lässt das Haus vor Ort entstehen, Schicht um Schicht, wie ein Kuchen der gebacken wird, nur halt riesig und aus Beton."
+    },
+    {
+      "id": "q17",
+      "person_id": "p17",
+      "text": "Wenn ich mich entscheiden müsste, würde ich eher zum Schrittweisen sagen — auch wenn mir dabei nicht ganz wohl ist, weil ich das Gefühl habe: Wir haben eigentlich keine Zeit mehr für kleine Schritte."
+    },
+    {
+      "id": "q18",
+      "person_id": "p18",
+      "text": "Es wird immer so getan, als wäre Bürgerbeteiligung eine Art Gnadenakt, den man den Leuten gewährt oder eben nicht. Und das ist doch absurd."
+    },
+    {
+      "id": "q19",
+      "person_id": "p19",
+      "text": "Weniger dieses jeder für sich bauen und dann isoliert wohnen, sondern mehr, dass sich Leute zusammentun, die das gemeinsam hochziehen und dann auch zusammen drin leben."
+    },
+    {
+      "id": "q20",
+      "person_id": "p20",
+      "text": "Das ist ja wie wenn man ein Zimmer aufräumt und gleichzeitig neue Sachen reinstellt."
+    },
+    {
+      "id": "q21",
+      "person_id": "p21",
+      "text": "Klimaanpassung, Hochwasserschutz, Statik – das sind Dinge, die haben eine technische Wahrheit, die kann man nicht wegdiskutieren, nur weil eine Bürgerinitiative das anders sieht."
+    },
+    {
+      "id": "q22",
+      "person_id": "p22",
+      "text": "Die Stadt recycelt sich selber, wächst aus sich selber raus wieder neu — so wie ein Baum, der seine eigenen Blätter in die Erde fallen lässt und daraus wachsen neue Sachen."
+    },
+    {
+      "id": "q23",
+      "person_id": "p24",
+      "text": "Die Leute wissen, wo der Wind pfeift an der Ecke, sie wissen, welcher Platz abends nicht sicher ist, sie wissen, wo die Kinder tatsächlich spielen – und nicht, wo der Spielplatz auf dem Plan eingezeichnet ist."
+    },
+    {
+      "id": "q24",
+      "person_id": "p25",
+      "text": "Weniger neu bauen — bei uns auf dem Dorf stehen ganze Straßenzüge leer, keiner will da rein."
+    },
+    {
+      "id": "q25",
+      "person_id": "p26",
+      "text": "Selbst wenn man einzelne Normen abschafft, kommen sie durch die Hintertür wieder rein: über die Haftpflichtversicherung, über den TÜV, über Gutachter, die sagen, Sie müssen sich ja trotzdem absichern."
+    },
+    {
+      "id": "q26",
+      "person_id": "p27",
+      "text": "Statik ist keine Meinungsfrage, Brandschutz auch nicht. Aber wie ein Quartier aussehen soll, das sind politische und soziale Fragen, keine rein technischen."
+    },
+    {
+      "id": "q27",
+      "person_id": "p28",
+      "text": "Man merkt richtig, der Boden kriegt keine Luft mehr, weil überall Beton drauf ist. Für mich wäre das Wichtigste, dass man den Boden auch mal wieder atmen lässt."
+    },
+    {
+      "id": "q28",
+      "person_id": "p29",
+      "text": "Ein Reförmchen hier, ein Reförmchen da bringt am Ende gar nichts, weil das System sich immer wieder neu verkompliziert, es wächst ja nach, wie so ein Gestrüpp."
+    },
+    {
+      "id": "q29",
+      "person_id": "p30",
+      "text": "Wenn Architekten sagen, die Leute haben doch keine Ahnung von Städtebau, dann sage ich denen ganz klar: Die Leute haben Ahnung von ihrem Leben, und das ist am Ende die einzige Expertise, die zählt."
+    },
+    {
+      "id": "q30",
+      "person_id": "p31",
+      "text": "Weniger Handarbeit vielleicht, dass Maschinenarme das Mauern übernehmen."
+    },
+    {
+      "id": "q31",
+      "person_id": "p32",
+      "text": "Wir haben ein Sedimentgestein aus Regeln, und keiner weiß mehr, warum die unterste Schicht da überhaupt liegt."
+    },
+    {
+      "id": "q32",
+      "person_id": "p33",
+      "text": "Das ist für mich die zentrale Herausforderung: nicht nur wie viel Mitbestimmung, sondern wessen Mitbestimmung."
+    },
+    {
+      "id": "q33",
+      "person_id": "p34",
+      "text": "Das Erste wäre, dass die Häuser nicht mehr aussehen wie eine Excel-Tabelle, hingeklotzt, Hauptsache es passt möglichst viel rein und am Ende kommt eine Rendite raus für irgendwen, der weit weg wohnt."
+    },
+    {
+      "id": "q34",
+      "person_id": "p35",
+      "text": "Ich widerspreche mir gerade selber: Ich sage einerseits radikal, andererseits schrittweise – aber genau das ist mein Punkt, es braucht beides."
+    },
+    {
+      "id": "q35",
+      "person_id": "p36",
+      "text": "Dann sitzen wir in Gremien und diskutieren drei Jahre über die Höhe von einem Baum – Verzeihung, aber das ist doch absurd."
+    },
+    {
+      "id": "q36",
+      "person_id": "p37",
+      "text": "Weniger neu kaufen und mehr von dem nehmen, was beim Abriss übrig bleibt \\u2013 das wär mir wichtig."
+    },
+    {
+      "id": "q37",
+      "person_id": "p38",
+      "text": "Das Baurecht ist wie mein Kleiderschrank: Ich kauf ständig neue Sachen und schmeiß nie die alten weg — irgendwann quillt der Schrank über."
+    },
+    {
+      "id": "q38",
+      "person_id": "p39",
+      "text": "Nicht nur eine unverbindliche Informationsveranstaltung am Dienstagabend um achtzehn Uhr, wo dann eh nur die kommen, die schon vorher dagegen waren."
+    },
+    {
+      "id": "q39",
+      "person_id": "p40",
+      "text": "Ein Ort, wo wieder Leben ist, wo man sich auf der Straße trifft und nicht nur an der Tankstelle draußen an der Umgehungsstraße."
+    },
+    {
+      "id": "q40",
+      "person_id": "p41",
+      "text": "Ehrlich gesagt finde ich klare Positionen bei dem Thema auch ein bisschen verdächtig."
+    },
+    {
+      "id": "q41",
+      "person_id": "p42",
+      "text": "Man macht einen Abend im Gemeindesaal, Kaffee und Kuchen, alle dürfen mal was auf ein Post-it schreiben – und danach ist eh schon alles entschieden. Das ist Show, das ist keine echte Beteiligung."
+    },
+    {
+      "id": "q42",
+      "person_id": "p43",
+      "text": "Wir pflastern im Grunde die ganze Landschaft einfach zu, das müsste anders werden."
+    },
+    {
+      "id": "q43",
+      "person_id": "p44",
+      "text": "Brandschutz redet nicht mit Schallschutz, Schallschutz redet nicht mit Energieeffizienz, und am Ende sitzt der Architekt da und muss das alles zusammenpuzzeln."
+    },
+    {
+      "id": "q44",
+      "person_id": "p45",
+      "text": "Sonst kriegt man immer nur die Stimmen von denen, die eh schon laut sind, und die anderen, die eigentlich am meisten betroffen sind, bleiben außen vor."
+    },
+    {
+      "id": "q45",
+      "person_id": "p46",
+      "text": "Keine großen Kräne mehr, keine Bauarbeiter, die sich abrackern müssen – sondern so etwas fliegt einfach hin und sprüht die Wände hin. Mein Wunsch wäre, dass das normal wird."
+    },
+    {
+      "id": "q46",
+      "person_id": "p47",
+      "text": "Schritt für Schritt hört sich schon seit zwanzig Jahren so an, und passiert ist quasi nichts. Die Normen werden ja eher mehr, nicht weniger: jedes Jahr kommt was dazu und nichts wird gestrichen."
+    },
+    {
+      "id": "q47",
+      "person_id": "p48",
+      "text": "Man muss die Menschen mitnehmen, bevor der erste Strich gezeichnet ist, nicht danach. Wir als Planer ziehen weiter zum nächsten Projekt, die Leute müssen mit dem Kram leben, den wir da hinstellen."
+    },
+    {
+      "id": "q48",
+      "person_id": "p49",
+      "text": "Das Haus gehört nicht nur einem, sondern die Leute, die da wohnen, besitzen das zusammen – so wie ein Verein halt."
+    },
+    {
+      "id": "q49",
+      "person_id": "p50",
+      "text": "Wir hatten eine unlösbare Kollision zwischen Brandschutz und Barrierefreiheit, wo die Tür gleichzeitig breiter und schmaler sein musste."
+    },
+    {
+      "id": "q50",
+      "person_id": "p51",
+      "text": "Dann wird Beteiligung zur Alibiveranstaltung: ein Abend, zwei Stunden, Flipchart, fertig. Und hinterher sagt die Verwaltung, ja, wir haben doch beteiligt, keiner ist gekommen."
+    },
+    {
+      "id": "q51",
+      "person_id": "p53",
+      "text": "Brandschutz oder Statik – da will ich nicht, dass man sagt: weg damit, wir bauen jetzt einfach frei Schnauze. Ich glaub, ich revidier mich grad selber."
+    },
+    {
+      "id": "q52",
+      "person_id": "p54",
+      "text": "Beteiligung kommt viel zu spät, wenn die große Entscheidung schon gefallen ist. Dann fragt man die Leute noch zur Farbe der Bank, die vorm Rathaus steht — das ist lächerlich."
+    },
+    {
+      "id": "q53",
+      "person_id": "p55",
+      "text": "Ich würde sagen, dass man endlich was macht mit diesen ganzen leeren Häusern in den Dörfern, wo keiner mehr wohnt. Mehr will ich dazu eigentlich gar nicht sagen."
+    },
+    {
+      "id": "q54",
+      "person_id": "p56",
+      "text": "Die Norm denkt den Werkstoff Holz noch aus den Neunzigern."
+    },
+    {
+      "id": "q55",
+      "person_id": "p57",
+      "text": "Oft wird Beteiligung als Wort benutzt, und dann stellt sich raus, es war eigentlich nur eine Infoveranstaltung mit zwei, drei Stellwänden – und dann heißt es, die Bürger wurden beteiligt."
+    },
+    {
+      "id": "q56",
+      "person_id": "p58",
+      "text": "Man packt auf jeden Meter Boden Steine oder so eine graue Platte, und dann wundert man sich, dass alles unter Wasser steht. Der Boden kann ja nicht mehr atmen."
+    },
+    {
+      "id": "q57",
+      "person_id": "p59",
+      "text": "Ich widersprech mir grad selber ein bisschen: Bei den doppelten und dreifachen Prüfverfahren – weg damit, radikal. Aber bei den eigentlichen Sicherheitsstandards glaub ich an den schrittweisen Weg."
+    },
+    {
+      "id": "q58",
+      "person_id": "p60",
+      "text": "Die kennen ihre Straße, ihren Markt, ihre Nachbarschaft besser als jeder Städtebaupreisträger."
+    }
+  ]
+}
