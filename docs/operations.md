@@ -221,6 +221,12 @@ Ausstellungstag", sonst öffnet Tag 2 mit den Träumen von Tag 1 im Streifen.
 2. Interview führen (Funkmikro läuft dauerhaft in den STT-Server).
 3. Beenden: beliebige Textnachricht in Telegram ODER gesprochen
    „Interview beendet" ODER nach 15 Minuten automatisch.
+   Der gesprochene Stopp verträgt **ein** eingeschobenes Wort — „Das Interview
+   ist **damit** beendet" wirkt genauso wie die reine Formel (Birk,
+   2026-08-30). Zwei Einschübe nicht mehr, und der Satz muss **enden**: wer
+   mitten im Gespräch über das Ende eines Interviews redet („bevor das
+   Interview beendet ist, wollte ich noch sagen…"), beendet keins. Wird der
+   Stopp doch einmal nicht erkannt, ist die Textnachricht der sichere Weg.
 4. Begriffe wachsen **nach** dem Stopp nach, nicht währenddessen.
 
 Ein neues Foto schließt ein noch laufendes Interview implizit — es kann also nie
