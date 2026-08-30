@@ -45,6 +45,25 @@ export function selectVisibleTermIds(terms, maxTerms, keepIds = new Set()) {
   for (const id of keepIds) {
     if (eligible.has(id)) ids.add(id);
   }
+  // Was gerade im Bild ist, MUSS an der Wand stehen — unabhängig vom
+  // Dichteregler (Birk am realen Graphen, 2026-08-30: „Ich sehe nur Rot,
+  // kein Gelb und kein Blau").
+  //
+  // Das war kein Anzeigefehler, sondern ein Konstruktionsfehler zwischen zwei
+  // Ranglisten, die gegeneinander laufen: Die Traumauswahl nimmt über ihre
+  // Neuheitsachse bewusst GERADE ERST gesagte Begriffe, und die haben genau
+  // eine Nennung. Die Anzeige sortiert nach Häufigkeit. Die gelben Begriffe
+  // standen deshalb auf Rang 130 und 131 von 131 und wurden von jedem
+  // Reglerwert darunter abgeschnitten — die Farbe für „gerade eben gesagt"
+  // war strukturell unsichtbar, nicht bloß selten.
+  //
+  // Fünf Knoten über dem Regler sind kein Bruch seines Zwecks: Er steuert die
+  // Dichte des Feldes, und ein Begriff, den die Besucherin im Bild vor sich
+  // sieht, aber nicht im Netz findet, ist genau das Gegenteil der
+  // Nachvollziehbarkeit, für die diese Station gebaut ist.
+  for (const term of candidates) {
+    if (term.in_dream) ids.add(term.id);
+  }
   return ids;
 }
 

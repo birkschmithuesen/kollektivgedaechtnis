@@ -174,3 +174,54 @@ def test_keep_ids_cannot_resurrect_a_hidden_or_absent_term(model):
     view = call(model, "visibleGraph", hidden_graph, 3, ["o3", "does-not-exist"])
     ids = {n["id"] for n in view["nodes"] if n["type"] == "term"}
     assert "o3" not in ids and "does-not-exist" not in ids
+
+
+def test_bildbegriffe_stehen_an_der_wand_auch_unter_dem_dichteregler(model):
+    """Birk am realen Graphen, 2026-08-30: „Ich sehe nur Rot, kein Gelb und
+    kein Blau."
+
+    Kein Anzeigefehler, sondern zwei Ranglisten, die gegeneinander laufen: Die
+    Traumauswahl nimmt ueber ihre Neuheitsachse bewusst GERADE ERST gesagte
+    Begriffe — die haben genau eine Nennung. Die Anzeige sortiert nach
+    Haeufigkeit. Am echten Graphen standen die beiden gelben Begriffe deshalb
+    auf Rang 130 und 131 von 131 und wurden vom Regler (110) abgeschnitten:
+    die Farbe fuer „gerade eben gesagt" war strukturell unsichtbar.
+    """
+    terms = [
+        {"id": f"t{i}", "type": "term", "label": f"Oft {i}", "mentions": 50 - i,
+         "created_at": float(i), "hidden": False, "in_dream": False}
+        for i in range(20)
+    ]
+    terms.append({
+        "id": "frisch", "type": "term", "label": "Gerade eben gesagt", "mentions": 1,
+        "created_at": 999.0, "hidden": False, "in_dream": True,
+    })
+
+    # Als Liste zurueckholen: ein JS-Set kommt in Python als leeres Objekt an.
+    sichtbar = model.evaluate(
+        "(a) => [...window.kgModel.selectVisibleTermIds(a[0], a[1])]", [terms, 5]
+    )
+
+    assert "frisch" in sichtbar, (
+        "ein Begriff, den die Besucherin im Bild sieht, muss im Netz auffindbar sein"
+    )
+    assert len(sichtbar) == 6, sichtbar
+
+
+def test_versteckte_begriffe_bleiben_versteckt_auch_wenn_sie_im_bild_waeren(model):
+    """Die Ausnahme darf die Handsteuerung nicht aushebeln: Was der Operator
+    ausgeblendet hat, bleibt weg — sonst kaeme ein bewusst entfernter Begriff
+    durch die Hintertuer zurueck auf die Wand."""
+    terms = [
+        {"id": "weg", "type": "term", "label": "Versteckt", "mentions": 1,
+         "created_at": 999.0, "hidden": True, "in_dream": True},
+        {"id": "da", "type": "term", "label": "Sichtbar", "mentions": 9,
+         "created_at": 1.0, "hidden": False, "in_dream": False},
+    ]
+
+    sichtbar = model.evaluate(
+        "(a) => [...window.kgModel.selectVisibleTermIds(a[0], a[1])]", [terms, 10]
+    )
+
+    assert "weg" not in sichtbar
+    assert "da" in sichtbar
