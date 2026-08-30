@@ -1,4 +1,5 @@
 import { newNodeIds, toCytoscape, visibleGraph } from './graph-model.js';
+import { LINE_HEIGHT } from './term-plate.js';
 import { Camera } from './camera.js';
 
 // Matches kg/config.py's Config.default_max_terms -- only relevant before the
@@ -11,6 +12,188 @@ function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
 }
+
+/* theme-f „Schwarzplan" (Entwurf 2026-08-30, an Cytoscape 3.30.2 headless
+   geprueft). Eigene Funktion statt Aenderungen an style(): theme-e bleibt
+   damit als Rueckfallebene woertlich erhalten, und beide sind ueber
+   ?theme= vergleichbar — Birk urteilt am Bild, nicht an der Beschreibung.
+
+   Die drei Aenderungen gegenueber theme-e:
+   1. Der Punkt am Begriff faellt weg; der Begriff IST die beschriftete
+      Flaeche. Kanten enden dadurch an der Tafelkante statt unter der Schrift.
+   2. Die Achsenfarbe wandert von der Schrift in die Flaeche. Farbige Schrift
+      auf Schwarz ist der schwaechste Traeger, den eine Farbe haben kann.
+   3. Statt Schlagschatten ein helles Halo: auf additiver Projektion ist ein
+      dunkler Schatten auf Schwarz buchstaeblich unsichtbar.
+
+   GEMESSEN, nicht gewaehlt: Weiss auf Gelb hat 1.66:1 und ist unlesbar —
+   gelbe Tafeln tragen deshalb SCHWARZE Schrift (12.65:1). */
+function styleSchwarzplan() {
+  const FF = cssVar('--label-font', 'Georgia, serif');
+  const FS = cssVar('--label-size', '26');
+
+  return [
+    /* ---- PERSONEN: Portrait mit Tiefe ------------------------------------
+       Drei Schichten statt der einen flachen Scheibe:
+         underlay-*  ein weiches, HELLES Halo. Auf additiver Projektion ist
+                     nur Licht sichtbar — ein dunkler Schlagschatten auf
+                     Schwarz wäre an der Wand exakt nichts. Das Halo dreht
+                     den Effekt um: der Schatten ist Licht.
+         background-fill: radial-gradient  füllt den Rest der Scheibe dort,
+                     wo das Portrait durchscheinend ausläuft.
+         outline-*   ein zweiter, schwacher Ring in Abstand — das
+                     konzentrische Echo, Bauhaus-Zirkelgeometrie.
+       Der weiche Rand selbst kommt NICHT von hier, sondern aus dem PNG:
+       kg/photos.py muss die harte Ellipsenmaske gegen einen Alpha-Verlauf
+       tauschen (siehe make_portrait-Patch). Cytoscape respektiert das
+       Alpha — headless nachgemessen. */
+    {
+      selector: 'node.person',
+      style: {
+        shape: 'ellipse',
+        width: cssVar('--person-size', '110'),
+        height: cssVar('--person-size', '110'),
+        'background-color': cssVar('--person-fill', '#242424'),
+        'background-fill': 'radial-gradient',
+        'background-gradient-stop-colors':
+          `${cssVar('--person-fill', '#242424')} #000000`,
+        'background-gradient-stop-positions': '55% 100%',
+        'background-image': (ele) => ele.data('portrait') || 'none',
+        'background-fit': 'cover',
+        'background-clip': 'node',
+        'border-width': cssVar('--ring-width', '5'),
+        'border-color': cssVar('--ring-color', '#D62828'),
+        'border-opacity': 1,
+        'outline-width': cssVar('--ring-echo-width', '1'),
+        'outline-color': cssVar('--ring-color', '#D62828'),
+        'outline-offset': cssVar('--ring-echo-offset', '7'),
+        'outline-opacity': cssVar('--ring-echo-opacity', '0.35'),
+        'underlay-color': cssVar('--halo-color', '#FFFFFF'),
+        'underlay-opacity': cssVar('--halo-opacity', '0.10'),
+        'underlay-padding': cssVar('--halo-padding', '14'),
+        'underlay-shape': 'ellipse',
+        label: '',
+        'z-index': 20,
+      },
+    },
+
+    /* ---- BEGRIFFE: die Tafel IST der Knoten ------------------------------
+       Der Punkt ist ersatzlos weg. Er hat nie etwas bedeutet: er war ein
+       Anfasser für die Kante und ein Anker fürs Label, und er kostete den
+       Blick einen Sprung (Punkt finden -> Text daneben lesen -> zuordnen).
+       Jetzt zielen die Kanten auf die Schriftfläche selbst.
+
+       background-opacity: 0 — der Knotenkörper ist unsichtbar, er ist nur
+       noch die Trefferfläche und das Kantenziel. Sichtbar ist allein die
+       text-background-* Tafel. Damit stimmen Tafel und Knotengeometrie
+       überein, und das fcose-Layout rechnet mit der wahren Fläche. */
+    {
+      selector: 'node.term',
+      style: {
+        shape: 'round-rectangle',
+        'corner-radius': cssVar('--plate-radius', '2'),
+        width: 'data(boxW)',
+        height: 'data(boxH)',
+        'background-opacity': 0,
+        'border-width': 0,
+        label: 'data(label)',
+        color: cssVar('--label-color', '#FFFFFF'),
+        'font-family': FF,
+        'font-size': FS,
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-wrap': 'wrap',
+        'text-max-width': cssVar('--label-max-width', '220px'),
+        'text-justification': 'center',
+        'line-height': LINE_HEIGHT,
+        // Ruhende Begriffe: Kontur, keine Tafel. Sie sollen zurücktreten.
+        'text-outline-width': cssVar('--label-outline-width', '4'),
+        'text-outline-color': cssVar('--label-outline-color', '#000000'),
+        'text-background-color': cssVar('--term-plate-idle', '#000000'),
+        'text-background-opacity': cssVar('--term-plate-idle-opacity', '0.55'),
+        'text-background-shape': 'rectangle',
+        'text-background-padding': cssVar('--plate-pad', '10'),
+        'z-index': 10,
+      },
+    },
+
+    /* Im Bild: die Tafel wird massiv. Der Umschlag von "Kontur auf Schwarz"
+       zu "Schrift auf Farbfläche" ist der stärkste Sprung, den die Wand
+       hergibt — ganz ohne Größenänderung, die Birk zu Recht verworfen hat.
+       text-outline-width: 0, weil eine schwarze Kontur auf einer Farbtafel
+       die Schrift nur verschmutzt. */
+    {
+      selector: 'node.term.in-dream',
+      style: {
+        'text-background-opacity': 1,
+        'text-outline-width': 0,
+        'z-index': 15,
+      },
+    },
+
+    /* Die drei Achsen. Die Schriftfarbe ist NICHT frei wählbar, sondern
+       folgt dem Kontrast auf der jeweiligen Fläche (gemessen, WCAG):
+         auf Rot  #D62828 : Weiß  5.01:1   ok
+         auf Blau #1D4E9C : Weiß  8.01:1   ok
+         auto Gelb #F4C300: Weiß  1.66:1   UNLESBAR -> Schwarz 12.65:1
+       Deshalb trägt Gelb schwarze Schrift. Das ist keine Stilfrage. */
+    {
+      selector: 'node.term.dream-anchor',
+      style: {
+        'text-background-color': cssVar('--dream-anchor-color', '#D62828'),
+        color: cssVar('--term-ink-on-red', '#FFFFFF'),
+      },
+    },
+    {
+      selector: 'node.term.dream-neighbour',
+      style: {
+        'text-background-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
+        color: cssVar('--term-ink-on-blue', '#FFFFFF'),
+      },
+    },
+    {
+      selector: 'node.term.dream-recent',
+      style: {
+        'text-background-color': cssVar('--dream-recent-color', '#F4C300'),
+        color: cssVar('--term-ink-on-yellow', '#000000'),
+      },
+    },
+
+    /* ---- KANTEN: Bögen statt Schnüre -------------------------------------
+       unbundled-bezier mit zwei Kontrollpunkten aus edgeCurve(). Weil die
+       Begriffs-Knoten jetzt die volle Tafelfläche haben, endet die Kante
+       automatisch an der Tafelkante statt unter der Schrift — das
+       "Ausweichen um Beschriftungen" fällt als Nebenwirkung ab und muss
+       nicht gerechnet werden. */
+    {
+      selector: 'edge.link',
+      style: {
+        width: cssVar('--edge-width', '2'),
+        'line-color': cssVar('--edge-color', '#858585'),
+        'curve-style': 'unbundled-bezier',
+        'control-point-distances': 'data(cpd)',
+        'control-point-weights': 'data(cpw)',
+        'edge-distances': 'intersection',
+        'line-cap': 'round',
+        'line-opacity': cssVar('--edge-opacity', '0.75'),
+        'z-index': 1,
+      },
+    },
+
+    /* Kanten ins Bild hinein: leicht kräftiger und in der Ankerfarbe. So
+       zeigt das Netz, WOHER der gezeigte Ausschnitt gespeist wird. */
+    {
+      selector: 'edge.link.in-dream',
+      style: {
+        width: cssVar('--edge-width-dream', '3'),
+        'line-color': cssVar('--dream-anchor-color', '#D62828'),
+        'line-opacity': cssVar('--edge-opacity-dream', '0.9'),
+        'z-index': 5,
+      },
+    },
+  ];
+}
+
 
 function style() {
   return [
@@ -820,7 +1003,17 @@ export function createGraphView(
   container,
   { onPositions = () => {}, migrationDuration = MIGRATION_DURATION_MS } = {},
 ) {
-  const cy = cytoscape({ container, style: style(), wheelSensitivity: 0.2 });
+  // Welcher Stil gilt, entscheidet das Theme — und zwar an einer CSS-Variablen,
+  // die nur theme-f setzt. Nicht am ?theme=-Parameter: der steht im HTML, und
+  // eine zweite Stelle, die dieselbe Wahl trifft, laeuft irgendwann auseinander.
+  // Das Stylesheet ist beim Aufruf bereits geladen (projection.html wartet auf
+  // das `load`-Event, bevor createGraphView laeuft).
+  const schwarzplan = cssVar('--schwarzplan', '') === 'an';
+  const cy = cytoscape({
+    container,
+    style: schwarzplan ? styleSchwarzplan() : style(),
+    wheelSensitivity: 0.2,
+  });
   // fcose only packs disconnected components when this extension is
   // initialised on the instance (it calls cy.layoutUtilities('get') and falls
   // back to constructing one). Doing it here, once, is also the only place the

@@ -27,11 +27,14 @@
   // wall, not a form with a user to correct a typo: an unrecognised
   // `?theme=` value (typo, retired name, anything) must fall back to the
   // default rather than ever producing a broken href.
+  // 'f' ist der Schwarzplan-Entwurf (2026-08-30): Begriffe als beschriftete
+  // Flaechen statt Punkt+Text, Achsenfarbe in der Flaeche, Kantenboegen.
+  // 'e' bleibt daneben bestehen, damit beide vergleichbar sind.
   // 'd' fehlt hier absichtlich: theme-d.css ist das Testbild (/testpattern),
   // kein Graph-Theme. 'e' ist das Bauhaus-Theme (Birk, 2026-08-30) und seit
   // dann die Vorgabe — es traegt die Farbcodierung der drei Auswahlachsen,
   // ohne die die Markierung an der Wand nur ein Ja/Nein waere.
-  const KNOWN_THEMES = ['a', 'b', 'c', 'e'];
+  const KNOWN_THEMES = ['a', 'b', 'c', 'e', 'f'];
   const requestedTheme = params.get('theme');
   const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'e';
   const themeHref = `static/theme-${theme}.css`;

@@ -1,0 +1,114 @@
+/* F: SCHWARZPLAN — Bauhaus, zweite Fassung (Entwurf 2026-08-30)
+
+   Baut auf theme-e.css auf und ändert genau drei Dinge:
+
+   1. DER PUNKT IST WEG. Ein Begriff ist eine beschriftete FLÄCHE, kein
+      Punkt mit Text daneben. Der Punkt war ein Anfasser, kein Zeichen — er
+      kostete den Blick einen Sprung und trug nie Bedeutung. Bauhaus setzt
+      Schrift auf Fläche (Bayers Universal, die Dessauer Signaletik, jedes
+      Blatt der Druckwerkstatt), nicht Schrift neben Marke.
+
+   2. DIE FARBE WIRD FLÄCHE STATT SCHRIFTFARBE. Vorher trugen Punkt und
+      Schrift die Achsenfarbe; farbige Schrift auf Schwarz ist der
+      schwächste Träger, den eine Farbe haben kann — dünn, und bei Blau auf
+      Schwarz (2.62:1 gegen den Grund) an der Wand fast verloren. Jetzt
+      steht die Schrift AUF der Farbe. Der Umschlag von "Kontur auf
+      Schwarz" zu "massive Farbtafel" ist der stärkste verfügbare Sprung,
+      und er kostet keine Größenänderung.
+
+   3. DAS PORTRAIT BEKOMMT LICHT STATT SCHATTEN. Auf additiver Projektion
+      ist Schwarz das, was der Beamer nicht anleuchtet — ein dunkler
+      Schlagschatten ist an der Wand buchstäblich nichts. Der Schatten wird
+      darum umgedreht: ein schwaches helles Halo (--halo-*) trägt die
+      Scheibe, und ein zweiter, schwacher Ring in Abstand (--ring-echo-*)
+      gibt ihr die konzentrische Zirkelgeometrie.
+
+   SCHRIFTFARBE AUF DEN TAFELN IST GEMESSEN, NICHT GEWÄHLT (WCAG-Kontrast):
+       Weiß auf Rot  #D62828 :  5.01:1   ok
+       Weiß auf Blau #1D4E9C :  8.01:1   ok
+       Weiß auf Gelb #F4C300 :  1.66:1   UNLESBAR
+       Schwarz auf Gelb      : 12.65:1   ok
+   Gelb trägt deshalb schwarze Schrift. Das ist keine Geschmacksfrage, und
+   es ist auch kein Bruch: Schwarz auf Gelb ist die klassischste
+   Bauhaus-Paarung überhaupt.
+
+   DIE SCHRIFTGRÖSSE BLEIBT. 26px, unverändert aus theme-e. Die Kalibrierung
+   über die Themen a/b/c wird nicht angefasst, und in-dream ist weiterhin
+   NICHT größer als der Rest — der Unterschied ist allein die Fläche. */
+
+:root {
+  /* Schaltet projection.js auf styleSchwarzplan(). Die Wahl steht bewusst
+     HIER und nicht am ?theme=-Parameter: das Theme bestimmt den Stil, und
+     eine zweite Stelle, die dasselbe entscheidet, laeuft auseinander. */
+  --schwarzplan: an;
+
+  --bg: #000000;
+
+  --bauhaus-rot: #D62828;
+  --bauhaus-gelb: #F4C300;
+  --bauhaus-blau: #1D4E9C;
+
+  /* ---- Personen ---------------------------------------------------------
+     Etwas größer als theme-e (56), weil die Portraits jetzt gegen massive
+     Farbtafeln bestehen müssen statt gegen 14px-Punkte. Der Wert ist eine
+     Modell-Einheit; die Deckelung in DEFAULT_PORTRAIT_SIZE bleibt gültig. */
+  --person-size: 110;
+  --person-fill: #242424;
+  --ring-color: #D62828;
+  --ring-width: 5;
+
+  /* Das Halo. NICHT höher als ~0.14 drehen: auf Schwarz wird daraus sonst
+     ein sichtbarer grauer Hof, und der Beamer zeichnet ihn als Rechteck-
+     Aufhellung nach, wenn die Wand nicht perfekt weiß ist. */
+  --halo-color: #FFFFFF;
+  --halo-opacity: 0.10;
+  --halo-padding: 14;
+
+  /* Das Ringecho — der zweite Kreis in Abstand. */
+  --ring-echo-width: 1;
+  --ring-echo-offset: 7;
+  --ring-echo-opacity: 0.35;
+
+  /* ---- Schrift ---------------------------------------------------------- */
+  --label-color: #FFFFFF;
+  --label-font: Georgia, "Times New Roman", serif;
+  --label-size: 26;
+  --label-outline-width: 4;
+  --label-outline-color: #000000;
+  --label-max-width: 220px;
+
+  /* ---- Die Tafeln -------------------------------------------------------
+     --plate-pad geht in ZWEI Dinge zugleich: in text-background-padding
+     und in termBox() in projection.js. Wer ihn hier ändert, ändert damit
+     auch die Knotengröße, mit der fcose rechnet — das ist Absicht, sonst
+     liefen Fläche und Layout auseinander.
+
+     --plate-radius: 2 und nicht 0. Eine ganz scharfe Ecke flimmert auf der
+     Projektion an der Kante; 2px nehmen das Flirren, ohne dass die Tafel
+     rund wirkt. */
+  --plate-pad: 10;
+  --plate-radius: 2;
+
+  /* Ruhende Begriffe: eine fast unsichtbare Tafel, die nur den Untergrund
+     beruhigt, wo Kanten hinter der Schrift durchlaufen. Zusammen mit der
+     4px-Kontur ist das die Lesbarkeitsreserve. */
+  --term-plate-idle: #000000;
+  --term-plate-idle-opacity: 0.55;
+
+  /* Schriftfarbe je Tafel — siehe Kontrastmessung oben. */
+  --term-ink-on-red: #FFFFFF;
+  --term-ink-on-blue: #FFFFFF;
+  --term-ink-on-yellow: #000000;
+
+  /* ---- Kanten ----------------------------------------------------------- */
+  --edge-color: #858585;
+  --edge-width: 2;
+  --edge-opacity: 0.75;
+  --edge-width-dream: 3;
+  --edge-opacity-dream: 0.9;
+
+  /* ---- Die drei Achsen -------------------------------------------------- */
+  --dream-anchor-color: var(--bauhaus-rot);
+  --dream-neighbour-color: var(--bauhaus-blau);
+  --dream-recent-color: var(--bauhaus-gelb);
+}

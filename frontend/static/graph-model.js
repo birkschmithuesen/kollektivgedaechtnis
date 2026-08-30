@@ -1,3 +1,5 @@
+import { termBox, edgeCurve } from './term-plate.js';
+
 // Pure display logic. The store keeps everything; the wall shows a view of it.
 // The term-count dial is a display filter: instant, reversible, lossless.
 
@@ -61,6 +63,17 @@ export function visibleGraph(graph, maxTerms, keepTermIds = new Set()) {
   return { nodes, edges };
 }
 
+/** Tafelmasse, defensiv: Ein Messfehler darf die Wand nicht kosten. */
+function boxDaten(label) {
+  try {
+    const box = termBox(label || '');
+    return { boxW: box.w, boxH: box.h };
+  } catch (error) {
+    console.warn('konnte die Tafel nicht messen', error);
+    return {};
+  }
+}
+
 export function toCytoscape(view) {
   const elements = [];
   for (const node of view.nodes) {
@@ -79,6 +92,11 @@ export function toCytoscape(view) {
         // anchor | neighbour | recent — welche der drei Auswahlachsen den
         // Begriff ins Bild geholt hat. Das Bauhaus-Theme faerbt danach.
         dream_role: node.dream_role || '',
+        // Tafelmasse fuer theme-f (Schwarzplan): Der Begriff IST die Flaeche,
+        // und fcose muss mit ihrer echten Groesse rechnen — sonst legt das
+        // Layout Tafeln uebereinander, die es fuer 14px-Punkte haelt. Die
+        // uebrigen Themes ignorieren die beiden Felder schlicht.
+        ...(node.type === 'term' ? boxDaten(node.label) : {}),
       },
       classes:
         node.in_dream === true
@@ -91,8 +109,12 @@ export function toCytoscape(view) {
     elements.push(element);
   }
   for (const edge of view.edges) {
+    // Der Bogen jeder Kante kommt aus einem Hash ihrer ID: eigener Schwung je
+    // Kante, aber ueber die ganzen acht Stunden KONSTANT. Zufall pro Frame
+    // wuerde bei jedem Re-Layout zappeln.
+    const kurve = edgeCurve(edge.id);
     elements.push({
-      data: { id: edge.id, source: edge.source, target: edge.target },
+      data: { id: edge.id, source: edge.source, target: edge.target, ...kurve },
       classes: 'link',
     });
   }
