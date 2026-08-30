@@ -108,9 +108,43 @@ Material liegt, muss aber keinen erfinden.
 BELEGBARKEIT: Alles in deinem Satz muss sich auf die gelieferten Begriffe \
 stützen. Erfinde nichts hinzu, was nicht im Material steht.
 
-GEWICHTUNG. Was viele Menschen gesagt haben, beherrscht das Bild. Was genau \
-eine Person gesagt hat, darf als kleines Detail am Rand vorkommen, nie als \
-Thema.
+DER BEGRIFF IST DIE ABKÜRZUNG, NICHT DIE SACHE. Was im Material steht, sind \
+verdichtete Etiketten aus einem Gespräch: „Klebepunkte-Workshop\", \
+„Bürgerversammlung als Pflichttermin\", „Stellplatznachweis\". Jedes davon ist \
+die Kurzform eines VORGANGS, an dem Menschen beteiligt sind — und die Kurzform \
+allein ergibt kein Bild. Wer „Klebepunkte-Workshop\" als bunte Punkte an einer \
+Wand malt, hat das Etikett abgemalt und die Sache weggelassen: Zu sehen wären \
+Menschen, die vor einem Plan stehen und mit dem Finger auf eine Stelle tippen, \
+Rentner und Kinder und jemand mit Kinderwagen in einer Turnhalle, \
+Klapptische, Jacken über Stuhllehnen. Die Punkte sind der Rest, den der \
+Vorgang hinterlässt, nicht der Vorgang.
+
+FRAGE DAHER BEI JEDEM BEGRIFF: Wer tut hier was, und wie sähe der Moment aus, \
+in dem er es tut? Setze DAS ins Bild. Nur wenn zu einem Begriff wirklich \
+niemand handelt, zeige die Spur allein.
+- Zu wenig (nur die Spur, der Vorgang fehlt): „a wall covered in hundreds of \
+coloured adhesive dots\\\"
+- Richtig (der Vorgang, die Spur nebenbei): „a dozen people of different ages \
+crowded at a pinned-up plan in a gym hall, one bending close to press a \
+coloured dot next to the school, folding tables and coats over chair backs \
+behind them\\\"
+- Zu wenig (nur der Gegenstand): „a stamped building permit on a table\\\"
+- Richtig (der Vorgang): „a man in shirtsleeves pressing a stamp onto the last \
+page while three people at the far end of the table are already standing up \
+to leave\\\"
+
+MENSCHEN GEHÖREN INS BILD, wo das Material von Menschen handelt. Beteiligung, \
+Entscheidung, Streit, Pflege, Handwerk, Wohnen: das sind Dinge, die Menschen \
+TUN. Ein Bild, in dem nur Gegenstände stehen, obwohl im Material Menschen \
+handeln, gibt es falsch wieder. Zeige sie bei der Tätigkeit — die Hände am \
+Werkzeug, den Körper in der Haltung, in der man arbeitet, wartet, zeigt oder \
+sich abwendet. Gesichter müssen nicht erkennbar sein.
+
+WAS OFT GESAGT WURDE, MUSS AUCH ZU SEHEN SEIN. Prüfe zum Schluss deine \
+Beschreibung gegen die Begriffe mit den meisten Nennungen: Kommt der \
+meistgenannte darin vor, und zwar als das, was er ist, nicht nur als sein \
+Etikett? Wenn nicht, schreibe ihn hinein statt eines Randdetails.
+
 
 VERBOTEN: Namen von Menschen, Zuschreibungen wie „eine Besucherin sagte", \
 Aufzählungen, Doppelpunkte mit Listen, Anführungszeichen, Meta-Sätze über den \
