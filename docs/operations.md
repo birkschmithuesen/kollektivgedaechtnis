@@ -946,13 +946,25 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    | `aspect` | 80×45 px | 31×18 px | Kein Zuschnitt, aber beide Maße schrumpfen bis zur Unleserlichkeit; das reservierte Streifenband bleibt bei 40 größtenteils leer. |
    | `wrap` (**gewählt**) | 372×210 px | 372×210 px (pro Bild) | Kein Zuschnitt einzelner Bilder — der von Birk genannte Grund. Die Zeilenhöhe ist fest mit `overflow: hidden`; ohne Gegenmaßnahme wäre bei 40 gleichzeitigen Träumen ein Teil stillschweigend abgeschnitten worden. |
 
-   Entscheidung: `wrap`, jetzt Standardwert in `frontend2/dream.html` und
-   `frontend2/static/dream-harness.html` (`data-strip-mode`) sowie in
-   `sim.dream_prerender`'s `--strip-mode`. Der `?strip_mode=`-URL-Parameter
-   bleibt für Vergleichsrenderings erhalten (per `--strip-mode` beim
-   Pre-Rendering und `data-strip-mode` auf der Seite wählbar).
+   Entscheidung vom 2026-08-26: `wrap`. **Überholt am 2026-08-30 durch den
+   Vollbild-Umbau** (Birk, live an der Station): das Bild liegt jetzt
+   formatfüllend, der Streifen liegt als Auflage darauf. `wrap`s Mechanismus
+   — bei vielen Träumen in weitere Reihen umbrechen — hieß im alten Raster
+   „das reservierte Band nach unten füllen" und hieße als Auflage „ins Bild
+   hineinwachsen"; die zusätzlichen Reihen deckten bei 40 Träumen den Satz und
+   die halbe Bildmitte zu. `wrap` ist deshalb **entfallen**. Der GRUND für
+   Birks Wahl — kein einzelnes Bild wird zugeschnitten — gilt weiter und wird
+   von `aspect` erfüllt, jetzt über gemeinsames Schrumpfen statt über Umbruch.
 
-   Zusammen mit dieser Wahl eingeführt: eine Obergrenze `strip_max` im
+   Aktueller Stand: `aspect` ist Standardwert in `frontend2/dream.html` und
+   `frontend2/static/dream-harness.html` (`data-strip-mode`) sowie in
+   `sim.dream_prerender`'s `--strip-mode`; `cover` bleibt für
+   Vergleichsrenderings wählbar (per `--strip-mode` beim Pre-Rendering und
+   `?strip_mode=cover` auf der Seite). Die Zahlen in der Tabelle oben sind die
+   Messwerte des alten Rasters und werden für die Auflage neu erhoben, sobald
+   die 40-Bilder-Serie aus 8. gefahren ist.
+
+   Zusammen mit der Wahl von 2026-08-26 eingeführt: eine Obergrenze `strip_max` im
    Operator-UI („Streifenlänge", Default 10) — sie begrenzt den Streifen auf
    die letzten N Träume und ist genau die Gegenmaßnahme zum oben genannten
    Abschneiden bei vielen gleichzeitigen Träumen. Die Begrenzung betrifft nur

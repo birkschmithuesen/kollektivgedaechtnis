@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-strip-mode="wrap">
+<html lang="de" data-strip-mode="aspect">
 <meta charset="utf-8">
 <title>Kollektivtraum</title>
 <!-- Relative asset paths, like Tool 1's pages: served at /dream these resolve
@@ -19,11 +19,13 @@
   import { createDreamView } from './static/dream.js';
 
   // Review finding: the strip's crop-vs-shrink trade-off was Birk's call, not
-  // this file's. `wrap` (set on <html> above) is the default, decided
-  // 2026-08-26 from the rendered comparison (docs/operations.md): it crops
-  // no individual image. `?strip_mode=aspect|cover` on the URL is how
-  // sim/dream_prerender.py's --strip-mode drives the three comparison
-  // renders, and how anyone can preview a mode by hand.
+  // this file's. Seit dem Vollbild-Umbau (2026-08-30) liegt der Streifen AUF
+  // dem Bild; `wrap` ist damit entfallen, weil weitere Reihen ins Bild
+  // hineinwüchsen (Begründung in dream.css). `aspect` (oben gesetzt) ist der
+  // Standard und hält Birks Grund von 2026-08-26 — kein einzelnes Bild wird
+  // zugeschnitten. `?strip_mode=cover` auf der URL ist, wie
+  // sim/dream_prerender.py's --strip-mode das Vergleichsrendering fährt, und
+  // wie man den Modus von Hand ansieht.
   const stripMode = new URLSearchParams(location.search).get('strip_mode');
   if (stripMode) document.documentElement.dataset.stripMode = stripMode;
 

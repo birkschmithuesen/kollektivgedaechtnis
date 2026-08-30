@@ -1,13 +1,40 @@
 /* Screen B. Every size is viewport-relative (spec §6, T1§11): the 65" screen's
    resolution is organiser-provided and still open, so nothing may be in
-   pixels. --strip-ratio and --fade-ms are set from the operator's state. */
+   pixels. --strip-ratio and --fade-ms are set from the operator's state.
+
+   Umbau 2026-08-30 (Birk, live an der Station): Das Bild liegt FORMATFÜLLEND,
+   Satz, Frage und Streifen liegen darauf. Vorher war #page ein Raster aus vier
+   Zeilen (Frage / Bild / Satz / Streifen) und das Bild bekam auf 1920×1080
+   nur 671 von 1080 px — 62 % der Höhe, 39 % der Fläche. Der Beschnitt durch
+   `object-fit: cover` wird dafür bewusst in Kauf genommen.
+
+   Das Raster hatte noch einen zweiten, härteren Fehler: mit
+   `question_visible=false` fiel die Frage-Zeile ganz aus dem Raster, die drei
+   übrigen Elemente rutschten je eine Zeile hoch, und die Bühne landete auf
+   der `auto`-Zeile — mit absolut positionierten Rahmen darin also 0 px hoch.
+   Die Frage abzuschalten löschte das Bild. Nichts hängt mehr an einer
+   Rasterzeile, also kann das nicht wiederkommen
+   (tests/test_dream_page.py::test_switching_the_question_off_...). */
 
 :root {
   --strip-ratio: 0.22;
   --fade-ms: 1200ms;
   --ink: #f2efe9;
   --ground: #0d0e10;
-  --dim: 0.55;
+  /* Die Auflage ist klein, nicht blass: auf einem hellen Traumbild
+     verschwindet eine 55-%-Miniatur, in der Rasterzeile auf schwarzem Grund
+     tat sie das nicht. Die Zurücknahme trägt jetzt die Größe. */
+  --dim: 0.85;
+  /* Ein Rand für alles, was auf dem Bild liegt — Frage, Satz, Streifen
+     fluchten an derselben Kante (Variante A). */
+  --gutter: 5.2vw;
+  /* Höhe einer Miniatur. `strip_ratio` (Server: 0.05–0.25, kg2/server.py)
+     BEHÄLT seine Bedeutung als Regler für die Größe der Miniaturen, steuert
+     aber seit dem Umbau keine Rasterzeile mehr: es gibt kein reserviertes
+     Band unter dem Bild, dessen Höhe man einstellen könnte. Der Faktor 25vh
+     bildet den alten Wertebereich auf die Auflage ab — der Standard 0.22
+     ergibt 5,5vh, die Miniaturgröße aus Birks Entwurf (var_a.png). */
+  --thumb-h: calc(var(--strip-ratio) * 25vh);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,33 +50,70 @@ html, body {
   user-select: none;
 }
 
+/* Kein Raster mehr, eine Fläche: jedes Element verankert sich selbst an einer
+   Kante des Bildschirms. Deshalb kann das Ein- oder Ausblenden eines
+   Elements die Geometrie eines anderen nicht mehr verändern. */
 #page {
+  position: relative;
   height: 100vh;
-  display: grid;
-  /* question / image / sentence / strip. The image row takes what is left,
-     which is what makes the layout asymmetric by construction rather than by
-     a magic number. */
-  grid-template-rows: auto 1fr auto calc(var(--strip-ratio) * 100vh);
-  gap: 1.4vh;
-  padding: 2.2vh 3vw;
+  overflow: hidden;
 }
 
+/* Die Verläufe („scrim"). Ohne sie ist heller Text auf einem hellen Traumbild
+   unlesbar — das ist der Grund für den Verlauf, nicht Dekoration. Als
+   Pseudo-Elemente, damit die Auflage keine zwei leeren <div> ins Markup
+   bringt, die dream.js kennen müsste. */
+#page::before,
+#page::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Unten kräftig: hier steht der Satz in großer Type. */
+#page::after {
+  bottom: 0;
+  height: 46vh;
+  background: linear-gradient(to top,
+    rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.75) 28%,
+    rgba(0, 0, 0, 0.35) 62%, rgba(0, 0, 0, 0) 100%);
+}
+
+/* Oben dezent: die Frage ist klein und zurückgenommen, sie braucht weniger. */
+#page::before {
+  top: 0;
+  height: 18vh;
+  background: linear-gradient(to bottom,
+    rgba(0, 0, 0, 0.70) 0%, rgba(0, 0, 0, 0.25) 55%, rgba(0, 0, 0, 0) 100%);
+}
+
+/* Oben links, klein und zurückgenommen (Variante A). Vorher zentriert in
+   einer eigenen Rasterzeile. */
 #question {
-  font-size: 2.6vh;
+  position: absolute;
+  top: 3.2vh;
+  left: var(--gutter);
+  right: var(--gutter);
+  z-index: 2;
+  font-size: 2.2vh;
   font-weight: 500;
-  letter-spacing: 0.02em;
-  opacity: 0.72;
-  text-align: center;
+  letter-spacing: 0.03em;
+  opacity: 0.62;
+  text-shadow: 0 0.1vh 0.8vh rgba(0, 0, 0, 0.7);
   transition: opacity var(--fade-ms) ease;
 }
 
 #question[hidden] { display: none; }
 
+/* Die Bühne ist der ganze Schirm. `z-index` bleibt bewusst `auto`, damit sie
+   keinen eigenen Stapelkontext aufmacht — #typewriter liegt darin und muss
+   ÜBER den Verläufen landen können. */
 #stage {
-  position: relative;
-  min-height: 0;
-  display: grid;
-  place-items: center;
+  position: absolute;
+  inset: 0;
 }
 
 /* Two stacked frames, opacity only. A cross-fade, explicitly NOT a morph
@@ -58,11 +122,19 @@ html, body {
 #stage .frame {
   position: absolute;
   inset: 0;
-  margin: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  /* Formatfüllend, Beschnitt in Kauf genommen (Birk, 2026-08-30). BEIDE
+     Rahmen: die Blende blendet auf den anderen um, ein `contain` dort wäre
+     ein sichtbarer Sprung mitten in der Überblendung. */
+  object-fit: cover;
   opacity: 0;
+  /* Seit der Rahmen formatfüllend ist, blendet die Überblendung zwei
+     1920×1080-Flächen ineinander statt zweier eingepasster Bilder. `opacity`
+     als eigene Ebene anzukündigen macht daraus eine reine Compositor-Blende
+     statt eines Neuzeichnens pro Einzelbild — ohne das lief die Blende auf
+     einem software-gerenderten Chromium messbar zäh an. */
+  will-change: opacity;
   transition-property: opacity;
   transition-duration: var(--fade-ms);
   transition-timing-function: ease-in-out;
@@ -75,116 +147,111 @@ html, body {
    instantly instead of animating in over --fade-ms. */
 #stage .frame.instant { transition: none; }
 
+/* Unten auf dem Verlauf, große Type, linksbündig wie im Entwurf. `balance`
+   verteilt die Zeilen gleichmäßig, statt eine Waise stehen zu lassen. */
 #sentence {
-  font-size: 3.1vh;
-  line-height: 1.35;
-  text-align: center;
-  min-height: 4.2vh;
-  max-width: 74vw;
-  justify-self: center;
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 12.2vh;
+  z-index: 2;
+  font-size: 4.1vh;
+  line-height: 1.34;
+  letter-spacing: 0.005em;
+  text-wrap: balance;
+  text-shadow: 0 0.2vh 1.2vh rgba(0, 0, 0, 0.55);
 }
 
 /* The typewriter is an ANIMATION LAYER over the baseline, not a second layout
    (spec §6): larger, centred, over the stage — and when the image arrives the
-   text settles into #sentence, the same fixed line the baseline always uses. */
+   text settles into #sentence, the same fixed line the baseline always uses.
+   Es liegt über den Verläufen (z-index 3), sonst würde es der untere Verlauf
+   auf halber Höhe abschneiden. */
 #typewriter {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: grid;
   place-items: center;
   padding: 0 8vw;
   font-size: 4.4vh;
   line-height: 1.3;
   text-align: center;
+  text-shadow: 0 0.2vh 1.4vh rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
 
 #typewriter[hidden] { display: none; }
 
+/* Der Streifen liegt AUF dem Bild, unten rechts, statt in einer eigenen
+   Rasterzeile (Variante A). Er wächst nach links, nicht nach oben.
+
+   Der Modus `wrap` ist mit dem Umbau ENTFALLEN. Er war Birks Wahl vom
+   2026-08-26, aber sein Mechanismus — bei vielen Träumen in weitere Reihen
+   umbrechen — hieß im Raster „das reservierte Band nach unten füllen" und
+   hieße als Auflage „ins Bild hineinwachsen": bei 40 Träumen deckten die
+   zusätzlichen Reihen den Satz und die halbe Bildmitte zu. Der GRUND für
+   Birks Wahl war „kein einzelnes Bild wird zugeschnitten"; genau den erfüllt
+   die Auflage unten weiter, nur über gemeinsames Schrumpfen statt über
+   Umbruch. `cover` bleibt als Vergleichsrendering wählbar
+   (`?strip_mode=cover`, sim.dream_prerender --strip-mode).
+
+   Die Spalte wird links UND rechts verankert, nicht nur rechts: ein
+   schrumpfbares Flex-Element trägt in einem Behälter mit „shrink to fit"
+   nichts zur Breite bei, der Streifen fiel damit auf die Eigenbreite der
+   Bilddatei zusammen (1 px bei den Testpixeln). Mit fester Spalte und
+   `justify-content: flex-end` steht er rechts und wächst nach links, bis er
+   bei 40 Träumen an derselben Kante endet, an der der Satz beginnt. */
 #strip {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 3.9vh;
+  z-index: 2;
   list-style: none;
   display: flex;
+  flex-wrap: nowrap;
   align-items: flex-end;
-  justify-content: center;
-  gap: 0.8vw;
-  min-height: 0;
-  overflow: hidden;
+  justify-content: flex-end;
+  gap: 0.5vw;
 }
 
-/* Smaller and dimmer: the strip is the evidence, not a second gallery. */
+/* Die Miniatur schrumpft in BEIDEN Maßen. Die Breite ist die Flex-Basis, die
+   Höhe folgt über `aspect-ratio` — deshalb wird ein voller Streifen kleiner
+   und nicht zu senkrechten Splittern zerschnitten. Bei wenigen Träumen liegt
+   die Basis unangetastet bei --thumb-h, dem Regler des Operators. */
 #strip li {
-  flex: 0 1 auto;
+  flex: 0 1 calc(var(--thumb-h) * 16 / 9);
   min-width: 0;
+  height: auto;
+  aspect-ratio: 16 / 9;
   opacity: var(--dim);
+  /* Kante gegen ein helles Bild, sonst franst die Auflage aus. */
+  box-shadow: 0 0.2vh 1.2vh rgba(0, 0, 0, 0.55);
 }
 
 #strip li img {
   display: block;
-}
-
-/* Review finding: at realistic counts (spec §11's 20/40-dream series) a
-   fixed-height, object-fit:cover strip crops each thumbnail to a thin
-   centre-vertical sliver — the evidence the strip exists to show gets thrown
-   away exactly as the day fills up. Which trade-off to accept is an artistic
-   call, not an implementer's, so THREE modes were built and left selectable
-   via `data-strip-mode` on <html> (query param `?strip_mode=`, read once at
-   load). Decided 2026-08-26 (docs/operations.md, "Offene Entscheidungen"):
-   `wrap` is the default — it crops no individual image — kept alongside
-   `strip_max` (kg2/server.py), which caps the strip to the newest N dreams
-   so `wrap`'s own row never has to silently clip a busy day. See
-   sim/dream_prerender.py --strip-mode for the side-by-side renders. No
-   ordering below implies a preference; they are listed alphabetically. */
-
-/* aspect: aspect-ratio on the LI itself ties width and height together, so
-   flex-shrink squeezes both in step as the count grows — smaller pictures,
-   the full frame always visible (object-fit: contain), never cropped. At a
-   handful of dreams max-height keeps it at the same size `cover` uses. */
-[data-strip-mode="aspect"] #strip li {
-  height: auto;
-  aspect-ratio: 16 / 9;
-  max-height: calc(var(--strip-ratio) * 100vh - 2.6vh);
-}
-
-[data-strip-mode="aspect"] #strip li img {
-  height: 100%;
   width: 100%;
-  object-fit: contain;
-}
-
-/* cover (the OLD default): fixed height, crop to fill. Every thumbnail is
-   the SAME height no matter the count, so a busy day compresses WIDTH
-   instead — the crop that eats most of each picture past ~20 dreams. */
-[data-strip-mode="cover"] #strip li {
-  /* Subtract more than the row's own gap-to-edge allowance: the current
-     image must stay unambiguously dominant (spec §6, asymmetric by design)
-     even at the default strip-ratio, not just barely win a pixel count. */
-  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
-}
-
-[data-strip-mode="cover"] #strip li img {
   height: 100%;
-  width: 100%;
+  /* Die Kachel ist 16:9 und das Bildregister rendert 16:9
+     (`image_aspect_ratio`, kg2/config.py) — hier wird also nichts
+     zugeschnitten. `cover` statt `contain` nur, damit ein Ausreißer mit
+     anderem Seitenverhältnis die Kachel füllt statt ein Loch in die Auflage
+     zu reißen. */
   object-fit: cover;
 }
 
-/* wrap (the default, decided 2026-08-26): items keep cover's natural size
-   (flex-shrink: 0) and the row wraps onto more lines instead of compressing
-   — the strip grows DOWN across the fixed strip band rather than thinning
-   sideways. At high counts the extra rows would exceed the band and be
-   clipped by #strip's own overflow:hidden; in practice `strip_max`
-   (kg2/server.py) keeps the count low enough that this never triggers. */
-[data-strip-mode="wrap"] #strip {
-  flex-wrap: wrap;
-  align-content: flex-end;
+/* cover (nur noch als Vergleichsrendering): feste Höhe, Zuschnitt zum Füllen.
+   Jede Miniatur ist gleich hoch, egal wie viele — ein voller Tag staucht
+   also die BREITE, und das ist der Zuschnitt, der ab etwa 20 Träumen den
+   größten Teil jedes Bildes wegwirft. Steht hier, weil Birk die Modi an
+   gerenderten Dateien vergleicht und nicht an einer Beschreibung. */
+[data-strip-mode="cover"] #strip li {
+  aspect-ratio: auto;
+  height: var(--thumb-h);
 }
 
-[data-strip-mode="wrap"] #strip li {
-  height: calc(var(--strip-ratio) * 100vh - 2.6vh);
-  flex-shrink: 0;
-}
-
-[data-strip-mode="wrap"] #strip li img {
-  height: 100%;
-  width: 100%;
+[data-strip-mode="cover"] #strip li img {
   object-fit: cover;
 }

@@ -11,9 +11,13 @@ works rather than on debugging a screenshot loop.
 
 Review finding (2026-08-26): the strip's crop-vs-shrink trade-off at realistic
 counts is an artistic call, not this module's — `--strip-mode` renders the page
-against whichever of `cover` / `aspect` / `wrap` frontend2/static/dream.css
-defines (see that file), so Birk compares real screenshots instead of the
-implementer choosing for him. And a pool of SOLID-COLOUR placeholders proved
+against whichever mode frontend2/static/dream.css defines (see that file), so
+Birk compares real screenshots instead of the implementer choosing for him.
+Seit dem Vollbild-Umbau (2026-08-30) liegt der Streifen AUF dem Bild und
+`wrap` ist entfallen; wählbar sind noch `aspect` (Standard) und `cover`. Was
+die Serie beurteilt, hat sich damit verschoben: nicht mehr „wie hoch ist das
+reservierte Streifenband", sondern „wieviel vom Bild verdeckt die Auflage".
+And a pool of SOLID-COLOUR placeholders proved
 nothing about cropping — a crop of a flat colour is still that flat colour —
 so `--placeholder-pool` builds a content-bearing one instead (shapes across the
 full frame, not a colour swatch).
@@ -51,24 +55,38 @@ class Shot:
 MEASURE = """
 () => {
   const strip = document.getElementById('strip');
-  const stage = document.getElementById('stage');
+  const frame = document.querySelector('#stage .frame.visible');
   const sentence = document.getElementById('sentence');
   const thumbs = Array.from(strip.children);
   const box = (el) => el.getBoundingClientRect();
+  const screen = window.innerWidth * window.innerHeight;
   return {
     strip_items: thumbs.length,
+    // Das tatsächlich gerenderte Bild. Die alte `stage_height_fraction` maß
+    // die Rasterzeile der Bühne; die gibt es nicht mehr, die Bühne IST der
+    // Schirm — die Zahl wäre seit dem Vollbild-Umbau immer 1,00 und würde
+    // einen Rückfall auf `object-fit: contain` nicht mehr anzeigen.
+    image_height_fraction: frame ? box(frame).height / window.innerHeight : null,
+    image_area_fraction: frame ? (box(frame).width * box(frame).height) / screen : null,
+    // Asymmetric by design (spec §6): the current dream is the subject. Als
+    // Auflage heißt das nicht mehr „die Bühne ist höher als eine Miniatur",
+    // sondern „die Miniaturen verdecken wenig vom Bild".
+    strip_area_fraction: thumbs.reduce((sum, t) => sum + box(t).width * box(t).height, 0) / screen,
     strip_height_fraction: box(strip).height / window.innerHeight,
-    stage_height_fraction: box(stage).height / window.innerHeight,
-    // Asymmetric by design (spec §6): the current dream is the subject.
-    stage_to_thumb: thumbs.length ? box(stage).height / box(thumbs[0]).height : null,
-    // Both dimensions, not just width: --strip-mode=aspect/wrap change the
-    // per-thumbnail HEIGHT too (cover's is fixed; the other two are not),
-    // and that is exactly what the comparison is judged on.
+    // Eine Reihe, nicht mehrere: die Auflage darf nicht ins Bild wachsen.
+    strip_rows: new Set(thumbs.map((t) => Math.round(box(t).top))).size,
+    // Both dimensions, not just width: --strip-mode=aspect shrinks the
+    // per-thumbnail HEIGHT too (cover's is fixed), and that is exactly what
+    // the comparison is judged on.
     thumb_width_px: thumbs.length ? box(thumbs[0]).width : null,
     thumb_height_px: thumbs.length ? box(thumbs[0]).height : null,
     sentence_px: parseFloat(getComputedStyle(sentence).fontSize),
     sentence_lines: Math.round(box(sentence).height /
       parseFloat(getComputedStyle(sentence).lineHeight)),
+    // Der Satz liegt jetzt auf dem Bild statt über dem Streifenband — dass
+    // die Auflage ihn nicht überdeckt, ist deshalb eine eigene Messung.
+    sentence_clears_strip: thumbs.length
+      ? box(sentence).bottom <= box(strip).top + 1 : true,
     // Everything must be inside the viewport, at every size.
     overflows: box(strip).bottom > window.innerHeight + 1,
   };
@@ -120,7 +138,7 @@ def _launch_chromium(playwright):
 
 
 def render_series(
-    dbs: dict[int, Path], out_dir, sizes=SIZES, strip_mode: str = "wrap"
+    dbs: dict[int, Path], out_dir, sizes=SIZES, strip_mode: str = "aspect"
 ) -> list[Shot]:
     """One screenshot per size, through the real page and the real server.
 
@@ -179,10 +197,11 @@ def render_series(
                     Shot(
                         target,
                         f"Der Traum-Schirm bei {size} Träumen, Streifen-Modus "
-                        f"'{strip_mode}': {coverage['strip_items']} im Streifen, "
-                        f"Streifen {coverage['strip_height_fraction']:.0%} der "
-                        f"Bildhöhe, aktuelles Bild {coverage['stage_height_fraction']:.0%}, "
-                        f"Thumbnail {thumb_size}. "
+                        f"'{strip_mode}': {coverage['strip_items']} im Streifen "
+                        f"in {coverage['strip_rows']} Reihe(n), Auflage verdeckt "
+                        f"{coverage['strip_area_fraction']:.1%} der Bildfläche, "
+                        f"das Bild füllt {coverage['image_height_fraction']:.0%} "
+                        f"der Bildhöhe. Thumbnail {thumb_size}. "
                         f"Der Satz steht in {coverage['sentence_lines']} Zeile(n) "
                         f"bei {coverage['sentence_px']:.0f}px.",
                         coverage,
@@ -353,12 +372,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--strip-mode",
-        choices=["aspect", "cover", "wrap"],
-        default="wrap",
-        help="which history-strip layout dream.css renders. 'wrap' is Birk's "
-        "choice from the rendered comparison (docs/operations.md, "
-        "2026-08-26) and stays the default; 'cover' and 'aspect' remain "
-        "selectable for future comparisons.",
+        choices=["aspect", "cover"],
+        default="aspect",
+        help="which history-strip layout dream.css renders. Seit dem "
+        "Vollbild-Umbau (2026-08-30) liegt der Streifen auf dem Bild; 'wrap' "
+        "ist entfallen, weil weitere Reihen ins Bild wüchsen. 'aspect' ist "
+        "der Standard und hält Birks Grund von 2026-08-26 (kein einzelnes "
+        "Bild wird zugeschnitten); 'cover' bleibt für Vergleiche wählbar.",
     )
     parser.add_argument(
         "--placeholder-pool",
@@ -410,6 +430,10 @@ def main() -> None:
         print(f"    {shot.description}")
         if shot.coverage.get("overflows"):
             print("    WARNUNG: der Streifen läuft unten aus dem Bild.")
+        if not shot.coverage.get("sentence_clears_strip", True):
+            print("    WARNUNG: die Auflage überdeckt den Satz.")
+        if (shot.coverage.get("strip_rows") or 1) > 1:
+            print("    WARNUNG: die Auflage ist auf mehrere Reihen umgebrochen.")
 
 
 if __name__ == "__main__":

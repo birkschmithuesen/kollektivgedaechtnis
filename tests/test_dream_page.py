@@ -44,6 +44,25 @@ def apply(page, value):
     page.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
 
 
+#: Was der Streifen als AUFLAGE vom Bild verdeckt: die Summe der
+#: Miniatur-Flächen, nicht die Höhe eines reservierten Rasterbandes. Seit dem
+#: Vollbild-Umbau gibt es kein Band mehr, dessen Höhe man messen könnte — die
+#: verdeckte Fläche ist die Größe, die die Aussage „das Hauptbild dominiert"
+#: noch trägt.
+THUMB_AREA_SHARE = """
+() => {
+  const boxes = Array.from(document.querySelectorAll('#strip li'))
+    .map((li) => li.getBoundingClientRect());
+  return boxes.reduce((sum, box) => sum + box.width * box.height, 0) /
+    (window.innerWidth * window.innerHeight);
+}
+"""
+
+
+def box(page, selector):
+    return page.locator(selector).bounding_box()
+
+
 # -- the baseline layout ----------------------------------------------------
 
 
@@ -70,16 +89,23 @@ def test_the_current_dream_is_not_repeated_in_the_strip(view):
     assert view.locator("#strip").inner_html().count("Traum 3") == 0
 
 
-def test_the_current_image_dominates_the_strip(view):
-    """Spec §6: asymmetric by design — the current dream is the subject."""
+def test_the_strip_covers_only_a_little_of_the_image(view):
+    """Spec §6: asymmetric by design — the current dream is the subject.
+
+    Umformuliert am 2026-08-30 (Vollbild-Umbau). Vorher verglich der Test die
+    Höhe der Bühne mit der Höhe einer Miniatur. Seit das Bild formatfüllend
+    liegt, ist die Bühne per Definition 1080 px hoch und jeder solche Vergleich
+    trivial wahr — der Test hätte auch einen Streifen bestanden, der das halbe
+    Bild zudeckt. Geprüft wird jetzt, was der Streifen als Auflage tatsächlich
+    kostet: den Anteil der Bildfläche, den die Miniaturen verdecken.
+    """
     apply(view, state(current=dream(3), history=[dream(i) for i in range(1, 6)]))
 
-    stage = view.locator("#stage").bounding_box()
-    thumb = view.locator("#strip li").first.bounding_box()
-    assert stage["height"] > thumb["height"] * 3
+    share = view.evaluate(THUMB_AREA_SHARE)
+    assert 0 < share < 0.06, f"die Auflage verdeckt {share:.1%} des Bildes"
 
 
-def test_the_stage_dominates_the_strip_across_the_full_legal_range(view):
+def test_the_strip_stays_an_overlay_across_the_full_legal_range(view):
     """An operator control must not be able to express a layout that inverts
     the design (Finding 1). `strip_ratio`'s bounds in kg2/server.py were
     lowered from a measured sweep showing the stage-vs-thumbnail dominance
@@ -87,15 +113,27 @@ def test_the_stage_dominates_the_strip_across_the_full_legal_range(view):
     range (inverted outright at 0.5). Walking min/middle/max here — instead
     of only the default, like the test above — is what makes a future change
     to either the CSS geometry or the bound fail loudly rather than silently
-    re-opening that gap."""
+    re-opening that gap.
+
+    Umformuliert am 2026-08-30 aus demselben Grund wie der Test darüber, und
+    zusätzlich am HÄRTESTEN Fall gefahren: 40 Träume, nicht fünf. Der Regler
+    ist seit dem Umbau die Miniaturhöhe der Auflage, also ist genau die
+    Kombination „größter Regler + vollster Streifen" die, die das Bild
+    zustellen könnte.
+    """
     for ratio in (0.05, 0.15, 0.25):  # legal minimum, middle, legal maximum
         apply(
             view,
-            state(current=dream(3), history=[dream(i) for i in range(1, 6)], strip_ratio=ratio),
+            state(
+                current=dream(41),
+                history=[dream(i) for i in range(1, 41)],
+                strip_ratio=ratio,
+            ),
         )
-        stage = view.locator("#stage").bounding_box()
-        thumb = view.locator("#strip li").first.bounding_box()
-        assert stage["height"] > thumb["height"] * 2, f"dominance lost at strip_ratio={ratio}"
+        share = view.evaluate(THUMB_AREA_SHARE)
+        assert 0 < share < 0.08, f"Auflage {share:.1%} des Bildes bei strip_ratio={ratio}"
+        strip = box(view, "#strip")
+        assert strip["height"] <= 0.12 * 1080, f"Auflage zu hoch bei strip_ratio={ratio}"
 
 
 def test_the_page_is_readable_with_no_dreams_at_all(view):
@@ -108,20 +146,40 @@ def test_the_page_is_readable_with_no_dreams_at_all(view):
 
 
 def test_a_full_strip_of_forty_dreams_still_fits_on_screen(view):
-    """The end of the festival day is the hard case (spec §11's visual series)."""
+    """The end of the festival day is the hard case (spec §11's visual series).
+
+    Gilt weiter, jetzt gegen die Auflage: der Streifen hängt an keiner
+    Rasterzeile mehr, sondern liegt unten rechts auf dem Bild. Dazu kommt eine
+    Aussage, die vorher keinen Sinn ergab — EINE Reihe. Der Streifen wächst
+    nicht mehr nach oben ins Bild hinein (siehe dream.css: der Modus `wrap`
+    ist mit dem Umbau entfallen).
+    """
     apply(view, state(current=dream(41), history=[dream(i) for i in range(1, 41)]))
 
     assert view.locator("#strip li").count() == 40
-    strip = view.locator("#strip").bounding_box()
+    strip = box(view, "#strip")
     assert strip["y"] + strip["height"] <= 1081  # inside a 1080-high viewport
+    assert strip["x"] >= -1 and strip["x"] + strip["width"] <= 1921
+
+    tops = view.locator("#strip li").evaluate_all(
+        "els => els.map(e => Math.round(e.getBoundingClientRect().top))"
+    )
+    assert len(set(tops)) == 1, f"die Auflage ist auf {len(set(tops))} Reihen umgebrochen"
 
 
-def test_the_longest_seeded_sentence_does_not_push_the_strip_off_screen(view):
+def test_the_longest_seeded_sentence_stays_clear_of_the_strip_and_the_screen(view):
     """Review finding: the seeded corpus used to top out at 21 words, so this
     case — a genuine 36-40 word sentence in the two-line `#sentence` budget,
     WITH a full strip below it — was never actually rendered before being
     judged. Uses the real corpus, not a hand-picked long string, so a future
-    edit that quietly shortens it back down would be caught here too."""
+    edit that quietly shortens it back down would be caught here too.
+
+    Umbenannt am 2026-08-30: „push the strip off screen" beschrieb den
+    Rastermechanismus — ein wachsender Satz schob die Streifenzeile nach
+    unten. Den gibt es nicht mehr, der Streifen ist absolut verankert. Die
+    Gefahr hat die Seite gewechselt: jetzt wächst der Satz nach OBEN aus dem
+    Verlauf heraus. Beides wird geprüft.
+    """
     from sim.seed_dreams import SENTENCES
 
     longest = max(SENTENCES, key=lambda sentence: len(sentence.split()))
@@ -135,10 +193,91 @@ def test_the_longest_seeded_sentence_does_not_push_the_strip_off_screen(view):
         ),
     )
 
-    strip = view.locator("#strip").bounding_box()
+    strip = box(view, "#strip")
     assert strip["y"] + strip["height"] <= 1081  # inside a 1080-high viewport
-    sentence_box = view.locator("#sentence").bounding_box()
-    assert sentence_box["y"] + sentence_box["height"] <= strip["y"]
+    sentence = box(view, "#sentence")
+    assert sentence["y"] + sentence["height"] <= strip["y"]
+    assert sentence["y"] >= 0  # nicht oben aus dem Bild heraus
+
+
+# -- formatfüllendes Bild (Birk, 2026-08-30) ---------------------------------
+
+
+def test_the_image_fills_the_whole_screen(view):
+    """Birks Befund an der Station: „bei einem Vollbild 16:9 das Bild
+    bildschirmfüllend komplett da". Gemessen wurde vorher 671 von 1080 px
+    (62 % der Höhe, 39 % der Fläche) — der Rest ging an die drei anderen
+    Rasterzeilen. Das Bild hängt jetzt an keiner Zeile mehr."""
+    apply(view, state(current=dream(3), history=[dream(1), dream(2)]))
+
+    frame = box(view, "#stage .frame.visible")
+    assert frame["width"] == pytest.approx(1920, abs=2)
+    assert frame["height"] == pytest.approx(1080, abs=2)
+    assert frame["x"] == pytest.approx(0, abs=2)
+    assert frame["y"] == pytest.approx(0, abs=2)
+
+    # Beide gestapelten Rahmen, nicht nur der sichtbare: die Überblendung
+    # blendet auf den anderen um, und ein `contain` dort wäre ein sichtbarer
+    # Sprung mitten in der Blende (Randbedingung 1).
+    fits = view.locator("#stage .frame").evaluate_all(
+        "els => els.map(e => getComputedStyle(e).objectFit)"
+    )
+    assert fits == ["cover", "cover"]
+
+
+def test_switching_the_question_off_does_not_change_the_image_area(view):
+    """Der gemeldete Fehler, nicht nur eine Schönheitsfrage: mit
+    `question_visible=false` fiel die Frage-Zeile aus dem Raster, die drei
+    verbleibenden Elemente rutschten eine Zeile hoch, und die Bühne bekam die
+    `auto`-Zeile — gemessen 0 px hoch. Das Bild verschwand komplett vom
+    Schirm. Ohne Raster kann das nicht mehr passieren."""
+    apply(view, state(current=dream(3), history=[dream(1), dream(2)]))
+    with_question = box(view, "#stage .frame.visible")
+
+    apply(
+        view,
+        state(current=dream(3), history=[dream(1), dream(2)], question_visible=False),
+    )
+    without_question = box(view, "#stage .frame.visible")
+
+    assert view.locator("#question").is_visible() is False
+    assert without_question["height"] == pytest.approx(with_question["height"], abs=1)
+    assert without_question["width"] == pytest.approx(with_question["width"], abs=1)
+    assert without_question["y"] == pytest.approx(with_question["y"], abs=1)
+    assert without_question["height"] == pytest.approx(1080, abs=2)
+
+
+def test_the_sentence_lies_over_the_image_on_a_scrim_and_clear_of_the_strip(view):
+    """Variante A: der Satz liegt auf dem Bild, nicht darunter. Auf einem
+    hellen Traumbild ist heller Text ohne Verlauf unlesbar — der Verlauf ist
+    der Grund, dass der Satz überhaupt oben liegen darf, keine Dekoration.
+    Deshalb wird hier beides geprüft: dass es ihn gibt, dass er den Satz
+    wirklich unterlegt, und dass die Auflage ihn nicht überdeckt."""
+    apply(view, state(current=dream(41), history=[dream(i) for i in range(1, 41)]))
+
+    scrim, scrim_height = view.locator("#page").evaluate(
+        "e => { const s = getComputedStyle(e, '::after');"
+        "       return [s.backgroundImage, parseFloat(s.height)]; }"
+    )
+    assert "gradient" in scrim, "kein Verlauf unter dem Satz"
+
+    frame = box(view, "#stage .frame.visible")
+    sentence = box(view, "#sentence")
+    strip = box(view, "#strip")
+
+    # Über dem Bild — also innerhalb der Bildfläche, nicht darunter.
+    assert sentence["y"] >= frame["y"]
+    assert sentence["y"] + sentence["height"] <= frame["y"] + frame["height"]
+    # Und innerhalb des Verlaufs, sonst trägt der Verlauf den Satz nicht.
+    assert sentence["y"] >= 1080 - scrim_height
+    # Die Auflage liegt darunter, nicht darauf.
+    assert sentence["y"] + sentence["height"] <= strip["y"]
+
+    # Dezent auch oben, für die Frage (Variante A).
+    top_scrim = view.locator("#page").evaluate(
+        "e => getComputedStyle(e, '::before').backgroundImage"
+    )
+    assert "gradient" in top_scrim
 
 
 # -- sizing (spec §6 / T1§11) ------------------------------------------------
@@ -195,17 +334,37 @@ def test_zero_seconds_means_permanent(view):
 # -- the cross-fade (spec §6, Birk: not a morph) -----------------------------
 
 
+def mid_fade_opacities(page):
+    """Die Deckkraft beider Rahmen in dem Moment, in dem die Blende läuft.
+
+    Gelesen in DERSELBEN Auswertung, die die Bedingung entscheidet — sonst
+    wäre zwischen „ist mittendrin" und „lies ab" wieder ein Rennen. Kein
+    festes Zeitfenster: dieselbe Lehre wie beim Schreibmaschinen-Test am
+    2026-08-30 (dream.js, TYPE_MS) — ein Test, der von der Auslastung des
+    Rechners abhängt, sagt nichts über den Code. Seit das Bild formatfüllend
+    liegt, blendet Chromium zwei 1920×1080-Flächen ineinander; auf einem
+    software-gerenderten Rechner kommt das erste Einzelbild der Blende
+    messbar später als nach den vorher fest gewarteten 150 ms.
+    """
+    handle = page.wait_for_function(
+        "() => { const values = Array.from(document.querySelectorAll('#stage .frame'))"
+        "         .map((e) => Number(getComputedStyle(e).opacity));"
+        "       return values.some((v) => v > 0 && v < 1) ? values : null; }",
+        timeout=10000,
+    )
+    return handle.json_value()
+
+
 def test_a_new_dream_cross_fades_rather_than_cutting(view):
     apply(view, state(current=dream(1)))
 
     view.evaluate("(s) => window.kgDream.applyState(s)", state(current=dream(2), history=[dream(1)]))
-    view.wait_for_timeout(150)  # mid-fade
 
-    opacities = view.locator("#stage .frame").evaluate_all(
-        "els => els.map(e => Number(getComputedStyle(e).opacity))"
-    )
+    opacities = mid_fade_opacities(view)
     # Both frames on screen at once is what makes it a fade and not a cut.
-    assert sum(1 for value in opacities if 0 < value < 1) >= 1
+    # Gewartet wurde auf EINEN Rahmen dazwischen, geprüft werden BEIDE — sonst
+    # wäre die Zusicherung nur die Wiederholung der Wartebedingung.
+    assert all(0 < value < 1 for value in opacities), opacities
     view.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
 
 
@@ -230,16 +389,17 @@ def test_a_dream_after_a_discard_to_empty_cross_fades_rather_than_cutting(view):
     null`, which is also true right after a discard-to-empty — so the next
     dream took the no-animation reveal path from a stage that was still
     showing the old frame a moment before. Tracking "ever revealed this
-    session" separately from `currentId` is what makes this a fade again."""
+    session" separately from `currentId` is what makes this a fade again.
+
+    Wartet seit dem Vollbild-Umbau auf die Bedingung statt auf die Uhr, siehe
+    `mid_fade_opacities`. Der ausgeblendete Rahmen steht hier auf 0 (die Bühne
+    war leer), es kann also nur EINER dazwischen liegen."""
     apply(view, state(current=dream(1)))
     apply(view, state(current=None, history=[]))
 
     view.evaluate("(s) => window.kgDream.applyState(s)", state(current=dream(2)))
-    view.wait_for_timeout(150)  # mid-fade
 
-    opacities = view.locator("#stage .frame").evaluate_all(
-        "els => els.map(e => Number(getComputedStyle(e).opacity))"
-    )
+    opacities = mid_fade_opacities(view)
     assert sum(1 for value in opacities if 0 < value < 1) >= 1
     view.wait_for_function("() => window.kgDream.fading === false", timeout=10000)
 
