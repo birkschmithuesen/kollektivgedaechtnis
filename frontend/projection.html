@@ -5,7 +5,7 @@
 <!-- Asset paths are relative so the page also loads from a plain file server
      (tests, pre-render harness); served at /projection they resolve to /static/… -->
 <link rel="stylesheet" href="static/base.css">
-<link id="theme" rel="stylesheet" href="static/theme-a.css">
+<link id="theme" rel="stylesheet" href="static/theme-e.css">
 <div id="cy"></div>
 <!-- Order matters: these UMD bundles resolve each other off `window`, and the
      two extensions self-register against the `cytoscape` global. See
@@ -27,9 +27,13 @@
   // wall, not a form with a user to correct a typo: an unrecognised
   // `?theme=` value (typo, retired name, anything) must fall back to the
   // default rather than ever producing a broken href.
-  const KNOWN_THEMES = ['a', 'b', 'c'];
+  // 'd' fehlt hier absichtlich: theme-d.css ist das Testbild (/testpattern),
+  // kein Graph-Theme. 'e' ist das Bauhaus-Theme (Birk, 2026-08-30) und seit
+  // dann die Vorgabe — es traegt die Farbcodierung der drei Auswahlachsen,
+  // ohne die die Markierung an der Wand nur ein Ja/Nein waere.
+  const KNOWN_THEMES = ['a', 'b', 'c', 'e'];
   const requestedTheme = params.get('theme');
-  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'a';
+  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'e';
   const themeHref = `static/theme-${theme}.css`;
   // Swapping `href` starts an async fetch. createGraphView() reads the
   // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),

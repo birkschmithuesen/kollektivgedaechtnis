@@ -68,6 +68,12 @@ class TermWeight:
     #: one) — the only thing `select_marginal` below uses to break ties among
     #: single mentions: the newest interview must be the one represented.
     created_at: float = 0.0
+    #: Wer diesen Begriff genannt hat. Seit 2026-08-30 für die dritte
+    #: Auswahlachse (`select_required`): Nähe zweier Begriffe heißt „dieselben
+    #: Menschen haben beide gesagt", und dafür reicht `mentions` als blosse
+    #: Zahl nicht — man braucht die Mengen selbst. Ein `frozenset`, weil
+    #: `TermWeight` frozen ist und ein `set` das Hashing bräche.
+    person_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -81,6 +87,12 @@ class Material:
     #: Said by exactly one person. Detail, not theme.
     marginal: list[TermWeight]
     quotes: list[str]
+    #: Die zuletzt hinzugekommene Person, nach `created_at` — der Anker fuer
+    #: den Bildausschnitt (`select_required`, Birk 2026-08-30). Hier bestimmt
+    #: und nicht vom Aufrufer uebergeben, weil das genau einmal falsch geraten
+    #: werden kann: Personen-Ids sind Strings, und `sorted(ids)[-1]` liefert
+    #: „p9" statt „p60". Der Zeitstempel ist die einzige verlaessliche Quelle.
+    last_person_id: str | None = None
 
 
 # Gefahren am 2026-08-28 (`sim.dream_calibrate terms`,
@@ -158,8 +170,22 @@ def build_material(graph: dict | None) -> Material:
         and isinstance(node.get("label"), str)
     }
 
+    letzte_person = None
+    letzte_zeit = None
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("type") != "person":
+            continue
+        if node.get("hidden") or not isinstance(node.get("id"), str):
+            continue
+        zeit = node.get("created_at")
+        if not isinstance(zeit, (int, float)):
+            continue
+        if letzte_zeit is None or zeit > letzte_zeit:
+            letzte_zeit, letzte_person = zeit, node["id"]
+
     counts: dict[str, int] = {}
     edge_count = 0
+    sprecher: dict[str, set[str]] = {}
     for edge in _as_list(graph.get("edges", ())):
         if not isinstance(edge, dict):
             continue
@@ -172,6 +198,10 @@ def build_material(graph: dict | None) -> Material:
             continue
         if source in persons and target in terms:
             counts[target] = counts.get(target, 0) + 1
+            # Wer genau, nicht nur wie viele: die dritte Auswahlachse
+            # (`select_required`, 2026-08-30) braucht die Sprechermengen, um
+            # Naehe zwischen zwei Begriffen zu bestimmen.
+            sprecher.setdefault(target, set()).add(source)
             edge_count += 1
 
     weights = []
@@ -179,7 +209,9 @@ def build_material(graph: dict | None) -> Material:
         label, created_at = terms[tid]
         if not isinstance(created_at, (int, float)):
             created_at = 0.0
-        weights.append(TermWeight(label, count, created_at))
+        weights.append(
+            TermWeight(label, count, created_at, frozenset(sprecher.get(tid, ())))
+        )
     # Descending by count, then by label: two runs over the same graph must
     # produce the same prompt, or the record in spec §5.3 explains nothing.
     weights.sort(key=lambda w: (-w.mentions, w.label))
@@ -207,6 +239,7 @@ def build_material(graph: dict | None) -> Material:
         shared=[w for w in weights if w.mentions >= 2],
         marginal=[w for w in weights if w.mentions == 1],
         quotes=quotes,
+        last_person_id=letzte_person,
     )
 
 
@@ -270,12 +303,55 @@ REQUIRED_TERMS = 5
 RECENCY_SHARE = 0.4
 
 
+#: Wie viele der Plätze über die NACHBARSCHAFT vergeben werden, statt über
+#: Häufigkeit oder Neuheit: 0.0 = keiner, 1.0 = alle außer dem Anker.
+#:
+#: Warum es diese dritte Achse gibt (Birk, 2026-08-30): „Nimm Begriffe, die im
+#: Graphen eng beieinander liegen — wir wollen einen inhaltlichen
+#: Detailausschnitt des Graphen mit dem Bild zeigen." Häufigkeit und Neuheit
+#: sind beides Ranglisten über EINZELNE Begriffe; sie wissen nichts davon, ob
+#: die fünf Gewählten etwas miteinander zu tun haben. Genau das fehlte: Fünf
+#: Spitzenreiter aus fünf verschiedenen Gesprächen ergeben ein Bild, das fünf
+#: Themen nebeneinanderstellt, statt eines zu zeigen.
+NEIGHBOUR_SHARE = 0.4
+
+
+def _mitsprecher(material: Material) -> dict[str, set[str]]:
+    """Wer hat welchen Begriff genannt — die Grundlage der Nachbarschaft.
+
+    Nähe im Graphen heißt hier NICHT Bildschirmabstand: Der ist ein Ergebnis
+    des Layout-Algorithmus und ändert sich, wenn jemand die Dichte verstellt.
+    Nah sind zwei Begriffe, wenn DIESELBEN MENSCHEN sie genannt haben — das
+    ist die Kante, die der Graph tatsächlich trägt (Person → Begriff), und sie
+    bedeutet etwas: Zwei Begriffe, die immer wieder im selben Gespräch fallen,
+    gehören inhaltlich zusammen, auch wenn kein Wort sie verbindet.
+    """
+    return {w.label: set(w.person_ids) for w in material.shared + material.marginal}
+
+
+def _naehe(a: str, b: str, sprecher: dict[str, set[str]]) -> float:
+    """Wie eng zwei Begriffe beieinander liegen, zwischen 0 und 1.
+
+    Jaccard über die Sprechermengen: gemeinsame Sprecher geteilt durch alle,
+    die eines von beidem gesagt haben. Nicht die rohe Zahl der Gemeinsamen —
+    die würde Begriffe bevorzugen, die ohnehin überall vorkommen, und die
+    Nachbarschaft wäre nur eine zweite Häufigkeitsliste.
+    """
+    x, y = sprecher.get(a, set()), sprecher.get(b, set())
+    if not x or not y:
+        return 0.0
+    vereint = len(x | y)
+    return len(x & y) / vereint if vereint else 0.0
+
+
 def select_required(
     material: Material,
     *,
     count: int = REQUIRED_TERMS,
     recency_share: float = RECENCY_SHARE,
+    neighbour_share: float = NEIGHBOUR_SHARE,
     allow_single_mentions: bool = True,
+    last_person_id: str | None = None,
 ) -> list[TermWeight]:
     """Die Begriffe, die in DIESEM Bild vorkommen MÜSSEN — mechanisch bestimmt.
 
@@ -289,29 +365,60 @@ def select_required(
     je nachdem wie die Bitte formuliert war: Einmal stand in allen fünf Bildern
     dasselbe (die Spitze gewann immer), einmal fiel der von sieben Menschen
     genannte Begriff ganz heraus, während der Satz aus lauter Einmal-Nennungen
-    bestand. Eine Auswahl, die sich aus zwei Zahlen ergibt, gehört nicht in
-    einen Prompt, sondern in Code — dort ist sie nachvollziehbar, prüfbar und
-    für Birk verstellbar, statt vom Formulierungsglück abzuhängen.
+    bestand. Eine Auswahl, die sich aus Zahlen ergibt, gehört nicht in einen
+    Prompt, sondern in Code — dort ist sie nachvollziehbar, prüfbar und für
+    Birk verstellbar, statt vom Formulierungsglück abzuhängen.
 
-    Zwei Achsen, beide aus dem Graphen, keine davon geschätzt:
+    ## Der Aufbau: ein Anker, dann seine Nachbarschaft
 
-    * **Häufigkeit** — `mentions`, wie viele Menschen den Begriff genannt
-      haben. Das ist die Gewichtung, die spec §5.1 verlangt.
-    * **Neuheit** — `created_at`, wann der Begriff zuerst auftauchte. Das ist
-      die Achse, an der sichtbar wird, dass seit dem letzten Traum jemand
-      gesprochen hat.
+    Drei Achsen, alle aus dem Graphen, keine davon geschätzt. Sie sind aber
+    NICHT gleichberechtigt nebeneinandergestellt, und das ist der Kern des
+    Entwurfs (Birk, 2026-08-30: „Wir wollen einen inhaltlichen
+    Detailausschnitt des Graphen mit dem Bild zeigen"):
 
-    `recency_share` teilt die Plätze zwischen beiden auf. Die Häufigkeitsplätze
-    gehen an die meistgenannten Begriffe, die Neuheitsplätze an die jüngsten,
-    die dort noch nicht stehen — Duplikate werden übersprungen, statt einen
-    Platz zu verbrauchen, sonst schrumpft die Liste, je stärker sich die beiden
-    Achsen einig sind.
+    1. **Der Anker** ist der meistgenannte Begriff DER ZULETZT BEFRAGTEN
+       PERSON — nicht der des ganzen Tages. Birks Entwurf, 2026-08-30, und er
+       löst ein Problem, das mein erster hatte: Ein fester Anker über dem
+       gesamten Graphen zeigt bei sechzig Interviews immer dasselbe Feld, weil
+       der Spitzenreiter oben bleibt. Der Anker wandert jetzt mit den
+       Gesprächen — er springt dorthin, wo gerade jemand gesprochen hat, und
+       nimmt von dort den Begriff, den die meisten Menschen teilen. Damit ist
+       er zugleich der Übergang zwischen den beiden Kräften: verankert im
+       Zuletzt-Gesagten, gewichtet nach dem Oft-Gesagten. Ohne
+       `last_person_id` (oder wenn diese Person keine Begriffe hat) fällt er
+       auf den Spitzenreiter des ganzen Materials zurück.
+    2. **Die Nachbarschaft** füllt den Großteil der übrigen Plätze: Begriffe,
+       die dem bereits Gewählten am nächsten liegen. Nähe heißt „dieselben
+       Menschen haben beide genannt" (`_naehe`), gemessen als Jaccard über die
+       Sprechermengen. Gewählt wird jeweils der Begriff mit der größten Nähe
+       zur bisherigen Auswahl — nicht nur zum Anker, sondern zur ganzen
+       wachsenden Gruppe, damit der Ausschnitt zusammenwächst statt sternförmig
+       um einen Punkt zu hängen.
+    3. **Die Neuheit** bekommt die restlichen Plätze und darf die
+       Nachbarschaft ausdrücklich verlassen: Was gerade erst gesagt wurde,
+       gehört ins Bild, auch wenn es zum Rest (noch) nichts zu tun hat.
 
-    Gezogen wird aus `shared` UND `marginal`: Ein Begriff, den gerade eben
-    jemand zum ersten Mal gesagt hat, hat definitionsgemäß eine Nennung und
-    könnte über die Häufigkeit nie hereinkommen — genau ihn soll die
-    Neuheitsachse holen. Für die Häufigkeitsplätze bleibt `marginal` faktisch
-    außen vor, weil jeder geteilte Begriff mehr Nennungen hat.
+    Warum in dieser Reihenfolge und nicht als drei getrennte Ranglisten: Die
+    ersten beiden Achsen beschreiben ZUSAMMENHANG, die dritte BEWEGUNG. Drei
+    unabhängige Listen ergäben fünf Begriffe aus fünf verschiedenen Gesprächen
+    — ein Bild, das fünf Themen nebeneinanderstellt, statt eines zu zeigen.
+    Genau das war der Zustand vorher.
+
+    Ein Wort zur „Nähe im Graphen", weil beide Lesarten dasselbe meinen: Birk
+    dachte an den Bildschirmabstand, hier gerechnet wird über geteilte
+    Sprecher. Das Layout ist fcose, also kraftbasiert, und Begriffe hängen an
+    Personen — zwei Begriffe, die dieselben Menschen genannt haben, teilen
+    Nachbarn und werden ins selbe Feld gezogen. Bildschirmnähe IST geteilte
+    Sprecherschaft, nur als Ergebnis statt als Ursache. Gerechnet wird mit der
+    Ursache: Die Bildschirmposition hängt am Layoutlauf und ändert sich, sobald
+    jemand die Dichte verstellt oder das Fenster anders steht — ein Bild, das
+    davon abhinge, sähe je nach Reglerstellung anders aus.
+
+
+    Anteile: `neighbour_share` und `recency_share` teilen die Plätze NACH dem
+    Anker auf. Bei fünf Plätzen und den Vorgaben (0.4 / 0.4) heißt das: ein
+    Anker, zwei Nachbarn, zwei junge Begriffe. Beide Regler gehören in die
+    Operator-UI; die Voreinstellungen sind gesetzt, nicht kalibriert.
 
     `allow_single_mentions=False` sperrt Einmal-Nennungen ganz aus. Nur für
     Kalibrierläufe, die `single_mention_budget=0` setzen: Sonst bekämen sie
@@ -327,25 +434,71 @@ def select_required(
     if not alle:
         return []
 
-    aus_neuheit = round(count * max(0.0, min(1.0, recency_share)))
-    aus_haeufigkeit = count - aus_neuheit
+    plaetze = count - 1  # der Anker belegt den ersten
+    aus_neuheit = round(plaetze * max(0.0, min(1.0, recency_share)))
+    aus_naehe = min(
+        plaetze - aus_neuheit, round(plaetze * max(0.0, min(1.0, neighbour_share)))
+    )
 
     haeufigste = sorted(alle, key=lambda w: (-w.mentions, w.label))
     juengste = sorted(alle, key=lambda w: (-w.created_at, w.label))
+    sprecher = _mitsprecher(material)
 
-    gewaehlt: list[TermWeight] = []
-    schon = set()
-    for w in haeufigste[:aus_haeufigkeit]:
-        gewaehlt.append(w)
-        schon.add(w.label)
+    # Der Anker wandert mit den Gesprächen: der meistgenannte Begriff DER
+    # ZULETZT BEFRAGTEN PERSON. Damit zeigt das Bild jedes Mal ein anderes
+    # Feld des Graphen, statt sechzig Interviews lang um denselben
+    # Spitzenreiter zu kreisen — und weil die Begriffe der letzten Person
+    # ohnehin dicht beieinander liegen, hängen die Nachbarn danach thematisch
+    # an dem, was gerade gesagt wurde. Fällt die Person aus (kein Wert, oder
+    # keiner ihrer Begriffe hat es ins Material geschafft), gilt wieder der
+    # Spitzenreiter des ganzen Tages.
+    anker = haeufigste[0]
+    if last_person_id is not None:
+        von_ihr = [w for w in alle if last_person_id in w.person_ids]
+        if von_ihr:
+            anker = max(von_ihr, key=lambda w: (w.mentions, w.created_at, w.label))
+
+    gewaehlt: list[TermWeight] = [anker]
+    schon = {anker.label}
+
+    # Die Nachbarschaft wächst um die bisherige Auswahl herum: Bewertet wird
+    # gegen ALLE schon Gewählten, nicht nur gegen den Anker. Bei Gleichstand
+    # (etwa ganz am Anfang, wenn noch niemand zwei Begriffe zusammen genannt
+    # hat) entscheidet die Häufigkeit — sonst hinge die Auswahl an der
+    # zufälligen Reihenfolge der Liste.
+    for _ in range(aus_naehe):
+        kandidaten = [w for w in alle if w.label not in schon]
+        if not kandidaten:
+            break
+        bester = max(
+            kandidaten,
+            key=lambda w: (
+                sum(_naehe(w.label, g.label, sprecher) for g in gewaehlt),
+                w.mentions,
+                w.label,
+            ),
+        )
+        gewaehlt.append(bester)
+        schon.add(bester.label)
+
+    # Nur so viele Plätze, wie der Regler hergibt. Die Begrenzung ist NICHT
+    # kosmetisch: Ohne sie nimmt diese Schleife jeden freien Platz, und
+    # `recency_share=0.0` — „gar keine jungen Begriffe" — lieferte trotzdem
+    # eine Liste voller Einmal-Nennungen, weil die Nachbarschaftsplätze bei
+    # `neighbour_share=0.0` ebenfalls frei bleiben. Der Regler bedeutete dann
+    # schlicht nichts, und das ist genau die Sorte stiller Wirkungslosigkeit,
+    # gegen die die mechanische Auswahl gebaut wurde.
+    vergeben = 0
     for w in juengste:
-        if len(gewaehlt) >= count:
+        if len(gewaehlt) >= count or vergeben >= aus_neuheit:
             break
         if w.label not in schon:
             gewaehlt.append(w)
             schon.add(w.label)
-    # Bleiben Plätze frei (weil die Neuheitsachse nur Duplikate lieferte),
-    # fülle mit den nächsten häufigsten auf — die Liste soll `count` lang sein.
+            vergeben += 1
+
+    # Bleiben Plätze frei (weil eine Achse nur Duplikate lieferte), fülle mit
+    # den nächsten häufigsten auf — die Liste soll `count` lang sein.
     for w in haeufigste:
         if len(gewaehlt) >= count:
             break
@@ -364,6 +517,7 @@ def render_material(
     recent_terms: int = RECENT_TERMS,
     required_terms: int = REQUIRED_TERMS,
     recency_share: float = RECENCY_SHARE,
+    last_person_id: str | None = None,
 ) -> str:
     """The German block that goes into stage 1's user message.
 
@@ -387,6 +541,7 @@ def render_material(
         count=required_terms,
         recency_share=recency_share,
         allow_single_mentions=single_mention_budget > 0,
+        last_person_id=last_person_id,
     )
     if required:
         lines = "\n".join(

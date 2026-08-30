@@ -76,8 +76,14 @@ export function toCytoscape(view) {
         // stylt, das Feld überlebt einen Klassenwechsel und lässt sich
         // abfragen, ohne den Stil zu lesen.
         in_dream: node.in_dream === true,
+        // anchor | neighbour | recent — welche der drei Auswahlachsen den
+        // Begriff ins Bild geholt hat. Das Bauhaus-Theme faerbt danach.
+        dream_role: node.dream_role || '',
       },
-      classes: node.in_dream === true ? `${node.type} in-dream` : node.type,
+      classes:
+        node.in_dream === true
+          ? `${node.type} in-dream dream-${node.dream_role || 'anchor'}`
+          : node.type,
     };
     if (node.x !== null && node.x !== undefined && node.y !== null && node.y !== undefined) {
       element.position = { x: node.x, y: node.y };

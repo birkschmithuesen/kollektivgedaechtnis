@@ -26,7 +26,11 @@ from kg.export import build_graph
 from kg.store import Store
 from kg2.graph_client import fetch_graph
 
-FIXTURE = Path(__file__).resolve().parent.parent / "sim" / "data" / "graph-19c.json"
+# graph-20a.json seit 2026-08-30: der Replay ueber das neue Drei-Fragen-Korpus.
+# graph-19c stammt aus den alten fuenf Fragen und kennt weder `in_dream` noch
+# `dream_role` — ein Vertragstest gegen ein Artefakt, das die Felder nicht hat,
+# prueft den Vertrag von gestern.
+FIXTURE = Path(__file__).resolve().parent.parent / "sim" / "data" / "graph-20a.json"
 REAL_GRAPH = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 # Every JSON path Tool 2 reads, and the type it must find there. This list is
@@ -97,23 +101,36 @@ def live_graph(tmp_path) -> dict:
 
 
 def test_the_fixture_is_the_real_run_and_not_a_toy(tmp_path):
+    """Geprüft wird die EIGENSCHAFT „echter Lauf", nicht eine Zahlenliste.
+
+    Bis 2026-08-30 standen hier die exakten Kennzahlen von Lauf 19c (60/163/
+    267/117). Die brechen bei jedem neuen Replay, und zwar ohne dass etwas
+    kaputt wäre — der Test hätte dann nur festgehalten, dass niemand das
+    Korpus anfasst. Was er wirklich absichern soll, steht im Modul-Docstring:
+    dass die Fixture aus `sim/replay.py` stammt und keine handgeschriebene
+    Attrappe ist. Genau das prüfen die Schwellen unten.
+    """
     persons = [n for n in REAL_GRAPH["nodes"] if n["type"] == "person"]
     terms = [n for n in REAL_GRAPH["nodes"] if n["type"] == "term"]
 
-    assert len(persons) == 60
-    assert len(terms) == 163
-    assert len(REAL_GRAPH["edges"]) == 267
-    assert len(REAL_GRAPH["quotes"]) == 117
+    # Ein voller Ausstellungstag, keine Handvoll Beispielknoten.
+    assert len(persons) >= 50
+    assert len(terms) >= 100
+    assert len(REAL_GRAPH["edges"]) >= 200
+    assert REAL_GRAPH["quotes"], "ein echter Lauf trägt Zitate"
+    # Jede Person hat gesprochen: ein erfundener Graph hätte lose Knoten.
+    beteiligt = {e["source"] for e in REAL_GRAPH["edges"]}
+    assert len(beteiligt) >= len(persons) * 0.9
     # A hand-written fixture would not have a long tail of single mentions.
     singletons = [t for t in terms if t["mentions"] == 1]
-    assert len(singletons) > 100
+    assert len(singletons) > 50
 
 
 def test_every_path_tool_2_reads_exists_in_the_real_artefact():
     found = type_map(REAL_GRAPH)
 
     for path, types in REQUIRED.items():
-        assert path in found, f"{path} is missing from sim/data/graph-19c.json"
+        assert path in found, f"{path} is missing from sim/data/graph-20a.json"
         assert types <= found[path], f"{path}: expected {types}, found {found[path]}"
 
 
@@ -133,7 +150,7 @@ def test_the_committed_artefact_and_the_live_exporter_agree_on_the_key_set(tmp_p
     live_paths = set(type_map(live_graph(tmp_path)))
 
     assert fixture_paths == live_paths, (
-        "sim/data/graph-19c.json and kg.export.build_graph have drifted apart:\n"
+        "sim/data/graph-20a.json and kg.export.build_graph have drifted apart:\n"
         f"  only in the fixture: {sorted(fixture_paths - live_paths)}\n"
         f"  only in the export:  {sorted(live_paths - fixture_paths)}"
     )

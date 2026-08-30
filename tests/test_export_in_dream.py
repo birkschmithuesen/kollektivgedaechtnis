@@ -120,6 +120,45 @@ def test_die_markierung_trifft_genau_die_auswahl_des_traums():
     assert markiert, "nichts markiert, obwohl Material da ist"
 
 
+def test_jeder_markierte_begriff_traegt_seine_rolle():
+    """Die Wand faerbt nach der Rolle (Bauhaus-Theme): Rot = Anker,
+    Blau = Nachbarschaft, Gelb = das Juengste. Ohne Rolle im Export koennte
+    die Projektion nur ein Ja/Nein zeigen, und die drei Achsen waeren an der
+    Wand nicht mehr auseinanderzuhalten."""
+    graph = build_graph(_store())
+    markiert = [n for n in graph["nodes"] if n.get("in_dream")]
+
+    assert markiert
+    assert all(n["dream_role"] in {"anchor", "neighbour", "recent"} for n in markiert)
+    rollen = [n["dream_role"] for n in markiert]
+    assert rollen.count("anchor") == 1, "genau ein Anker, sonst faerbt Rot mehrfach"
+    assert "neighbour" in rollen
+    assert "recent" in rollen
+    # Unmarkierte Begriffe tragen ein leeres Feld, nicht None: die Projektion
+    # baut daraus einen Klassennamen.
+    unmarkiert = [n for n in graph["nodes"] if n["type"] == "term" and not n["in_dream"]]
+    assert all(n["dream_role"] == "" for n in unmarkiert)
+
+
+def test_der_anker_ist_der_meistgenannte_und_die_nachbarn_haengen_an_ihm():
+    """Der Kern des Entwurfs (Birk, 2026-08-30): nicht drei unabhaengige
+    Ranglisten, sondern ein Anker und sein Umfeld. Die Nachbarn muessen
+    Sprecher mit dem Anker teilen — sonst waere es wieder nur Haeufigkeit."""
+    graph = build_graph(_store())
+    rollen = {n["label"]: n["dream_role"] for n in graph["nodes"] if n.get("in_dream")}
+    anker = [k for k, v in rollen.items() if v == "anchor"][0]
+    nachbarn = [k for k, v in rollen.items() if v == "neighbour"]
+
+    assert anker == "Oft genannt", "der Anker ist der meistgenannte Begriff"
+
+    material = build_material({"nodes": graph["nodes"], "edges": graph["edges"]})
+    sprecher = {w.label: set(w.person_ids) for w in material.shared + material.marginal}
+    for nachbar in nachbarn:
+        assert sprecher[anker] & sprecher[nachbar], (
+            f"{nachbar} teilt keinen Sprecher mit dem Anker — das ist keine Nachbarschaft"
+        )
+
+
 def test_die_spitze_und_das_juengste_sind_beide_dabei():
     """Was die Markierung sichtbar machen soll: dass die Wand beides zeigt —
     worüber viele gesprochen haben UND was gerade erst gesagt wurde."""

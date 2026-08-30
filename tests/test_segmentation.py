@@ -2,10 +2,12 @@ import unicodedata
 
 import pytest
 
-from kg.config import DEFAULT_STOP_PHRASES
+from kg.config import DEFAULT_STOP_PHRASES, DEFAULT_WAKE_WORD
 from kg.segmentation import find_stop_phrase, normalize, strip_stop_phrases
 
 PHRASES = ["Interview beendet", "Aufnahme beenden"]
+
+WAKE = DEFAULT_WAKE_WORD
 
 # The list the station actually runs (`config.example.toml` mirrors it). The
 # short PHRASES above stays the fixture for the matching mechanics; the
@@ -155,3 +157,79 @@ def test_what_counts_as_a_stop_is_also_removed_from_the_transcript():
     assert "beendet" not in stripped.lower()
     assert "damit" not in stripped.lower()
     assert "Beton ist wichtig." in stripped
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Robo, Interview beendet.",
+        # STT rarely sets the comma after an address.
+        "Robo Interview beendet",
+        "Robo, das Interview ist beendet.",
+        "Robo, das Interview ist damit beendet.",
+        # Typed into Telegram rather than spoken.
+        "Robo: Interview beendet",
+        # The address in the middle of a transcript chunk, which is how the
+        # STT actually delivers it: the previous sentence is still in there.
+        "Wir brauchen mehr Holzbau. Robo, das Interview ist jetzt damit beendet.",
+        # Freer than the phrase-only path allows — two fillers inside the
+        # command and a whole thank-you behind it. Both were negative before
+        # 2026-08-30; behind a "Robo" they are unambiguous.
+        "Robo, das Interview ist jetzt damit beendet",
+        "Robo, Interview beendet, vielen Dank fürs Zuhören",
+    ],
+)
+def test_the_bot_addressed_by_name_stops_the_interview(text):
+    """Birk, 2026-08-30: 'Robo, Interview beendet' is the sure-fire way."""
+    assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The name alone is not a command — guests talk about the bot.
+        "Robo hat mir gestern geholfen",
+        "Robo ist ein guter Zuhörer",
+        # A question about a future end, not a command. Decided negative:
+        # a wrong stop costs a whole interview, a missed one a text message.
+        "Robo, kannst du das Interview gleich beenden?",
+        "Robo, können wir die Aufnahme später mal beenden?",
+        # Still talking about the end, name or no name: a whole clause behind
+        # the command is what no spoken command has.
+        "Robo, bevor das Interview beendet ist, wollte ich noch sagen…",
+        # The wake word must not soften the phrase-only path behind it.
+        "das Interview ist ja noch gar nicht beendet",
+        "war das Interview eigentlich schon beendet",
+    ],
+)
+def test_the_name_without_a_command_behind_it_does_not_stop(text):
+    assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Das Interview ist damit beendet.",
+        "Gut, dann Interview beendet, vielen Dank.",
+    ],
+)
+def test_the_phrases_alone_still_stop_with_a_wake_word_configured(text):
+    """Additive: a guest who never says 'Robo' must still get through."""
+    assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
+
+
+def test_the_wake_word_is_removed_from_the_transcript_with_the_command():
+    """Spec 5: otherwise 'Robo' reaches the extraction and becomes a term."""
+    text = "Beton ist wichtig. Robo, das Interview ist beendet."
+    assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
+
+    stripped = strip_stop_phrases(text, CONFIGURED, wake_word=WAKE)
+    assert "robo" not in stripped.lower()
+    assert "beendet" not in stripped.lower()
+    assert "Beton ist wichtig." in stripped
+
+
+def test_a_renamed_bot_is_a_config_change_not_a_code_change():
+    text = "Hey Roboter, Interview beendet"
+    assert find_stop_phrase(text, CONFIGURED, wake_word="Hey Roboter") is not None
+    assert "Roboter" not in strip_stop_phrases(text, CONFIGURED, wake_word="Hey Roboter")

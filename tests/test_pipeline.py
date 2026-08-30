@@ -140,6 +140,22 @@ def test_the_stop_command_is_stripped_before_the_llm_sees_the_text(env):
     assert "Holzbau ist gut." in llm.prompts[0]
 
 
+def test_the_bots_name_never_reaches_the_llm_with_the_command(env):
+    """Spec 5: 'Robo' must not be left standing where a term is extracted."""
+    cfg, store, log = env
+    fill_log(log, [("Holzbau ist gut.", 105.0), ("Robo, das Interview ist beendet", 150.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [ExtractionResult(interview_end_index=9999, terms=[], quotes=[]), MergeResult(groups=[])]
+    )
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert "Robo" not in llm.prompts[0]
+    assert "beendet" not in llm.prompts[0]
+    assert "Holzbau ist gut." in llm.prompts[0]
+
+
 def test_the_settled_cut_end_is_handed_to_the_llm_but_transcript_stops_at_the_detected_end(env):
     cfg, store, log = env
     # A final at 150.9 lands just inside a plausible 3s settle window after a

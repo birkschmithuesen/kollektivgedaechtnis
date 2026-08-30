@@ -1,0 +1,86 @@
+/* E: Bauhaus. Die Farbmarkierung der Traumbegriffe (Birk, 2026-08-30).
+
+   Zwei Aufgaben in einem Theme, und die zweite bestimmt die erste:
+   „Nicht größer machen, sondern farbig kennzeichnen. Dabei die Bauhausfarben
+   nutzen. Gesamtes Layout mit Bauhausfarben."
+
+   DIE PALETTE. Bauhaus heißt nicht „bunt", sondern die drei Grundfarben plus
+   Schwarz und Weiß — Ittens Farbenlehre am Weimarer Vorkurs, Kandinskys
+   Zuordnung von Kreis/Dreieck/Quadrat zu Blau/Gelb/Rot. Genau drei Farben,
+   keine vierte:
+
+     --bauhaus-rot    #D62828   Kandinskys Quadrat
+     --bauhaus-gelb   #F4C300   Kandinskys Dreieck
+     --bauhaus-blau   #1D4E9C   Kandinskys Kreis
+
+   Das ist auch der Grund, warum hier NICHT durchgefärbt wird: Ein Netz aus
+   sechzig roten, gelben und blauen Punkten wäre Dekoration, keine Ordnung,
+   und die Wand verlöre genau die Lesbarkeit, für die die Themen a/b/c
+   überhaupt durchprobiert wurden. Die Farbe MARKIERT, der Rest bleibt
+   Schwarzweiß — das ist der Bauhaus-Gedanke ernst genommen: Farbe als
+   Funktion, nicht als Schmuck.
+
+   WAS WELCHE FARBE BEDEUTET. Die drei Farben tragen die drei Achsen, aus
+   denen `kg2.weighting.select_required` die Bildbegriffe wählt. Wer die Wand
+   ansieht, kann damit ablesen, WARUM ein Begriff ins Bild ging:
+
+     ROT    der Anker — der meistgenannte Begriff, das Zentrum des Ausschnitts
+     BLAU   seine Nachbarschaft — Begriffe, die dieselben Menschen mitgenannt
+            haben; zusammen mit Rot der inhaltliche Detailausschnitt
+     GELB   das Jüngste — was gerade erst gesagt wurde und den Ausschnitt
+            bewusst verlässt
+
+   Rot fürs Zentrum, weil es am stärksten vorspringt; Blau für die
+   Nachbarschaft, weil es zurücktritt und als Gruppe liest; Gelb fürs Neue,
+   weil es auf schwarzem Grund am hellsten aufblitzt — das Signal für
+   „gerade passiert".
+
+   --ring-color wechselt von Gold auf Rot: Gold war der einzige nicht-graue
+   Ton der bisherigen Themen und läge zwischen Rot und Gelb, ohne selbst etwas
+   zu bedeuten. Die Personenringe tragen jetzt dieselbe Grundfarbe wie der
+   Anker — beide sagen „hier ist das Zentrum".
+
+   KEINE GRÖSSENÄNDERUNG. Der erste Entwurf hob die Traumbegriffe durch einen
+   größeren Punkt und größere Schrift hervor. Birk hat das verworfen, und zu
+   Recht: Die Schriftgröße ist über die Themen a/b/c gegen die Lesbarkeit auf
+   1080 Zeilen kalibriert worden, und zwei Größen nebeneinander machen die
+   kleinere zur zweiten Klasse. --term-dot-dream und --label-size-dream
+   bleiben deshalb hier gleich den Normalwerten; der Unterschied ist allein
+   die Farbe und ein Ring. */
+:root {
+  --bg: #000000;
+  --person-size: 56;
+  --person-fill: #242424;
+  --ring-color: #D62828;
+  --ring-width: 5;
+
+  --bauhaus-rot: #D62828;
+  --bauhaus-gelb: #F4C300;
+  --bauhaus-blau: #1D4E9C;
+
+  --term-dot: 14;
+  --term-dot-color: #FFFFFF;
+  --label-color: #FFFFFF;
+  --label-font: Georgia, "Times New Roman", serif;
+  --label-size: 26;
+  --label-outline-width: 4;
+  --label-outline-color: #000000;
+  --label-max-width: 220px;
+  --label-margin-y: 6;
+  --edge-color: #858585;
+  --edge-width: 2;
+  --edge-opacity: 0.75;
+
+  /* Die Bildbegriffe: gleiche Größe wie alle anderen, nur farbig. */
+  --term-dot-dream: 14;
+  --label-size-dream: 26;
+  --label-outline-width-dream: 4;
+  --term-dream-ring: 0;
+
+  /* Je Achse eine Grundfarbe. Punkt UND Beschriftung nehmen sie an, damit die
+     Zuordnung auch dort lesbar bleibt, wo der Punkt hinter einem Portrait
+     verschwindet. */
+  --dream-anchor-color: var(--bauhaus-rot);
+  --dream-neighbour-color: var(--bauhaus-blau);
+  --dream-recent-color: var(--bauhaus-gelb);
+}

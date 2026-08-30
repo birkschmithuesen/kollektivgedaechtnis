@@ -116,7 +116,11 @@ def run_dream(
     )
 
     try:
-        result = condense_fn(llm, material)
+        # Die zuletzt befragte Person verankert den Bildausschnitt
+        # (kg2.weighting.select_required). Sie kommt aus `material`, nicht aus
+        # `absorbed`: Personen-Ids sind Strings, und `sorted(absorbed)[-1]`
+        # liefert „p9" statt „p60" — build_material nimmt den Zeitstempel.
+        result = condense_fn(llm, material, last_person_id=material.last_person_id)
         store.set_stage1(
             dream.id,
             prompt=result.prompt,

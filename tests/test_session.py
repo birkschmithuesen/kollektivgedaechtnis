@@ -28,6 +28,22 @@ def test_spoken_command_in_the_transcript_stops_it():
     ]
 
 
+def test_the_bot_addressed_by_name_stops_it():
+    """Both entrances run through find_stop_phrase — spoken text as well."""
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Robo")
+    t.photo(at=100.0)
+    assert t.transcript("Robo, das Interview ist damit beendet", at=200.0) == [
+        Transition("closed", 200.0, "spoken")
+    ]
+
+
+def test_the_bots_name_alone_does_not_stop_it():
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Robo")
+    t.photo(at=100.0)
+    assert t.transcript("Robo hat mir gestern geholfen", at=150.0) == []
+    assert t.open_since == 100.0
+
+
 def test_ordinary_transcript_does_not_stop_it():
     t = tracker()
     t.photo(at=100.0)

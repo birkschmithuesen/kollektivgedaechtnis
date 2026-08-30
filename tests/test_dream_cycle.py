@@ -66,7 +66,7 @@ def good_condense(
 ):
     from kg2.condense import CondenseResult
 
-    def fn(llm, material):
+    def fn(llm, material, **_):
         return CondenseResult(
             prompt="P", sentence=sentence,
             sentence_en=sentence_en if sentence_en is not None else sentence,
@@ -262,7 +262,7 @@ def test_a_stage_1_failure_leaves_the_previous_image_up(tmp_path):
     run_dream(store, cfg, object(), graph(), 1.0,
               condense_fn=good_condense("das gute Bild"), render_fn=good_render())
 
-    def boom(llm, material):
+    def boom(llm, material, **_):
         raise RuntimeError("llm call failed after 2 attempts")
 
     result = run_dream(store, cfg, object(), graph(), 300.0,
@@ -299,7 +299,7 @@ def test_a_stage_2_failure_leaves_the_previous_image_up_and_keeps_the_sentence(t
 def test_a_failure_with_no_previous_dream_leaves_the_screen_empty_not_broken(tmp_path):
     cfg, store = setup(tmp_path)
 
-    def boom(llm, material):
+    def boom(llm, material, **_):
         raise RuntimeError("no connectivity at all")
 
     assert run_dream(store, cfg, object(), graph(), 1.0,
@@ -328,7 +328,7 @@ def test_a_keyboard_interrupt_propagates_after_closing_the_row(tmp_path):
     still be closed honestly, but the interrupt itself has to escape."""
     cfg, store = setup(tmp_path)
 
-    def interrupt(llm, material):
+    def interrupt(llm, material, **_):
         raise KeyboardInterrupt()
 
     try:
@@ -448,7 +448,7 @@ def test_the_row_exists_even_if_the_process_dies_mid_cycle(tmp_path):
     cfg, store = setup(tmp_path)
     seen = {}
 
-    def note_and_die(llm, material):
+    def note_and_die(llm, material, **_):
         seen["row"] = store.get_dream("d1")
         raise RuntimeError("killed")
 

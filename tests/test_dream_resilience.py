@@ -62,7 +62,7 @@ def graph(persons, generated_at=1000.0) -> dict:
 def good_condense(sentence="Der Beton träumt von Wald."):
     from kg2.condense import CondenseResult
 
-    def fn(llm, material):
+    def fn(llm, material, **_):
         return CondenseResult(prompt="P", sentence=sentence)
 
     return fn
@@ -106,7 +106,7 @@ def test_a_whole_day_of_no_connectivity_still_shows_a_calm_screen(tmp_path):
     for index in range(1, 6):
         seed_one_good_dream(store, cfg, at=float(index), sentence=f"traum {index}")
 
-    def dead(llm, material):
+    def dead(llm, material, **_):
         raise RuntimeError("no route to host")
 
     for index in range(20):
@@ -124,7 +124,7 @@ def test_a_stage_1_timeout_leaves_the_last_image_up(tmp_path):
     store = DreamStore.open(cfg.db_path)
     seed_one_good_dream(store, cfg)
 
-    def timeout(llm, material):
+    def timeout(llm, material, **_):
         raise TimeoutError("read timeout")
 
     assert run_dream(store, cfg, object(), graph(5), 300.0,

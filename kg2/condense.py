@@ -464,6 +464,7 @@ def build_condense_prompt(
     recent_terms: int = RECENT_TERMS,
     required_terms: int = REQUIRED_TERMS,
     recency_share: float = RECENCY_SHARE,
+    last_person_id: str | None = None,
 ) -> str:
     """`single_mention_budget`/`shared_terms_saturation`/`recent_terms` only
     exist so `sim.dream_calibrate terms`/`recency` can try other values
@@ -485,6 +486,7 @@ def build_condense_prompt(
         recent_terms=recent_terms,
         required_terms=required_terms,
         recency_share=recency_share,
+        last_person_id=last_person_id,
     )
     return f"{rendered}\n\n--- ENDE MATERIAL ---\n\nAntworte mit genau einem Satz."
 
@@ -563,8 +565,16 @@ def condense(
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
+    last_person_id: str | None = None,
 ) -> CondenseResult:
-    """One call. Errors propagate — `kg2.cycle` owns the failure policy (§8)."""
+    """One call. Errors propagate — `kg2.cycle` owns the failure policy (§8).
+
+    `last_person_id` verankert die Bildbegriffe bei der zuletzt befragten
+    Person (Birk, 2026-08-30, siehe `kg2.weighting.select_required`): Der
+    Ausschnitt wandert dann mit den Gespraechen durch den Graphen, statt den
+    ganzen Tag um denselben Spitzenreiter zu kreisen. Ohne Wert bleibt es beim
+    meistgenannten Begriff des ganzen Materials.
+    """
     system = build_condense_system()
     user = build_condense_prompt(
         material,
@@ -572,6 +582,7 @@ def condense(
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
         recent_terms=recent_terms,
+        last_person_id=last_person_id,
     )
 
     result = llm.parse(system=system, user=user, output_model=DreamSentence)

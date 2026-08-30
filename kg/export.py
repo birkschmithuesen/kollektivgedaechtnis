@@ -62,17 +62,38 @@ def build_graph(store) -> dict:
     # Stelle, an der Tool 1 etwas aus `kg2` liest, und ein Fehlschlag darf den
     # Export nicht kosten — ohne Tool 2 im Pfad bleibt `in_dream` schlicht
     # überall False und die Wand sieht aus wie vorher.
-    dream_labels: set[str] = set()
+    dream_labels: dict[str, str] = {}
     try:
         from kg2.weighting import build_material, select_required
 
         material = build_material({"nodes": nodes, "edges": edges})
-        dream_labels = {w.label for w in select_required(material)}
+        gewaehlt = select_required(material, last_person_id=material.last_person_id)
+        # Die ROLLE, nicht nur ein Ja/Nein: Die Wand färbt nach ihr (Bauhaus-
+        # Theme, Birk 2026-08-30), und die Rolle folgt aus der Reihenfolge, in
+        # der `select_required` vergibt — Anker zuerst, dann die Nachbarschaft,
+        # zuletzt das Jüngste. Hier nachgebildet statt dort zurückgegeben, weil
+        # die Funktion eine reine Auswahl bleibt; ändert sich ihre Aufteilung,
+        # ändert sich diese Zuordnung mit — deshalb liest sie dieselben
+        # Regler-Konstanten und rät sie nicht.
+        from kg2.weighting import NEIGHBOUR_SHARE, RECENCY_SHARE
+
+        plaetze = max(0, len(gewaehlt) - 1)
+        aus_neuheit = round(plaetze * RECENCY_SHARE)
+        aus_naehe = min(plaetze - aus_neuheit, round(plaetze * NEIGHBOUR_SHARE))
+        for i, w in enumerate(gewaehlt):
+            if i == 0:
+                dream_labels[w.label] = "anchor"
+            elif i <= aus_naehe:
+                dream_labels[w.label] = "neighbour"
+            else:
+                dream_labels[w.label] = "recent"
     except Exception:  # noqa: BLE001 — die Wand darf daran nicht scheitern
-        dream_labels = set()
+        dream_labels = {}
     for node in nodes:
         if node["type"] == "term":
-            node["in_dream"] = node.get("label") in dream_labels
+            rolle = dream_labels.get(node.get("label") or "")
+            node["in_dream"] = rolle is not None
+            node["dream_role"] = rolle or ""
 
     return {
         "version": 1,

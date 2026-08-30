@@ -51,22 +51,50 @@ function style() {
     },
     {
       // Die Begriffe, aus denen gerade das Bild entsteht (Birk, 2026-08-30).
-      // Bewusst KEINE andere Farbe: Die Wand hat genau einen Akzent, das Gold
-      // der Personenringe, und ein zweiter Farbton würde eine Bedeutung
-      // behaupten, die es nicht gibt. Stattdessen dasselbe Weiß, nur heller
-      // und größer — die Marke liest sich als „lauter", nicht als „anders".
+      // KEINE Größenänderung — der erste Entwurf machte sie größer, Birk hat
+      // das verworfen: Die Schriftgröße ist über die Themen a/b/c gegen die
+      // Lesbarkeit auf 1080 Zeilen kalibriert, und zwei Größen nebeneinander
+      // machen die kleinere zur zweiten Klasse. Die Vorgaben unten sind
+      // deshalb gleich den Normalwerten; ein Theme darf sie ändern, das
+      // Bauhaus-Theme (theme-e.css) tut es bewusst nicht.
       // Muss NACH `node.term` stehen: Cytoscape gewichtet gleich spezifische
       // Selektoren nach Reihenfolge, und diese Regel soll gewinnen.
       selector: 'node.term.in-dream',
       style: {
-        width: cssVar('--term-dot-dream', '26'),
-        height: cssVar('--term-dot-dream', '26'),
-        'background-color': cssVar('--term-dot-dream-color', '#FFFFFF'),
-        'border-width': cssVar('--term-dream-ring', '4'),
-        'border-color': cssVar('--ring-color', '#C9A227'),
-        'font-size': cssVar('--label-size-dream', '30'),
-        'text-outline-width': cssVar('--label-outline-width-dream', '5'),
+        width: cssVar('--term-dot-dream', '14'),
+        height: cssVar('--term-dot-dream', '14'),
+        'border-width': cssVar('--term-dream-ring', '0'),
+        'border-color': cssVar('--dream-anchor-color', '#D62828'),
+        'font-size': cssVar('--label-size-dream', '22'),
+        'text-outline-width': cssVar('--label-outline-width-dream', '3'),
         'z-index': 10,
+      },
+    },
+    {
+      // Die drei Bauhaus-Grundfarben tragen die drei Auswahlachsen aus
+      // `kg2.weighting.select_required`, damit an der Wand ablesbar ist,
+      // WARUM ein Begriff im Bild ist. Rot = Anker (das Zentrum des
+      // Ausschnitts), Blau = seine Nachbarschaft, Gelb = das gerade erst
+      // Gesagte. Punkt UND Schrift nehmen die Farbe an: Der Punkt allein
+      // verschwindet, sobald ein Portrait davor liegt.
+      selector: 'node.term.dream-anchor',
+      style: {
+        'background-color': cssVar('--dream-anchor-color', '#D62828'),
+        color: cssVar('--dream-anchor-color', '#D62828'),
+      },
+    },
+    {
+      selector: 'node.term.dream-neighbour',
+      style: {
+        'background-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
+        color: cssVar('--dream-neighbour-color', '#1D4E9C'),
+      },
+    },
+    {
+      selector: 'node.term.dream-recent',
+      style: {
+        'background-color': cssVar('--dream-recent-color', '#F4C300'),
+        color: cssVar('--dream-recent-color', '#F4C300'),
       },
     },
     {
@@ -1048,9 +1076,18 @@ export function createGraphView(
       const element = cy.$id(node.id);
       if (element.length === 0) continue;
       const soll = node.in_dream === true;
-      if (soll !== element.hasClass('in-dream')) {
+      const rolle = soll ? `dream-${node.dream_role || 'anchor'}` : '';
+      if (soll !== element.hasClass('in-dream') || (soll && !element.hasClass(rolle))) {
         element.toggleClass('in-dream', soll);
+        // Die alte Rollenklasse muss WEG, nicht nur die neue dazu: Ein
+        // Begriff, der vom Anker zum Nachbarn wird, trüge sonst beide und
+        // Cytoscape entschiede nach Regelreihenfolge — die Wand zeigte eine
+        // Farbe, die nichts mehr bedeutet.
+        for (const r of ['dream-anchor', 'dream-neighbour', 'dream-recent']) {
+          element.toggleClass(r, r === rolle);
+        }
         element.data('in_dream', soll);
+        element.data('dream_role', node.dream_role || '');
       }
     }
     returning.forEach((id) => cy.$id(id).position({ ...lastSeen.get(id) }));

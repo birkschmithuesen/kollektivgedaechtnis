@@ -175,6 +175,11 @@ def test_counts_describe_what_the_dream_actually_saw():
         shared=material.shared,
         marginal=material.marginal,
         quotes=[],
+        # Seit 2026-08-30 traegt Material die zuletzt hinzugekommene Person:
+        # sie verankert den Bildausschnitt (`select_required`). Beide Personen
+        # dieses Fixtures haben dasselbe created_at, also gewinnt die erste,
+        # die durchlaeuft — hier p1.
+        last_person_id="p1",
     )
 
 

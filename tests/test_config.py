@@ -55,6 +55,15 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
     # Embeddings come from OpenRouter, never from a local model (spec 6.2).
     assert cfg.embedding_url == "https://openrouter.ai/api/v1/embeddings"
     assert cfg.embedding_model == "openai/text-embedding-3-small"
+    # The bot's name, spoken in front of a stop phrase (Birk, 2026-08-30).
+    assert cfg.wake_word == "Robo"
+
+
+def test_the_wake_word_is_configurable_because_the_bot_can_be_renamed(tmp_path):
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\nwake_word = "Ada"\n', encoding="utf-8")
+
+    assert load_config(cfg_file).wake_word == "Ada"
 
 
 def test_data_dir_is_created(tmp_path):
