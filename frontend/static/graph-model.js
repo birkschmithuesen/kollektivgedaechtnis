@@ -71,8 +71,13 @@ export function toCytoscape(view) {
         label: node.type === 'term' ? node.label : '',
         portrait: node.portrait || '',
         mentions: node.mentions || 0,
+        // Ob dieser Begriff gerade ins Bild geht (kg/export.py rechnet das
+        // aus, Birk 2026-08-30). Als data-Feld UND als Klasse: die Klasse
+        // stylt, das Feld überlebt einen Klassenwechsel und lässt sich
+        // abfragen, ohne den Stil zu lesen.
+        in_dream: node.in_dream === true,
       },
-      classes: node.type,
+      classes: node.in_dream === true ? `${node.type} in-dream` : node.type,
     };
     if (node.x !== null && node.x !== undefined && node.y !== null && node.y !== undefined) {
       element.position = { x: node.x, y: node.y };

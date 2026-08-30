@@ -45,14 +45,41 @@ def build_graph(store) -> dict:
             }
         )
 
+    edges = [
+        {"id": e.id, "source": e.person_id, "target": e.term_id} for e in store.list_edges()
+    ]
+
+    # Welche Begriffe der Traum gerade benutzt (Birk, 2026-08-30): „Der Graph
+    # soll die Begriffe hervorheben, die gerade zur Bildgenerierung genutzt
+    # werden." Berechnet, NICHT von Tool 2 gemeldet — Tool 1 darf Tool 2 nicht
+    # kennen (spec §9, die Kopplung geht nur in eine Richtung: Tool 2 pollt
+    # diese Datei). Möglich ist das nur, weil die Auswahl seit 2026-08-30
+    # mechanisch aus zwei Zahlen folgt (`kg2.weighting.select_required`):
+    # dieselben Eingaben ergeben hier dieselbe Liste wie dort, ohne dass ein
+    # Wert hin und her laufen müsste.
+    #
+    # Der Import steht bewusst hier unten und nicht oben: Er ist die EINZIGE
+    # Stelle, an der Tool 1 etwas aus `kg2` liest, und ein Fehlschlag darf den
+    # Export nicht kosten — ohne Tool 2 im Pfad bleibt `in_dream` schlicht
+    # überall False und die Wand sieht aus wie vorher.
+    dream_labels: set[str] = set()
+    try:
+        from kg2.weighting import build_material, select_required
+
+        material = build_material({"nodes": nodes, "edges": edges})
+        dream_labels = {w.label for w in select_required(material)}
+    except Exception:  # noqa: BLE001 — die Wand darf daran nicht scheitern
+        dream_labels = set()
+    for node in nodes:
+        if node["type"] == "term":
+            node["in_dream"] = node.get("label") in dream_labels
+
     return {
         "version": 1,
         "generated_at": time.time(),
         "max_terms": int(store.get_setting("max_terms", "1")),
         "nodes": nodes,
-        "edges": [
-            {"id": e.id, "source": e.person_id, "target": e.term_id} for e in store.list_edges()
-        ],
+        "edges": edges,
         "quotes": _quotes(store),
     }
 

@@ -50,6 +50,26 @@ function style() {
       },
     },
     {
+      // Die Begriffe, aus denen gerade das Bild entsteht (Birk, 2026-08-30).
+      // Bewusst KEINE andere Farbe: Die Wand hat genau einen Akzent, das Gold
+      // der Personenringe, und ein zweiter Farbton würde eine Bedeutung
+      // behaupten, die es nicht gibt. Stattdessen dasselbe Weiß, nur heller
+      // und größer — die Marke liest sich als „lauter", nicht als „anders".
+      // Muss NACH `node.term` stehen: Cytoscape gewichtet gleich spezifische
+      // Selektoren nach Reihenfolge, und diese Regel soll gewinnen.
+      selector: 'node.term.in-dream',
+      style: {
+        width: cssVar('--term-dot-dream', '26'),
+        height: cssVar('--term-dot-dream', '26'),
+        'background-color': cssVar('--term-dot-dream-color', '#FFFFFF'),
+        'border-width': cssVar('--term-dream-ring', '4'),
+        'border-color': cssVar('--ring-color', '#C9A227'),
+        'font-size': cssVar('--label-size-dream', '30'),
+        'text-outline-width': cssVar('--label-outline-width-dream', '5'),
+        'z-index': 10,
+      },
+    },
+    {
       selector: 'edge.link',
       style: {
         width: cssVar('--edge-width', '2'),
@@ -1016,6 +1036,23 @@ export function createGraphView(
     const fresh = arriving.filter((id) => !placed.has(id) && !lastSeen.has(id));
     const toAdd = toCytoscape(view).filter((el) => cy.$id(el.data.id).length === 0);
     if (toAdd.length) cy.add(toAdd);
+
+    // Die Hervorhebung der Traumbegriffe muss auch an Knoten nachgezogen
+    // werden, die schon da sind (Birk, 2026-08-30). `toCytoscape` setzt die
+    // Klasse nur beim Anlegen — ohne diese Schleife bliebe die Auswahl des
+    // ERSTEN Traums den ganzen Tag stehen, während die Bilder längst aus
+    // anderen Begriffen entstehen. Genau das wäre schlimmer als keine
+    // Hervorhebung: eine Anzeige, die etwas Falsches behauptet.
+    for (const node of view.nodes) {
+      if (node.type !== 'term') continue;
+      const element = cy.$id(node.id);
+      if (element.length === 0) continue;
+      const soll = node.in_dream === true;
+      if (soll !== element.hasClass('in-dream')) {
+        element.toggleClass('in-dream', soll);
+        element.data('in_dream', soll);
+      }
+    }
     returning.forEach((id) => cy.$id(id).position({ ...lastSeen.get(id) }));
 
     fresh.forEach((id, index) => {
