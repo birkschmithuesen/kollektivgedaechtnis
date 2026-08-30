@@ -4,6 +4,18 @@
 <title>Kollektivtraum — Operator</title>
 <link rel="stylesheet" href="static/operator.css">
 
+<!-- Zwei Tabs (Birk, 2026-08-30): „Das haette ich gern auch als Standardserver
+     bei der Live-Installation, als extra Operator-Fenster. Kann auch einfach
+     ein extra Tab sein." Gemeint ist die Ansicht aus sim/probes/durchklick.py,
+     die neben dem Bild zeigt, WORAUS es entstanden ist. Hier ueber die echten
+     Traeume statt ueber eine Sonde — dieselbe Frage, bessere Datenquelle. -->
+<nav class="tabs">
+  <button class="tab on" data-tab="steuerung">Steuerung</button>
+  <button class="tab" data-tab="werkstatt">Werkstatt</button>
+</nav>
+
+<div id="tab-steuerung">
+
 <h2>Leitfrage</h2>
 <!-- Read-only ON PURPOSE (spec §7). Changing the question mid-day destroys
      exactly the comparability the history strip exists for. It is set in the
@@ -32,6 +44,33 @@
 
 <h2>Alle Träume</h2>
 <ul id="dreams"></ul>
+</div>
+
+<div id="tab-werkstatt" hidden>
+  <h2>Träume durchblättern</h2>
+  <div class="controls">
+    <button id="werk-prev">&larr;</button>
+    <span id="werk-position" class="note"></span>
+    <button id="werk-next">&rarr;</button>
+    <span class="note">Pfeiltasten funktionieren auch</span>
+  </div>
+  <div id="werk-leer" class="note">Noch kein Traum entstanden.</div>
+  <div id="werk-inhalt" hidden>
+    <img id="werk-bild" alt="">
+    <div id="werk-satz"></div>
+    <div id="werk-meta" class="note"></div>
+    <h2>Bildbeschreibung — das Motiv, das Stufe 2 bekommen hat</h2>
+    <div id="werk-motiv" class="werk-feld"></div>
+    <h2>Benannter Widerspruch</h2>
+    <div id="werk-widerspruch" class="werk-feld"></div>
+    <h2>Werte, aus dem Material abgeleitet</h2>
+    <div id="werk-werte" class="werk-feld"></div>
+    <details><summary>Stufe 1 — vollständiger Prompt</summary>
+      <pre id="werk-prompt1"></pre></details>
+    <details><summary>Stufe 2 — vollständiger Bildprompt</summary>
+      <pre id="werk-prompt2"></pre></details>
+  </div>
+</div>
 
 <script type="module" src="static/operator.js"></script>
 </html>

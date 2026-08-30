@@ -190,6 +190,16 @@ def create_dream_app(store, cfg, bus) -> FastAPI:
                         "contradiction": d.contradiction,
                         "stage1_prompt": d.stage1_prompt,
                         "stage2_prompt": d.stage2_prompt,
+                        # Fuer den Werkstatt-Tab (Birk, 2026-08-30): dieselbe
+                        # Ansicht wie sim/probes/durchklick.py, aber ueber die
+                        # echten Traeume statt ueber eine Sonde. Das sind die
+                        # Felder, aus denen das Bild entstanden ist - ohne sie
+                        # zeigt der Tab nur das Ergebnis und nicht den Weg.
+                        "sentence_en": d.sentence_en,
+                        "image_description": d.image_description,
+                        "tension_source": d.tension_source,
+                        "mood": d.mood,
+                        "tension": d.tension,
                         "condense_model": d.condense_model,
                         "image_model": d.image_model,
                     }

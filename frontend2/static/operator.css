@@ -59,3 +59,30 @@ button:disabled { opacity: 0.35; cursor: default; }
 #dreams .meta { font-size: 12px; opacity: 0.5; margin-top: 4px; }
 #dreams .prompt { font-size: 11px; opacity: 0.42; margin-top: 5px; white-space: pre-wrap; word-break: break-word; }
 #dreams .error { font-size: 12px; color: #d98a8a; margin-top: 4px; }
+
+/* Tabs (Birk, 2026-08-30). Zwei Ansichten auf dieselben Daten: die Steuerung
+   fuer den Ablauf, die Werkstatt fuer die Frage „woraus ist dieses Bild
+   entstanden". */
+.tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+.tab {
+  padding: 7px 16px; border: 1px solid #2c3038; border-radius: 5px;
+  background: #1d2026; color: #e8e6e1; font-size: 13px; cursor: pointer;
+}
+.tab.on { background: #D62828; border-color: #D62828; color: #fff; }
+
+#werk-bild {
+  max-width: 100%; max-height: 46vh; border-radius: 6px;
+  display: block; background: #000;
+}
+#werk-satz { font-size: 20px; line-height: 1.35; margin: 12px 0 4px; }
+.werk-feld {
+  padding: 9px 12px; background: #1d2026; border-radius: 5px;
+  border-left: 3px solid #2c3038; white-space: pre-wrap;
+}
+#tab-werkstatt pre {
+  white-space: pre-wrap; font-size: 11.5px; color: #9aa0aa;
+  background: #131519; padding: 10px; border-radius: 5px;
+  max-height: 24rem; overflow: auto;
+}
+#tab-werkstatt details { margin-top: 10px; }
+#tab-werkstatt summary { cursor: pointer; color: #9aa0aa; font-size: 12px; }

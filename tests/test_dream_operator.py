@@ -40,6 +40,13 @@ def record(index, status="done", discarded=False):
         "stage2_prompt": f"S2 für d{index}",
         "condense_model": "claude-opus-5",
         "image_model": "google/gemini-3-pro-image",
+        # Seit 2026-08-30 fuer den Werkstatt-Tab: das, WORAUS das Bild
+        # entstanden ist, nicht nur das Ergebnis.
+        "sentence_en": f"Dream {index} in English",
+        "image_description": f"A wide courtyard, dream {index}",
+        "tension_source": f"widerspruch {index}",
+        "mood": 3,
+        "tension": 4,
     }
 
 
@@ -277,3 +284,74 @@ def test_a_failed_write_snaps_the_control_back_to_the_servers_value(ui):
     ui.wait_for_function("() => document.getElementById('fade-ms').value === '1200'", timeout=5000)
 
     assert ui.locator("#fade-ms").input_value() == "1200"
+
+
+# -- Werkstatt-Tab (Birk, 2026-08-30) ----------------------------------------
+
+
+def werkstatt(page, dreams):
+    """Traeume laden und in den Werkstatt-Tab wechseln."""
+    page.evaluate("(a) => window.kgDreamOperator.werkSetze(a[0])", [list(dreams)])
+    page.click('.tab[data-tab="werkstatt"]')
+    return page
+
+
+def test_der_werkstatt_tab_zeigt_woraus_das_bild_entstanden_ist(ui):
+    """Birk, 2026-08-30: die Durchklick-Ansicht als fester Teil der
+    Installation. Der Punkt ist nicht das Bild — das haengt an der Wand —
+    sondern der Weg dorthin: Satz, Motiv, Widerspruch, Werte, beide Prompts."""
+    werkstatt(ui, [record(1), record(2)])
+
+    assert ui.eval_on_selector("#tab-werkstatt", "el => !el.hidden")
+    assert ui.eval_on_selector("#tab-steuerung", "el => el.hidden")
+    # Zuletzt entstandener Traum steht vorn: der haengt gerade an der Wand.
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 2"
+    assert "courtyard, dream 2" in ui.eval_on_selector("#werk-motiv", "el => el.textContent")
+    assert "widerspruch 2" in ui.eval_on_selector("#werk-widerspruch", "el => el.textContent")
+    assert "mood 3" in ui.eval_on_selector("#werk-werte", "el => el.textContent")
+    assert "S1 für d2" in ui.eval_on_selector("#werk-prompt1", "el => el.textContent")
+    assert "S2 für d2" in ui.eval_on_selector("#werk-prompt2", "el => el.textContent")
+
+
+def test_man_kann_durch_die_traeume_des_tages_blaettern(ui):
+    werkstatt(ui, [record(1), record(2), record(3)])
+
+    assert ui.eval_on_selector("#werk-position", "el => el.textContent") == "3 von 3"
+    ui.click("#werk-prev")
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 2"
+    ui.click("#werk-prev")
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 1"
+    # Am Anfang bleibt es stehen, statt in einen leeren Zustand zu laufen.
+    ui.click("#werk-prev")
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 1"
+    ui.click("#werk-next")
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 2"
+
+
+def test_die_pfeiltasten_blaettern_nur_im_werkstatt_tab(ui):
+    """Der Steuerungs-Tab ist voller Zahlenfelder — dort wuerden Pfeiltasten
+    Werte verstellen, waehrend der Operator glaubt zu blaettern."""
+    werkstatt(ui, [record(1), record(2)])
+    ui.keyboard.press("ArrowLeft")
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 1"
+
+    ui.click('.tab[data-tab="steuerung"]')
+    ui.keyboard.press("ArrowRight")
+    # Unveraendert: im anderen Tab darf die Taste nichts tun.
+    assert ui.eval_on_selector("#werk-satz", "el => el.textContent") == "Traum 1"
+
+
+def test_ein_gescheiterter_traum_bleibt_in_der_werkstatt_sichtbar(ui):
+    """Gerade der Traum, der schiefging, ist der, dessen Prompt man sehen
+    will. Die Werkstatt filtert deshalb nicht, anders als die Wand."""
+    werkstatt(ui, [record(1), record(2, status="failed")])
+
+    assert ui.eval_on_selector("#werk-position", "el => el.textContent") == "2 von 2"
+    assert "failed" in ui.eval_on_selector("#werk-meta", "el => el.textContent")
+
+
+def test_vor_dem_ersten_traum_steht_ein_hinweis_statt_einer_leeren_flaeche(ui):
+    werkstatt(ui, [])
+
+    assert ui.eval_on_selector("#werk-leer", "el => !el.hidden")
+    assert ui.eval_on_selector("#werk-inhalt", "el => el.hidden")

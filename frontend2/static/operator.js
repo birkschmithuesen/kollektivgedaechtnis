@@ -110,10 +110,79 @@ function renderDreams(dreams) {
     .forEach((dream) => list.appendChild(dreamRow(dream)));
 }
 
+// -- Werkstatt-Tab (Birk, 2026-08-30) --------------------------------------
+// Zeigt neben dem Bild, WORAUS es entstanden ist: Satz, Bildbeschreibung,
+// benannter Widerspruch, mood/tension und die beiden vollstaendigen Prompts.
+// Dieselbe Frage, die sim/probes/durchklick.py fuer Testlaeufe beantwortet,
+// hier aber ueber die echten Traeume — die Sonde bleibt fuer Renderreihen
+// ausserhalb der Installation, dieser Tab ist fuer den Ausstellungstag.
+//
+// Verworfene und fehlgeschlagene Traeume bleiben drin: Gerade der Traum, der
+// schiefging, ist der, dessen Prompt man sehen will.
+let werkTraeume = [];
+let werkIndex = 0;
+
+function werkZeige(index) {
+  const inhalt = document.getElementById('werk-inhalt');
+  const leer = document.getElementById('werk-leer');
+  if (!werkTraeume.length) {
+    if (inhalt) inhalt.hidden = true;
+    if (leer) leer.hidden = false;
+    const pos = document.getElementById('werk-position');
+    if (pos) pos.textContent = '';
+    return;
+  }
+  werkIndex = Math.max(0, Math.min(index, werkTraeume.length - 1));
+  const traum = werkTraeume[werkIndex];
+  if (leer) leer.hidden = true;
+  if (inhalt) inhalt.hidden = false;
+
+  const setze = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text || '—';
+  };
+  const bild = document.getElementById('werk-bild');
+  if (bild) {
+    bild.src = traum.image || '';
+    bild.hidden = !traum.image;
+  }
+  setze('werk-satz', traum.sentence);
+  const zeit = new Date(traum.created_at * 1000).toLocaleTimeString('de-DE');
+  setze(
+    'werk-meta',
+    `${zeit} · ${traum.person_count} Personen · ${traum.term_count} Begriffe` +
+      (traum.status !== 'ok' ? ` · ${traum.status}` : '') +
+      (traum.discarded ? ' · verworfen' : ''),
+  );
+  setze('werk-motiv', traum.image_description || traum.sentence_en);
+  setze('werk-widerspruch', traum.tension_source);
+  setze(
+    'werk-werte',
+    `mood ${traum.mood ?? '—'} · tension ${traum.tension ?? '—'}` +
+      (traum.condense_model ? ` · ${traum.condense_model} → ${traum.image_model || '—'}` : ''),
+  );
+  setze('werk-prompt1', traum.stage1_prompt);
+  setze('werk-prompt2', traum.stage2_prompt);
+  setze('werk-position', `${werkIndex + 1} von ${werkTraeume.length}`);
+}
+
+function werkSetze(dreams) {
+  // Aeltester zuerst: der Werkstatt-Tab ist eine Zeitachse durch den Tag,
+  // keine Arbeitsliste. Beim ersten Laden steht der neueste Traum vorn, weil
+  // das der ist, der gerade an der Wand haengt.
+  const vorher = werkTraeume.length;
+  werkTraeume = dreams.slice().sort((a, b) => a.created_at - b.created_at);
+  werkZeige(vorher === 0 ? werkTraeume.length - 1 : werkIndex);
+}
+
 function refreshDreams() {
   return fetch('/api/dreams')
     .then((response) => response.json())
-    .then((payload) => renderDreams(payload.dreams || []))
+    .then((payload) => {
+      const dreams = payload.dreams || [];
+      renderDreams(dreams);
+      werkSetze(dreams);
+    })
     .catch((error) => console.warn('could not load the dream record', error));
 }
 
@@ -145,7 +214,26 @@ document.getElementById('discard-current').addEventListener('click', (event) => 
   if (id) post('/api/discard', { dream_id: id, discarded: true });
 });
 
-window.kgDreamOperator = { render, renderDreams, refreshDreams };
+document.querySelectorAll('.tab').forEach((knopf) => {
+  knopf.addEventListener('click', () => {
+    const ziel = knopf.dataset.tab;
+    document.querySelectorAll('.tab').forEach((k) => k.classList.toggle('on', k === knopf));
+    document.getElementById('tab-steuerung').hidden = ziel !== 'steuerung';
+    document.getElementById('tab-werkstatt').hidden = ziel !== 'werkstatt';
+  });
+});
+document.getElementById('werk-prev').addEventListener('click', () => werkZeige(werkIndex - 1));
+document.getElementById('werk-next').addEventListener('click', () => werkZeige(werkIndex + 1));
+// Die Pfeiltasten nur, wenn die Werkstatt sichtbar ist: im Steuerungs-Tab
+// stehen Zahlenfelder, und dort verstellen Pfeiltasten Werte.
+addEventListener('keydown', (event) => {
+  if (document.getElementById('tab-werkstatt').hidden) return;
+  if (event.target && /^(INPUT|TEXTAREA)$/.test(event.target.tagName)) return;
+  if (event.key === 'ArrowLeft') werkZeige(werkIndex - 1);
+  if (event.key === 'ArrowRight') werkZeige(werkIndex + 1);
+});
+
+window.kgDreamOperator = { render, renderDreams, refreshDreams, werkSetze, werkZeige };
 
 const events = new EventSource('/events');
 events.onmessage = (message) => {
