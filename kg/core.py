@@ -79,6 +79,7 @@ class Core:
             cfg.interview_timeout_s,
             cfg.stop_phrases,
             open_since=open_person.started_at if open_person else None,
+            wake_word=cfg.wake_word,
         )
         self._queue: asyncio.Queue = asyncio.Queue()
         self._tasks: set[asyncio.Task] = set()

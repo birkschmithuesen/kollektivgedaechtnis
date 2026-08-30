@@ -39,7 +39,7 @@ def process_interview(
     # end past stopped_at, to the final that landed inside its settle window
     # (kg.core.settle_cut_end); every other path leaves cut_end at stopped_at.
     raw = transcript_log.text_between(started_at, stopped_at if cut_end is None else cut_end)
-    text = strip_stop_phrases(raw, cfg.stop_phrases)
+    text = strip_stop_phrases(raw, cfg.stop_phrases, cfg.wake_word)
 
     if not text.strip():
         store.set_person_transcript(person_id, "")

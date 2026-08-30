@@ -24,6 +24,14 @@ stop_phrases = [
     "Aufnahme ist beendet",
 ]
 
+# Der Name, mit dem die Gäste den Telegram-Bot ansprechen. Steht er vor einer
+# der Phrasen oben („Robo, das Interview ist damit beendet"), gilt der Stopp
+# auch dann, wenn die Phrase dahinter freier formuliert ist — wer den Bot beim
+# Namen nennt, meint es eindeutig, und beiläufig sagt „Robo" niemand. Die
+# Phrasen allein wirken unverändert weiter. Heißt der Bot einmal anders, wird
+# er hier umbenannt; leer lassen schaltet den Weg ab.
+wake_word = "Robo"
+
 # Calibrated in simulation (spec 6.3), NOT runtime-adjustable.
 # Run 19b (60 interviews, out/sim19b/sim.db, .superpowers/sdd/task-19-report.md):
 #   the model self-limits to 4.35 terms per interview against this cap of 5, so

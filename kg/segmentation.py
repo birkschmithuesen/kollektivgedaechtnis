@@ -79,6 +79,26 @@ _MAX_GAP_TOKENS = 1
 # costs a whole interview, a missed one costs a text message to the bot.
 _MAX_TRAILING_TOKENS = 2
 
+# Second, deliberately looser way in: the bot's name in front of the phrase
+# („Robo, Interview beendet", Birk 2026-08-30). Additive — the phrase alone
+# keeps working exactly as above; whoever calls the bot by its name, though,
+# means it, so behind a wake word the same phrase may be spoken more freely:
+_WAKE_MAX_GAP_TOKENS = 2  # two fillers inside the command instead of one…
+_WAKE_MAX_TRAILING_TOKENS = 4  # …and a whole "vielen Dank für das Gespräch"
+# behind it instead of two words.
+#
+# What stays strict is the distance between name and command: at most this many
+# foreign words may sit between them. That is what keeps the address a form of
+# address and not a topic. It also settles the brief's borderline case,
+# "Robo, kannst du das Interview gleich beenden?" — DOES NOT STOP: three words
+# ("kannst du das") stand between name and phrase, so it never reaches the
+# looser gap budget at all. Deliberate: that sentence asks about an end still
+# to come, it does not declare one, and the whole tuning of this module leans
+# the same way — a wrongly fired stop costs a whole interview, a missed one
+# costs a text message to the bot. Guests who really want to stop have the
+# short form and the text message.
+_WAKE_LEAD_TOKENS = 2
+
 
 def _find_phrase_matches(
     needle: list[str], haystack: list[_Token], max_gap: int
@@ -123,10 +143,34 @@ def _spans(needle: list[str], haystack: list[_Token], max_gap: int) -> list[tupl
     ]
 
 
-def find_stop_phrase(text: str, phrases: Sequence[str]) -> str | None:
+def _find_wake_matches(
+    wake: list[str], needle: list[str], haystack: list[_Token]
+) -> list[tuple[int, int]]:
+    """(first, last) token indices of every "<wake word> … <phrase>" occurrence.
+
+    `first` is the wake word's own first token, so a caller that cuts the span
+    cuts the name away with the command — otherwise "Robo" would be left
+    standing in the extraction input (spec 5).
+    """
+    wake_spans = _find_phrase_matches(wake, haystack, 0)
+    if not wake_spans:
+        return []
+    matches = []
+    for first, last in _find_phrase_matches(needle, haystack, _WAKE_MAX_GAP_TOKENS):
+        for wake_first, wake_last in wake_spans:
+            if wake_last < first <= wake_last + 1 + _WAKE_LEAD_TOKENS:
+                matches.append((wake_first, last))
+                break
+    return matches
+
+
+def find_stop_phrase(
+    text: str, phrases: Sequence[str], wake_word: str | None = None
+) -> str | None:
     _, tokens = _tokenize(text)
     if not tokens:
         return None
+    wake = _phrase_tokens(wake_word) if wake_word else []
     for phrase in phrases:
         needle = _phrase_tokens(phrase)
         if not needle:
@@ -134,10 +178,15 @@ def find_stop_phrase(text: str, phrases: Sequence[str]) -> str | None:
         for _first, last in _find_phrase_matches(needle, tokens, _MAX_GAP_TOKENS):
             if len(tokens) - 1 - last <= _MAX_TRAILING_TOKENS:
                 return phrase
+        if not wake:
+            continue
+        for _first, last in _find_wake_matches(wake, needle, tokens):
+            if len(tokens) - 1 - last <= _WAKE_MAX_TRAILING_TOKENS:
+                return phrase
     return None
 
 
-def strip_stop_phrases(text: str, phrases: Sequence[str]) -> str:
+def strip_stop_phrases(text: str, phrases: Sequence[str], wake_word: str | None = None) -> str:
     """Remove every occurrence of a stop phrase. MUST run before extraction (spec 5).
 
     Same span finder and the same gap tolerance as find_stop_phrase, so
@@ -151,14 +200,27 @@ def strip_stop_phrases(text: str, phrases: Sequence[str]) -> str:
     the one thing this function exists to prevent. The price is that a sentence
     merely talking about the end loses those words too — a filler sentence, no
     term in it.
+
+    With a wake word configured the cut starts at the name, not at the phrase:
+    "Robo, das Interview ist beendet" must not leave "Robo" behind, or the
+    extraction turns the bot's name into a term. A "Robo" NOT followed by a
+    command stays — there the name is part of a real sentence ("Robo hat mir
+    gestern geholfen"), and cutting words out of it would change what the
+    person said.
     """
     nfc_text, tokens = _tokenize(text)
+    wake = _phrase_tokens(wake_word) if wake_word else []
     spans: list[tuple[int, int]] = []
     for phrase in phrases:
         needle = _phrase_tokens(phrase)
         if not needle:
             continue
         spans.extend(_spans(needle, tokens, _MAX_GAP_TOKENS))
+        if wake:
+            spans.extend(
+                (tokens[first].start, tokens[last].end)
+                for first, last in _find_wake_matches(wake, needle, tokens)
+            )
 
     if not spans:
         return _SPACES.sub(" ", nfc_text).strip()

@@ -26,9 +26,14 @@ class SessionTracker:
         timeout_s: float,
         stop_phrases: Sequence[str],
         open_since: float | None = None,
+        wake_word: str | None = None,
     ) -> None:
         self.timeout_s = float(timeout_s)
         self.stop_phrases = list(stop_phrases)
+        # The bot's name in front of a phrase is the second, looser way to stop
+        # (kg.segmentation). Both entrances pass through here: spoken text from
+        # the STT and text messages to the bot.
+        self.wake_word = wake_word
         # Lets a caller resume an interview that was already open in storage
         # (a restart after a crash) instead of silently forgetting it and
         # opening a second one on the next photo.
@@ -52,7 +57,7 @@ class SessionTracker:
     def transcript(self, text: str, at: float) -> list[Transition]:
         if self._open_since is None:
             return []
-        if find_stop_phrase(text, self.stop_phrases) is None:
+        if find_stop_phrase(text, self.stop_phrases, self.wake_word) is None:
             return []
         return self._close(at, "spoken")
 

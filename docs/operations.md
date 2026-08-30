@@ -227,6 +227,16 @@ Ausstellungstag", sonst öffnet Tag 2 mit den Träumen von Tag 1 im Streifen.
    mitten im Gespräch über das Ende eines Interviews redet („bevor das
    Interview beendet ist, wollte ich noch sagen…"), beendet keins. Wird der
    Stopp doch einmal nicht erkannt, ist die Textnachricht der sichere Weg.
+   **Sicherer als jede Formel: den Bot beim Namen ansprechen** — „**Robo**,
+   Interview beendet" (Birk, 2026-08-30). Das Komma ist egal, die
+   Spracherkennung setzt ohnehin selten eins. Hinter einem „Robo" darf die
+   Formel freier sitzen: **zwei** Einschübe („Robo, das Interview ist jetzt
+   damit beendet") und ein kurzer Dank hinterher („Robo, Interview beendet,
+   vielen Dank fürs Zuhören"). Nur zwischen Name und Formel dürfen höchstens
+   zwei Wörter stehen — deshalb beendet „Robo, kannst du das Interview gleich
+   beenden?" **nichts**: Das ist eine Frage nach einem Ende, keine Ansage. Der
+   Name steht in `wake_word` (`config.toml`), heißt der Bot einmal anders,
+   wird er dort umbenannt.
 4. Begriffe wachsen **nach** dem Stopp nach, nicht währenddessen.
 
 Ein neues Foto schließt ein noch laufendes Interview implizit — es kann also nie

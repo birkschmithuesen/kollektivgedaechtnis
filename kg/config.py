@@ -14,6 +14,12 @@ DEFAULT_STOP_PHRASES = [
     "Aufnahme ist beendet",
 ]
 
+# The name the guests address the bot with. Spoken in front of a stop phrase it
+# is the sure-fire way to end an interview (Birk, 2026-08-30) — nobody says
+# "Robo" in passing. Configurable because the bot can be renamed; the detection
+# never hardcodes it (kg/segmentation.py).
+DEFAULT_WAKE_WORD = "Robo"
+
 # Prompt dial for merge aggressiveness (spec 6.2): calibrated in simulation,
 # never exposed at runtime.
 DEFAULT_MERGE_STYLE = (
@@ -29,6 +35,7 @@ class Config:
     telegram_chat_id: int | None = None
     interview_timeout_s: int = 900
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
+    wake_word: str = DEFAULT_WAKE_WORD
     terms_per_interview: int = 5
     # Run 19c: 5 was too narrow — in 7 of 8 near-misses of run 19b the
     # concept's own node sat at rank 7-56 in the candidate pool and was never
@@ -104,6 +111,7 @@ _FIELD_NAMES = {
     "telegram_chat_id",
     "interview_timeout_s",
     "stop_phrases",
+    "wake_word",
     "terms_per_interview",
     "merge_neighbours",
     "merge_style",
