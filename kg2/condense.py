@@ -384,8 +384,24 @@ liegt, lass dieses Feld leer — ein erfundener Widerspruch ist schlechter als \
 keiner.
 
 EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
-- mood: Wie blicken die Menschen in diesem Material auf die Zukunft? \
+- mood: Wie blicken die Menschen in diesem Material auf die ZUKUNFT? \
 1 = deutlich negativ, 3 = neutral/gemischt, 5 = deutlich positiv.
+
+  Entscheidend ist die Richtung, nicht der Ton. Wer ein Problem scharf \
+benennt und dazu sagt, was man tun müsste, blickt ZUVERSICHTLICH nach vorn — \
+auch wenn jedes einzelne Wort nach Missstand klingt. „Normen-Inventur\", \
+„gestaffelte Beteiligungstiefe\", „Planungswerkstätten\" sind Vorschläge; sie \
+setzen voraus, dass sich etwas ändern lässt. Zähle sie als das, was sie sind, \
+nicht als Klage über den Zustand, aus dem heraus sie gesagt wurden. Negativ \
+ist Material erst, wenn die Menschen keinen Weg mehr sehen: wenn sie \
+resignieren, andere für unbelehrbar halten oder erwarten, dass alles so \
+bleibt.
+
+  Wäge deshalb ab, statt den lautesten Begriff entscheiden zu lassen: Wie \
+viele Aussagen benennen einen Weg, wie viele nur einen Missstand? Bei \
+ungefähr gleich vielen ist 3 richtig. Ein einzelner drastischer Begriff macht \
+noch keine 2, und ein Material voller Lösungsvorschläge ist auch dann nicht \
+negativ, wenn diese Vorschläge Probleme voraussetzen.
 - tension: Wie weit liegen die Aussagen im Material auseinander? \
 1 = einig, 5 = unvereinbar.\
 """
