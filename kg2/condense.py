@@ -144,6 +144,22 @@ Textstück dieser Arbeit, ein zweiter Text im Bild tritt gegen ihn an — und \
 Bildmodelle setzen Schrift unzuverlässig, verdrehte Buchstaben stehen dann in \
 hyperrealistischer Schärfe an der Wand.
 
+GEGENSTÄNDE, DIE VON SELBST SCHRIFT TRAGEN. Papierpläne, Zeichnungen, Tafeln, \
+Aushänge, Bildschirme, Formulare und Stempel bringen Schrift ins Bild, auch \
+wenn du keine verlangst: Das Bildmodell füllt jede leere Papierfläche \
+ungefragt mit verdrehten Buchstaben. Gemessen am 2026-08-30 an fünf Bildern — \
+in dreien stand Buchstabensalat, und in keinem dieser drei war Schrift \
+verlangt worden; sie kam jedes Mal von einem Plan oder einem Blatt Papier im \
+Motiv. Wenn ein solcher Gegenstand vorkommt, sage ausdrücklich dazu, WAS auf \
+seiner Fläche zu sehen ist — und zwar etwas, das keine Schrift ist: Linien, \
+Umrisse, Farbflächen, Punkte, Knicke, Flecken. Ein Plan zeigt Grundrisslinien, \
+kein Beschriftungsfeld.
+- Falsch (leere Fläche, Modell erfindet Buchstaben): „a pinned-up floor plan \
+on the wall\\\"
+- Richtig (Fläche ist besetzt, ohne Schrift): „a pinned-up floor plan showing \
+only thin black outlines of rooms and a thick stair spiral, its surface \
+otherwise bare paper\\\"
+
 AUSNAHME: Wenn ein beschrifteter Gegenstand der EINZIGE Weg ist, den \
 Widerspruch sichtbar zu machen, nimm ihn — aber genau einen, und sage dazu, \
 was daraufsteht: als deutschen Wortlaut in Anführungszeichen, mit ausdrücklich \
@@ -191,10 +207,27 @@ crumbling plaster carries on beneath it\"
 WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
 zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
 keine Kamera-, Objektiv-, Film- oder Stilangabe. Beides steht in Stufe 2 \
-bereits fest und würde sich mit deiner Fassung schlagen. Das Licht, das du \
-beschreibst, ist das Licht AN EINEM DING — ein Glanz auf nassem Beton, ein \
-Schatten unter einer Kante —, nicht die Stimmung des Bildes. Auch hier gilt \
-die Belegbarkeit: nur was sich auf die gelieferten Begriffe stützt.
+bereits fest und würde sich mit deiner Fassung schlagen. Auch keine \
+LICHTQUELLE, keine Tageszeit und keine Lichtrichtung: kein Sonnenstand, kein \
+„afternoon light\\\", kein „low sun\\\", kein „daylight\\\", kein Strahl, der von \
+irgendwo einfällt. Wie hell das Bild ist und aus welcher Richtung es \
+beleuchtet wird, entscheidet Stufe 2 aus mood — nennst du es selbst, gewinnt \
+deine Fassung, und die Stimmung des Tages steht dann nicht mehr im Bild.
+
+STATT LICHT: DEN ZUSTAND DER OBERFLÄCHE. Was du an einem Ding beschreiben \
+darfst, ist seine Beschaffenheit, nicht seine Beleuchtung: nass, trocken, \
+staubig, matt, verkrustet, frisch gestrichen, ausgeblichen, moosig, \
+abgegriffen, gerissen. Diese Angaben halten unter jedem Licht.
+- Falsch (nennt Lichtquelle und Tageszeit): „the wet surface glinting in low \
+afternoon light\\\"
+- Richtig (nennt den Zustand): „the render still wet and dark where it was \
+just pulled flat\\\"
+- Falsch (nennt Sonnenstand und Richtung): „low sun grazing the raised dots\\\"
+- Richtig (nennt den Zustand): „the dots curling at their edges where the \
+paper has cockled\\\"
+
+Auch hier gilt die Belegbarkeit: nur was sich auf die gelieferten Begriffe \
+stützt.
 
 WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der den \
 Widerspruch aus dem Material als etwas SICHTBARES benennt. Er wird in Stufe 2 \

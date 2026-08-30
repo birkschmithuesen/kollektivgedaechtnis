@@ -89,9 +89,17 @@ TENSION_DE = {
 }
 
 
-def begleittext(nummer, personen, tageszeit, ergebnis, begriffe, prompt, bildname, cfg) -> str:
+def begleittext(nummer, personen, tageszeit, ergebnis, begriffe, prompt, bildname, cfg, register) -> str:
     """Die `.md` neben dem Bild — Prompt und Parameter, wie AGENTS.md es für
-    jede erzeugte Mediendatei verlangt."""
+    jede erzeugte Mediendatei verlangt.
+
+    `register` wird DURCHGEREICHT, nicht hier hinterlegt. Bis 2026-08-30 stand
+    hier eine zweite, festverdrahtete Fassung des Registertexts — die noch die
+    alte Film/Korn-Variante MIT Schriftverbot zeigte, während längst das
+    hyperreale Register ohne Schriftverbot gesendet wurde. Der Begleittext ist
+    die einzige Stelle, an der Birk am Material prüft, was ein Bild an Anweisung
+    bekommen hat; eine Kopie darin kann von der Wahrheit abdriften und tat es.
+    """
     return f"""# Traum {nummer} — {tageszeit}
 
 ![{bildname}]({bildname})
@@ -112,7 +120,7 @@ zusammenhängende englische Prosa). Hier die Bausteine, deutsch:
 | **Stimmung** (mood = {ergebnis.mood}) | {MOOD_DE[ergebnis.mood]} |
 | **Spannung** (tension = {ergebnis.tension}) | {TENSION_DE[ergebnis.tension]} |
 | **Widerspruch im Material** | {ergebnis.tension_source or "— (kein Widerspruch im Material)"} |
-| **Register** (fix, ganzer Tag) | Eine Fotografie, auf echtem Film oder echtem Sensor aufgenommen, mit dem Korn, dem Tonwertumfang und den kleinen Unvollkommenheiten einer tatsächlichen Belichtung. Auf Augenhöhe fotografiert, normale Brennweite, natürliche Schärfentiefe. Jede Fläche im Bild ist frei von Schrift, ohne Schilder, Beschriftungen, Lettern. Ein einzelnes fotografisches Bild, ganz und unbeschnitten. |
+| **Register** (fix, ganzer Tag, englisch wie gesendet) | {register} |
 | **Format** (fix) | Seitenverhältnis {cfg.image_aspect_ratio}, Querformat, eine einzelne Fotografie. |
 
 ## Woraus er entstanden ist
@@ -213,7 +221,7 @@ def main() -> int:
         begleiter = bild.with_suffix(".md")
         begleiter.write_text(
             begleittext(nummer, personen, tageszeit, ergebnis,
-                        material.term_count, prompt, bild.name, cfg),
+                        material.term_count, prompt, bild.name, cfg, register),
             encoding="utf-8",
         )
         fertig.append((nummer, personen, ergebnis, bild))
