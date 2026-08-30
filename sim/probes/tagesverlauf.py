@@ -70,6 +70,8 @@ log = logging.getLogger("tagesverlauf")
 #: frühen Schritte liegen dichter, weil sich der Graph dort am stärksten
 #: verändert — bei 3 Personen entscheidet jedes neue Interview den Satz mit,
 #: bei 60 verschiebt es nur noch Gewichte.
+#: `--nur <n>` filtert auf einen Zeitpunkt: ein einzelnes Testbild kostet
+#: 0,14 statt 0,70 USD und reicht, um eine Prompt-Änderung zu sehen.
 ZEITPUNKTE = [
     (3, "früher Vormittag, die ersten drei Gespräche"),
     (10, "später Vormittag"),
@@ -175,6 +177,7 @@ def main() -> int:
     stufe1_datei: Path | None = None
     modell_wahl: str | None = None
     mit_kanaelen = True
+    nur: int | None = None
     stellungen: list[str] = []
     i = 0
     while i < len(argumente):
@@ -184,6 +187,9 @@ def main() -> int:
             i += 2
         elif a == "--modell":
             modell_wahl = argumente[i + 1]
+            i += 2
+        elif a == "--nur":
+            nur = int(argumente[i + 1])
             i += 2
         elif a == "--ohne-kanaele":
             mit_kanaelen = False
@@ -237,6 +243,8 @@ def main() -> int:
           f"{'ja' if mit_kanaelen else 'NEIN (Radikaltest)'}")
 
     for nummer, (personen, tageszeit) in enumerate(ZEITPUNKTE, 1):
+        if nur is not None and personen != nur:
+            continue
         teilgraph = prefix_graph(graph, personen)
         material = build_material(teilgraph)
         print(f"\n--- {nummer}/5  {personen} Personen ({tageszeit}) "

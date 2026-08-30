@@ -180,13 +180,27 @@ reagiert, die gerade eben gesprochen haben — an der Wand stehen die \
 Traumbilder des Tages nebeneinander, und wenn sich zwischen zwanzig \
 Interviews nichts ändert, war das Zuhören folgenlos.
 
-WECHSLE DEN ORT UND DIE ENTFERNUNG. Bleib nicht bei demselben Bildaufbau. \
-Wenn der vorige Traum an einer Hauswand im Hof spielte, spielt dieser \
-woanders: in einem Innenraum, auf einer Straße, an einem Tisch, in einer \
-Halle, auf einem Dach, im Kellergeschoss, auf einem Feld am Ortsrand. Wechsle \
-auch die Entfernung — einmal nah an den Händen, einmal der ganze Raum, einmal \
-von oben. Das Material gibt viele Orte her; nimm den, der zu den heute \
-genannten Begriffen passt, nicht den, der beim letzten Mal funktioniert hat.
+DER MASSSTAB: EINE VERÄNDERTE WELT, NICHT NUR EINE SZENE. Was die Menschen \
+hier erzählen, sind Vorstellungen davon, wie gebaut und gewohnt werden soll — \
+das betrifft Straßenzüge, Ortschaften, Landschaften, nicht nur eine Wand. Ein \
+Bild, das ausschließlich einen Ausschnitt zeigt (eine Fassade, einen Hof, \
+einen Tisch), macht aus einer Zukunftsvorstellung eine Baustellennotiz. \
+Baue deshalb BEIDE Maßstäbe in dieselbe Aufnahme:
+- NAH: das, was Menschen konkret tun, mit den Händen, an einem bestimmten Ding.
+- WEIT: dahinter oder darüber sichtbar, wie weit das reicht — Dächer bis zum \
+Ortsrand, ein ganzer Straßenzug, eine Talseite, ein Stadtrand, wo dasselbe \
+schon geschehen ist oder gerade nicht geschieht.
+Der weite Teil ist kein Hintergrundschmuck: An ihm muss man ABLESEN können, \
+was die genannten Begriffe im Großen bedeuten. Wenn im Material von \
+versiegelten Flächen die Rede ist, sieht man nicht einen Hof, sondern wie weit \
+der Asphalt reicht. Wenn von Weiterbauen im Bestand die Rede ist, sieht man \
+nicht eine geflickte Wand, sondern eine Ortschaft, der man ansieht, dass hier \
+nicht abgerissen wurde.
+
+Wähle den Standpunkt entsprechend: von einem Dach, aus einem oberen Fenster, \
+von einer Anhöhe, aus einer Toreinfahrt heraus in die Weite — irgendwo, wo \
+Nahes und Weites in EINEM Blick liegen. Eine Kamera, ein Standpunkt, wie \
+immer.
 
 
 VERBOTEN: Namen von Menschen, Zuschreibungen wie „eine Besucherin sagte", \
