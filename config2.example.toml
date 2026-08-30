@@ -94,8 +94,20 @@ guiding_question = "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"
 # Analoges Korn ist bewusst ENTFALLEN: Korn ist das Gegenteil von
 # hyperrealistischer Detailtreue, es verdeckt genau die Mikrostruktur, um die
 # es hier geht.
+# SCHRIFT IM BILD IST ERLAUBT (Birk, 2026-08-29). Bis dahin stand hier „Every
+# surface in the frame is free of writing, bare of signs, labels and
+# lettering." Der Grund dafür war, dass der Wandsatz ein eigenes Artefakt ist
+# (Spec §5.2) und Text im Bild mit ihm konkurrieren würde.
+#
+# Aufgehoben, weil das Verbot einen Bildinhalt unmöglich machte, den das
+# Material hergibt: Ein Gegenstand, der seine Bedeutung über seine
+# Beschriftung trägt — eine Honorartafel mit Neubaupreisen, ein gestempelter
+# Plan, ein Plakat mit Anweisungen —, wurde vom Modell zwangsläufig LEER
+# gemalt und sagte dann nichts mehr. Beobachtet am 2026-08-29 an
+# out/tagesverlauf-einort/1: „hier ist eine Tafel, aber da steht nichts drauf."
+# Die Konkurrenz zum Wandsatz nimmt Birk dafür in Kauf.
 # Varianten rendern mit: uv run python -m sim.dream_register --out out/registerN
-visual_register = "A hyperreal photograph of extreme sharpness and resolution, every surface rendered in fine microscopic detail: the pores of concrete, the fibre of timber, the fine scratches on metal, individual leaves and blades of grass all separately legible. Shot from eye level with a normal focal length, deep focus carrying detail from the foreground to the far background. Every surface in the frame is free of writing, bare of signs, labels and lettering. One single photographic frame, whole and uncut."
+visual_register = "A hyperreal photograph of extreme sharpness and resolution, every surface rendered in fine microscopic detail: the pores of concrete, the fibre of timber, the fine scratches on metal, individual leaves and blades of grass all separately legible. Shot from eye level with a normal focal length, deep focus carrying detail from the foreground to the far background. One single photographic frame, whole and uncut."
 
 condense_model = "claude-opus-5"
 condense_effort = "high"
