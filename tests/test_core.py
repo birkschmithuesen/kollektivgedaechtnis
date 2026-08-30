@@ -355,3 +355,175 @@ async def test_settle_cut_end_gives_up_and_returns_stopped_at_unchanged(tmp_path
 
     assert result == 100.0
     assert elapsed >= 0.2
+
+
+# -- the LLM gate behind the wake word (2026-08-30) ----------------------------
+
+
+class WakeLLM:
+    """The cheap yes/no model, faked. Counts calls and can be made slow."""
+
+    def __init__(self, is_stop=True, delay=0.0):
+        self.is_stop = is_stop
+        self.delay = delay
+        self.calls = 0
+
+    def parse(self, system, user, output_model):
+        self.calls += 1
+        if self.delay:
+            time.sleep(self.delay)
+        if isinstance(self.is_stop, Exception):
+            raise self.is_stop
+        return output_model(is_stop_command=self.is_stop)
+
+
+def wake_core(tmp_path, wake_llm, **cfg_kwargs):
+    cfg = Config(data_dir=tmp_path / "state", interview_timeout_s=900, **cfg_kwargs)
+    store = Store.open(cfg.db_path)
+    processor, calls = make_processor()
+    core = Core(
+        cfg=cfg,
+        store=store,
+        bus=EventBus(),
+        transcript_log=TranscriptLog(cfg.transcript_log_path),
+        llm=object(),
+        embedder=HashEmbedder(dim=16),
+        processor=processor,
+        wake_llm=wake_llm,
+        settle_timeout_s=TEST_SETTLE_TIMEOUT_S,
+        settle_poll_s=TEST_SETTLE_POLL_S,
+    )
+    core.processed = calls
+    return core
+
+
+async def test_a_freely_worded_stop_behind_the_name_closes_the_interview(tmp_path):
+    llm = WakeLLM(is_stop=True)
+    core = wake_core(tmp_path, llm)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    core.on_final(
+        TranscriptionEvent(
+            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+        )
+    )
+    await core.drain()
+
+    # A reason of its own, so store and logs say which of the two ways fired.
+    assert core.store.get_person("p1").stop_reason == "spoken_llm"
+    assert core.processed == [("p1", 100.0, 180.0, 180.0)]
+    assert llm.calls == 1
+    core.store.close()
+
+
+async def test_a_no_from_the_llm_keeps_the_recording_running(tmp_path):
+    llm = WakeLLM(is_stop=False)
+    core = wake_core(tmp_path, llm)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    core.on_final(
+        TranscriptionEvent(type="final", text="Robo hat mir gestern geholfen", timestamp=180.0)
+    )
+    await core.drain()
+
+    assert core.store.open_person().id == "p1"
+    assert llm.calls == 1
+    core.store.close()
+
+
+async def test_a_dead_proxy_leaves_the_mechanical_way_untouched(tmp_path):
+    """2026-08-30: an expired subscription token answered every call with
+    auth_error. The station has to keep working through that."""
+    llm = WakeLLM(is_stop=RuntimeError("auth_error"))
+    core = wake_core(tmp_path, llm)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    core.on_final(
+        TranscriptionEvent(
+            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+        )
+    )
+    await core.drain()
+    assert core.store.open_person().id == "p1"  # still recording
+
+    core.on_final(TranscriptionEvent(type="final", text="Interview beendet", timestamp=200.0))
+    await core.drain()
+    assert core.store.get_person("p1").stop_reason == "spoken"
+    core.store.close()
+
+
+async def test_switched_off_nothing_is_ever_asked(tmp_path):
+    llm = WakeLLM(is_stop=True)
+    core = wake_core(tmp_path, llm, wake_word_llm=False)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    core.on_final(
+        TranscriptionEvent(
+            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+        )
+    )
+    await core.drain()
+
+    assert core.store.open_person().id == "p1"
+    assert llm.calls == 0
+    core.store.close()
+
+
+async def test_ordinary_finals_never_reach_the_model(tmp_path):
+    """The cost guarantee, measured where the money is actually spent."""
+    llm = WakeLLM(is_stop=True)
+    core = wake_core(tmp_path, llm)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    for at, text in enumerate(
+        ["wir brauchen mehr Holzbau", "die Bodenpreise sind das Problem"], start=110
+    ):
+        core.on_final(TranscriptionEvent(type="final", text=text, timestamp=float(at)))
+    # And a mechanical hit does not pay for a second opinion either.
+    core.on_final(TranscriptionEvent(type="final", text="Interview beendet", timestamp=180.0))
+    await core.drain()
+
+    assert core.store.get_person("p1").stop_reason == "spoken"
+    assert llm.calls == 0
+    core.store.close()
+
+
+async def test_a_slow_answer_neither_blocks_the_loop_nor_the_next_utterance(tmp_path):
+    """The call sits on the hot path of a running recording: it runs off the
+    event loop and gives up after a hard, short budget."""
+    llm = WakeLLM(is_stop=True, delay=30.0)
+    core = wake_core(tmp_path, llm, wake_word_llm_timeout_s=0.1)
+    core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
+    await core.drain()
+
+    ticks = 0
+
+    async def ticker():
+        nonlocal ticks
+        while True:
+            ticks += 1
+            await asyncio.sleep(0.005)
+
+    beat = asyncio.create_task(ticker())
+    began = time.monotonic()
+    core.on_final(
+        TranscriptionEvent(
+            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+        )
+    )
+    core.on_final(
+        TranscriptionEvent(type="final", text="und noch ein Satz danach", timestamp=181.0)
+    )
+    await core.drain()
+    elapsed = time.monotonic() - began
+    beat.cancel()
+
+    assert elapsed < 5.0  # the 30 s answer was abandoned, not waited for
+    assert ticks > 3  # …and the rest of the station kept running meanwhile
+    assert core.store.open_person().id == "p1"  # a lost answer never closes
+    core.store.close()

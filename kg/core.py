@@ -9,6 +9,7 @@ import time
 from kg.pipeline import process_interview
 from kg.server import broadcast_graph, broadcast_state
 from kg.session import SessionTracker
+from kg.stop_intent import make_stop_intent
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ class Core:
         processor=process_interview,
         settle_timeout_s: float = SETTLE_TIMEOUT_S,
         settle_poll_s: float = SETTLE_POLL_S,
+        wake_llm=None,
     ) -> None:
         self.cfg = cfg
         self.store = store
@@ -75,11 +77,18 @@ class Core:
         # reset (spec: state must be reconstructible from SQLite) and keeps
         # the one-interview-at-a-time guarantee across a restart.
         open_person = store.open_person()
+        # A second, cheap client, separate from the pipeline's `llm`, and only
+        # if the config asks for it AND there is a name to gate on. Without it
+        # the tracker never asks anyone anything (spec 5, 2026-08-30).
+        stop_intent = None
+        if wake_llm is not None and cfg.wake_word_llm and cfg.wake_word:
+            stop_intent = make_stop_intent(wake_llm, cfg.wake_word_llm_timeout_s)
         self.tracker = SessionTracker(
             cfg.interview_timeout_s,
             cfg.stop_phrases,
             open_since=open_person.started_at if open_person else None,
             wake_word=cfg.wake_word,
+            stop_intent=stop_intent,
         )
         self._queue: asyncio.Queue = asyncio.Queue()
         self._tasks: set[asyncio.Task] = set()
@@ -138,7 +147,19 @@ class Core:
         elif kind == "text":
             transitions = self.tracker.text_message(at)
         elif kind == "final":
-            transitions = self.tracker.transcript(payload, at)
+            if self.tracker.stop_intent is None:
+                transitions = self.tracker.transcript(payload, at)
+            else:
+                # A final may now cost an LLM call, so it must not run on the
+                # event loop — the wall, the SSE stream and the Telegram poller
+                # all live there. A thread instead of a background task: this
+                # worker is the tracker's only caller, so awaiting keeps the
+                # event order exactly as it is for every other event, and a
+                # photo can never arrive "during" a stop check and get its
+                # brand-new interview closed by the answer to the old one.
+                # The waiting itself is bounded by kg.stop_intent's own hard
+                # timeout, so this can delay the queue by seconds, never hang.
+                transitions = await asyncio.to_thread(self.tracker.transcript, payload, at)
         else:
             transitions = self.tracker.tick(at)
 

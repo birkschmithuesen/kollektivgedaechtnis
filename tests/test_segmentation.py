@@ -3,7 +3,12 @@ import unicodedata
 import pytest
 
 from kg.config import DEFAULT_STOP_PHRASES, DEFAULT_WAKE_WORD
-from kg.segmentation import find_stop_phrase, normalize, strip_stop_phrases
+from kg.segmentation import (
+    contains_wake_word,
+    find_stop_phrase,
+    normalize,
+    strip_stop_phrases,
+)
 
 PHRASES = ["Interview beendet", "Aufnahme beenden"]
 
@@ -233,3 +238,41 @@ def test_a_renamed_bot_is_a_config_change_not_a_code_change():
     text = "Hey Roboter, Interview beendet"
     assert find_stop_phrase(text, CONFIGURED, wake_word="Hey Roboter") is not None
     assert "Roboter" not in strip_stop_phrases(text, CONFIGURED, wake_word="Hey Roboter")
+
+
+# -- the gate in front of the LLM ---------------------------------------------
+# Mechanical and deterministic on purpose: it decides whether an LLM call is
+# bought at all (kg.session), so it must never itself cost or guess anything.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Robo, hiermit beende ich das Interview",
+        "Robo hat mir gestern geholfen",
+        "robo, wir sind fertig",
+        "Ich glaube, Robo. Wir hören auf.",
+    ],
+)
+def test_the_name_anywhere_in_the_utterance_opens_the_gate(text):
+    assert contains_wake_word(text, WAKE) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "hiermit beende ich das Interview",
+        "wir brauchen mehr Holzbau",
+        # Not a substring match: the name has to be a word of its own, or every
+        # "Robotik" in a conference about building would buy an LLM call.
+        "Robotik verändert die Baustelle",
+        "",
+    ],
+)
+def test_anything_else_keeps_the_gate_shut(text):
+    assert contains_wake_word(text, WAKE) is False
+
+
+def test_without_a_configured_name_the_gate_never_opens():
+    assert contains_wake_word("Robo, wir sind fertig", None) is False
+    assert contains_wake_word("Robo, wir sind fertig", "") is False

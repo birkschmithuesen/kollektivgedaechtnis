@@ -32,6 +32,33 @@ stop_phrases = [
 # er hier umbenannt; leer lassen schaltet den Weg ab.
 wake_word = "Robo"
 
+# Greift hinter dem Namen KEINE der Phrasen oben, entscheidet ein kleines
+# Modell, ob trotzdem ein Beenden-Befehl gemeint war. Anlass: Birk beendete am
+# 2026-08-30 an der Station mit „Hiermit beende ich das Interview." — das Verb
+# steht voran, keine konfigurierte Phrase passt, das Interview blieb offen.
+# Keine Phrasenliste löst das allgemein; niemand schreibt vorab alle
+# natürlichen Formulierungen auf.
+#
+# Das Wake-Word ist dabei der Torwächter: OHNE den Namen wird NIE gefragt (kein
+# Dauerlauschen, keine Kosten, keine Latenz), und ein mechanischer Treffer
+# fragt ebenfalls nicht — der schnelle, kostenlose Normalfall bleibt, wie er
+# ist. Ein Treffer über diesen Weg steht als `spoken_llm` in der Datenbank,
+# der mechanische als `spoken`.
+#
+# Timeout, Fehler oder ein totes Proxy beenden NICHTS: das Interview läuft
+# weiter, der 15-Minuten-Timeout und die Textnachricht an den Bot bleiben der
+# sichere Weg. `false` verhält sich exakt wie vor dem 2026-08-30.
+wake_word_llm = true
+# Bewusst nicht `llm_model`: hier fällt ein einziges Ja/Nein, nicht die
+# Verdichtung eines Interviews. Sonnet und nicht Haiku 4.5, weil kg/llm.py
+# immer `output_config.effort` mitschickt und Haiku 4.5 das ablehnt.
+wake_word_llm_model = "claude-sonnet-5"
+# Hartes Budget für diesen einen Aufruf — er liegt im heißen Pfad einer
+# laufenden Aufnahme. Eine Antwort, die später kommt, wird verworfen. Gemessen
+# am 2026-08-30 über Birks Proxy: 1,8-2,9 s für die fünf Beispiele oben, also
+# rund das Doppelte des Schlechtesten als Budget.
+wake_word_llm_timeout_s = 6.0
+
 # Calibrated in simulation (spec 6.3), NOT runtime-adjustable.
 # Run 19b (60 interviews, out/sim19b/sim.db, .superpowers/sdd/task-19-report.md):
 #   the model self-limits to 4.35 terms per interview against this cap of 5, so

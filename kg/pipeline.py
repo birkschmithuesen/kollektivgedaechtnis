@@ -40,6 +40,14 @@ def process_interview(
     # (kg.core.settle_cut_end); every other path leaves cut_end at stopped_at.
     raw = transcript_log.text_between(started_at, stopped_at if cut_end is None else cut_end)
     text = strip_stop_phrases(raw, cfg.stop_phrases, cfg.wake_word)
+    # The mechanical stripper only knows the CONFIGURED phrases, so a freely
+    # worded stop that only the LLM gate recognised (reason "spoken_llm",
+    # kg.session) survives this line — deliberately. Step 2 below removes it:
+    # extract() puts `interview_end_index` where the interview ends in
+    # substance and terms are taken from BEFORE that index only, which is the
+    # same mechanism that already drops every farewell, bit of smalltalk and
+    # next person's voice at the tail of the cut. Nothing extra is built here;
+    # a second, redundant cut would only cost content when it guessed wrong.
 
     if not text.strip():
         store.set_person_transcript(person_id, "")

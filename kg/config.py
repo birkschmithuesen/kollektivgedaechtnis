@@ -20,6 +20,12 @@ DEFAULT_STOP_PHRASES = [
 # never hardcodes it (kg/segmentation.py).
 DEFAULT_WAKE_WORD = "Robo"
 
+# …and behind that name, when no configured phrase matches, one small model
+# decides whether a stop was meant (Birk, 2026-08-30: „Hiermit beende ich das
+# Interview." ended nothing). Deliberately not the pipeline's model: one
+# boolean per addressed utterance, not the condensation of an interview.
+DEFAULT_WAKE_WORD_LLM_MODEL = "claude-sonnet-5"
+
 # Prompt dial for merge aggressiveness (spec 6.2): calibrated in simulation,
 # never exposed at runtime.
 DEFAULT_MERGE_STYLE = (
@@ -36,6 +42,13 @@ class Config:
     interview_timeout_s: int = 900
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
     wake_word: str = DEFAULT_WAKE_WORD
+    # False = exactly the behaviour before 2026-08-30: mechanics only, never a
+    # call. The gate stays the wake word in either case (kg/session.py).
+    wake_word_llm: bool = True
+    wake_word_llm_model: str = DEFAULT_WAKE_WORD_LLM_MODEL
+    # Hard budget for that call. It sits on the hot path of a running
+    # recording, so a late answer is dropped rather than waited for.
+    wake_word_llm_timeout_s: float = 6.0
     terms_per_interview: int = 5
     # Run 19c: 5 was too narrow — in 7 of 8 near-misses of run 19b the
     # concept's own node sat at rank 7-56 in the candidate pool and was never
@@ -112,6 +125,9 @@ _FIELD_NAMES = {
     "interview_timeout_s",
     "stop_phrases",
     "wake_word",
+    "wake_word_llm",
+    "wake_word_llm_model",
+    "wake_word_llm_timeout_s",
     "terms_per_interview",
     "merge_neighbours",
     "merge_style",

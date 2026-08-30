@@ -186,6 +186,22 @@ def find_stop_phrase(
     return None
 
 
+def contains_wake_word(text: str, wake_word: str | None) -> bool:
+    """Is the bot addressed by name anywhere in this utterance?
+
+    The gate in front of the LLM check (kg.session, kg.stop_intent): only an
+    utterance that names the bot may ever cost a model call. Deliberately
+    looser than find_stop_phrase — it asks nothing about a command behind the
+    name, that judgement is the model's job — but just as mechanical, and it
+    matches whole tokens only, so „Robotik" on a building conference never buys
+    a call.
+    """
+    if not wake_word:
+        return False
+    _, tokens = _tokenize(text)
+    return bool(_find_phrase_matches(_phrase_tokens(wake_word), tokens, 0))
+
+
 def strip_stop_phrases(text: str, phrases: Sequence[str], wake_word: str | None = None) -> str:
     """Remove every occurrence of a stop phrase. MUST run before extraction (spec 5).
 

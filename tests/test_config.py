@@ -59,6 +59,27 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
     assert cfg.wake_word == "Robo"
 
 
+def test_the_llm_gate_behind_the_wake_word_is_on_by_default_and_runs_cheap(tmp_path):
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\n', encoding="utf-8")
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.wake_word_llm is True
+    # Deliberately NOT the pipeline's model: one boolean does not need Opus.
+    assert cfg.wake_word_llm_model != cfg.llm_model
+    # Hard and short — this sits on the hot path of a running recording.
+    assert 0 < cfg.wake_word_llm_timeout_s <= 10
+
+
+def test_the_llm_gate_can_be_switched_off(tmp_path):
+    """Off means exactly today's behaviour: mechanics only, never a call."""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\nwake_word_llm = false\n', encoding="utf-8")
+
+    assert load_config(cfg_file).wake_word_llm is False
+
+
 def test_the_wake_word_is_configurable_because_the_bot_can_be_renamed(tmp_path):
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text('data_dir = "state"\nwake_word = "Ada"\n', encoding="utf-8")

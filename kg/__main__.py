@@ -19,6 +19,7 @@ from kg.embeddings import build_embedder
 from kg.export import write_graph_json
 from kg.llm import LLMClient
 from kg.server import create_app
+from kg.stop_intent import build_stop_intent_llm
 from kg.store import Store
 from kg.stt_client import STTClient
 from kg.telegram_bot import TelegramSource
@@ -171,7 +172,11 @@ async def main_async(args) -> None:
     # model, and repeated terms are served from the cache.
     embedder = build_embedder(cfg)
 
-    core = Core(cfg, store, bus, transcript_log, llm, embedder)
+    # Second, small client for the one yes/no question behind the wake word
+    # (spec 5, 2026-08-30). None when the way is switched off in the config.
+    wake_llm = build_stop_intent_llm(cfg)
+
+    core = Core(cfg, store, bus, transcript_log, llm, embedder, wake_llm=wake_llm)
     write_graph_json(store, cfg.graph_json_path)  # state is reconstructed from SQLite
 
     app = create_app(store, cfg, bus)
