@@ -1,5 +1,6 @@
 import yaml
 
+from kg.extraction import ALTERNATIVE_QUESTIONS
 from sim.generate_interviews import (
     DEFAULT_GENERATION_MODEL,
     PLANTED,
@@ -11,13 +12,22 @@ from sim.generate_interviews import (
 )
 
 
-def test_the_five_real_guiding_questions_are_used_verbatim():
-    assert len(QUESTIONS) == 5
+def test_the_three_guiding_questions_are_used_verbatim():
+    """Three since 2026-08-30 (Birk) — chosen by how much room each theme gets
+    in the conference programme. The two dropped ones live on as
+    ALTERNATIVE_QUESTIONS and must NOT leak back into the corpus: the
+    simulation has to describe what the station actually asks."""
+    assert len(QUESTIONS) == 3
     assert any("in 20 Jahren" in q for q in QUESTIONS)
-    assert any("Eine KI plant Ihr nächstes Zuhause" in q for q in QUESTIONS)
-    assert any("radikalen Bruch" in q for q in QUESTIONS)
-    assert any("Wer sollte entscheiden" in q for q in QUESTIONS)
-    assert any("für die Natur mehr übrig" in q for q in QUESTIONS)
+    assert any("Regelwerk" in q for q in QUESTIONS)
+    assert any("Städte und Dörfer" in q for q in QUESTIONS)
+
+
+def test_the_alternatives_are_kept_but_stay_out_of_the_corpus():
+    assert len(ALTERNATIVE_QUESTIONS) == 2
+    assert any("Eine KI plant Ihr nächstes Zuhause" in q for q in ALTERNATIVE_QUESTIONS)
+    assert any("für die Natur mehr übrig" in q for q in ALTERNATIVE_QUESTIONS)
+    assert not set(ALTERNATIVE_QUESTIONS) & set(QUESTIONS)
 
 
 def test_the_plan_is_deterministic():
@@ -26,7 +36,7 @@ def test_the_plan_is_deterministic():
 
 def test_every_question_and_every_speaker_type_is_covered():
     plan = plan_corpus(60)
-    assert {spec.question_index for spec in plan} == set(range(5))
+    assert {spec.question_index for spec in plan} == set(range(len(QUESTIONS)))
     assert {spec.speaker_type for spec in plan} == set(SPEAKER_TYPES)
 
 

@@ -14,9 +14,13 @@ class FakeLLM:
 def test_the_prompt_carries_the_concreteness_examples_verbatim():
     assert "Betonspritzen mit Drohnen" in EXTRACTION_SYSTEM
     assert "Nachhaltigkeit" in EXTRACTION_SYSTEM
-    # The five real guiding questions, so the right text genre is targeted.
+    # The three real guiding questions, so the right text genre is targeted —
+    # and the two ALTERNATIVE_QUESTIONS explicitly NOT, because the extraction
+    # prompt must describe what the station actually asks (2026-08-30).
     assert "in 20 Jahren" in EXTRACTION_SYSTEM
-    assert "Eine KI plant Ihr nächstes Zuhause" in EXTRACTION_SYSTEM
+    assert "Regelwerk" in EXTRACTION_SYSTEM
+    assert "Städte und Dörfer" in EXTRACTION_SYSTEM
+    assert "Eine KI plant Ihr nächstes Zuhause" not in EXTRACTION_SYSTEM
 
 
 def test_the_user_prompt_states_the_hard_cap_and_carries_the_transcript():

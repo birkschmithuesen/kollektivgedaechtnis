@@ -4,18 +4,56 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-# The five real guiding questions from the briefing. Single source of truth:
-# the simulation corpus generator (sim/generate_interviews.py) imports these,
-# so the test corpus can never drift away from the extraction prompt (spec 9).
+# The three guiding questions actually asked at the station. Single source of
+# truth: the simulation corpus generator (sim/generate_interviews.py) imports
+# these, so the test corpus can never drift away from the extraction prompt
+# (spec 9).
+#
+# **Three, not five, since 2026-08-30 (Birk).** The five drafts were narrowed
+# to the three themes the conference programme itself spends most time on —
+# counted over all 37 content slots of both days, each assigned to exactly one
+# question: future/what should differ 13, who decides 8, system break 7, AI 6,
+# nature/restraint 3. The reasoning is that the station should carry on the
+# conversation happening in the halls: a theme the conference already handles
+# is a reason to pick it up, not to leave it out. „Der Systembruch beginnt
+# jetzt" is the motto of day one.
+#
+# The two dropped questions are NOT deleted — they are kept below as
+# ALTERNATIVES, fully worded, for when someone brings the topic up themselves
+# or a main question turns out to be barren on site. Full record, including the
+# per-question count and the wording history:
+# `entities/artesmobiles/projekte/NewBauhaus/stationen/interview-graph-photobooth/interviewfragen.md`
+# in the hermes-entities vault.
+#
+# Two wordings were sharpened at the same time, both because the old ones
+# steered the answers wrong:
+# * „das Bestehende klüger reparieren" sounds like masonry although it means
+#   RULES — demonstrably so: the old corpus produced the terms „Klüger
+#   reparieren" and „Strukturelle Reparatur" as building terms, sitting next to
+#   „Weiterbauen im Bestand". Answers about renovation are then
+#   indistinguishable from question 1's.
+# * „wie Ihr Ort sich verändert … fühlen Sie sich gehört?" assumes a resident's
+#   role almost nobody in the hall has (mayors, managing directors, presidiums)
+#   and pulls a professional back into a private one.
 GUIDING_QUESTIONS = [
     "Wenn Sie an das Haus oder die Stadt denken, in der Sie in 20 Jahren leben "
     "wollen — was wäre das Erste, das anders sein sollte als heute?",
+    "Das Bauen erstickt an Normen, Genehmigungen und Standards — braucht es "
+    "dafür einen radikalen Bruch, oder lässt sich das bestehende Regelwerk "
+    "Schritt für Schritt entrümpeln?",
+    "Wer sollte entscheiden, wie sich Städte und Dörfer verändern — und wie "
+    "weit sollen die Menschen, die dort leben, wirklich mitbestimmen dürfen?",
+]
+
+#: Kept, not asked by default. Available if a visitor goes there on their own,
+#: if the station runs more than three questions, or as a replacement should a
+#: main question prove barren on site. NOT part of GUIDING_QUESTIONS: the
+#: corpus and the extraction prompt must describe what the station actually
+#: asks, or the simulation tests a different text genre than the one that
+#: arrives on the day.
+ALTERNATIVE_QUESTIONS = [
     "Eine KI plant Ihr nächstes Zuhause — bis wohin vertrauen Sie ihr? Wo wollen "
     "Sie unbedingt einen Menschen entscheiden lassen?",
-    "Braucht das Bauen einen radikalen Bruch mit dem System — oder reicht es, das "
-    "Bestehende klüger zu reparieren?",
-    "Wer sollte entscheiden, wie Ihr Ort/Ihre Stadt sich verändert — und fühlen "
-    "Sie sich dabei gehört?",
     "Worauf würden Sie beim Bauen verzichten, damit für die Natur mehr übrig "
     "bleibt? Gibt es etwas, auf das Sie niemals verzichten möchten?",
 ]
@@ -29,7 +67,7 @@ Du verdichtest das Transkript eines gesprochenen Interviews auf einer \
 Architektur- und Baukultur-Konferenz (Festival NEW bauhaus 2026) zu wenigen, \
 sehr konkreten Begriffen.
 
-Den Personen wurden diese fünf Leitfragen gestellt:
+Den Personen wurden diese drei Leitfragen gestellt:
 {_QUESTION_BLOCK}
 
 Das Transkript kommt aus automatischer Spracherkennung: Füllwörter, \

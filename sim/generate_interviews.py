@@ -15,9 +15,10 @@ import yaml
 
 from kg.extraction import GUIDING_QUESTIONS as QUESTIONS  # noqa: F401  (re-exported)
 
-# NOT redefined here: the corpus must be generated from the SAME five guiding
+# NOT redefined here: the corpus must be generated from the SAME guiding
 # questions the extraction prompt names, otherwise the simulation tests the
-# wrong text genre (spec 9).
+# wrong text genre (spec 9). Three since 2026-08-30 — see kg/extraction.py for
+# why these three and not the original five.
 
 # Sonnet, not the Opus default used for real extraction/merge-judge calls:
 # writing synthetic spoken German does not need Opus-level reasoning, and 60
