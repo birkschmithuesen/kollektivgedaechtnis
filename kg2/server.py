@@ -17,12 +17,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+# Same Windows trap Tool 1 hit on the exhibition machine (2026-08-29): Windows
+# resolves MIME types through the registry, where HKCR\.js is routinely
+# "text/plain", and Starlette's StaticFiles takes `mimetypes` at its word.
+# Chromium then refuses every ES module -- "Expected a JavaScript module script
+# but the server responded with a MIME type of text/plain" -- and the page comes
+# up styled but EMPTY, with no failing request and no traceback to follow.
+# Registered here too because kg2 serves its own frontend from its own process;
+# a no-op on Linux, where the mapping is already right.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend2"
 
