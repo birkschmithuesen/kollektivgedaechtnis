@@ -71,7 +71,9 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from kg2.weighting import (
+    RECENCY_SHARE,
     RECENT_TERMS,
+    REQUIRED_TERMS,
     SHARED_TERMS_SATURATION,
     SINGLE_MENTION_BUDGET,
     Material,
@@ -164,13 +166,26 @@ Mitte und dem unteren Teil der Liste, die das Bild konkret machen. Ein Bild, \
 das nur aus den ersten beiden Zeilen der Liste besteht, hat das Material nicht \
 gelesen.
 
-WER DAS BILD TRÄGT, WECHSELT. Der meistgenannte Begriff muss VORKOMMEN, aber \
-er muss nicht die Hauptsache sein. Wähle als tragendes Motiv — das, was den \
-Bildmittelpunkt und den Ort bestimmt — bewusst einen anderen Begriff aus dem \
-Feld, und lass den meistgenannten daneben stehen: als Gegenstand am Rand, als \
-Spur an einer Fläche, als etwas, das gerade vorbei ist oder erst noch \
-kommt. Sonst zeigt jedes Bild des Tages dieselbe Sache, nur mit wechselnder \
-Kulisse, obwohl das Material breit ist.
+DIE PFLICHTBEGRIFFE. Das Material beginnt mit einer kurzen Liste von \
+Begriffen, die ins Bild MÜSSEN. Sie ist nicht gemeint, sondern gerechnet — aus \
+der Zahl der Menschen, die einen Begriff genannt haben, und aus dem Zeitpunkt, \
+an dem er zuerst fiel. Nimm sie als gesetzt: Jeder dieser Begriffe steht in \
+deiner Bildbeschreibung, als das was er meint, nicht nur als sein Wort. Das \
+ist die halbe Antwort auf die Frage, was ins Bild gehört.
+
+Die andere Hälfte ist deine: Die lange Liste darunter zeigt das ganze Feld. \
+Nimm dort weitere Begriffe her, die das Bild konkret machen und die zu den \
+Pflichtbegriffen passen — aus der Mitte und dem unteren Teil, nicht nur von \
+oben. Ein Bild, das nur aus der Pflichtliste besteht, ist eine Aufzählung; \
+eines, das nur aus dem unteren Teil besteht, gibt die Gewichtung falsch \
+wieder.
+
+WELCHER BEGRIFF DAS BILD TRÄGT, ENTSCHEIDEST DU. Die Pflichtliste sagt, WAS \
+vorkommt, nicht was im Mittelpunkt steht. Wähle als tragendes Motiv — das, was \
+Ort und Blickrichtung bestimmt — den Begriff, der die stärkste Szene hergibt, \
+und stelle die übrigen daneben: als Gegenstand am Rand, als Spur an einer \
+Fläche, als etwas, das gerade vorbei ist oder erst noch kommt. So zeigt nicht \
+jedes Bild des Tages dieselbe Sache mit wechselnder Kulisse.
 
 DER JÜNGSTE BLOCK MUSS SICHTBAR WERDEN. Unter „Zuletzt gesagt\" stehen die \
 Begriffe aus den zuletzt geführten Gesprächen. Mindestens zwei davon gehören \
@@ -220,11 +235,19 @@ mit ihm zusammen aufbewahrt.
 BILDBESCHREIBUNG: Liefere zusätzlich eine ausführlichere englische \
 Beschreibung DERSELBEN Szene, die auch der deutsche Satz zeigt — keine zweite, \
 andere Szene daneben. Der Wandsatz und diese Beschreibung sind dasselbe Bild, \
-einmal knapp und einmal ausführlich. Zusammenhängende Prosa, drei bis vier \
-Sätze, ungefähr 50 bis 80 Wörter. Benenne, was konkret zu sehen ist: \
-Materialien, Oberflächen, wie das Licht auf den Dingen liegt, wie die Dinge im \
-Raum zueinander stehen, wie groß sie im Verhältnis zueinander sind. Diese \
-Fassung ist das Bildmotiv für Stufe 2.
+einmal knapp und einmal ausführlich. Zusammenhängende Prosa, sechs bis acht \
+Sätze, ungefähr 130 bis 180 Wörter. Nimm dir diesen Raum wirklich: Das \
+Material eines Ausstellungstags trägt dutzende Begriffe, und eine zu knappe \
+Beschreibung zwingt dich, fast alles davon wegzulassen — dann steht am Ende \
+dieselbe magere Szene an der Wand wie am Vormittag, obwohl inzwischen fünfzig \
+Menschen gesprochen haben. Ein Bildmodell verkraftet viele Einzelheiten in \
+einem Raum; was es nicht verkraftet, sind zwei Räume.
+
+Benenne, was konkret zu sehen ist: Materialien, Oberflächen, den Zustand der \
+Dinge, wie sie im Raum zueinander stehen, wie groß sie im Verhältnis \
+zueinander sind, was die Menschen darin mit den Händen tun, und was in der \
+Tiefe des Bildes liegt. Geh vom Vordergrund nach hinten durch, damit nichts \
+nur als Aufzählung danebensteht. Diese Fassung ist das Bildmotiv für Stufe 2.
 
 SCHRIFT IM BILD: SO WENIG WIE MÖGLICH, UND WENN, DANN MIT WORTLAUT. Der \
 Regelfall ist ein Bild OHNE Schrift. Zeige, was gemeint ist, an der FORM der \
@@ -423,17 +446,29 @@ def build_condense_prompt(
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
+    required_terms: int = REQUIRED_TERMS,
+    recency_share: float = RECENCY_SHARE,
 ) -> str:
     """`single_mention_budget`/`shared_terms_saturation`/`recent_terms` only
     exist so `sim.dream_calibrate terms`/`recency` can try other values
     (kg2/weighting.py's gliding formula and recency block) without
-    duplicating this function; production always uses the module defaults."""
+    duplicating this function; production always uses the module defaults.
+
+    `required_terms`/`recency_share` are the two dials behind the mechanical
+    required-terms block (`kg2.weighting.select_required`, added 2026-08-30 on
+    Birk's suggestion). They are passed through for the same reason — and
+    because a calibration run that sets `single_mention_budget=0` must not get
+    single mentions back through the required block, which would make that
+    dial silently mean nothing.
+    """
     rendered = render_material(
         material,
         include_quotes=include_quotes,
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
         recent_terms=recent_terms,
+        required_terms=required_terms,
+        recency_share=recency_share,
     )
     return f"{rendered}\n\n--- ENDE MATERIAL ---\n\nAntworte mit genau einem Satz."
 

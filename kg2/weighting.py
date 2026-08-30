@@ -251,6 +251,110 @@ def select_recent(material: Material, *, count: int = RECENT_TERMS) -> list[Term
     return newest_first[:count]
 
 
+#: Wie viele Begriffe VERBINDLICH ins Bild müssen (`select_required` unten).
+#: Fünf, weil ein Bild etwa so viele Dinge tragen kann, ohne zur Aufzählung zu
+#: werden — bei zehn beschreibt Stufe 1 einen Katalog, bei zwei fällt die
+#: halbe Materiallage weg. Nicht kalibriert, sondern gesetzt: Der Wert ist ein
+#: Regler für Birk (Operator-UI), keine Messgröße.
+REQUIRED_TERMS = 5
+
+#: Wie sich die fünf Pflichtplätze zwischen den beiden Achsen aufteilen:
+#: 0.0 = alle nach Häufigkeit, 1.0 = alle nach Neuheit. 0.4 heißt drei
+#: meistgenannte plus zwei jüngste.
+#:
+#: Warum es diesen Regler gibt (Birk, 2026-08-30): Die beiden Achsen ziehen
+#: gegeneinander. Nur Häufigkeit heißt, dass das Bild bei sechzig Interviews
+#: dasselbe zeigt wie bei zehn, weil die frühen Begriffe oben bleiben. Nur
+#: Neuheit heißt, dass das, worüber alle geredet haben, aus dem Bild fällt.
+#: Beides ist am Material passiert, beides an einem Tag.
+RECENCY_SHARE = 0.4
+
+
+def select_required(
+    material: Material,
+    *,
+    count: int = REQUIRED_TERMS,
+    recency_share: float = RECENCY_SHARE,
+    allow_single_mentions: bool = True,
+) -> list[TermWeight]:
+    """Die Begriffe, die in DIESEM Bild vorkommen MÜSSEN — mechanisch bestimmt.
+
+    Birks Einwand vom 2026-08-30, und er trifft: „Wie oft ein Begriff genannt
+    wurde und wie lange er schon besteht, das sind harte Zahlen. Da könntest du
+    doch einfach mit einem Script die Liste machen, die im Bild sein muss."
+
+    Bis dahin bekam Stufe 1 die vollständige, nach Häufigkeit sortierte Liste
+    — bei sechzig Interviews 49 geteilte Begriffe — und dazu die Prosa-Bitte,
+    „das Meistgenannte" zu berücksichtigen. Das Ergebnis war beides Mal falsch,
+    je nachdem wie die Bitte formuliert war: Einmal stand in allen fünf Bildern
+    dasselbe (die Spitze gewann immer), einmal fiel der von sieben Menschen
+    genannte Begriff ganz heraus, während der Satz aus lauter Einmal-Nennungen
+    bestand. Eine Auswahl, die sich aus zwei Zahlen ergibt, gehört nicht in
+    einen Prompt, sondern in Code — dort ist sie nachvollziehbar, prüfbar und
+    für Birk verstellbar, statt vom Formulierungsglück abzuhängen.
+
+    Zwei Achsen, beide aus dem Graphen, keine davon geschätzt:
+
+    * **Häufigkeit** — `mentions`, wie viele Menschen den Begriff genannt
+      haben. Das ist die Gewichtung, die spec §5.1 verlangt.
+    * **Neuheit** — `created_at`, wann der Begriff zuerst auftauchte. Das ist
+      die Achse, an der sichtbar wird, dass seit dem letzten Traum jemand
+      gesprochen hat.
+
+    `recency_share` teilt die Plätze zwischen beiden auf. Die Häufigkeitsplätze
+    gehen an die meistgenannten Begriffe, die Neuheitsplätze an die jüngsten,
+    die dort noch nicht stehen — Duplikate werden übersprungen, statt einen
+    Platz zu verbrauchen, sonst schrumpft die Liste, je stärker sich die beiden
+    Achsen einig sind.
+
+    Gezogen wird aus `shared` UND `marginal`: Ein Begriff, den gerade eben
+    jemand zum ersten Mal gesagt hat, hat definitionsgemäß eine Nennung und
+    könnte über die Häufigkeit nie hereinkommen — genau ihn soll die
+    Neuheitsachse holen. Für die Häufigkeitsplätze bleibt `marginal` faktisch
+    außen vor, weil jeder geteilte Begriff mehr Nennungen hat.
+
+    `allow_single_mentions=False` sperrt Einmal-Nennungen ganz aus. Nur für
+    Kalibrierläufe, die `single_mention_budget=0` setzen: Sonst bekämen sie
+    die Randbegriffe über diese Liste zurück, und der Regler, den sie messen
+    wollen, bedeutete nichts mehr.
+    """
+    if count <= 0:
+        return []
+
+    alle = material.shared + material.marginal
+    if not allow_single_mentions:
+        alle = list(material.shared)
+    if not alle:
+        return []
+
+    aus_neuheit = round(count * max(0.0, min(1.0, recency_share)))
+    aus_haeufigkeit = count - aus_neuheit
+
+    haeufigste = sorted(alle, key=lambda w: (-w.mentions, w.label))
+    juengste = sorted(alle, key=lambda w: (-w.created_at, w.label))
+
+    gewaehlt: list[TermWeight] = []
+    schon = set()
+    for w in haeufigste[:aus_haeufigkeit]:
+        gewaehlt.append(w)
+        schon.add(w.label)
+    for w in juengste:
+        if len(gewaehlt) >= count:
+            break
+        if w.label not in schon:
+            gewaehlt.append(w)
+            schon.add(w.label)
+    # Bleiben Plätze frei (weil die Neuheitsachse nur Duplikate lieferte),
+    # fülle mit den nächsten häufigsten auf — die Liste soll `count` lang sein.
+    for w in haeufigste:
+        if len(gewaehlt) >= count:
+            break
+        if w.label not in schon:
+            gewaehlt.append(w)
+            schon.add(w.label)
+    return gewaehlt
+
+
 def render_material(
     material: Material,
     *,
@@ -258,6 +362,8 @@ def render_material(
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
+    required_terms: int = REQUIRED_TERMS,
+    recency_share: float = RECENCY_SHARE,
 ) -> str:
     """The German block that goes into stage 1's user message.
 
@@ -275,6 +381,25 @@ def render_material(
     function.
     """
     blocks: list[str] = []
+
+    required = select_required(
+        material,
+        count=required_terms,
+        recency_share=recency_share,
+        allow_single_mentions=single_mention_budget > 0,
+    )
+    if required:
+        lines = "\n".join(
+            f"  {w.label} ({w.mentions}× genannt)" for w in required
+        )
+        blocks.append(
+            "DIESE BEGRIFFE MÜSSEN INS BILD — alle, jeder als das was er "
+            "meint, nicht nur als sein Wort. Sie sind nicht ausgewählt, "
+            "sondern ausgerechnet: aus der Zahl der Menschen, die einen "
+            "Begriff genannt haben, und aus dem Zeitpunkt, an dem er zuerst "
+            "fiel. Steht einer nicht in deiner Bildbeschreibung, fehlt dem "
+            "Bild etwas, worüber heute wirklich gesprochen wurde:\n" + lines
+        )
 
     if material.shared:
         lines = "\n".join(f"  {w.mentions}× {w.label}" for w in material.shared)

@@ -164,9 +164,15 @@ def test_the_prompt_asks_for_a_longer_image_description():
 
     assert "BILDBESCHREIBUNG" in system
     # Length, named as a number so nobody can read „ausführlich" as one line.
-    assert "50" in system and "80" in system
-    # The concrete things the description is supposed to carry.
-    for asked_for in ("Materialien", "Oberflächen", "Licht"):
+    # Raised from 50-80 to 130-180 on 2026-08-30 (Birk, at the material): the
+    # day's graph carries dozens of terms, and at 80 words stage 1 has to drop
+    # nearly all of them — measured, the model was already overrunning the old
+    # ceiling on its own (88 words average against a stated 50-80).
+    assert "130" in system and "180" in system
+    # The concrete things the description is supposed to carry. NOT „Licht":
+    # naming light is now explicitly forbidden here, because it collides with
+    # the mood channel that owns it (same session, measured).
+    for asked_for in ("Materialien", "Oberflächen", "Zustand"):
         assert asked_for in system
 
 
@@ -216,9 +222,19 @@ def test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one():
     „von oben entschieden".
 
     Geprüft wird die Eigenschaft, nicht der Wortlaut: dass der Prompt
-    Sichtbarkeit verlangt UND ein sichtbares Beispiel mitliefert. Ein
-    abstraktes Gegenbeispiel allein genügt nicht — das Modell ahmt das
-    Positivbeispiel nach.
+    Sichtbarkeit verlangt und den Grund dafür nennt.
+
+    **Korrigiert am 2026-08-30.** Bis dahin verlangte dieser Test zusätzlich
+    ein POSITIVBEISPIEL, mit der Begründung „ein abstraktes Gegenbeispiel
+    allein genügt nicht — das Modell ahmt das Positivbeispiel nach". Der
+    zweite Halbsatz stimmt, die Schlussfolgerung war falsch herum: Das Modell
+    ahmt das Positivbeispiel WÖRTLICH nach. Gemessen über je fünf Bilder
+    stiegen die aus meinem Beispiel übernommenen Wendungen von 9 auf 30, und
+    jede einzelne Formulierung daraus tauchte in den Bildern wieder auf
+    („thin room outlines" 4/5, „round table signing" 3/5). Alle
+    Positivbeispiele sind deshalb aus dem Prompt entfernt; an ihrer Stelle
+    steht eine Prüffrage. Negativbeispiele bleiben — die werden nicht
+    nachgeahmt.
     """
     system = build_condense_system()
 
@@ -226,10 +242,11 @@ def test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one():
     assert "SICHTBARES" in system or "sichtbar" in system.lower()
     # Die Begründung, warum: ein Bildmodell zeigt keine Vorgänge.
     assert "Vorgang" in system
-    # Ein Positivbeispiel, an dem sich das Modell orientieren kann, und ein
-    # Negativbeispiel, das den Fehler benennt.
-    assert "Gut (sichtbar)" in system
+    # Ein Negativbeispiel, das den Fehler benennt, und eine Prüffrage an ihrer
+    # Stelle statt eines Musters (siehe Docstring).
+    assert "Gut (sichtbar)" not in system  # 2026-08-30, siehe Docstring
     assert "Schlecht (unsichtbar)" in system
+    assert "Fotograf" in system  # die Prüffrage, die an die Stelle trat
     # Das konkrete Gegenbeispiel aus Birks Befund muss als schlecht markiert
     # sein — es stand vorher als Vorbild da.
     schlecht = system[system.index("Schlecht (unsichtbar)"):]
@@ -298,9 +315,12 @@ def test_the_prompt_forbids_splitting_the_frame_into_two_pictures():
     # Die verbotenen Trennwendungen müssen benannt sein, sonst ist die Regel
     # eine Absichtserklärung: „links … rechts" ist genau der Fall, der auftrat.
     assert "links" in ort
-    # Und ein Positivbeispiel, an dem sich das Modell orientiert — ein
-    # Negativbeispiel allein hat beim Sichtbarkeits-Fix schon nicht gereicht.
-    assert "Gut (ein Ort)" in ort
+    # KEIN Positivbeispiel mehr (2026-08-30, siehe
+    # test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one):
+    # „a single façade where new render stops halfway" wurde wörtlich
+    # abgeschrieben. An seiner Stelle steht die Prüffrage.
+    assert "Gut (ein Ort)" not in ort
+    assert "Kamera von einem Punkt" in ort
 
     # Der Widerspruchs-Halbsatz trägt dieselbe Regel.
     assert "AUCH HIER EIN ORT" in system

@@ -436,7 +436,14 @@ def test_render_includes_the_recency_block():
 
 def test_a_shared_term_may_reappear_in_the_recency_block():
     """The point of the second block: a term already in the main block gets
-    doubly emphasised by showing up again here."""
+    doubly emphasised by showing up again here.
+
+    Counted against the two blocks by name rather than over the whole text:
+    since 2026-08-30 `render_material` opens with the mechanically computed
+    block of required terms (`select_required`), where the same term legitimately
+    appears a third time. Counting the whole string would make this test fail
+    for a reason that has nothing to do with the property it guards.
+    """
     material = build_material(
         graph(
             [person("p1"), person("p2"), term("t1", "Holzbau", 2, created_at=50.0)],
@@ -446,7 +453,10 @@ def test_a_shared_term_may_reappear_in_the_recency_block():
 
     text = render_material(material, recent_terms=1)
 
-    assert text.count("Holzbau") == 2
+    geteilt = text.split("Geteilte Begriffe")[1].split("Zuletzt gesagt")[0]
+    zuletzt = text.split("Zuletzt gesagt")[1]
+    assert "Holzbau" in geteilt
+    assert "Holzbau" in zuletzt
 
 
 def test_render_omits_the_recency_block_when_material_is_empty():
