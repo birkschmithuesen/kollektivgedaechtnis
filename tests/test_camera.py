@@ -440,10 +440,12 @@ def test_the_handover_lands_exactly_on_the_automatic_view(camera, mode):
     assert camera.evaluate("window.cyStub._zoom") == pytest.approx(target["zoom"])
     assert camera.evaluate("window.cyStub._pan.x") == pytest.approx(target["x"])
     assert camera.evaluate("window.cyStub._pan.y") == pytest.approx(target["y"])
-    # In the order of a leg of the tour (~5 s) rather than of a cut: long
-    # enough to read as one movement, short enough that the next visitor does
-    # not watch the wall unwind somebody else's pinch.
-    assert 0.5 < seconds < 3.0, seconds
+    # A full leg of the tour (~5 s), on Birk's call after watching it on the
+    # wall (2026-08-30). It read as a lurch at 1.5 s; the point is that the
+    # takeover should look like the tour simply carrying on. The window stays
+    # wide on purpose -- it pins the order of magnitude, not the constant,
+    # which lives in ROAM.handoverMs.
+    assert 3.0 < seconds < 8.0, seconds
 
 
 def test_after_the_handover_a_fit_wall_stands_still_again(camera):
@@ -459,7 +461,12 @@ def test_after_the_handover_a_fit_wall_stands_still_again(camera):
 def test_the_handover_eases_instead_of_running_at_a_constant_speed(camera):
     """Same feel as a leg of the tour: cosine in, cosine out."""
     _visitor_leaves_a_close_up(camera, "fit")
-    xs = [700.0] + [s["x"] for s in _view_samples(camera, 15)]
+    # Sample past the end of the handover (ROAM.handoverMs = 5000): the ease
+    # is only visible over the WHOLE travel. Sampling a fixed 1.5 s window --
+    # what this test did while the handover lasted exactly that long -- now
+    # catches just the accelerating first third and would fail on a perfectly
+    # good ease.
+    xs = [700.0] + [s["x"] for s in _view_samples(camera, 60)]
     deltas = [abs(b - a) for a, b in zip(xs, xs[1:])]
     moving = [d for d in deltas if d > 1e-9]
     assert moving[0] < max(moving)
@@ -511,7 +518,7 @@ def test_an_operator_fit_still_frames_in_a_single_frame(camera):
 # three regimes the wall is in — driven, in a visitor's hands, or travelling
 # between the two — so it publishes that as one number and the projection sizes
 # its discs off it. Interpolating on the handover's own clock is what keeps the
-# discs from snapping back to the ceiling at the end of the 1.5 s travel.
+# discs from snapping back to the ceiling at the end of the handover travel.
 
 
 def test_the_driven_modes_apply_the_portrait_ceiling_in_full(camera):

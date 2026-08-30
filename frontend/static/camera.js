@@ -31,15 +31,19 @@ const ROAM = {
   // Handing the view back: how long the camera takes to travel from the
   // close-up a visitor left behind to the view the automatic mode wants.
   //
-  // Deliberately shorter than a leg (5200 ms) and in the same breath longer
-  // than a cut: this is not part of the journey, it is the wall taking over
-  // after 30 s of nobody touching it, and the next person walking up should
-  // find it already moving rather than still unwinding somebody else's pinch.
+  // 5000 ms on Birk's call after watching it on the wall (2026-08-30). The
+  // first value was 1500 ms, reasoned from the leg duration (5200 ms) -- the
+  // handover should not read as part of the journey. Seen on the actual
+  // projection that argument does not survive: at 1.5 s the takeover still
+  // reads as a lurch rather than the wall calmly resuming, and this is the one
+  // transition an audience watches from a standstill. Now essentially a full
+  // leg, which is the point -- it should look like the tour simply carrying
+  // on.
   //
   // NOT scaled by the operator's speed slider, unlike travel and dwell. The
   // slider sets the pace of the tour; a quarter-speed setting must not leave a
-  // visitor's abandoned close-up on the wall for six seconds.
-  handoverMs: 1500,
+  // visitor's abandoned close-up on the wall for twenty seconds.
+  handoverMs: 5000,
 };
 
 /** Ease in and out — no abrupt starts, no arrivals that slam to a halt.
