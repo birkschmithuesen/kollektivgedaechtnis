@@ -293,16 +293,40 @@ def test_re_applying_the_same_state_does_not_re_fade(view):
 
 
 def test_the_typewriter_builds_the_sentence_up_while_stage_2_runs(view):
+    """Wortweise, nicht auf einen Schlag.
+
+    Repariert am 2026-08-30: Der Test wartete feste 120 ms und griff dann den
+    Zwischenstand ab. Bei 55 ms pro Wort (dream.js, TYPE_MS) und fünf Wörtern
+    ist das ein Rennen — allein lief er grün, im vollen Lauf unter Last war
+    der Satz nach 120 ms schon fertig und der Test rot. Ein Test, der von der
+    Auslastung des Rechners abhängt, sagt nichts über den Code.
+
+    Jetzt wird auf den ERSTEN Zwischenstand gewartet, statt auf die Uhr zu
+    schauen: sobald überhaupt Text steht, muss er kürzer als der ganze Satz
+    sein. Das prüft dieselbe Eigenschaft — es baut sich auf — und kann nicht
+    mehr am Zeitverhalten der Maschine scheitern.
+    """
     apply(view, state(current=dream(1), typewriter=True))
 
-    view.evaluate("() => window.kgDream.showDreaming('Der Beton träumt von Wald')")
-    view.wait_for_timeout(120)
+    ganzer_satz = "Der Beton träumt von Wald"
+    view.evaluate(f"() => window.kgDream.showDreaming({ganzer_satz!r})")
+
+    # Der erste Zustand, in dem überhaupt etwas steht — der muss unvollständig
+    # sein. Kein Timeout-Fenster, sondern eine Bedingung.
+    view.wait_for_function(
+        "() => document.getElementById('typewriter').innerText.length > 0",
+        timeout=10000,
+    )
     partial = view.locator("#typewriter").inner_text()
+
     view.wait_for_function(
         "() => document.getElementById('typewriter').innerText.includes('Wald')", timeout=10000
     )
 
-    assert partial != "Der Beton träumt von Wald"
+    assert partial != ganzer_satz
+    assert ganzer_satz.startswith(partial), (
+        f"der Zwischenstand muss ein Präfix des Satzes sein, war: {partial!r}"
+    )
     assert view.locator("#typewriter").is_visible() is True
 
 
