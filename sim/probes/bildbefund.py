@@ -83,7 +83,18 @@ def _aus_md(md: Path) -> tuple[str, str]:
     )
 
 
-def befunde(ordner: Path) -> list[dict]:
+def befunde(ordner: Path, widerspruch_aus: Path | None = None) -> list[dict]:
+    """`widerspruch_aus` holt den Widerspruchstext aus einem ANDEREN Ordner.
+
+    Gebraucht für den Radikaltest ohne mood/tension: dessen `.md` trägt an der
+    Stelle „NICHT GESENDET\", weil der Block wirklich nicht gesendet wurde. Wer
+    das dem Sehmodell als Widerspruch vorlegt, misst nichts und bekommt
+    trotzdem eine Zahl — beim ersten Versuch am 2026-08-30 kam 0/5 heraus, was
+    wie ein vernichtender Befund aussah und ein Messfehler war. Die Frage ist
+    aber sinnvoll: Sieht man den Widerspruch AUCH DANN, wenn er nicht im Prompt
+    stand? Dazu muss der Text aus dem Referenzlauf kommen, der auf demselben
+    Material sitzt.
+    """
     key = os.environ["OPENROUTER_API_KEY"]
     ergebnisse: list[dict] = []
     for md in sorted(ordner.glob("*.md")):
@@ -94,6 +105,8 @@ def befunde(ordner: Path) -> list[dict]:
         if bild is None:
             continue
         prompt, tension_source = _aus_md(md)
+        if widerspruch_aus is not None:
+            _, tension_source = _aus_md(widerspruch_aus / md.name)
         mime = "image/png" if bild.suffix == ".png" else "image/jpeg"
         b64 = base64.b64encode(bild.read_bytes()).decode()
         antwort = httpx.post(
@@ -135,7 +148,9 @@ def befunde(ordner: Path) -> list[dict]:
 
 def main() -> None:
     ordner = Path(sys.argv[1])
-    ergebnisse = befunde(ordner)
+    # Zweites Argument: Ordner, aus dem der Widerspruchstext geholt wird.
+    quelle = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+    ergebnisse = befunde(ordner, quelle)
     ziel = ordner / "_befund.json"
     ziel.write_text(json.dumps(ergebnisse, indent=2, ensure_ascii=False), "utf-8")
     for b in ergebnisse:

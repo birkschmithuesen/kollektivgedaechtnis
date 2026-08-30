@@ -219,6 +219,7 @@ def build_image_prompt(
     sentence_en: str | None = "",
     sentence: str | None = "",
     tension_source: str | None = "",
+    include_channels: bool = True,
 ) -> str:
     """The documented block order (module docstring): subject (the motif)
     first, mood, tension, register, format last.
@@ -239,6 +240,14 @@ def build_image_prompt(
     tension block is exactly what it was before 2026-08-29, because material
     without a real contradiction must not have one invented for it, here no
     more than in stage 1.
+
+    `include_channels=False` drops the mood and tension blocks entirely,
+    leaving motif + register + format. That is NOT a runtime mode — the
+    station always sends both — but the control condition for the question
+    „do the two fixed scales change the picture at all, or are they only
+    text?\" (Birk, 2026-08-30). It is a parameter rather than a separate
+    prompt builder so that the compared prompts are provably identical in
+    every other byte; a second builder could drift from this one.
     """
     # `or` rather than a chain of ifs: every one of the three can arrive as
     # "" (the dataclass default), as None (a NULL column read straight out of
@@ -263,13 +272,19 @@ def build_image_prompt(
             f"{TENSION_SOURCE_TEMPLATE.format(source=source.rstrip('.'))}."
         )
 
+    format_block = (
+        f"Aspect ratio {aspect_ratio}, landscape orientation, a single photograph."
+    )
+    if not include_channels:
+        return "\n\n".join([motif, register, format_block])
+
     return "\n\n".join(
         [
             motif,
             MOOD_LIGHT.get(mood, MOOD_LIGHT[3]),
             tension_block,
             register,
-            f"Aspect ratio {aspect_ratio}, landscape orientation, a single photograph.",
+            format_block,
         ]
     )
 
