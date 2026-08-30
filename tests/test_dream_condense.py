@@ -308,6 +308,58 @@ def test_the_prompt_forbids_splitting_the_frame_into_two_pictures():
     assert "Trennlinie" in halbsatz
 
 
+def test_the_prompt_prefers_no_lettering_but_demands_german_wording_when_used():
+    """Zwei Befunde Birks an einem Abend, die zusammen die Regel ergeben.
+
+    Zuerst am Ein-Ort-Bild: „hier ist eine Tafel, aber da steht nichts drauf" —
+    das damalige Schriftverbot im Register hatte sie leeren müssen. Verbot
+    aufgehoben (ebb65d5).
+
+    Dann am schriftfreigegebenen Bild: „jetzt ist die Beschriftung auf
+    Englisch… wenn Beschriftung, dann müsste die explizit dem Modell übergeben
+    werden als deutsche Beschriftung." Richtig: der Prompt nannte nur „a
+    printed fee schedule board", WAS daraufsteht erfand das Modell — englisch,
+    weil der umgebende Prompt englisch ist.
+
+    Und schließlich: „generell schon auch besser ohne Schrift… entweder du
+    gehst deine Idee und checkst dass das alles ohne Schrift passiert, oder du
+    baust eine Tendenz ein."
+
+    Tendenz statt Verbot, weil beide Extreme einen belegten Fehler haben: Ein
+    Verbot erzwingt leere Tafeln (Befund 1). Freie Erlaubnis erzeugt
+    unzuverlässig gesetzten Text — Googles eigene Anleitung nennt Textrendering
+    ausdrücklich als nicht verlässlich, und verdrehte Buchstaben stünden in
+    hyperrealistischer Schärfe an der Wand.
+
+    Geprüft wird deshalb BEIDES: dass der Regelfall schriftlos ist, und dass
+    die Ausnahme Googles zwei Bedingungen erfüllt (exakter Wortlaut in
+    Anführungszeichen UND Zielsprache benannt).
+    """
+    system = build_condense_system()
+
+    assert "SCHRIFT IM BILD" in system
+    schrift = system[system.index("SCHRIFT IM BILD"):]
+
+    # 1. Die Tendenz: Regelfall ohne Schrift, über die Form der Dinge.
+    assert "Regelfall ist ein Bild OHNE Schrift" in schrift
+    assert "FORM der" in schrift
+    assert "Regelfall (ohne Schrift" in schrift, "kein Positivbeispiel für den Regelfall"
+
+    # 2. Die Ausnahme ist als solche markiert, nicht als gleichwertige Option.
+    assert "AUSNAHME" in schrift
+    assert "EINZIGE Weg" in schrift
+
+    # 3. Googles zwei Bedingungen für Fremdsprachen-Text.
+    assert "Wortlaut" in schrift and "Anführungszeichen" in schrift
+    assert "the German text reading" in schrift
+
+    # 4. Der real aufgetretene Fehler steht als Gegenbeispiel da.
+    assert "fee schedule board" in schrift
+
+    # 5. Nichts erfinden, was nicht im Material steht.
+    assert "Erfinde keine Zahlen" in schrift
+
+
 def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
     """kg2/imagegen.py hangs `tension_source` behind a sentence of its own and
     adds the full stop itself. A field that arrived as a whole sentence would

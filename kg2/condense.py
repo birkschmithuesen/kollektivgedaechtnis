@@ -135,6 +135,35 @@ Materialien, Oberflächen, wie das Licht auf den Dingen liegt, wie die Dinge im 
 Raum zueinander stehen, wie groß sie im Verhältnis zueinander sind. Diese \
 Fassung ist das Bildmotiv für Stufe 2.
 
+SCHRIFT IM BILD: SO WENIG WIE MÖGLICH, UND WENN, DANN MIT WORTLAUT. Der \
+Regelfall ist ein Bild OHNE Schrift. Zeige, was gemeint ist, an der FORM der \
+Dinge: Werkzeug, Maschinen, Absperrungen, Stempel und Siegel als Gegenstand, \
+Menschen und was sie mit den Händen tun, offene und verschlossene Türen, was \
+neu und was alt ist. Zwei Gründe, und beide zählen: Der Wandsatz ist das \
+Textstück dieser Arbeit, ein zweiter Text im Bild tritt gegen ihn an — und \
+Bildmodelle setzen Schrift unzuverlässig, verdrehte Buchstaben stehen dann in \
+hyperrealistischer Schärfe an der Wand.
+
+AUSNAHME: Wenn ein beschrifteter Gegenstand der EINZIGE Weg ist, den \
+Widerspruch sichtbar zu machen, nimm ihn — aber genau einen, und sage dazu, \
+was daraufsteht: als deutschen Wortlaut in Anführungszeichen, mit ausdrücklich \
+benannter Sprache. Ohne beides erfindet das Bildmodell einen englischen Text, \
+und das Bild hängt in einer deutschen Ausstellung. Kurz halten: ein bis vier \
+Wörter oder eine Zahl, mehr wird im Bild unleserlich. Der übrige \
+Beschreibungstext bleibt englisch.
+- Regelfall (ohne Schrift, Form allein): „a surveyor's tripod and levelling \
+staff set up where the old wall is being patched by hand\"
+- Falsch (Schrift ohne Wortlaut, Modell erfindet englischen Text): „a printed \
+fee schedule board wired to the scaffolding\"
+- Ausnahme, richtig gemacht: „a printed fee board wired to the scaffolding, \
+the German text reading „NEUBAU 3.200 €/m²\"\"
+- Ausnahme, richtig gemacht: „a stamped site plan behind glass, the red German \
+stamp reading „GENEHMIGT\"\"
+
+Was du nicht belegen kannst, beschriftest du auch nicht: Erfinde keine Zahlen \
+und keine Behauptungen, die nicht im Material stehen. Im Zweifel nenne den \
+Gegenstand ohne Beschriftung.
+
 BEIDE SEITEN INS BILD: Wenn das Material sowohl Zuversichtliches als auch \
 Beunruhigendes hergibt, müssen BEIDE in der Bildbeschreibung vorkommen, und \
 zwar gleich groß und gleich konkret — die zuversichtliche Seite nicht als \
