@@ -272,6 +272,7 @@ def main() -> int:
                 api_key=cfg.openrouter_api_key,
                 url=cfg.image_url,
                 timeout=cfg.image_timeout_s,
+                aspect_ratio=cfg.image_aspect_ratio,
             )
             bild = save_image(daten, ziel / f"{nummer}-{personen:02d}personen")
         except Exception as exc:  # ein Ausfall darf die anderen nicht kosten

@@ -335,6 +335,20 @@ def decode_image(payload: dict) -> bytes:
         raise ImageError(f"image data is not valid base64: {exc}") from exc
 
 
+#: Models that declare `output_modalities: ["image"]` WITHOUT text. Asking such
+#: a model for text alongside the image is not a harmless extra — OpenRouter
+#: answers HTTP 404 „No endpoints found that support the requested output
+#: modalities" and the model is unreachable. Matched by substring rather than
+#: by exact id because provider ids carry version suffixes (`flux.2-max`,
+#: `flux.2-pro`, …) that would each need a new entry here. Checked against the
+#: `/endpoints` metadata, which is the authority; see `render_image`.
+_IMAGE_ONLY_MARKERS = ("flux",)
+
+
+def _image_only(model: str) -> bool:
+    return any(marker in model.lower() for marker in _IMAGE_ONLY_MARKERS)
+
+
 def render_image(
     prompt: str,
     *,
@@ -343,24 +357,44 @@ def render_image(
     url: str,
     timeout: float,
     post=_httpx_post,
+    aspect_ratio: str | None = None,
 ) -> bytes:
-    """One call, no retry. `post` is injectable so no test touches the network."""
+    """One call, no retry. `post` is injectable so no test touches the network.
+
+    Two request details are model-dependent and were measured against the live
+    endpoint on 2026-08-30, not assumed:
+
+    * **`modalities`.** Google's and OpenAI's image models declare
+      `output_modalities: ["image", "text"]` and need the pair, or they answer
+      in prose about the picture instead of returning one (contract document).
+      Black Forest Labs' `flux.2-max` declares `["image"]` ALONE and answers
+      HTTP 404 „No endpoints found that support the requested output
+      modalities: image, text\" to the pair. Asking for text from a model that
+      cannot produce it excludes it entirely — which is why flux was long
+      believed to be absent from OpenRouter (it is also missing from
+      `/api/v1/models`, so the catalogue confirms the wrong conclusion).
+    * **`image_config.aspect_ratio`.** The aspect ratio otherwise travels as
+      prose inside the prompt, and prose is a request, not a setting: measured,
+      gemini-3-pro-image honours it (1376x768), while gpt-5-image and
+      gemini-2.5-flash-image return a square 1024x1024 regardless — and
+      accept every aspect-ratio parameter with HTTP 200 while ignoring it,
+      which looks like success. `flux.2-max` DOES honour the parameter
+      (2048x1136). It is therefore sent when given, harmless where ignored.
+    """
     if not api_key:
         raise ImageError("OPENROUTER_API_KEY is not set — stage 2 cannot render")
 
+    body: dict = {
+        "model": model,
+        "modalities": ["image"] if _image_only(model) else ["image", "text"],
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if aspect_ratio:
+        body["image_config"] = {"aspect_ratio": aspect_ratio}
+
     try:
-        payload = post(
-            url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                # Without `modalities` the model answers in text about the
-                # image instead of returning one (contract document).
-                "model": model,
-                "modalities": ["image", "text"],
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=timeout,
-        )
+        payload = post(url, headers={"Authorization": f"Bearer {api_key}"},
+                       json=body, timeout=timeout)
     except ImageError:
         raise
     except Exception as exc:  # transport, HTTP status, JSON — all one failure

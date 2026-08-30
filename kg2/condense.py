@@ -124,14 +124,23 @@ in dem er es tut? Setze DAS ins Bild. Nur wenn zu einem Begriff wirklich \
 niemand handelt, zeige die Spur allein.
 - Zu wenig (nur die Spur, der Vorgang fehlt): „a wall covered in hundreds of \
 coloured adhesive dots\\\"
-- Richtig (der Vorgang, die Spur nebenbei): „a dozen people of different ages \
-crowded at a pinned-up plan in a gym hall, one bending close to press a \
-coloured dot next to the school, folding tables and coats over chair backs \
-behind them\\\"
 - Zu wenig (nur der Gegenstand): „a stamped building permit on a table\\\"
-- Richtig (der Vorgang): „a man in shirtsleeves pressing a stamp onto the last \
-page while three people at the far end of the table are already standing up \
-to leave\\\"
+
+DIE BEIDEN ZEILEN OBEN SIND DAS, WAS DU VERMEIDEN SOLLST — und es gibt \
+absichtlich KEINE Musterlösung dazu. Am 2026-08-30 stand hier eine, und das \
+Ergebnis war messbar: In vier von fünf Bildern stand danach dieselbe Szene, \
+Wendung für Wendung aus dem Beispiel abgeschrieben — Menschen \
+verschiedenen Alters drängen sich an einem angehefteten Plan, eine Person \
+beugt sich vor und drückt einen Punkt. Aus einem Standardmotiv war ein \
+zweites geworden. Ein Bildmodell und ein Sprachmodell ahmen jedes gezeigte \
+Vorbild nach, statt es als eine Möglichkeit unter vielen zu lesen.
+
+Finde die Szene deshalb SELBST, am Material dieses Tages. Der Vorgang, den ein \
+Begriff meint, sieht jedes Mal anders aus: Er kann in einer Halle stattfinden \
+oder auf der Straße, im Sitzen oder im Stehen, mit zwanzig Menschen oder mit \
+zweien, mitten im Geschehen oder danach, wenn alle weg sind und nur \
+Stuhlreihen bleiben. Nimm nicht die naheliegendste Fassung — nimm die, die zu \
+den heute genannten Begriffen passt.
 
 MENSCHEN GEHÖREN INS BILD, wo das Material von Menschen handelt. Beteiligung, \
 Entscheidung, Streit, Pflege, Handwerk, Wohnen: das sind Dinge, die Menschen \
@@ -144,6 +153,40 @@ WAS OFT GESAGT WURDE, MUSS AUCH ZU SEHEN SEIN. Prüfe zum Schluss deine \
 Beschreibung gegen die Begriffe mit den meisten Nennungen: Kommt der \
 meistgenannte darin vor, und zwar als das, was er ist, nicht nur als sein \
 Etikett? Wenn nicht, schreibe ihn hinein statt eines Randdetails.
+
+DIE BREITE DES MATERIALS, NICHT NUR DIE SPITZE. Die zwei, drei meistgenannten \
+Begriffe stehen oft den ganzen Tag ganz oben, weil sie früh gefallen sind und \
+seither mitgezählt werden. Wer nur sie nimmt, träumt bei zehn Interviews \
+dasselbe wie bei sechzig — obwohl inzwischen fünfzig Menschen gesprochen \
+haben. Nimm deshalb Begriffe aus dem GANZEN gelieferten Feld: die \
+meistgenannten als das Thema, das das Bild trägt, und dazu mehrere aus der \
+Mitte und dem unteren Teil der Liste, die das Bild konkret machen. Ein Bild, \
+das nur aus den ersten beiden Zeilen der Liste besteht, hat das Material nicht \
+gelesen.
+
+WER DAS BILD TRÄGT, WECHSELT. Der meistgenannte Begriff muss VORKOMMEN, aber \
+er muss nicht die Hauptsache sein. Wähle als tragendes Motiv — das, was den \
+Bildmittelpunkt und den Ort bestimmt — bewusst einen anderen Begriff aus dem \
+Feld, und lass den meistgenannten daneben stehen: als Gegenstand am Rand, als \
+Spur an einer Fläche, als etwas, das gerade vorbei ist oder erst noch \
+kommt. Sonst zeigt jedes Bild des Tages dieselbe Sache, nur mit wechselnder \
+Kulisse, obwohl das Material breit ist.
+
+DER JÜNGSTE BLOCK MUSS SICHTBAR WERDEN. Unter „Zuletzt gesagt\" stehen die \
+Begriffe aus den zuletzt geführten Gesprächen. Mindestens zwei davon gehören \
+in die Bildbeschreibung, und zwar als etwas, das man sieht, nicht als \
+Nebenwort. Das ist die einzige Stelle, an der das Bild auf die Menschen \
+reagiert, die gerade eben gesprochen haben — an der Wand stehen die \
+Traumbilder des Tages nebeneinander, und wenn sich zwischen zwanzig \
+Interviews nichts ändert, war das Zuhören folgenlos.
+
+WECHSLE DEN ORT UND DIE ENTFERNUNG. Bleib nicht bei demselben Bildaufbau. \
+Wenn der vorige Traum an einer Hauswand im Hof spielte, spielt dieser \
+woanders: in einem Innenraum, auf einer Straße, an einem Tisch, in einer \
+Halle, auf einem Dach, im Kellergeschoss, auf einem Feld am Ortsrand. Wechsle \
+auch die Entfernung — einmal nah an den Händen, einmal der ganze Raum, einmal \
+von oben. Das Material gibt viele Orte her; nimm den, der zu den heute \
+genannten Begriffen passt, nicht den, der beim letzten Mal funktioniert hat.
 
 
 VERBOTEN: Namen von Menschen, Zuschreibungen wie „eine Besucherin sagte", \
@@ -186,13 +229,11 @@ in dreien stand Buchstabensalat, und in keinem dieser drei war Schrift \
 verlangt worden; sie kam jedes Mal von einem Plan oder einem Blatt Papier im \
 Motiv. Wenn ein solcher Gegenstand vorkommt, sage ausdrücklich dazu, WAS auf \
 seiner Fläche zu sehen ist — und zwar etwas, das keine Schrift ist: Linien, \
-Umrisse, Farbflächen, Punkte, Knicke, Flecken. Ein Plan zeigt Grundrisslinien, \
-kein Beschriftungsfeld.
+Umrisse, Farbflächen, Punkte, Knicke, Flecken. Denke dir aus, was auf DIESER \
+Fläche stünde, statt eine Formulierung von anderswo zu übernehmen; sonst \
+tragen alle Bilder des Tages dieselbe Zeichnung.
 - Falsch (leere Fläche, Modell erfindet Buchstaben): „a pinned-up floor plan \
 on the wall\\\"
-- Richtig (Fläche ist besetzt, ohne Schrift): „a pinned-up floor plan showing \
-only thin black outlines of rooms and a thick stair spiral, its surface \
-otherwise bare paper\\\"
 
 AUSNAHME: Wenn ein beschrifteter Gegenstand der EINZIGE Weg ist, den \
 Widerspruch sichtbar zu machen, nimm ihn — aber genau einen, und sage dazu, \
@@ -234,9 +275,12 @@ Seite … auf der anderen\", „daneben\", „gegenüber\", „im Gegensatz dazu
 sondern solche, die den Raum zusammenhalten („an derselben Wand\", „durch \
 dieselbe Tür\", „hinter\", „darüber\", „mitten in\").
 - Schlecht (zwei Bilder in einem): „a freshly rendered house on the left, and \
-boarded-up shopfronts on the right\"
-- Gut (ein Ort): „a single façade where new render stops halfway and the old \
-crumbling plaster carries on beneath it\"
+boarded-up shopfronts on the right\\\"
+
+Wie dein einer Ort aussieht, findest du am Material — hier steht bewusst kein \
+Muster dafür (gemessen am 2026-08-30: jede Beispielszene, die hier stand, kam \
+in den Bildern wörtlich wieder). Prüfe nur: Steht alles, was du nennst, in \
+einem Raum, den eine Kamera von einem Punkt aus erfasst?
 
 WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
 zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
@@ -254,11 +298,10 @@ staubig, matt, verkrustet, frisch gestrichen, ausgeblichen, moosig, \
 abgegriffen, gerissen. Diese Angaben halten unter jedem Licht.
 - Falsch (nennt Lichtquelle und Tageszeit): „the wet surface glinting in low \
 afternoon light\\\"
-- Richtig (nennt den Zustand): „the render still wet and dark where it was \
-just pulled flat\\\"
 - Falsch (nennt Sonnenstand und Richtung): „low sun grazing the raised dots\\\"
-- Richtig (nennt den Zustand): „the dots curling at their edges where the \
-paper has cockled\\\"
+
+Wie der Zustand aussieht, den du beschreibst, findest du am Ding selbst — \
+nimm keine Wendung von hier oder aus einem früheren Traum.
 
 Auch hier gilt die Belegbarkeit: nur was sich auf die gelieferten Begriffe \
 stützt.
@@ -283,13 +326,16 @@ Dinge im Raum. Nenne deshalb zwei GEGENSTÄNDE, ORTE ODER MENSCHLICHE HANDLUNGEN
 die man beide gleichzeitig fotografieren könnte, nicht zwei Begriffe oder \
 Verfahren. Übersetze den abstrakten Widerspruch in das, woran man ihn sähe.
 - Schlecht (unsichtbar): „gathering opinions while decisions are made from \
-above\" — „von oben entschieden\" hat kein Aussehen.
-- Gut (sichtbar): „a wall of coloured dots stuck on by many hands, and four \
-people at a round table behind glass signing the finished plan\"
+above\\\" — „von oben entschieden\\\" hat kein Aussehen.
 - Schlecht (unsichtbar): „restoring an existing façade while billing it as new \
-construction\"
-- Gut (sichtbar): „workers patching old brickwork by hand, beside a printed \
-invoice board showing new-build prices\"
+construction\\\"
+
+Wie die sichtbare Fassung aussieht, entscheidest du am Material — es steht \
+hier absichtlich kein Muster, weil ein Muster abgeschrieben statt verstanden \
+wird (siehe oben, gemessen am 2026-08-30). Prüfe deine Fassung nur an einer \
+Frage: Könnte ein Fotograf das, was du nennst, mit einer einzigen Aufnahme \
+festhalten? Wenn er dafür wissen müsste, was jemand denkt, vorhat oder \
+abrechnet, ist es noch nicht sichtbar.
 
 AUCH HIER EIN ORT: Die beiden Hälften müssen in derselben Aufnahme stehen \
 können, nicht in zwei nebeneinandergestellten. Verbinde sie über den Raum, \
