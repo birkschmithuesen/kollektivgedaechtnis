@@ -275,6 +275,39 @@ def test_the_prompt_demands_both_poles_of_the_material_in_the_picture():
     assert "erfinden" in haelften
 
 
+def test_the_prompt_forbids_splitting_the_frame_into_two_pictures():
+    """Birk am ersten Bild des Pol-Aufbaus (2026-08-29): „Jetzt sind es zwei
+    Bilder in einem Bild geworden. Das Bild ist geteilt in links und rechts."
+
+    Die eigene Folge der Anweisung davor: „beide Seiten gleich groß" liest
+    sich für ein Bildmodell als Aufforderung zum Diptychon. Der
+    Einzelbild-Hinweis im Register („One single photographic frame, whole and
+    uncut") stand zwar schon da, aber er beschreibt den RAHMEN — gegen eine
+    Beschreibung, die zwei getrennte Halbszenen nennt, kommt er nicht an. Die
+    Trennung muss dort verhindert werden, wo sie entsteht: in Stufe 1.
+
+    Geprüft wird beides, weil beide Felder sie erzeugen können — die
+    Bildbeschreibung UND der Widerspruchs-Halbsatz.
+    """
+    system = build_condense_system()
+
+    # Die Bildbeschreibung: ein Ort, eine Kamera.
+    assert "EIN EINZIGER ORT" in system
+    ort = system[system.index("EIN EINZIGER ORT"):]
+    assert "einzige Kamera" in ort
+    # Die verbotenen Trennwendungen müssen benannt sein, sonst ist die Regel
+    # eine Absichtserklärung: „links … rechts" ist genau der Fall, der auftrat.
+    assert "links" in ort
+    # Und ein Positivbeispiel, an dem sich das Modell orientiert — ein
+    # Negativbeispiel allein hat beim Sichtbarkeits-Fix schon nicht gereicht.
+    assert "Gut (ein Ort)" in ort
+
+    # Der Widerspruchs-Halbsatz trägt dieselbe Regel.
+    assert "AUCH HIER EIN ORT" in system
+    halbsatz = system[system.index("AUCH HIER EIN ORT"):]
+    assert "Trennlinie" in halbsatz
+
+
 def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
     """kg2/imagegen.py hangs `tension_source` behind a sentence of its own and
     adds the full stop itself. A field that arrived as a whole sentence would

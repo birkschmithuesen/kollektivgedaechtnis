@@ -145,6 +145,20 @@ nur den Verfall zeigt, obwohl die Menschen auch von Gelingendem gesprochen \
 haben, gibt das Material falsch wieder — und eines, das nur Gelingendes zeigt, \
 ebenso.
 
+EIN EINZIGER ORT, EINE EINZIGE AUFNAHME: Die beiden Seiten stehen an DEMSELBEN \
+Ort, in DERSELBEN Aufnahme, ineinander verschränkt — nicht als zwei Hälften \
+nebeneinander. Beschreibe einen zusammenhängenden Raum, den eine einzige \
+Kamera von einem einzigen Standpunkt aus erfasst: das Gelingende und das \
+Bröckelnde an derselben Wand, im selben Hof, am selben Haus. Verwende keine \
+Wendungen, die den Bildausschnitt teilen („links … rechts\", „auf der einen \
+Seite … auf der anderen\", „daneben\", „gegenüber\", „im Gegensatz dazu\"), \
+sondern solche, die den Raum zusammenhalten („an derselben Wand\", „durch \
+dieselbe Tür\", „hinter\", „darüber\", „mitten in\").
+- Schlecht (zwei Bilder in einem): „a freshly rendered house on the left, and \
+boarded-up shopfronts on the right\"
+- Gut (ein Ort): „a single façade where new render stops halfway and the old \
+crumbling plaster carries on beneath it\"
+
 WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
 zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
 keine Kamera-, Objektiv-, Film- oder Stilangabe. Beides steht in Stufe 2 \
@@ -180,6 +194,11 @@ people at a round table behind glass signing the finished plan\"
 construction\"
 - Gut (sichtbar): „workers patching old brickwork by hand, beside a printed \
 invoice board showing new-build prices\"
+
+AUCH HIER EIN ORT: Die beiden Hälften müssen in derselben Aufnahme stehen \
+können, nicht in zwei nebeneinandergestellten. Verbinde sie über den Raum, \
+nicht über eine Trennlinie — „hinter der Punktewand hängt der gestempelte \
+Plan\" statt „links Punktewand, rechts gestempelter Plan\".
 
 Beide Hälften müssen im Material belegt sein. Wenn dort kein echter Widerspruch \
 liegt, lass dieses Feld leer — ein erfundener Widerspruch ist schlechter als \
