@@ -47,16 +47,20 @@
     <output id="camera-zoom-value">1,00×</output>
   </label>
   <label>Porträtgröße
-    <!-- In Bildschirm-Pixeln, nicht in Modelleinheiten: ein Porträt ist damit
-         immer gleich groß, egal ob eine Person auf der Wand steht oder
-         sechzig, und unabhängig vom Zoom daneben (Birk, 2026-08-29, an der
-         Station beobachtet: bei einer einzelnen Person füllte das Porträt den
-         ganzen Schirm). Bereich und Schritt spiegeln die Serverschranke
-         (PortraitSize: 40-260), damit die Oberfläche keinen Wert posten kann,
-         den die API ablehnt. `input`/`change` wie beim Zoom: die Anzeige folgt
-         der Hand, gepostet wird erst beim Loslassen. -->
+    <!-- Eine OBERGRENZE in Bildschirm-Pixeln, keine feste Größe (Birk,
+         2026-08-30). Sie greift nur im Automatikbetrieb ("alles zeigen",
+         "automatisch schwenken") und verhindert dort den Fall, den Birk am
+         2026-08-29 an der Station gesehen hat: bei einer einzelnen Person
+         füllte das Porträt den ganzen Schirm. Steht viel auf der Wand, bleiben
+         die Porträts von selbst kleiner und der Regler tut gar nichts. In
+         "manuell" gilt die Grenze nicht — dort darf ein Besucher in ein
+         Gesicht hineinzoomen, bis es formatfüllend ist. Bereich und Schritt
+         spiegeln die Serverschranke (PortraitSize: 40-260), damit die
+         Oberfläche keinen Wert posten kann, den die API ablehnt.
+         `input`/`change` wie beim Zoom: die Anzeige folgt der Hand, gepostet
+         wird erst beim Loslassen. -->
     <input id="portrait-size" type="range" min="40" max="260" step="1" value="120">
-    <output id="portrait-size-value">120 px</output>
+    <output id="portrait-size-value">höchstens 120 px</output>
   </label>
   <label>Tempo
     <!-- Speed of the automatic tour as a fraction of its tuned pace: right

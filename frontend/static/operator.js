@@ -166,15 +166,19 @@ document.getElementById('camera-zoom').addEventListener('change', (event) =>
   post('/api/camera_zoom', { factor: Number(event.target.value) }),
 );
 
-/** The portrait's size on the wall, in the unit the operator is choosing in:
- * pixels of the projected image, whole ones ("120 px").
+/** The largest a portrait may get on the wall, in the unit the operator is
+ * choosing in: pixels of the projected image, whole ones.
  *
  * No fraction and no multiplier, because this control is not relative to
- * anything — unlike the zoom, which multiplies a fit, this IS the size, and it
- * stays that size at every zoom and at every number of people on the wall. */
+ * anything — unlike the zoom, which multiplies a fit, this is a size in
+ * pixels. "höchstens" and not a bare number because it is a CEILING since
+ * 2026-08-30: on a busy wall the portraits stay under it by themselves and
+ * the slider does nothing at all, and in manual mode it does not apply. An
+ * operator who reads it as "so groß sind die Porträts" would go looking for a
+ * fault when nothing moves. */
 function showPortraitSizeValue(pixels) {
   const value = Math.round(Number(pixels) || 120);
-  document.getElementById('portrait-size-value').textContent = `${value} px`;
+  document.getElementById('portrait-size-value').textContent = `höchstens ${value} px`;
 }
 
 document.getElementById('portrait-size').addEventListener('input', (event) =>

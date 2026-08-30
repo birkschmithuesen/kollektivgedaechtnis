@@ -207,12 +207,13 @@ MEASURE = """
     // model size AND the effective size, and since each ladder variant is now
     // laid out for itself the two no longer differ by a shared factor.
     //
-    // The DISC is the exception since 2026-08-29: its size on the wall is set
-    // in rendered pixels and its model size is whatever that works out to at
-    // this zoom, so the model number reported here is the one the PLACEMENT
-    // reasons in (the theme's --person-size) and person_px_on_wall is no
-    // longer it times the zoom — it is the operator's setting, at every zoom
-    // and every net size.
+    // The DISC carries one qualification since 2026-08-29, corrected on
+    // 2026-08-30: the operator's setting is an upper BOUND in rendered pixels
+    // for the driven camera modes. Below it (anything but a nearly empty wall)
+    // the disc is the theme's model size times the zoom like everything else;
+    // at it, the model size reported here and person_px_on_wall stop agreeing,
+    // because the drawn model width is then portrait_size / zoom. The model
+    // number reported is always the one the PLACEMENT reasons in.
     label_size_model: term ? Number(term.numericStyle('font-size')) : null,
     person_size_model: window.kgView.placementPersonSize,
     label_px_on_wall: term ? Number(term.numericStyle('font-size')) * cy.zoom() : null,
@@ -686,9 +687,9 @@ def _fill_shots(page, dbs: dict[int, Path], out_dir: Path, theme: str, scratch: 
                     f"labels reach the wall at {data['label_px_on_wall']:.0f}px and person discs "
                     f"at {data['person_px_on_wall']:.0f}px. Nothing in the theme changed between "
                     "these three shots — the viewport fit scales model-unit type with it, so a "
-                    "smaller net comes out with larger type. The portraits deliberately do not "
-                    "follow it any more (2026-08-29): they hold the operator's size in rendered "
-                    "pixels, the same at 5 persons as at 50.",
+                    "smaller net comes out with larger type. The portraits follow it like "
+                    "everything else; the operator's setting only caps them from above "
+                    "(2026-08-30), which on this series never binds.",
                     data,
                 )
             )

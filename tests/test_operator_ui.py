@@ -246,10 +246,15 @@ def test_a_zoomed_in_value_carries_no_warning(ui):
 
 def test_the_portrait_slider_reflects_state_and_posts_on_release(ui):
     """The control for Birk's 2026-08-29 finding: with one person on the wall
-    the portrait filled the screen. It sets a size in rendered pixels, which
-    the wall then holds at any zoom and any number of people."""
+    the portrait filled the screen. Since 2026-08-30 it sets an UPPER BOUND in
+    rendered pixels for the automatic modes, which the read-out has to say —
+    an operator who reads it as "so groß sind die Porträts" would go looking
+    for a fault on the busy wall where it does nothing."""
     assert ui.eval_on_selector("#portrait-size", "el => el.value") == "150"
-    assert ui.eval_on_selector("#portrait-size-value", "el => el.textContent") == "150 px"
+    assert (
+        ui.eval_on_selector("#portrait-size-value", "el => el.textContent")
+        == "höchstens 150 px"
+    )
 
     before = ui.evaluate("window.kgFetches.length")
     ui.evaluate(
@@ -261,7 +266,10 @@ def test_the_portrait_slider_reflects_state_and_posts_on_release(ui):
     )
     # Dragging only moves the read-out: a POST per pixel would push a state
     # broadcast to every SSE client dozens of times per second.
-    assert ui.eval_on_selector("#portrait-size-value", "el => el.textContent") == "90 px"
+    assert (
+        ui.eval_on_selector("#portrait-size-value", "el => el.textContent")
+        == "höchstens 90 px"
+    )
     assert ui.evaluate("window.kgFetches.length") == before
 
     ui.evaluate(

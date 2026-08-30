@@ -140,10 +140,11 @@
         // instead of resetting it to full.
         const speed = Number(payload.state.camera_speed);
         if (speed > 0) view.camera.setRoamSpeed(speed);
-        // How big a portrait is on this wall, in rendered pixels. A separate
-        // control from the zoom on purpose (the zoom picks the SECTION, this
-        // the size of the faces in it), and guarded the same way: an absent
-        // or unusable value must leave the wall at the size it is showing.
+        // How big a portrait may get on this wall in the driven modes, in
+        // rendered pixels. A separate control from the zoom on purpose (the
+        // zoom picks the SECTION, this bounds the faces in it), and guarded
+        // the same way: an absent or unusable value must leave the wall at the
+        // bound it is showing.
         const portraitSize = Number(payload.state.portrait_size);
         if (portraitSize > 0) view.setPortraitSize(portraitSize);
       }

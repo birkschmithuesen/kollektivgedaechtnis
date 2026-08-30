@@ -68,27 +68,33 @@ function style() {
 // a high zoom and come out large, a hundred fit at a low zoom and come out
 // small. There is no fixed on-screen scale to become unreadable or overcrowded.
 //
-// The PORTRAIT DISCS are the one deliberate exception, since 2026-08-29. See
-// the portrait-size block in createGraphView() for what that costs and how it
-// is kept from feeding back into everything else.
+// The PORTRAIT DISCS carry one deliberate qualification since 2026-08-29: an
+// upper bound in rendered pixels, so a wall with a single person on it does
+// not show one face and nothing else. See the portrait-size block in
+// createGraphView() for how that is kept from feeding back into everything
+// else.
 const PADDING = 60;
 
-// How large a portrait is on the wall, in RENDERED pixels, until the operator
-// says otherwise. Birk, live at the station: with a single person on the wall
-// the model-unit sizing filled the whole screen with one face ("die müssen
-// immer dieselbe Größe haben, die Porträtkreise"). Measured on the unchanged
-// renderer at 1920x1080, one person and one term: 367px at theme a, 450px at
-// theme b — against 29px at fifty persons.
+// The largest a portrait may get on the wall, in RENDERED pixels, until the
+// operator says otherwise. Birk, live at the station 2026-08-29: with a single
+// person on the wall the model-unit sizing filled the whole screen with one
+// face. Measured on the unchanged renderer at 1920x1080, one person and one
+// term: 367px at theme a, 450px at theme b — against 29px at fifty persons.
+//
+// A CEILING, not a size (Birk again, 2026-08-30, correcting b803745). He
+// wanted that one case gone, not the sizing: on the touchscreen, pinching into
+// a portrait until it fills the format is how a visitor looks at a face.
 //
 // 120px is a tenth of the wall's height: plainly a portrait rather than a
-// backdrop when one person stands alone, and still a face rather than a dot
-// at fifty. It sits in the lower half of the operator's 40-260px range on
-// purpose — the placement does not know about this size (see below), so a
-// generous default would crowd a full wall before anyone had touched a
-// control. The exact value is an on-site judgement like the zoom next to it.
+// backdrop when one person stands alone. It sits in the lower half of the
+// operator's 40-260px range on purpose — the placement does not know about
+// this size (see below), so a generous ceiling would let a busy wall crowd
+// itself before anyone had touched a control. The exact value is an on-site
+// judgement like the zoom next to it.
 const DEFAULT_PORTRAIT_SIZE = 120;
 
-// Re-size the discs only when the zoom has moved by more than this fraction.
+// Re-size the discs only when the target size has moved by more than this
+// fraction.
 //
 // A style write per zoom frame is NOT free, which is why this threshold
 // exists. Measured 2026-08-29 in Chromium on the seeded 50-person net: one
@@ -102,7 +108,9 @@ const DEFAULT_PORTRAIT_SIZE = 120;
 // At 1% a disc is off its target size by at most a pixel in a hundred, and a
 // whole breathing cycle costs ~24 writes instead of ~2500. Operator changes
 // and camera fits bypass the threshold entirely (`force`), so the one case
-// where the size really does jump is never throttled.
+// where the size really does jump is never throttled. It also bounds the 1.5s
+// handover, where the ceiling eases back on: ~1% per write there too, which is
+// a step no eye resolves on a face travelling from 1200px to 120px.
 const PORTRAIT_ZOOM_TOLERANCE = 0.01;
 
 /** The layout. fcose, from the library, not a hand-rolled force pass.
@@ -771,12 +779,31 @@ export function createGraphView(
   // packing options can be set.
   if (cy.layoutUtilities) cy.layoutUtilities({ desiredAspectRatio: CANVAS_ASPECT, componentSpacing: 80 });
 
-  // --- Portrait size on the wall (Birk, 2026-08-29) ----------------------
+  // --- Portrait size on the wall (Birk, 2026-08-29 / 2026-08-30) ----------
   //
-  // A portrait must reach the wall at the SAME size whether one person is on
-  // it or sixty, and whatever the camera's zoom is doing. Cytoscape has no
-  // rendered-pixel node size, so the disc's model width is re-derived from
-  // the live zoom instead: width * zoom == portraitSize, always.
+  // A single portrait must not fill the wall. That was the whole of the
+  // complaint, and b803745 over-answered it by pinning the disc to a constant
+  // size in rendered pixels — which also killed the gesture the touchscreen is
+  // there for, a visitor pinching into a face until it fills the format.
+  //
+  // So `portraitSize` is a CEILING, and it applies only while the camera is
+  // DRIVING (modes 'fit' and 'pan'):
+  //
+  //   driven:  width = min(placement size, portraitSize / zoom)
+  //   manual:  width = whatever it was when the visitor took over
+  //
+  // Below the ceiling — anything but a nearly empty wall — the min() picks the
+  // theme's own model size and the disc scales with the zoom exactly as it did
+  // before b803745, so a crowded wall behaves as it always did. In 'manual'
+  // the disc holds its MODEL width, which means the visitor's pinch magnifies
+  // the picture they were looking at instead of re-proportioning it: at ten
+  // times the zoom the face is ten times as big, on past the ceiling, up to
+  // the full 1080px format.
+  //
+  // Freezing rather than releasing to the theme size is what makes entering
+  // manual continuous. Leaving it is the camera's 1.5 s handover (384b928),
+  // and the ceiling eases back on along that same cosine — see
+  // camera.portraitCapBlend.
   //
   // The part that needs care is that this could easily become circular. The
   // camera sizes the zoom by fitting the net, and the fit measures the very
@@ -785,10 +812,10 @@ export function createGraphView(
   // zoom by roughly (canvas height - padding) / portraitSize — a factor of 8
   // at the default — and a handful of graph updates would blow the viewport
   // away entirely. It is not a stability problem to be damped, either: a lone
-  // disc of constant screen size can NEVER satisfy "fill the viewport", so
+  // disc of bounded screen size can NEVER satisfy "fill the viewport", so
   // there is no fit for the fit to find.
   //
-  // So the screen size is strictly a DISPLAY property, applied on top of a
+  // So the ceiling is strictly a DISPLAY property, applied on top of a
   // placement that knows nothing about it: every pass that computes or scores
   // geometry (fcose, settlePlacement, declutterLabels, countLabelOverlaps)
   // and every viewport fit runs at the theme's own --person-size, in model
@@ -796,37 +823,60 @@ export function createGraphView(
   // node positions, and every measurement this repo has ever taken of the
   // placement still means what it meant.
   //
-  // The price, stated plainly because it is visible on the wall: at high
-  // person counts the discs are drawn LARGER than the placement assumed (at
-  // fifty persons the wall went from 29px discs to the configured size), and
-  // the placement has no idea. Measured 2026-08-29 on the seeded 50-person
-  // net, portrait pairs whose discs touch on screen: 9 at 40px, 62 at 80px,
-  // 108 at the 120px default, 268 at 260px — against 1225 pairs in total, and
-  // 0 before the change. At 20 persons the same series reads 0 / 3 / 13 / 34.
-  // The operator's slider is the lever for that; teaching the PLACEMENT about
-  // the display size is the real fix and is a brief of its own (it reopens
-  // the feedback above from the other side, since a disc that is larger in
-  // model units spreads the net and so lowers the zoom).
+  // The price b803745 carried is gone with the fixed size: the ceiling only
+  // ever makes a disc SMALLER than the placement assumed, so it cannot push
+  // portraits onto each other. (b803745's own measurement, for the record:
+  // 108 touching portrait pairs of 1225 at the 120px default on the seeded
+  // 50-person net, against 0 before it and 0 again now.)
   const placementPersonSize = Number(cssVar('--person-size', '96'));
   // The ring is not a constant but a RATIO of the disc: the themes tune the
   // two together (theme a 5 on 56, theme c 10 on 100), so a resized portrait
   // has to keep the proportion or it gets a frame from another drawing.
   const ringRatio = Number(cssVar('--ring-width', '5')) / placementPersonSize;
   let portraitSize = DEFAULT_PORTRAIT_SIZE;
-  let sizedForZoom = 0;
+  // The disc's model width as last written, and the width it holds while the
+  // ceiling is off. `null` means "the visitor does not have it".
+  let appliedWidth = 0;
+  let freeWidth = null;
   // Re-entrant on purpose: settle() holds the placement size across a call
   // that fits the camera, which holds it again.
   let placementDepth = 0;
+
+  /** The disc's model width at this zoom, under the current regime. */
+  function portraitWidth(zoom) {
+    const capped = Math.min(placementPersonSize, portraitSize / zoom);
+    // `camera` is assigned below this function and the very first call comes
+    // from inside its constructor (a fit changes the zoom), so the fallback is
+    // load-bearing, not defensive: until the camera exists the wall is in its
+    // initial driven mode.
+    const blend = camera ? camera.portraitCapBlend : 1;
+    if (blend >= 1) {
+      freeWidth = null;
+      return capped;
+    }
+    if (freeWidth === null) freeWidth = appliedWidth > 0 ? appliedWidth : capped;
+    if (blend <= 0) return freeWidth;
+    // Geometric, like camera.js's lerpZoom and for the same reason: this is a
+    // magnification travelling by a factor of ten, and the eye reads factors.
+    return freeWidth * Math.pow(capped / freeWidth, blend);
+  }
 
   function applyPortraitSize(force = false) {
     if (placementDepth > 0) return;
     const zoom = cy.zoom();
     if (!(zoom > 0)) return;
-    if (!force && Math.abs(zoom - sizedForZoom) < sizedForZoom * PORTRAIT_ZOOM_TOLERANCE) return;
-    sizedForZoom = zoom;
-    const width = portraitSize / zoom;
+    const width = portraitWidth(zoom);
+    if (!(width > 0)) return;
+    if (!force && Math.abs(width - appliedWidth) < appliedWidth * PORTRAIT_ZOOM_TOLERANCE) return;
+    appliedWidth = width;
     cy.batch(() => {
-      cy.nodes('.person').style({ width, height: width, 'border-width': width * ringRatio });
+      const persons = cy.nodes('.person');
+      // At or above the theme's own size the ceiling is not binding, and the
+      // override is REMOVED rather than written back — so a later theme swap
+      // still takes effect through the normal cascade (same reason as
+      // resetLabelOffsets), and a crowded wall pays no style writes at all.
+      if (width >= placementPersonSize) persons.removeStyle('width height border-width');
+      else persons.style({ width, height: width, 'border-width': width * ringRatio });
     });
   }
 
@@ -871,7 +921,19 @@ export function createGraphView(
 
   cy.on('zoom', () => applyPortraitSize());
 
-  const camera = new Camera(cy, { fitWith: (fit) => atPlacementSize(fit) });
+  // `let`, not `const`, and read through a guard in portraitWidth(): the
+  // Camera's constructor fits the viewport, which fires the zoom handler
+  // above, which would otherwise reach a binding still in its temporal dead
+  // zone and take the whole wall down on load.
+  let camera = null;
+  camera = new Camera(cy, {
+    fitWith: (fit) => atPlacementSize(fit),
+    // A mode change IS a size change now (the ceiling applies to the driven
+    // modes only), and it has to land in the same synchronous breath as the
+    // mode rather than on the next animation frame — the pre-render and the
+    // tests both read the wall straight after setMode().
+    onModeChanged: () => applyPortraitSize(true),
+  });
   let lastGraph = { nodes: [], edges: [], max_terms: DEFAULT_MAX_TERMS };
   let maxTerms = DEFAULT_MAX_TERMS;
   // Hysteresis (spec §7: measured 2026-08-29 -- raw churn is far above "less
@@ -1020,6 +1082,11 @@ export function createGraphView(
   function tick(now) {
     camera.step((now - last) / 1000);
     last = now;
+    // After the camera, because the handover moves the ceiling as well as the
+    // viewport and the discs have to follow it frame by frame. Cheap when
+    // nothing is travelling: the target width is unchanged and the tolerance
+    // above turns the call into a zoom read and a comparison.
+    applyPortraitSize();
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -1039,13 +1106,16 @@ export function createGraphView(
     get labelOverlapStats() {
       return labelOverlapStats;
     },
-    /** The portrait's size on the wall, in rendered pixels. */
+    /** The largest a portrait may get on the wall in the driven camera modes,
+     * in rendered pixels. Not the size it IS: below the ceiling a disc is the
+     * theme's model size times the zoom like everything else, and in 'manual'
+     * the ceiling does not apply at all. */
     get portraitSize() {
       return portraitSize;
     },
     /** The model size the PLACEMENT reasons in — the theme's --person-size.
      * Reported by the pre-render alongside the size that reaches the wall,
-     * which is `portraitSize` and no longer this number times the zoom. */
+     * which is this number times the zoom unless the ceiling cuts it short. */
     get placementPersonSize() {
       return placementPersonSize;
     },
@@ -1064,10 +1134,11 @@ export function createGraphView(
       standSince.clear();
       render();
     },
-    /** How large a portrait is on the wall, in rendered pixels. Takes effect
-     * at once, like the operator's other dials. A value that is not a usable
-     * size is ignored rather than thrown on: this runs an unattended wall,
-     * and a bad state push must never stop it rendering. */
+    /** How large a portrait may get on the wall in the driven modes, in
+     * rendered pixels. Takes effect at once, like the operator's other dials.
+     * A value that is not a usable size is ignored rather than thrown on:
+     * this runs an unattended wall, and a bad state push must never stop it
+     * rendering. */
     setPortraitSize(pixels) {
       const size = Number(pixels);
       if (!(size > 0)) return;

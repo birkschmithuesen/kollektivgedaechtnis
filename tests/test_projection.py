@@ -1,4 +1,6 @@
+import itertools
 import math
+import statistics
 
 import pytest
 
@@ -885,12 +887,12 @@ def test_type_grows_as_the_net_shrinks(page, static_server):
         scales[persons] = _rendered_scale(page)
 
     assert scales[5]["font"] > scales[20]["font"] > scales[50]["font"]
-    # The discs deliberately do NOT follow the type any more (Birk, 2026-08-29):
-    # they are pinned to a size in rendered pixels, so the same portrait reaches
-    # the wall the same size whether it is one face or fifty. Asserted here as
-    # well as in the portrait block below, because this is the test that would
-    # otherwise quietly re-establish the old, zoom-following behaviour.
-    assert scales[5]["disc"] == pytest.approx(scales[50]["disc"], rel=0.02)
+    # The discs follow the type again since 2026-08-30 — the portrait size is a
+    # CEILING now, not a fixed size, and on all three of these nets it is still
+    # far above what the fit produces (107.7 / 47.5 / 28.5px at theme b). The
+    # ceiling's own behaviour is pinned in the portrait block below.
+    assert scales[5]["disc"] > scales[20]["disc"] > scales[50]["disc"]
+    assert scales[5]["disc"] <= 120 * 1.02
 
 
 # --- Hysteresis: minimum stand time (spec 2026-08-29 §7) -------------------
@@ -951,18 +953,27 @@ def test_an_operators_cap_change_is_immediate_not_smoothed_by_grace(view):
     assert view.evaluate("window.kgView.cy.$('#t1').length") == 1
 
 
-# --- Portraits keep one size on the wall (Birk, 2026-08-29) ----------------
+# --- The portrait size is a CEILING, not a fixed size (Birk, 2026-08-30) ---
 #
 # Observed live at the station, with a single person on the wall: the portrait
 # filled the whole screen. Measured on the unchanged renderer at 1920x1080,
 # one person and one term: the disc reached the wall at 367px (theme a) and
 # 450px (theme b) — a third of the canvas height, and growing with every zoom
-# step the operator adds. "Die müssen immer dieselbe Größe haben, die
-# Porträtkreise."
+# step the operator adds.
 #
-# So the disc is now the ONE thing on this wall measured in rendered pixels
-# rather than in model units. Everything else — type, term dots, edge widths —
-# keeps the model-unit sizing the block above pins down.
+# b803745 answered that by pinning the disc to a constant size in rendered
+# pixels. Birk at the station the next day: that is too much. He wanted the ONE
+# case gone (a lone face filling the wall on its own), not the gesture — on the
+# touchscreen, pinching into a portrait until it fills the format is exactly
+# how a visitor looks at a face, and a disc that stays 120px while everything
+# around it grows is dead.
+#
+# So the setting is an UPPER BOUND, and only in the DRIVEN camera modes ('fit',
+# 'pan'). Below it — a crowded wall — the disc scales with the zoom like every
+# other node, exactly as it did before b803745. In 'manual' the bound does not
+# apply at all: the disc holds the model size it had when the visitor took
+# over, so their pinch magnifies the picture they were looking at rather than
+# re-proportioning it, and it can grow until it fills the format.
 
 # projection.js's DEFAULT_PORTRAIT_SIZE. Duplicated on purpose: a test that
 # imported the constant would pass no matter what it was changed to.
@@ -1005,10 +1016,12 @@ def test_a_single_portrait_does_not_fill_the_screen(view):
     assert portrait["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
 
 
-def test_a_portrait_is_the_same_size_alone_as_it_is_among_fifty(page, static_server):
-    # The actual proof of "immer dieselbe Größe": the same renderer, the same
-    # theme, one portrait and then fifty. Before the change these measured
-    # 450px and 29px respectively (theme b, 2026-08-29).
+def test_a_crowded_wall_lets_the_portrait_stay_under_the_ceiling(page, static_server):
+    # The half of the correction of 2026-08-30 that the automatic modes can
+    # show: the setting is a CEILING. With one person the ceiling binds (the
+    # net would put 450px of face on the wall at theme b); with fifty it does
+    # not bind at all and the disc is back to what it was before b803745 —
+    # 28.5px, sized by the fit like every other node.
     sizes = {}
     for label, graph in (
         ("one", ONE_PERSON),
@@ -1023,15 +1036,25 @@ def test_a_portrait_is_the_same_size_alone_as_it_is_among_fifty(page, static_ser
     # The zooms really are far apart — otherwise this would pass for the wrong
     # reason (nothing to compensate for in the first place).
     assert sizes["one"]["zoom"] > 10 * sizes["fifty"]["zoom"]
+    # Nobody ever exceeds the ceiling ...
     for measured in sizes.values():
-        assert measured["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+        assert measured["disc"] <= DEFAULT_PORTRAIT_PX * 1.02
         assert measured["box"] <= DEFAULT_PORTRAIT_PX * PORTRAIT_BOX_SLACK
+    # ... the lone face is held AT it (it would otherwise be 450px) ...
+    assert sizes["one"]["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+    # ... and a full wall stays well below it, sized by the fit as before.
+    assert sizes["fifty"]["disc"] < DEFAULT_PORTRAIT_PX / 2
+    assert sizes["twenty"]["disc"] < DEFAULT_PORTRAIT_PX / 2
+    # And below the ceiling the old rule is back in force: fewer people on the
+    # wall means a larger face, the same way type grows (see the block above).
+    assert sizes["twenty"]["disc"] > sizes["fifty"]["disc"]
 
 
-def test_a_portrait_keeps_its_size_when_the_operator_zooms(view):
-    # The zoom slider frames the wall; it is not a portrait-size control. Two
-    # different things, both of which have to keep working (the camera really
-    # zooms, the portrait really does not grow).
+def test_the_operators_zoom_grows_the_portrait_only_up_to_the_ceiling(view):
+    # The zoom slider frames the wall, and in a driven mode the portrait rides
+    # along with it — up to the ceiling and no further. Measured on the harness
+    # (theme a, 20 persons): 47.9px at 1x, and 143.7px at 3x if nothing capped
+    # it.
     update(view, _dense_net(persons=20, terms=30))
     before = _portrait(view)
 
@@ -1039,7 +1062,10 @@ def test_a_portrait_keeps_its_size_when_the_operator_zooms(view):
 
     after = _portrait(view)
     assert after["zoom"] > 2 * before["zoom"]
-    assert after["disc"] == pytest.approx(before["disc"], rel=0.02)
+    # It really did grow — the ceiling is a bound, not a freeze ...
+    assert after["disc"] > 1.5 * before["disc"]
+    # ... and it stopped at the bound rather than following the zoom to 143px.
+    assert after["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
 
 
 def test_the_ring_scales_with_the_portrait_it_sits_on(view):
@@ -1057,7 +1083,11 @@ def test_the_ring_scales_with_the_portrait_it_sits_on(view):
 
 
 def test_the_portrait_size_takes_effect_at_once_like_the_other_dials(view):
-    update(view, _dense_net(persons=20, terms=30))
+    # ONE_PERSON rather than a full wall on purpose: the dial is a CEILING
+    # since 2026-08-30, so it can only be seen acting where it actually binds.
+    # On the 20-person net the natural disc is 47.9px and neither 60 nor 200
+    # would touch it — that test would pass without the dial being read at all.
+    update(view, ONE_PERSON)
 
     view.evaluate("() => window.kgView.setPortraitSize(60)")
     small = _portrait(view)
@@ -1066,6 +1096,70 @@ def test_the_portrait_size_takes_effect_at_once_like_the_other_dials(view):
 
     assert small["disc"] == pytest.approx(60, rel=0.02)
     assert large["disc"] == pytest.approx(200, rel=0.02)
+
+
+def test_a_visitor_can_zoom_a_portrait_until_it_fills_the_format(view):
+    # The gesture b803745 took away and 2026-08-30 gives back. In 'manual' the
+    # ceiling does not apply: the disc holds its model size and magnifies with
+    # the zoom like every other node, all the way to a face that fills the
+    # 1080px format.
+    update(view, ONE_PERSON)
+    capped = _portrait(view)
+    assert capped["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
+
+    view.evaluate("() => window.kgView.camera.setMode('manual')")
+    # Wrapped in a block: cy.zoom(level) returns the cy CORE, and handing
+    # that back through page.evaluate crashes the renderer trying to
+    # serialise it (measured 2026-08-30, reproducible).
+    view.evaluate("() => { const cy = window.kgView.cy; cy.zoom(cy.zoom() * 10); }")
+
+    grown = _portrait(view)
+    assert grown["zoom"] == pytest.approx(10 * capped["zoom"], rel=0.02)
+    # Ten times the zoom, ten times the face — the ceiling is simply not there.
+    assert grown["disc"] == pytest.approx(10 * capped["disc"], rel=0.02)
+    assert grown["box"] >= 1080
+
+
+def test_the_handover_eases_the_ceiling_back_on_instead_of_snapping(view):
+    # camera.js's 1.5s handover (384b928) travels pan and zoom out of the view
+    # a visitor left behind. The portrait size has to travel WITH it: putting
+    # the ceiling back on the moment the mode flips would be exactly the snap
+    # that commit exists to remove, only in the one element that is ten times
+    # oversized at that instant.
+    update(view, ONE_PERSON)
+    view.evaluate("() => window.kgView.camera.setMode('manual')")
+    # Wrapped in a block: cy.zoom(level) returns the cy CORE, and handing
+    # that back through page.evaluate crashes the renderer trying to
+    # serialise it (measured 2026-08-30, reproducible).
+    view.evaluate("() => { const cy = window.kgView.cy; cy.zoom(cy.zoom() * 10); }")
+    assert _portrait(view)["disc"] > 1000
+
+    trace = view.evaluate(
+        """async () => {
+             const cy = window.kgView.cy;
+             const disc = () =>
+               Number(cy.nodes('.person')[0].numericStyle('width')) * cy.zoom();
+             const out = [disc()];
+             window.kgView.camera.setMode('fit');
+             out.push(disc());
+             for (let i = 0; i < 400; i += 1) {
+               await new Promise((resolve) => requestAnimationFrame(resolve));
+               out.push(disc());
+               if (window.kgView.camera.handoverTarget === null) break;
+             }
+             return out;
+           }""",
+    )
+
+    # It lands where the automatic mode wants it ...
+    assert trace[-1] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.05)
+    # ... having come down by a factor of ten ...
+    assert trace[0] > 8 * trace[-1]
+    # ... and no single frame carries more than a fraction of that drop. This
+    # is the assertion the old behaviour fails on: it puts the whole factor of
+    # ten into the very first step.
+    steps = [max(a, b) / min(a, b) for a, b in zip(trace, trace[1:]) if min(a, b) > 0]
+    assert max(steps) < 1.25
 
 
 def test_repeated_fits_never_run_the_portrait_size_away(view):
@@ -1088,24 +1182,254 @@ def test_repeated_fits_never_run_the_portrait_size_away(view):
 
 
 def test_the_placement_still_reasons_in_the_themes_model_units(view):
-    # The screen-constant size is a DISPLAY property. If it leaked into the
-    # placement, the layout would size a disc from the zoom, the fit would size
-    # the zoom from the layout, and the net would drift a little further apart
-    # (or together) on every single graph update — the same feedback the test
-    # above rules out for the camera. So the passes that compute positions, and
-    # the overlap count that scores them, still see the theme's --person-size.
-    update(view, _dense_net(persons=20, terms=30))
+    # The ceiling is a DISPLAY property. If it leaked into the placement, the
+    # layout would size a disc from the zoom, the fit would size the zoom from
+    # the layout, and the net would drift a little further apart (or together)
+    # on every single graph update — the same feedback the test above rules out
+    # for the camera. So the passes that compute positions, and the overlap
+    # count that scores them, still see the theme's --person-size.
+    #
+    # render-harness.html is pinned to theme-a: --person-size 56.
+    update(view, ONE_PERSON)
 
-    # render-harness.html is pinned to theme-a: --person-size 56. What the disc
-    # is DRAWN at is not that any more (that is the whole point) ...
+    # With one person the ceiling binds, so the disc is DRAWN smaller than the
+    # theme's model size (that is what "at most 120 rendered px" costs here) ...
     drawn = view.evaluate("() => Number(window.kgView.cy.nodes('.person')[0].numericStyle('width'))")
-    assert drawn != pytest.approx(56, rel=0.02)
+    assert drawn < 56
 
-    # ... while the placement's own measurement still is, which is what keeps
-    # this net as clean as it was before the change.
+    # ... while the placement's own measurement is the theme's number either way.
     assert view.evaluate("() => window.kgView.placementPersonSize") == 56
+
+    # And on a net where the ceiling does not bind, nothing is overridden at
+    # all: the disc IS the theme's model size, exactly as before b803745, which
+    # is what keeps this net as clean as it was.
+    update(view, _dense_net(persons=20, terms=30))
+    assert view.evaluate(
+        "() => Number(window.kgView.cy.nodes('.person')[0].numericStyle('width'))"
+    ) == pytest.approx(56, rel=0.02)
     assert view.evaluate("() => window.kgView.labelOverlaps()") == {
         "labelPairs": 0,
         "labelsOnPersons": 0,
         "personPairs": 0,
     }
+
+
+# --- Nothing is ever dragged out of the layout (Birk, 2026-08-30) ----------
+#
+# Observed live at the station: in manual mode a visitor's hand pulled
+# portraits and terms out of the arrangement and left them there. Panning and
+# zooming are the point of manual mode and stay; moving a NODE never was.
+# The arrangement belongs to the layout.
+#
+# Both input paths are exercised, because they are two different code paths in
+# cytoscape (the mouse handler gates on `nodeIsGrabbable`, the touch handler on
+# its own copy of the same check) and the wall in the foyer is driven by the
+# second one — a USB-HID digitizer whose contacts arrive as touch events.
+#
+# `emit('tap')` is deliberately NOT used to fake these: it takes the vendored
+# Chromium down (docs/briefs/task5-e2e-telegram-stt.md). These are real input
+# events, dispatched by the browser at real screen coordinates.
+
+# All node positions by id, as plain numbers. Never returns cytoscape objects
+# themselves: `cy.autoungrabify(true)` and friends return the cy CORE, and
+# handing that back through page.evaluate crashes the renderer trying to
+# serialise it (measured 2026-08-30, reproducible).
+NODE_POSITIONS = """
+  () => Object.fromEntries(
+    window.kgView.cy.nodes().map((n) => [n.id(), [n.position('x'), n.position('y')]]),
+  )
+"""
+
+# Records which node, if any, the gesture actually landed on — so a test can
+# never pass because the pointer missed the graph entirely. `tapstart` is
+# cytoscape's own normalisation of mousedown AND touchstart, and it fires
+# whether or not the node can be grabbed.
+RECORD_TAPS = """
+  () => {
+    window.kgTaps = [];
+    window.kgView.cy.nodes().on('tapstart', (e) => { window.kgTaps.push(e.target.id()); });
+  }
+"""
+
+
+@pytest.fixture()
+def touch_view(browser, static_server):
+    """A page that reports a touchscreen, like the 65" panel in the foyer.
+
+    Chromium only routes touch events at all when the context declares it, so
+    this cannot be folded into the plain `view` fixture."""
+    page = browser.new_page(viewport={"width": 1920, "height": 1080}, has_touch=True)
+    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.wait_for_function("window.kgView !== undefined")
+    yield page
+    page.close()
+
+
+def _rendered(page, node_id):
+    return page.evaluate(
+        "(id) => { const p = window.kgView.cy.$id(id).renderedPosition(); return [p.x, p.y]; }",
+        node_id,
+    )
+
+
+def _drag_with_touch(page, start, dx, dy, steps=5):
+    """A one-finger drag on the digitizer, through Chromium's real touch input."""
+    cdp = page.context.new_cdp_session(page)
+    x, y = start
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
+    for i in range(1, steps + 1):
+        cdp.send(
+            "Input.dispatchTouchEvent",
+            {"type": "touchMove", "touchPoints": [{"x": x + dx * i / steps, "y": y + dy * i / steps}]},
+        )
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+
+def test_a_mouse_drag_on_a_node_leaves_the_arrangement_alone(view):
+    update(view, _dense_net(persons=20, terms=30))
+    # Manual is the mode a visitor is in when they touch the wall, and the one
+    # mode in which nodes used to be grabbable.
+    view.evaluate("() => { window.kgView.camera.setMode('manual'); }")
+    view.evaluate(RECORD_TAPS)
+    before = view.evaluate(NODE_POSITIONS)
+
+    x, y = _rendered(view, "p3")
+    view.mouse.move(x, y)
+    view.mouse.down()
+    for step in range(1, 6):
+        view.mouse.move(x + 40 * step, y + 30 * step)
+    view.mouse.up()
+
+    # The gesture really did start on a node — otherwise this test would pass
+    # by missing the graph.
+    assert view.evaluate("window.kgTaps") != []
+    assert view.evaluate(NODE_POSITIONS) == before
+
+
+def test_a_touch_drag_on_a_node_leaves_the_arrangement_alone(touch_view):
+    # The one that matters in the foyer: the panel is a multitouch digitizer,
+    # and cytoscape's touch handler is a separate implementation from its mouse
+    # handler. Measured before the fix, on this exact gesture: the node under
+    # the finger moved with it.
+    update(touch_view, _dense_net(persons=20, terms=30))
+    touch_view.evaluate("() => { window.kgView.camera.setMode('manual'); }")
+    touch_view.evaluate(RECORD_TAPS)
+    before = touch_view.evaluate(NODE_POSITIONS)
+
+    _drag_with_touch(touch_view, _rendered(touch_view, "p3"), 200, 150)
+
+    assert touch_view.evaluate("window.kgTaps") != []
+    assert touch_view.evaluate(NODE_POSITIONS) == before
+
+
+@pytest.mark.parametrize("mode", ["fit", "pan", "manual"])
+def test_no_camera_mode_hands_the_nodes_over_to_the_visitor(view, mode):
+    # The rule is not "manual is special" any more, it is "never": whatever the
+    # operator has set, a hand on the wall moves the view, never the net.
+    update(view, GRAPH_1)
+    view.evaluate("(m) => { window.kgView.camera.setMode(m); }", mode)
+
+    assert view.evaluate("() => window.kgView.cy.autoungrabify()") is True
+    assert view.evaluate("() => window.kgView.cy.$('#p1').grabbable()") is False
+
+
+def test_the_layout_can_still_place_nodes_that_no_hand_may_move(view):
+    """Why `autoungrabify` and NOT `autolock`, measured rather than asserted.
+
+    Both would stop a drag, and `grabbable: false` in the stylesheet is a third
+    way to the same place. `autoungrabify` is the one that draws the line where
+    Birk drew it — between USER input and everything else — because cytoscape
+    gates only its two input handlers on `grabbable()`
+    (`nodeIsDraggable = !locked() && grabbable()`), while `locked()` is also
+    checked by `position()` itself (`canSet: (e) => !e.locked()`) and by the
+    preset layout the migration glide runs on (`!t.locked() && ...`).
+
+    So `autolock` would take the wall's own placement down with the visitor's
+    hand: sim/prerender.py, the crash-recovery path and every test in this file
+    write positions programmatically. This is that difference, on the real
+    renderer, not read off the source."""
+    update(view, GRAPH_1)
+
+    # The state the wall actually runs in: ungrabbable, and still placeable.
+    moved = view.evaluate(
+        """() => {
+             const node = window.kgView.cy.$('#p1');
+             node.position({ x: 4242, y: -1717 });
+             return [node.position('x'), node.position('y')];
+           }"""
+    )
+    assert moved == [4242, -1717]
+
+    # And the alternative, on the same node, so the reason is visible: a locked
+    # node refuses the very write the pre-render depends on.
+    locked = view.evaluate(
+        """() => {
+             const cy = window.kgView.cy;
+             cy.autolock(true);
+             const node = cy.$('#p1');
+             node.position({ x: 11, y: 22 });
+             const at = [node.position('x'), node.position('y')];
+             cy.autolock(false);
+             return at;
+           }"""
+    )
+    assert locked == [4242, -1717]
+
+
+# --- Does the wall actually group people by what they said? ----------------
+#
+# Birk's assumption, checked rather than assumed (2026-08-30): "Menschen, die
+# ähnliche Begriffe nennen, tauchen an denselben Orten auf."
+#
+# Nothing in this repo draws a person-to-person edge. kg/export.py emits person
+# -> term only, so the grouping — if it exists — can only be INDIRECT: the merge
+# (kg/merging.py) folds similar wordings onto ONE term node, two people who said
+# the same thing then hang off the same ball, and fcose's attraction along those
+# two edges pulls them together while nodeRepulsion pushes everyone else apart.
+#
+# This test measures whether that indirect path is strong enough to be visible
+# in the FINAL placement — after fcose, settlePlacement and the framing, which
+# is what a visitor sees — on the real graph of replay run 19c (60 people, 163
+# terms, 267 edges) at the term cap that graph itself carries.
+
+
+def _person_terms_and_positions(page):
+    return page.evaluate(
+        """() => ({
+             persons: window.kgView.cy.nodes('.person').map((n) => [n.id(), n.position('x'), n.position('y')]),
+             edges: window.kgView.cy.edges().map((e) => [e.source().id(), e.target().id()]),
+           })"""
+    )
+
+
+def _sharing_and_stranger_distances(data):
+    """Split every person pair on the wall by whether they share a term."""
+    terms_of = {}
+    for source, target in data["edges"]:
+        terms_of.setdefault(source, set()).add(target)
+    # Somebody whose every term fell off the cap has no shared term to be near,
+    # and no reason to be anywhere in particular — they would only add noise.
+    placed = {pid: (x, y) for pid, x, y in data["persons"] if terms_of.get(pid)}
+
+    sharing, strangers = [], []
+    for a, b in itertools.combinations(sorted(placed), 2):
+        distance = math.dist(placed[a], placed[b])
+        (sharing if terms_of[a] & terms_of[b] else strangers).append(distance)
+    return sharing, strangers
+
+
+def test_people_who_named_the_same_term_end_up_closer_together(view, real_graph):
+    update(view, real_graph, max_terms=real_graph["max_terms"])
+
+    sharing, strangers = _sharing_and_stranger_distances(_person_terms_and_positions(view))
+
+    # Not a vacuous comparison: both populations are hundreds of pairs.
+    assert len(sharing) > 100
+    assert len(strangers) > 500
+    # Measured 2026-08-30 on this graph at its own cap of 32 terms: median 504
+    # model units between two people who named the same thing, against 872
+    # between two who did not — 42% closer. The margin asserted is far looser
+    # than that, because the claim under test is "the grouping is real", not
+    # "it is exactly this strong".
+    assert statistics.median(sharing) < 0.9 * statistics.median(strangers)
+    assert statistics.mean(sharing) < 0.9 * statistics.mean(strangers)

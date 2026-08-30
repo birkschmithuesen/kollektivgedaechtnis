@@ -86,11 +86,18 @@ export class Camera {
       roamSpeed = 1,
       random = Math.random,
       fitWith = (fit) => fit(),
+      onModeChanged = () => {},
     } = {},
   ) {
     this.cy = cy;
     this.panSpeed = panSpeed;
     this.padding = padding;
+    // Called after every setMode(). The projection re-sizes its portrait discs
+    // there: since 2026-08-30 the portrait ceiling applies to the DRIVEN modes
+    // only (see portraitCapBlend), so a mode change is a size change, and it
+    // has to land in the same synchronous breath as the mode itself rather
+    // than on the next animation frame.
+    this._onModeChanged = onModeChanged;
     // Every viewport fit this camera performs goes through here. The
     // projection passes a wrapper that first puts the portrait discs back to
     // their placement size: since 2026-08-29 a disc's model size is derived
@@ -187,6 +194,23 @@ export class Camera {
     // pre-render, which shoots a screenshot right after setting a view.
     if (previous === 'manual' && mode !== 'manual') this._startHandover();
     else if (mode === 'fit') this._frame();
+    this._onModeChanged(mode);
+  }
+
+  /** How much of the automatic portrait ceiling is in force right now, 0..1.
+   *
+   * The portrait size is an upper bound in the DRIVEN modes and no bound at
+   * all in the visitor's (projection.js). The camera is the only component
+   * that knows which of the two the wall is in — and, more to the point, that
+   * there is a third state in between: the 1.5 s travel out of a close-up
+   * somebody left behind. Switching the bound back on at either end of that
+   * travel would be the snap the handover exists to remove, in the one element
+   * that is ten times oversized at that moment, so it comes back on along the
+   * handover's own cosine, together with the pan and the zoom.
+   */
+  get portraitCapBlend() {
+    if (this._handover) return easeInOut(this._handover.elapsed / ROAM.handoverMs);
+    return this._mode === 'manual' ? 0 : 1;
   }
 
   setZoomFactor(factor) {
@@ -227,7 +251,24 @@ export class Camera {
     const interactive = mode === 'manual';
     this.cy.userPanningEnabled(interactive);
     this.cy.userZoomingEnabled(interactive);
-    this.cy.autoungrabify(!interactive);
+    // NOT gated on the mode, unlike the two above. Birk, 2026-08-30, live at
+    // the station: in manual mode a visitor's hand pulled portraits and terms
+    // out of the arrangement and left them there. Moving the VIEW is what
+    // manual mode is for; the arrangement belongs to the layout, always.
+    //
+    // `autoungrabify` and not `autolock`, and not a `grabbable: false` in the
+    // stylesheet, because it is the one of the three that draws the line
+    // exactly where Birk drew it — between user input and everything else.
+    // Cytoscape gates only its two input handlers on grabbability
+    // (`nodeIsDraggable = !locked() && grabbable()`, checked by the mouse
+    // handler and again by the separate touch handler, which is the one the
+    // foyer's HID digitizer goes through). `locked()` is checked in two more
+    // places: by `position()` itself (`canSet: (e) => !e.locked()`) and by the
+    // preset layout the migration glide runs on — so `autolock` would take
+    // sim/prerender.py, the crash-recovery path and every position-writing
+    // test down with the visitor's hand. Both halves of that are measured in
+    // tests/test_projection.py rather than left as a claim.
+    this.cy.autoungrabify(true);
   }
 
   onGraphChanged() {
@@ -275,11 +316,17 @@ export class Camera {
 
   /** Begin the travel from the view the visitor left to the automatic one. */
   _startHandover() {
-    this._handover = {
-      elapsed: 0,
-      from: { x: this.cy.pan().x, y: this.cy.pan().y, zoom: this.cy.zoom() },
-      to: this._automaticView(),
-    };
+    const from = { x: this.cy.pan().x, y: this.cy.pan().y, zoom: this.cy.zoom() };
+    // In flight BEFORE the target is measured, and provisionally aimed at the
+    // view it starts from. _automaticView() performs the hard framing and so
+    // writes the zoom three times before putting it back, and the projection
+    // sizes its portrait discs off portraitCapBlend on every one of those
+    // writes. With the handover not yet in flight the blend would read 1 —
+    // the mode has already flipped — and those writes would size the discs as
+    // if the ceiling were fully back on, i.e. exactly the snap this travel
+    // exists to remove, one frame before it starts.
+    this._handover = { elapsed: 0, from, to: { ...from } };
+    this._handover.to = this._automaticView();
   }
 
   /** Where the automatic mode wants the viewport — measured, not derived.

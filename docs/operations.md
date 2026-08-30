@@ -303,8 +303,9 @@ werden vor Ort am echten Beamer überprüft (siehe D4 unten); die Messung deckt
 > vergleichbar, obwohl die Menschen dasselbe gesagt haben.
 
 **Kamera** — „alles zeigen" (ganzes Netz im Bild, steht still), „manuell"
-(Besucher zoomt und schiebt per Touch), „automatisch schwenken" (die Kamera
-wandert von selbst von Begriff zu Begriff). **Voreinstellung ist
+(Besucher zoomt und schiebt den Ausschnitt per Touch — Knoten verschieben kann
+er in keinem Modus), „automatisch schwenken" (die Kamera wandert von selbst
+von Begriff zu Begriff). **Voreinstellung ist
 „automatisch schwenken"** (`default_camera_mode` in `config.toml`) — eine
 Station, die bewegungslos hochkommt, wirkt defekt.
 
@@ -319,29 +320,41 @@ in „manuell" nicht, weil dort die Hand des Besuchers führt.
 > 66 % der Knoten im Bild, bei 2× noch 37 %).
 
 **Porträtgröße** — stufenloser Regler **40 px bis 260 px**, Startwert
-**120 px**. Er setzt, wie groß ein Porträtkreis auf der Wand erscheint, in
-echten Bildschirmpixeln: gleich groß bei einer Person wie bei sechzig, und
-unabhängig davon, wie weit der Zoom danebensteht. Anlass (Birk, 2026-08-29, an
-der Station beobachtet): bei einer einzelnen Person füllte das Porträt den
-ganzen Schirm. Gemessen vor der Änderung, ein Mensch und ein Begriff auf
-1920×1080: 367 px (Thema a) bzw. 450 px (Thema b) — gegen 29 px bei fünfzig
-Personen. Die Schrift folgt weiter dem alten Prinzip (Modelleinheiten mal
-Zoom) und wird mit wachsendem Netz kleiner; ausgenommen sind nur die Porträts.
+**120 px**, Anzeige „höchstens 120 px". Er setzt eine **Obergrenze**, keine
+feste Größe: im Automatikbetrieb („alles zeigen", „automatisch schwenken")
+wird ein Porträtkreis nie größer als der eingestellte Wert in echten
+Bildschirmpixeln. Anlass (Birk, 2026-08-29, an der Station beobachtet): bei
+einer einzelnen Person füllte das Porträt den ganzen Schirm. Gemessen ohne
+Grenze, ein Mensch und ein Begriff auf 1920×1080: 367 px (Thema a) bzw.
+450 px (Thema b).
+
+> **Meistens tut der Regler gar nichts, und das ist richtig so.** Unterhalb
+> der Grenze bleibt alles beim alten Prinzip: Modelleinheiten mal Zoom, also
+> wird jedes Gesicht kleiner, je mehr auf der Wand steht — genau wie die
+> Schrift. Gemessen (Thema b, 2026-08-30): 107,7 px bei 5 Personen, 47,5 px
+> bei 20, 28,5 px bei 50. Von der 120er-Grenze wird davon keiner berührt. Sie
+> greift erst bei einer nahezu leeren Wand oder bei stark aufgezogenem Zoom.
+
+> **In „manuell" gilt die Grenze nicht** (Birk, 2026-08-30). Am Touchscreen ist
+> das Hineinzoomen in ein Gesicht die Geste, mit der ein Besucher sich eine
+> Person ansieht; ein Porträt, das dabei stur auf 120 px stehen bleibt, ist
+> tot. Sobald eine Hand die Wand übernimmt, behält die Scheibe ihre
+> Modellgröße und wächst mit dem Zoom wie jeder andere Knoten — bis
+> formatfüllend. Beim Rückweg in die Automatik (die 1,5-s-Fahrt, siehe
+> Touchscreen unten) fährt die Grenze auf derselben Kurve wieder heran, statt
+> am Ende hart umzuschalten.
 
 > **Der Regler ändert die Platzierung nicht.** Das Layout rechnet unverändert
 > mit der Modellgröße des Themas (`--person-size`) und weiß nichts von der
-> eingestellten Bildschirmgröße. Auf einer vollen Wand werden die Porträts
-> damit größer gezeichnet, als das Layout angenommen hat, und können sich
-> berühren. Gemessen am 50-Personen-Netz (2026-08-29), Paare sich berührender
-> Porträts von 1225 möglichen: 9 bei 40 px, 62 bei 80 px, 108 bei 120 px, 268
-> bei 260 px; bei 20 Personen 0 / 3 / 13 / 34. Wenn sich die Kreise stapeln,
-> ist der Regler nach links das Mittel — die Platzierung selbst mitzuziehen
-> wäre ein eigener Umbau.
+> Grenze. Weil die Grenze eine Scheibe nur **kleiner** machen kann als das
+> Layout angenommen hat, kann sie keine Porträts aufeinanderschieben — die
+> berührenden Paare, die die feste Größe von b803745 erzeugte (108 von 1225
+> möglichen beim 50-Personen-Netz), sind damit wieder bei 0.
 
 > **Nicht dasselbe wie Zoom.** Der Zoom wählt den Ausschnitt (wie viel vom Netz
-> auf der Wand steht), die Porträtgröße die Größe der Gesichter darin. Beide
-> wirken unabhängig: ein Zoomzug lässt die Porträts unverändert groß, ein Zug
-> an der Porträtgröße ändert den Ausschnitt nicht.
+> auf der Wand steht), die Porträtgröße begrenzt die Gesichter darin. Ein
+> Zoomzug vergrößert die Porträts mit — aber nur bis an die Grenze; ein Zug an
+> der Porträtgröße ändert den Ausschnitt nicht.
 
 **Tempo** — Geschwindigkeit der automatischen Fahrt, 1/1 bis 1/4. Rechter
 Anschlag ist das Tempo, auf das die Bewegung abgestimmt wurde; nach links wird
@@ -368,13 +381,22 @@ das Flag ist die Seite reine Anzeige; genau so läuft Fläche C im Plenumssaal.
 | Geste | Wirkung |
 |---|---|
 | Ein Finger ziehen | Ausschnitt verschieben |
-| Zwei Finger auf/zu | Zoom |
+| Zwei Finger auf/zu | Zoom (ein Porträt darf dabei bis formatfüllend werden) |
 | Portrait antippen | Zitat der Person erscheint; nochmal = nächstes Zitat |
 | Hintergrund antippen | Zitat weg (sonst nach 12 s von selbst) |
 | „Übersicht" | ganzes Netz, Zoom 1×, zurück zur Automatik |
 
 „Übersicht" ist der **einzige** Knopf am Touchscreen. Alles, was ein Besucher
 dort tut, bleibt auf diesem Schirm.
+
+> **Knoten lassen sich nicht verschieben** (Birk, 2026-08-30, an der Station
+> beobachtet: Besucher zogen Porträts und Begriffe aus dem Layout heraus und
+> ließen sie liegen). Ein Finger auf einem Knoten verschiebt den Ausschnitt wie
+> überall sonst, nie den Knoten. Das gilt in **allen** Kameramodi, auch in
+> „manuell": Schwenken und Zoomen sind der Sinn des manuellen Modus, die
+> Anordnung gehört dem Layout. Technisch `cy.autoungrabify(true)` dauerhaft —
+> nicht `autolock`, das zusätzlich die programmatische Platzierung sperren
+> würde, von der Pre-Render und Absturzwiederherstellung leben.
 
 **Berührung schaltet lokal auf „manuell", 30 s ohne Kontakt schaltet zurück.**
 Lokal heißt: Der Wechsel wird **nicht** an den Server gemeldet. `camera_mode`

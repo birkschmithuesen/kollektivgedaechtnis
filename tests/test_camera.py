@@ -299,16 +299,20 @@ def test_initial_fit_mode_disables_panning_zooming_and_grabbing(camera):
     assert camera.evaluate("window.cyStub._autoungrabify") is True
 
 
-def test_manual_mode_enables_panning_zooming_and_grabbing(camera):
+def test_manual_mode_enables_panning_and_zooming_but_never_grabbing(camera):
+    # Birk, 2026-08-30, live at the station: in manual mode a visitor's hand
+    # pulled portraits and terms out of the arrangement. Panning and zooming
+    # are what manual mode is FOR and stay; the arrangement belongs to the
+    # layout, in every mode.
     camera.evaluate("window.cyStub.interactivity.length = 0")
     camera.evaluate("window.cam.setMode('manual')")
     calls = camera.evaluate("window.cyStub.interactivity")
     assert ["userPanningEnabled", True] in calls
     assert ["userZoomingEnabled", True] in calls
-    assert ["autoungrabify", False] in calls
+    assert ["autoungrabify", False] not in calls
     assert camera.evaluate("window.cyStub._panningEnabled") is True
     assert camera.evaluate("window.cyStub._zoomingEnabled") is True
-    assert camera.evaluate("window.cyStub._autoungrabify") is False
+    assert camera.evaluate("window.cyStub._autoungrabify") is True
 
 
 def test_fit_and_pan_modes_disable_panning_zooming_and_grabbing(camera):
@@ -322,6 +326,18 @@ def test_fit_and_pan_modes_disable_panning_zooming_and_grabbing(camera):
         assert camera.evaluate("window.cyStub._panningEnabled") is False, mode
         assert camera.evaluate("window.cyStub._zoomingEnabled") is False, mode
         assert camera.evaluate("window.cyStub._autoungrabify") is True, mode
+
+
+def test_no_sequence_of_modes_ever_makes_a_node_grabbable(camera):
+    # The guarantee stated as a sweep rather than per mode: whatever the
+    # operator, the idle timeout and a visitor's hand do to the mode, in what
+    # order, `autoungrabify` is never once switched off.
+    camera.evaluate("window.cyStub.interactivity.length = 0")
+    for mode in ("manual", "fit", "manual", "pan", "manual", "pan", "fit"):
+        camera.evaluate(f"window.cam.setMode('{mode}')")
+        assert camera.evaluate("window.cyStub._autoungrabify") is True, mode
+    off = [call for call in camera.evaluate("window.cyStub.interactivity") if call == ["autoungrabify", False]]
+    assert off == []
 
 
 # --- Handing the view back from the visitor to the automatic mode ------------
@@ -486,3 +502,60 @@ def test_an_operator_fit_still_frames_in_a_single_frame(camera):
     camera.evaluate("window.cam.setMode('fit')")
     assert camera.evaluate("window.cyStub._zoom") == 1
     assert camera.evaluate("window.cam.handoverTarget") is None
+
+
+# --- How much of the portrait ceiling is in force (Birk, 2026-08-30) --------
+#
+# The portrait size became an upper bound for the DRIVEN modes only
+# (projection.js). The camera is the only component that knows which of the
+# three regimes the wall is in — driven, in a visitor's hands, or travelling
+# between the two — so it publishes that as one number and the projection sizes
+# its discs off it. Interpolating on the handover's own clock is what keeps the
+# discs from snapping back to the ceiling at the end of the 1.5 s travel.
+
+
+def test_the_driven_modes_apply_the_portrait_ceiling_in_full(camera):
+    for mode in ("fit", "pan"):
+        camera.evaluate(f"window.cam.setMode('{mode}')")
+        assert camera.evaluate("window.cam.portraitCapBlend") == 1, mode
+
+
+def test_the_visitors_mode_lifts_the_portrait_ceiling_entirely(camera):
+    camera.evaluate("window.cam.setMode('manual')")
+    assert camera.evaluate("window.cam.portraitCapBlend") == 0
+
+
+@pytest.mark.parametrize("mode", ["fit", "pan"])
+def test_the_ceiling_comes_back_on_over_the_handover_not_at_its_end(camera, mode):
+    _visitor_leaves_a_close_up(camera, mode)
+    # Not already back on the instant the mode flips — that is the snap.
+    assert camera.evaluate("window.cam.portraitCapBlend") == 0
+
+    blends = camera.evaluate(
+        """() => {
+             const seen = [];
+             while (window.cam.handoverTarget && seen.length < 2000) {
+                 window.cam.step(0.02);
+                 seen.push(window.cam.portraitCapBlend);
+             }
+             return seen;
+           }"""
+    )
+
+    # It rises the whole way, monotonically, and no single frame carries more
+    # than a fraction of it.
+    assert blends[-1] == 1
+    assert all(a <= b + 1e-12 for a, b in zip(blends, blends[1:]))
+    assert max(b - a for a, b in zip([0.0] + blends, blends)) < 0.2
+
+
+def test_a_hand_back_on_the_wall_lifts_the_ceiling_again_at_once(camera):
+    # Same rule as the pan and the zoom: a half-run handover must not keep
+    # shrinking a face under the hand that just grabbed the wall.
+    _visitor_leaves_a_close_up(camera, "pan")
+    _view_samples(camera, 4)
+    assert 0 < camera.evaluate("window.cam.portraitCapBlend") < 1
+
+    camera.evaluate("window.cam.setMode('manual')")
+
+    assert camera.evaluate("window.cam.portraitCapBlend") == 0
