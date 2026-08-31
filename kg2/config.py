@@ -65,6 +65,22 @@ class DreamConfig:
     condense_model: str = "claude-opus-5"
     condense_effort: str = "high"
     condense_max_tokens: int = 16000
+    # Zweiter Anbieterweg für Stufe 1 (2026-08-31), spiegelbildlich zu
+    # `kg.config.llm_api_mode`: "anthropic" ist der Default und damit das
+    # bisherige Verhalten, "chat_completions" spricht jeden OpenAI-kompatiblen
+    # Endpunkt an (Infomaniak, Schweiz). `condense_url` und
+    # `condense_api_key_env` gelten nur im zweiten Modus.
+    #
+    # 🔴 Bei Kimi K2.6 MUSS `condense_reasoning_effort = "none"` gesetzt sein.
+    # Gemessen am 2026-08-31 mit dem echten Extraktions-Schema: ohne den Wert
+    # 0/5 valides JSON, mit "low" 0/8, mit "none" 8/8 in 1,3 s. Der Fehler ist
+    # heimtückisch — HTTP 200, finish_reason "stop", aber der Inhalt beginnt
+    # mit "{{" statt "{" und json.loads wirft. Wer den Wert entfernt, bekommt
+    # eine Station, die scheinbar läuft und keine Träume mehr erzeugt.
+    condense_api_mode: str = "anthropic"
+    condense_url: str = ""
+    condense_api_key_env: str = ""
+    condense_reasoning_effort: str = ""
 
     # -- stage 2 (spec §5.2; the endpoint shape is verified at Task 8) ------
     image_model: str = "google/gemini-3-pro-image"
@@ -128,6 +144,20 @@ class DreamConfig:
         return self.openrouter_api_key
 
     @property
+    def condense_api_key(self) -> str | None:
+        """Der Schlüssel für Stufe 1. Ohne `condense_api_key_env` wie bisher
+        der von Anthropic; sonst der Inhalt genau dieser Variablen.
+
+        Gleiche Bauart und gleiche Begründung wie `image_api_key`: fehlt die
+        Variable, ist das Ergebnis `None` und der Fehler fällt erst beim
+        Aufruf mit klarer Meldung — nicht schon beim Laden, damit
+        `kg2 --no-watch` ohne jeden Schlüssel startet.
+        """
+        if self.condense_api_key_env:
+            return os.environ.get(self.condense_api_key_env)
+        return self.anthropic_api_key
+
+    @property
     def db_path(self) -> Path:
         return self.data_dir / "dreams.sqlite3"
 
@@ -157,6 +187,10 @@ _FIELD_NAMES = {
     "condense_model",
     "condense_effort",
     "condense_max_tokens",
+    "condense_api_mode",
+    "condense_url",
+    "condense_api_key_env",
+    "condense_reasoning_effort",
     "image_model",
     "image_url",
     "image_aspect_ratio",

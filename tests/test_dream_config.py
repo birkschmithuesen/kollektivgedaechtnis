@@ -179,3 +179,54 @@ def test_a_config_with_the_removed_question_keys_still_starts(tmp_path):
     assert not hasattr(cfg, "guiding_question")
     assert not hasattr(cfg, "default_question_visible")
     assert not hasattr(cfg, "default_question_seconds")
+
+
+# --- Stufe 1 auf einen zweiten Anbieter umschalten (2026-08-31) ------------
+
+def test_condense_default_bleibt_anthropic():
+    """Fallback-Regel: unveraenderte Config verhaelt sich wie vorher."""
+    from kg2.config import DreamConfig
+    f = DreamConfig.__dataclass_fields__
+    assert f["condense_api_mode"].default == "anthropic"
+    assert f["condense_url"].default == ""
+    assert f["condense_api_key_env"].default == ""
+    assert f["condense_reasoning_effort"].default == ""
+
+
+def test_condense_api_key_faellt_auf_anthropic_zurueck():
+    from kg2.config import DreamConfig
+    from pathlib import Path
+    c = DreamConfig(data_dir=Path("/tmp"), anthropic_api_key="anthropic-key")
+    assert c.condense_api_key == "anthropic-key"
+
+
+def test_condense_api_key_env_gewinnt(monkeypatch):
+    from kg2.config import DreamConfig
+    from pathlib import Path
+    monkeypatch.setenv("MEIN_EU_KEY", "eu-key")
+    c = DreamConfig(
+        data_dir=Path("/tmp"),
+        anthropic_api_key="anthropic-key",
+        condense_api_key_env="MEIN_EU_KEY",
+    )
+    assert c.condense_api_key == "eu-key"
+
+
+def test_condense_schalter_kommen_aus_der_toml(tmp_path):
+    """Ohne Eintrag in _FIELD_NAMES waeren die Felder stumm wirkungslos."""
+    from kg2.config import load_dream_config
+    cfg = tmp_path / "c.toml"
+    cfg.write_text(
+        'data_dir = "d"\n'
+        'condense_api_mode = "chat_completions"\n'
+        'condense_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"\n'
+        'condense_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"\n'
+        'condense_reasoning_effort = "none"\n'
+        'condense_model = "moonshotai/Kimi-K2.6"\n',
+        encoding="utf-8",
+    )
+    c = load_dream_config(cfg)
+    assert c.condense_api_mode == "chat_completions"
+    assert c.condense_reasoning_effort == "none"
+    assert c.condense_model == "moonshotai/Kimi-K2.6"
+    assert "infomaniak" in c.condense_url

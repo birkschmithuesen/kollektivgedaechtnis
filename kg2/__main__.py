@@ -154,11 +154,19 @@ async def main_async(args) -> None:
     seed_display_settings(store, cfg)
     bus = EventBus()
     # kg.llm is a pure client wrapper — no store, no core, no server (spec §3).
+    # Anbieter und Schlüssel kommen aus der Konfiguration, nicht fest aus dem
+    # Code: der Default bleibt Anthropic, `condense_api_mode =
+    # "chat_completions"` schaltet auf einen OpenAI-kompatiblen Endpunkt
+    # (Infomaniak). Bei Kimi K2.6 gehört `condense_reasoning_effort = "none"`
+    # dazu — siehe die Messung in kg2/config.py.
     llm = LLMClient(
         model=cfg.condense_model,
         effort=cfg.condense_effort,
         max_tokens=cfg.condense_max_tokens,
-        api_key=cfg.anthropic_api_key,
+        api_key=cfg.condense_api_key,
+        api_mode=cfg.condense_api_mode,
+        url=cfg.condense_url or None,
+        reasoning_effort=cfg.condense_reasoning_effort or None,
     )
 
     app = create_dream_app(store, cfg, bus)
