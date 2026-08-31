@@ -124,6 +124,12 @@ def evaluate(
     `force` is the operator's „Dream now" (spec §7): it ignores the floor and
     ignores silence, because its whole purpose is to demonstrate the station on
     demand.
+
+    Ein erzwungener Traum auf leerem Graphen feuert bewusst weiterhin: Was
+    daraus wird, entscheidet der Zyklus, nicht der Auslöser (so auch
+    `test_force_on_an_empty_graph_still_fires`). `kg2/cycle.py` bricht dort
+    mit „no material to condense" ab; hier bleibt die Trennung von Zeitpunkt
+    und Inhalt intakt.
     """
     absorbed = frozenset(absorbed_persons(graph))
 

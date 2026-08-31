@@ -548,6 +548,54 @@ def _is_truncated(sentence: str) -> bool:
     return any(control in sentence for control in ("\n", "\r", "\t"))
 
 
+#: Wendungen, mit denen ein Modell die AUFGABE beschreibt, statt sie zu lösen.
+#: Gemessen am 2026-08-31 an der Wand: Als Traumsatz stand dort wörtlich
+#: „language not specified", als Bildbeschreibung „no explicit 'your MOTD'
+#: found". Beides kam mit HTTP 200 und gültigem Schema zurück — für jede
+#: bestehende Prüfung ein einwandfreier String, für die Ausstellung eine
+#: Fehlermeldung an der Wand.
+#:
+#: Bewusst eng gefasst und ausschliesslich ENGLISCH: Der Wandsatz ist deutsch
+#: (FORM-Abschnitt des Prompts), also kann keine dieser Wendungen in einer
+#: gültigen Antwort vorkommen. Eine deutsche Wendung wie „nicht angegeben"
+#: steht absichtlich NICHT hier — sie könnte Teil eines echten Satzes sein,
+#: und ein zu breiter Filter, der gute Sätze wegwirft, wäre schlimmer als der
+#: Fehler, den er verhindern soll.
+_META_WENDUNGEN = (
+    "not specified",
+    "no explicit",
+    "not provided",
+    "placeholder",
+    "insert the actual",
+    "no material",
+    "not available",
+    "unable to determine",
+)
+
+
+def _ist_meta_antwort(text: str) -> bool:
+    """Beschreibt der Text die Aufgabe, statt sie zu erfüllen?
+
+    Zwei Merkmale, beide notwendig gegen Fehlalarm:
+
+    1. Eine der Wendungen oben — alle englisch, während der Wandsatz deutsch
+       sein muss.
+    2. ODER der Text zitiert die Anweisung selbst zurück. Gemessen mit Kimi
+       K2.6 bei einer Person ohne ausgewertete Begriffe: „Ein einzelner
+       Hauptsatz auf Deutsch, höchstens 16 Wörter, ohne Komma…". Erkennbar
+       daran, dass mehrere Wörter aus dem FORM-Abschnitt gemeinsam auftreten —
+       ein echter Traumsatz über eine Ausstellung sagt nicht „Hauptsatz" und
+       „Nebensatz" in einem Atemzug.
+    """
+    if not text:
+        return False
+    klein = text.lower()
+    if any(w in klein for w in _META_WENDUNGEN):
+        return True
+    anweisungswoerter = ("hauptsatz", "nebensatz", "gedankenstrich", "höchstens")
+    return sum(w in klein for w in anweisungswoerter) >= 2
+
+
 def _clamp_1_to_5(value: int, name: str) -> int:
     """Enforced here, not just in the prompt — same discipline as
     `terms_per_interview` in kg/extraction.py:95: "The cap is enforced here
@@ -594,10 +642,18 @@ def condense(
         # Broken, not merely imperfect — see _is_truncated's docstring for
         # why this is rejected while a missing final period is not.
         raise ValueError(f"stage 1 sentence looks truncated/corrupted: {sentence!r}")
+    if _ist_meta_antwort(sentence):
+        # Wie `_is_truncated`: lieber kein Traum als ein falscher. Der Traum
+        # scheitert, der Watcher versucht es beim nächsten Auslöser erneut
+        # (spec §8) — und auf Schirm B bleibt der letzte gute Traum stehen,
+        # statt von einer Fehlermeldung ersetzt zu werden.
+        raise ValueError(f"stage 1 described the task instead of doing it: {sentence!r}")
 
     sentence_en = _clean(result.sentence_en or "")
     if _is_truncated(sentence_en):
         raise ValueError(f"stage 1 English sentence looks truncated/corrupted: {sentence_en!r}")
+    if _ist_meta_antwort(sentence_en):
+        raise ValueError(f"stage 1 English sentence is a meta answer: {sentence_en!r}")
     if not sentence_en:
         # A missing image motif would be worse than reusing the German
         # sentence — stage 2 (kg2/imagegen.py) needs SOMETHING to render.
@@ -623,6 +679,17 @@ def condense(
     if image_description and _is_truncated(image_description):
         log.warning(
             "stage 1 image description looks truncated/corrupted; falling back: %r",
+            image_description,
+        )
+        image_description = ""
+    if image_description and _ist_meta_antwort(image_description):
+        # Hier VERWERFEN statt scheitern — anders als beim Wandsatz oben. Der
+        # Unterschied ist derselbe, den der Kommentar unten begründet: Ein
+        # Defekt hier verschlechtert das Bild, zerstört aber nicht den Traum,
+        # und Stufe 2 hat mit `sentence_en` einen ehrlichen Rückweg.
+        # „no explicit 'your MOTD' found" ging am 2026-08-31 genau hier durch.
+        log.warning(
+            "stage 1 image description describes the task instead of a motif; falling back: %r",
             image_description,
         )
         image_description = ""
