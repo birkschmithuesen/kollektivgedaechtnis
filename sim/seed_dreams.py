@@ -103,7 +103,6 @@ def seed_dreams(data_dir, count: int, images, *, start_at=START_AT, sentences=No
             person_count=persons,
             term_count=persons * 3,
             edge_count=persons * 4,
-            guiding_question=cfg.guiding_question,
             absorbed_persons=[f"p{n}" for n in range(1, persons + 1)],
         )
         # mood/tension cycle through the whole 1-5 range across the seeded day

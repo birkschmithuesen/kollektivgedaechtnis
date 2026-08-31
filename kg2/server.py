@@ -43,11 +43,6 @@ class DisplaySettings(BaseModel):
     """Spec §7's display settings. Every field optional — the operator UI sends
     one control at a time, and a partial update must not reset its neighbours."""
 
-    question_visible: bool | None = None
-    # 0 = permanent. The ceiling is ten hours — longer than any exhibition day,
-    # so a value above it is a typo, and a question that hides after ten hours
-    # has in practice never hidden.
-    question_seconds: int | None = Field(default=None, ge=0, le=36000)
     # Never 0: a 0 ms "cross-fade" is a cut, and Birk ruled out anything but a
     # fade (spec §6). The upper bound keeps a stray value from leaving the wall
     # mid-dissolve for half a minute.
@@ -82,8 +77,6 @@ class DiscardFlag(BaseModel):
 
 
 _DEFAULTS = {
-    "question_visible": ("default_question_visible", bool),
-    "question_seconds": ("default_question_seconds", int),
     "fade_ms": ("default_fade_ms", int),
     "strip_ratio": ("default_strip_ratio", float),
     "strip_max": ("default_strip_max", int),
@@ -124,10 +117,10 @@ def dream_payload(dream) -> dict | None:
 
 def dream_state(store, cfg) -> dict:
     strip_max = int(store.get_setting("strip_max", str(cfg.default_strip_max)))
+    # Keine Frage mehr im Zustand (2026-08-31): die Überschrift war die letzte
+    # Verwendung der Leitfrage, und sie zeigte eine Frage, die niemand im Raum
+    # gestellt bekommen hat. Der Platz oben gehört jetzt dem Bild.
     return {
-        "question": cfg.guiding_question,
-        "question_visible": store.get_setting("question_visible", "1") == "1",
-        "question_seconds": int(store.get_setting("question_seconds", "0")),
         "fade_ms": int(store.get_setting("fade_ms", str(cfg.default_fade_ms))),
         "strip_ratio": float(store.get_setting("strip_ratio", str(cfg.default_strip_ratio))),
         # Display only: the strip's newest `strip_max` entries. Nothing is

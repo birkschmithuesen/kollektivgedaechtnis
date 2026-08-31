@@ -24,6 +24,10 @@ class Dream:
     # (kg2/condense.py). The column and field stay — no migration for a
     # feature that was never released — but nothing sets this True anymore.
     contradiction: bool = False
+    # Always "" from 2026-08-31 on: the guiding question is gone entirely
+    # (kg2/config.py). Field and column stay so that rows written before that
+    # date still read back with the question that stood above them — nothing
+    # writes a non-empty value here anymore.
     guiding_question: str = ""
     # The person ids this dream condensed. Persisted because a restart has no
     # other way to know which interviews have already been dreamt — without it

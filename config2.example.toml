@@ -27,19 +27,16 @@ min_interval_s = 240
 # stützen. Die Personen-Schwelle für die alte Klausel gibt es deshalb hier
 # nicht mehr — es gibt keine Schwelle mehr zu setzen.
 
-# EINE Leitfrage, den ganzen Tag (Spec §7). Nicht zur Laufzeit änderbar:
-# eine wandernde Frage macht den Verlaufsstreifen unlesbar.
-# GEWÄHLT von Birk am 2026-08-26 aus vier Kandidaten (Lauf:
-# sim.dream_calibrate questions, Ergebnis out/calibrate-questions.txt).
-# Begründung: der soziale Miteinander-Aspekt ist ihm wichtig.
-# SEIT 2026-08-28 steuert dieser Wert AUSSCHLIESSLICH die Überschrift auf dem
-# Schirm (kg2/server.py) — nicht mehr den Trauminhalt. Eine sechste Frage, die
-# niemand im Raum gestellt bekam, hätte dem Modell eine Leserichtung
-# aufgezwungen, die im Material nicht liegen muss (derselbe Fehler wie bei der
-# Widerspruchs-Klausel). Siehe kg2/condense.py.
-# Offen bleibt nur, ob das Programm der NEW bauhaus 2026 eine noch bessere
-# Formulierung nahelegt — siehe docs/HANDOFF-2026-08-26.md, Punkt D.
-guiding_question = "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"
+# Die Leitfrage (`guiding_question`) ist am 2026-08-31 ERSATZLOS ENTFALLEN,
+# mit ihr die Schalter `default_question_visible` und
+# `default_question_seconds`. Seit dem 2026-08-28 erreichte sie kein Modell
+# mehr (kg2/condense.py) und stand nur noch als Überschrift über dem Bild —
+# eine Anzeige ohne Funktion, die zudem eine vierte Frage zeigte, die den
+# Gästen nie gestellt wurde (gefragt wird nach kg.extraction.GUIDING_QUESTIONS
+# in Tool 1). Birk an der Station: „Ja, ganz weg."
+# Steht eine dieser drei Zeilen noch in einer bestehenden config2.toml, ist
+# das folgenlos: kg2/config.py überliest unbekannte Schlüssel, der Start
+# scheitert nicht daran. Sie darf trotzdem gelöscht werden.
 
 # EIN Bildregister, den ganzen Tag (Spec §5.2, §10). Wird an jeden Bildprompt
 # angehängt, nie vom Modell gewählt. Legt NUR die Machart fest — sie wechselt
@@ -148,8 +145,6 @@ image_api_mode = "openrouter"
 
 # Startwerte der Anzeige. Danach gehören sie dem Operator-UI, und ein Neustart
 # stellt DESSEN Wert wieder her, nicht diesen hier.
-default_question_visible = true
-default_question_seconds = 0     # 0 = dauerhaft
 default_fade_ms = 1200           # Überblendung, kein Morph (Spec §6)
 default_strip_ratio = 0.22
 # Obergrenze für den Streifen: nur die letzten N Träume werden gezeigt, der

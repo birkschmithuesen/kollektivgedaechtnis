@@ -16,19 +16,8 @@
 
 <div id="tab-steuerung">
 
-<h2>Leitfrage</h2>
-<!-- Read-only ON PURPOSE (spec §7). Changing the question mid-day destroys
-     exactly the comparability the history strip exists for. It is set in the
-     morning, in config2.toml. Shown here so the operator can see what is set. -->
-<div id="the-question">
-  <span></span>
-  <span class="note">Wird morgens in config2.toml gesetzt und läuft den ganzen Tag durch — hier bewusst nicht änderbar.</span>
-</div>
-
 <h2>Anzeige</h2>
 <div class="controls">
-  <label><input type="checkbox" id="question-visible"> Leitfrage zeigen</label>
-  <label>ausblenden nach <input type="number" id="question-seconds" min="0" max="36000" step="5"> s (0 = nie)</label>
   <label>Überblendung <input type="number" id="fade-ms" min="100" max="10000" step="100"> ms</label>
   <label>Streifenhöhe <input type="number" id="strip-ratio" min="0.05" max="0.25" step="0.01"></label>
   <label>Streifenlänge <input type="number" id="strip-max" min="1" max="40" step="1"> Träume</label>

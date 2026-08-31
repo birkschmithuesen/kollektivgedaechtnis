@@ -108,8 +108,8 @@ def test_the_prompt_forbids_naming_anyone():
 
 def test_the_system_prompt_no_longer_carries_a_guiding_question():
     """Decided 2026-08-28: a sixth question nobody was asked forces a reading
-    direction the material may not contain — the config's `guiding_question`
-    now steers only the on-screen headline (kg2/server.py), not this prompt."""
+    direction the material may not contain. Seit dem 2026-08-31 gibt es gar
+    keine Leitfrage mehr — auch nicht als Überschrift auf dem Schirm."""
     system = build_condense_system()
 
     assert "LEITFRAGE" not in system

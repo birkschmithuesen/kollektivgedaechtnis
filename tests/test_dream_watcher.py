@@ -65,7 +65,6 @@ class Harness:
             created_at=now, graph_generated_at=material.generated_at,
             person_count=material.person_count, term_count=material.term_count,
             edge_count=material.edge_count,
-            guiding_question=cfg.guiding_question,
             absorbed_persons=sorted(absorbed_persons(graph)),
         )
         if self.fail_next:

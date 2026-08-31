@@ -8,7 +8,6 @@
 const TYPE_MS = 55; // per word, the typewriter's own pace
 
 export function createDreamView(root) {
-  const question = root.querySelector('#question');
   const stage = root.querySelector('#stage');
   const sentence = root.querySelector('#sentence');
   const typewriter = root.querySelector('#typewriter');
@@ -25,30 +24,11 @@ export function createDreamView(root) {
   let visibleFrame = 0;
   let fading = false;
   let fadeTimer = null;
-  let questionTimer = null;
   let typeTimer = null;
   let typewriterEnabled = false;
 
   function setFade(ms) {
     root.style.setProperty('--fade-ms', `${ms}ms`);
-  }
-
-  function applyQuestion(state) {
-    question.textContent = state.question || '';
-    clearTimeout(questionTimer);
-    if (!state.question_visible) {
-      question.hidden = true;
-      return;
-    }
-    question.hidden = false;
-    // 0 means permanent (spec §7). Anything else hides it after N seconds —
-    // Birk's explicit request, so the question can introduce the piece in the
-    // morning and then get out of the image's way.
-    if (state.question_seconds > 0) {
-      questionTimer = setTimeout(() => {
-        question.hidden = true;
-      }, state.question_seconds * 1000);
-    }
   }
 
   function scheduleFadeDone() {
@@ -138,7 +118,6 @@ export function createDreamView(root) {
       // mid-word let the animation run to completion on screen regardless.
       stopTypewriter();
     }
-    applyQuestion(state);
     renderStrip(state.history || []);
 
     const dream = state.current;

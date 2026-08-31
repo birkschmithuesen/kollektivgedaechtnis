@@ -13,7 +13,6 @@ def test_load_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
         tool1_url = "http://192.168.1.10:8800"
         poll_interval_s = 5.0
         min_interval_s = 240
-        guiding_question = "Wie leben und bauen wir in zehn Jahren?"
         visual_register = "malerisch, atmosphaerisch, weich"
         server_host = "0.0.0.0"
         server_port = 8810
@@ -33,7 +32,6 @@ def test_load_reads_toml_and_resolves_paths(tmp_path, monkeypatch):
     assert cfg.graph_url == "http://192.168.1.10:8800/graph.json"
     assert cfg.poll_interval_s == 5.0
     assert cfg.min_interval_s == 240
-    assert cfg.guiding_question == "Wie leben und bauen wir in zehn Jahren?"
     assert cfg.visual_register == "malerisch, atmosphaerisch, weich"
     assert cfg.server_host == "0.0.0.0"
     assert cfg.server_port == 8810
@@ -149,5 +147,35 @@ def test_the_example_config_loads(tmp_path, monkeypatch):
     cfg = load_dream_config(target)
 
     assert cfg.tool1_url.startswith("http://")
-    assert cfg.guiding_question
     assert cfg.visual_register
+
+
+def test_a_config_with_the_removed_question_keys_still_starts(tmp_path):
+    """Auf dem Ausstellungsrechner liegt eine `config2.toml`, die noch
+    `guiding_question` (und die beiden Anzeige-Startwerte dazu) enthält — die
+    drei Schlüssel sind am 2026-08-31 ersatzlos entfallen. Ein Startfehler am
+    Ausstellungsmorgen wegen Zeilen, die nichts mehr tun, wäre die teuerste
+    denkbare Art, diese Entfernung zu melden: `load_dream_config` überliest
+    unbekannte Schlüssel, statt sie an DreamConfig durchzureichen, wo sie ein
+    unerwartetes Argument wären."""
+    cfg_file = tmp_path / "config2.toml"
+    cfg_file.write_text(
+        """
+        data_dir = "dream-state"
+        min_interval_s = 300
+        guiding_question = "Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"
+        default_question_visible = true
+        default_question_seconds = 0
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = load_dream_config(cfg_file)
+
+    # Die Datei wird geladen, der Rest der Datei wirkt weiterhin ...
+    assert cfg.min_interval_s == 300
+    # ... und die alten Schlüssel hinterlassen nichts, auch keinen stillen
+    # Rest, den irgendwer später wieder anzeigen könnte.
+    assert not hasattr(cfg, "guiding_question")
+    assert not hasattr(cfg, "default_question_visible")
+    assert not hasattr(cfg, "default_question_seconds")

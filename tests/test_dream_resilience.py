@@ -215,8 +215,7 @@ def test_a_dream_interrupted_by_the_crash_is_visibly_incomplete_not_invisible(tm
     store = DreamStore.open(cfg.db_path)
     seed_one_good_dream(store, cfg, sentence="das gute Bild")
     store.create_dream(created_at=300.0, graph_generated_at=299.0, person_count=5,
-                       term_count=4, edge_count=6,
-                       guiding_question="Q", absorbed_persons=["p4"])
+                       term_count=4, edge_count=6, absorbed_persons=["p4"])
     store.close()  # killed mid-cycle
 
     reopened = DreamStore.open(cfg.db_path)

@@ -791,10 +791,9 @@ zusammengefasst — der Traum ist der des ganzen Graphen, nicht der einer Person
 
 ### Die Regler (alle im Operator-Fenster der Traum-Maschine)
 
-**Anzeige** — Leitfrage zeigen/verbergen und nach N Sekunden ausblenden;
-Überblenddauer; Streifenhöhe; Streifenlänge (nur die letzten N Träume, Rest
-bleibt in `dreams.sqlite3` und wird beim Hochsetzen wieder sichtbar);
-Schreibmaschine an/aus.
+**Anzeige** — Überblenddauer; Streifenhöhe; Streifenlänge (nur die letzten N
+Träume, Rest bleibt in `dreams.sqlite3` und wird beim Hochsetzen wieder
+sichtbar); Schreibmaschine an/aus.
 
 **Ablauf** — „Jetzt träumen" (ignoriert den Mindestabstand; für den Moment, in
 dem jemand vom Veranstalter vor dem Schirm steht), „Pause", „Aktuellen Traum
@@ -805,9 +804,21 @@ verwerfen".
 > vorherige Traum rückt wieder nach vorn. Der Datensatz bleibt erhalten —
 > „zurückholen" ist derselbe Knopf. Kein Freigabeprozess, keine Kuratierung.
 
-**Nicht im Interface, absichtlich:** Leitfrage, Bildregister und Gewichtung.
-Alle drei werden morgens in `config2.toml` gesetzt. Eine wandernde Leitfrage
-macht genau die Vergleichbarkeit kaputt, für die der Verlaufsstreifen da ist.
+**Nicht im Interface, absichtlich:** Bildregister und Gewichtung. Beide werden
+morgens in `config2.toml` gesetzt. Ein wanderndes Bildregister macht genau die
+Vergleichbarkeit kaputt, für die der Verlaufsstreifen da ist.
+
+> **Die Leitfrage gibt es nicht mehr** (2026-08-31). Sie stand als Überschrift
+> über dem Bild, erreichte aber seit dem 2026-08-28 kein Modell mehr — und die
+> Frage, die dort stand, war keine der drei, die den Gästen tatsächlich
+> gestellt werden (`kg.extraction.GUIDING_QUESTIONS`, Tool 1). Birk an der
+> Station: „Ja, ganz weg." Mit ihr sind der zugehörige Anzeige-Schalter, die
+> Sekunden-Einstellung und die Schlüssel `guiding_question`,
+> `default_question_visible`, `default_question_seconds` entfallen. Der frei
+> gewordene Platz oben bekommt kein Ersatzelement, er gehört dem Bild.
+> **Stehen die alten Schlüssel noch in der `config2.toml` auf dem
+> Ausstellungsrechner, ist das folgenlos:** unbekannte Schlüssel werden
+> überlesen, der Start scheitert nicht daran. Löschen darf man sie trotzdem.
 
 ### Wenn etwas ausfällt
 
@@ -980,24 +991,19 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
 > (bezahlt), 40-Bilder-Serie **≈ 5,55 USD**, Ausstellungstag ≈ 5,55 USD.
 > Beleg: `usage.cost`, siehe `docs/dream-image-contract.md`.
 
-1. **Wortlaut der Leitfrage** (`guiding_question`) — **ENTSCHIEDEN am
-   2026-08-26.** Birk hat aus den vier Kandidaten gewählt:
-   **„Wie wollen wir in zehn Jahren zusammen wohnen und bauen?"** Begründung:
-   der soziale Miteinander-Aspekt ist ihm wichtig. Der Wert steht so in
-   `config2.example.toml`.
+1. ~~**Wortlaut der Leitfrage** (`guiding_question`)~~ — **ERLEDIGT, weil die
+   Sache selbst am 2026-08-31 entfallen ist.** Es gibt keine Leitfrage mehr,
+   also auch keinen Wortlaut zu entscheiden. Der Weg dorthin in zwei Schritten:
+   am 2026-08-28 verschwand sie aus Stufe 1's Prompt (`kg2/condense.py`) und
+   steuerte nur noch die Überschrift auf dem Schirm; am 2026-08-31 fiel diese
+   Überschrift weg. Birks Begründung an der Station: die Frage stand über dem
+   Bild, ohne irgendetwas zu tun — und es war nicht einmal eine der Fragen,
+   die den Gästen gestellt werden. „Ja, ganz weg."
 
-   Grundlage waren 16 kalt gelesene Sätze (4 Formulierungen × 3/10/30/60
-   Personen) in `out/calibrate-questions.txt` (Lauf vom 2026-08-26, vor dem
-   Umbau unten), erzeugt ohne Empfehlung im Output.
-
-   **SEIT 2026-08-28 gegenstandslos für den Trauminhalt:** Die Leitfrage
-   steuert nur noch die Überschrift auf dem Schirm (`kg2/server.py`), nicht
-   mehr Stufe 1's Prompt (`kg2/condense.py`) — ein weiterer Vergleichslauf
-   über generierte Sätze ergibt daher keinen Sinn mehr, der Befehl
-   `sim.dream_calibrate questions` wurde ersatzlos entfernt. Bleibt offen: ob
-   das Programm der NEW bauhaus 2026 eine Formulierung nahelegt, die in noch
-   mehr Vorträgen als Fragestellung steckt (`docs/HANDOFF-2026-08-26.md`,
-   Punkt D) — das ist jetzt eine reine Textentscheidung, kein Kalibrierlauf.
+   Damit ist auch Punkt D aus `docs/HANDOFF-2026-08-26.md` (bessere
+   Formulierung aus dem Programm der NEW bauhaus 2026) gegenstandslos. Die
+   Kalibrierläufe dazu (`out/calibrate-questions.txt`, Befehl
+   `sim.dream_calibrate questions`) sind Historie.
 
 2. **Gleitende Begriffsauswahl** (`SINGLE_MENTION_BUDGET` /
    `SHARED_TERMS_SATURATION`, `kg2/weighting.py`) — **ENTSCHIEDEN am

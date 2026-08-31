@@ -8,9 +8,6 @@ import pytest
 
 def state(current=None, history=(), **overrides):
     base = {
-        "question": "Wie leben und bauen wir in zehn Jahren?",
-        "question_visible": True,
-        "question_seconds": 0,
         "fade_ms": 1200,
         "strip_ratio": 0.22,
         "typewriter": False,
@@ -66,10 +63,12 @@ def box(page, selector):
 # -- the baseline layout ----------------------------------------------------
 
 
-def test_the_question_the_image_the_sentence_and_the_strip_are_all_present(view):
+def test_the_image_the_sentence_and_the_strip_are_all_present(view):
+    """Drei Elemente, nicht mehr vier: die Leitfrage ist am 2026-08-31
+    ersatzlos entfallen (Birk: „Ja, ganz weg")."""
     apply(view, state(current=dream(3), history=[dream(1), dream(2)]))
 
-    assert view.locator("#question").inner_text() == "Wie leben und bauen wir in zehn Jahren?"
+    assert view.locator("#stage .frame.visible").count() == 1
     assert view.locator("#sentence").inner_text() == "Traum 3"
     assert view.locator("#strip li").count() == 2
 
@@ -142,7 +141,6 @@ def test_the_page_is_readable_with_no_dreams_at_all(view):
 
     assert view.locator("#sentence").inner_text() == ""
     assert view.locator("#strip li").count() == 0
-    assert view.locator("#question").is_visible() is True
 
 
 def test_a_full_strip_of_forty_dreams_still_fits_on_screen(view):
@@ -225,26 +223,39 @@ def test_the_image_fills_the_whole_screen(view):
     assert fits == ["cover", "cover"]
 
 
-def test_switching_the_question_off_does_not_change_the_image_area(view):
-    """Der gemeldete Fehler, nicht nur eine Schönheitsfrage: mit
-    `question_visible=false` fiel die Frage-Zeile aus dem Raster, die drei
-    verbleibenden Elemente rutschten eine Zeile hoch, und die Bühne bekam die
-    `auto`-Zeile — gemessen 0 px hoch. Das Bild verschwand komplett vom
-    Schirm. Ohne Raster kann das nicht mehr passieren."""
+def test_there_is_no_question_element_and_the_image_still_fills_the_screen(view):
+    """Die Leitfrage ist am 2026-08-31 ersatzlos entfallen (Birk an der
+    Station: „Ja, ganz weg") — sie erreichte seit dem 2026-08-28 kein Modell
+    mehr und zeigte obendrein eine Frage, die den Gästen nie gestellt wurde.
+
+    Dieser Test ersetzt `test_switching_the_question_off_does_not_change_the_
+    image_area`: dessen Fehlerbild — die Frage-Zeile fiel aus dem alten
+    Raster, die Bühne landete auf der `auto`-Zeile und war 0 px hoch — kann
+    ohne Frage und ohne Raster nicht mehr auftreten, und der Schalter, den er
+    umlegte, existiert nicht mehr. Geprüft bleibt die Randbedingung, die von
+    der Entfernung berührt wird: Kein `#question` im Dokument, und der frei
+    gewordene Platz oben bekommt kein Ersatzelement, sondern gehört dem Bild.
+    """
     apply(view, state(current=dream(3), history=[dream(1), dream(2)]))
-    with_question = box(view, "#stage .frame.visible")
 
-    apply(
-        view,
-        state(current=dream(3), history=[dream(1), dream(2)], question_visible=False),
+    assert view.locator("#question").count() == 0
+
+    frame = box(view, "#stage .frame.visible")
+    assert frame["width"] == pytest.approx(1920, abs=2)
+    assert frame["height"] == pytest.approx(1080, abs=2)
+    assert frame["x"] == pytest.approx(0, abs=2)
+    assert frame["y"] == pytest.approx(0, abs=2)
+
+    # Und oben liegt wirklich nichts mehr auf dem Bild: kein Element ragt in
+    # die oberen 18 vh, die vorher der Frage und ihrem Verlauf gehörten.
+    top_band = view.evaluate(
+        """() => Array.from(document.querySelectorAll('#page > *'))
+             .filter((el) => el.id !== 'stage')
+             .filter((el) => { const b = el.getBoundingClientRect();
+                               return b.height > 0 && b.top < 0.18 * window.innerHeight; })
+             .map((el) => el.id)"""
     )
-    without_question = box(view, "#stage .frame.visible")
-
-    assert view.locator("#question").is_visible() is False
-    assert without_question["height"] == pytest.approx(with_question["height"], abs=1)
-    assert without_question["width"] == pytest.approx(with_question["width"], abs=1)
-    assert without_question["y"] == pytest.approx(with_question["y"], abs=1)
-    assert without_question["height"] == pytest.approx(1080, abs=2)
+    assert top_band == []
 
 
 def test_the_sentence_lies_over_the_image_on_a_scrim_and_clear_of_the_strip(view):
@@ -273,11 +284,13 @@ def test_the_sentence_lies_over_the_image_on_a_scrim_and_clear_of_the_strip(view
     # Die Auflage liegt darunter, nicht darauf.
     assert sentence["y"] + sentence["height"] <= strip["y"]
 
-    # Dezent auch oben, für die Frage (Variante A).
+    # OBEN liegt seit dem 2026-08-31 kein Verlauf mehr: der obere war
+    # ausschließlich für die Leitfrage da, die es nicht mehr gibt. Ein Verlauf
+    # ohne Text darunter verdunkelt nur das Bild, dem dieser Platz gehört.
     top_scrim = view.locator("#page").evaluate(
         "e => getComputedStyle(e, '::before').backgroundImage"
     )
-    assert "gradient" in top_scrim
+    assert "gradient" not in top_scrim
 
 
 # -- sizing (spec §6 / T1§11) ------------------------------------------------
@@ -306,29 +319,12 @@ def test_the_strip_ratio_control_changes_the_thumbnail_height(view):
     assert thick > thin * 1.8
 
 
-# -- the guiding question (spec §7) ------------------------------------------
-
-
-def test_the_question_can_be_switched_off(view):
-    apply(view, state(current=dream(1), question_visible=False))
-
-    assert view.locator("#question").is_visible() is False
-
-
-def test_the_question_auto_hides_after_the_configured_seconds(view):
-    apply(view, state(current=dream(1), question_visible=True, question_seconds=1))
-
-    assert view.locator("#question").is_visible() is True
-    view.wait_for_function(
-        "() => !document.getElementById('question').checkVisibility()", timeout=5000
-    )
-
-
-def test_zero_seconds_means_permanent(view):
-    apply(view, state(current=dream(1), question_visible=True, question_seconds=0))
-    view.wait_for_timeout(1500)
-
-    assert view.locator("#question").is_visible() is True
+# Die drei Tests zur Leitfrage (`test_the_question_can_be_switched_off`,
+# `test_the_question_auto_hides_after_the_configured_seconds`,
+# `test_zero_seconds_means_permanent`) sind am 2026-08-31 entfallen: sie
+# prüften das Verhalten eines Elements und zweier Schalter, die es nicht mehr
+# gibt. Was von ihnen bleibt, ist die Abwesenheitsprüfung oben
+# (`test_there_is_no_question_element_and_the_image_still_fills_the_screen`).
 
 
 # -- the cross-fade (spec §6, Birk: not a morph) -----------------------------

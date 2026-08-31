@@ -3,18 +3,15 @@
    pixels. --strip-ratio and --fade-ms are set from the operator's state.
 
    Umbau 2026-08-30 (Birk, live an der Station): Das Bild liegt FORMATFÜLLEND,
-   Satz, Frage und Streifen liegen darauf. Vorher war #page ein Raster aus vier
+   Satz und Streifen liegen darauf. Vorher war #page ein Raster aus vier
    Zeilen (Frage / Bild / Satz / Streifen) und das Bild bekam auf 1920×1080
    nur 671 von 1080 px — 62 % der Höhe, 39 % der Fläche. Der Beschnitt durch
    `object-fit: cover` wird dafür bewusst in Kauf genommen.
 
-   Das Raster hatte noch einen zweiten, härteren Fehler: mit
-   `question_visible=false` fiel die Frage-Zeile ganz aus dem Raster, die drei
-   übrigen Elemente rutschten je eine Zeile hoch, und die Bühne landete auf
-   der `auto`-Zeile — mit absolut positionierten Rahmen darin also 0 px hoch.
-   Die Frage abzuschalten löschte das Bild. Nichts hängt mehr an einer
-   Rasterzeile, also kann das nicht wiederkommen
-   (tests/test_dream_page.py::test_switching_the_question_off_...). */
+   Die Leitfrage ist am 2026-08-31 ersatzlos entfallen (Birk: „Ja, ganz weg").
+   Sie erreichte seit dem 2026-08-28 kein Modell mehr und zeigte zudem eine
+   Frage, die den Gästen nie gestellt wurde. Der obere Bereich bekommt KEIN
+   Ersatzelement: er gehört dem Bild. */
 
 :root {
   --strip-ratio: 0.22;
@@ -25,8 +22,8 @@
      verschwindet eine 55-%-Miniatur, in der Rasterzeile auf schwarzem Grund
      tat sie das nicht. Die Zurücknahme trägt jetzt die Größe. */
   --dim: 0.85;
-  /* Ein Rand für alles, was auf dem Bild liegt — Frage, Satz, Streifen
-     fluchten an derselben Kante (Variante A). */
+  /* Ein Rand für alles, was auf dem Bild liegt — Satz und Streifen fluchten
+     an derselben Kante (Variante A). */
   --gutter: 5.2vw;
   /* Höhe einer Miniatur. `strip_ratio` (Server: 0.05–0.25, kg2/server.py)
      BEHÄLT seine Bedeutung als Regler für die Größe der Miniaturen, steuert
@@ -59,11 +56,16 @@ html, body {
   overflow: hidden;
 }
 
-/* Die Verläufe („scrim"). Ohne sie ist heller Text auf einem hellen Traumbild
+/* Der Verlauf („scrim"). Ohne ihn ist heller Text auf einem hellen Traumbild
    unlesbar — das ist der Grund für den Verlauf, nicht Dekoration. Als
-   Pseudo-Elemente, damit die Auflage keine zwei leeren <div> ins Markup
-   bringt, die dream.js kennen müsste. */
-#page::before,
+   Pseudo-Element, damit die Auflage kein leeres <div> ins Markup bringt, das
+   dream.js kennen müsste.
+
+   Nur noch UNTEN, seit die Leitfrage entfallen ist (2026-08-31): der obere
+   Verlauf war ausschließlich für sie da — er machte die kleine, hell gesetzte
+   Frage auf einem hellen Traumbild lesbar. Über den oberen 18 vh liegt jetzt
+   nichts mehr, und ein Verlauf ohne Text darunter verdunkelt nur noch das
+   Bild, dem dieser Platz seit dem Vollbild-Umbau gehört. */
 #page::after {
   content: "";
   position: absolute;
@@ -71,42 +73,12 @@ html, body {
   right: 0;
   z-index: 1;
   pointer-events: none;
-}
-
-/* Unten kräftig: hier steht der Satz in großer Type. */
-#page::after {
   bottom: 0;
   height: 46vh;
   background: linear-gradient(to top,
     rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.75) 28%,
     rgba(0, 0, 0, 0.35) 62%, rgba(0, 0, 0, 0) 100%);
 }
-
-/* Oben dezent: die Frage ist klein und zurückgenommen, sie braucht weniger. */
-#page::before {
-  top: 0;
-  height: 18vh;
-  background: linear-gradient(to bottom,
-    rgba(0, 0, 0, 0.70) 0%, rgba(0, 0, 0, 0.25) 55%, rgba(0, 0, 0, 0) 100%);
-}
-
-/* Oben links, klein und zurückgenommen (Variante A). Vorher zentriert in
-   einer eigenen Rasterzeile. */
-#question {
-  position: absolute;
-  top: 3.2vh;
-  left: var(--gutter);
-  right: var(--gutter);
-  z-index: 2;
-  font-size: 2.2vh;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  opacity: 0.62;
-  text-shadow: 0 0.1vh 0.8vh rgba(0, 0, 0, 0.7);
-  transition: opacity var(--fade-ms) ease;
-}
-
-#question[hidden] { display: none; }
 
 /* Die Bühne ist der ganze Schirm. `z-index` bleibt bewusst `auto`, damit sie
    keinen eigenen Stapelkontext aufmacht — #typewriter liegt darin und muss

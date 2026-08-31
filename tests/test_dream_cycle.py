@@ -108,7 +108,6 @@ def test_a_successful_dream_records_everything_spec_5_3_asks_for(tmp_path):
     assert dream.stage2_prompt
     assert dream.condense_model == "claude-opus-5"
     assert dream.image_model == "google/gemini-3-pro-image"
-    assert dream.guiding_question == cfg.guiding_question
     assert dream.absorbed_persons == [f"p{i}" for i in range(8)]
     assert dream.discarded is False
     store.close()

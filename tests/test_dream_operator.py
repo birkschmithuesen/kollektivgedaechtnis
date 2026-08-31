@@ -9,9 +9,6 @@ import pytest
 
 def state(**overrides):
     base = {
-        "question": "Wie leben und bauen wir in zehn Jahren?",
-        "question_visible": True,
-        "question_seconds": 0,
         "fade_ms": 1200,
         "strip_ratio": 0.22,
         "typewriter": False,
@@ -88,17 +85,13 @@ def posts(page):
 def test_every_display_control_is_present(ui):
     render(ui, state())
 
-    for control in ("#question-visible", "#question-seconds", "#fade-ms",
-                    "#strip-ratio", "#typewriter"):
+    for control in ("#fade-ms", "#strip-ratio", "#typewriter"):
         assert ui.locator(control).count() == 1
 
 
 def test_the_controls_show_the_servers_values(ui):
-    render(ui, state(question_visible=False, question_seconds=30, fade_ms=800,
-                     strip_ratio=0.3, typewriter=True))
+    render(ui, state(fade_ms=800, strip_ratio=0.3, typewriter=True))
 
-    assert ui.locator("#question-visible").is_checked() is False
-    assert ui.locator("#question-seconds").input_value() == "30"
     assert ui.locator("#fade-ms").input_value() == "800"
     assert ui.locator("#strip-ratio").input_value() == "0.3"
     assert ui.locator("#typewriter").is_checked() is True
@@ -121,21 +114,10 @@ def test_toggling_the_typewriter_posts_it(ui):
     assert posts(ui)[-1] == ["/api/display", {"typewriter": True}]
 
 
-def test_switching_the_question_off_posts_it(ui):
-    render(ui, state())
-
-    ui.locator("#question-visible").click()
-
-    assert posts(ui)[-1] == ["/api/display", {"question_visible": False}]
-
-
-def test_the_auto_hide_duration_posts_seconds(ui):
-    render(ui, state())
-
-    ui.locator("#question-seconds").fill("20")
-    ui.locator("#question-seconds").dispatch_event("change")
-
-    assert posts(ui)[-1] == ["/api/display", {"question_seconds": 20}]
+# `test_switching_the_question_off_posts_it` und
+# `test_the_auto_hide_duration_posts_seconds` sind am 2026-08-31 entfallen:
+# beide Regler gibt es nicht mehr. Die Abwesenheit prueft
+# `test_the_operator_shows_no_guiding_question_at_all` weiter unten.
 
 
 def test_the_strip_ratio_posts_a_fraction(ui):
@@ -229,15 +211,16 @@ def test_a_discarded_dream_is_marked_but_still_listed(ui):
 # -- the deliberate limits (spec §7) ---------------------------------------
 
 
-def test_the_guiding_question_is_shown_but_has_no_control(ui):
-    """Spec §7: changing the question mid-day destroys exactly the
-    comparability the strip exists for. It is set in the morning, in
-    config2.toml — visible here, not editable."""
+def test_the_operator_shows_no_guiding_question_at_all(ui):
+    """Bis zum 2026-08-31 stand die Leitfrage hier unveraenderbar zum
+    Nachlesen. Sie ist ersatzlos entfallen — sie steuerte nichts mehr und war
+    zudem keine der Fragen, die den Gaesten gestellt werden. Der Nachfolger
+    des alten Tests prueft deshalb die Abwesenheit: weder Anzeige noch
+    Regler, und auch keine Beschriftung, die noch eine verspricht."""
     render(ui, state())
 
-    assert "Wie leben und bauen wir in zehn Jahren?" in ui.locator("#the-question").inner_text()
-    assert ui.locator("#the-question input").count() == 0
-    assert ui.locator("#the-question textarea").count() == 0
+    assert ui.locator("#the-question").count() == 0
+    assert "leitfrage" not in ui.locator("body").inner_text().lower()
 
 
 def test_there_is_no_control_for_the_register_or_the_weighting(ui):
@@ -260,8 +243,6 @@ def test_there_is_no_control_for_the_register_or_the_weighting(ui):
     assert writable == sorted(
         [
             "fade-ms",
-            "question-seconds",
-            "question-visible",
             "strip-max",
             "strip-ratio",
             "typewriter",

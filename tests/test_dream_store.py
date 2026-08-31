@@ -23,7 +23,6 @@ def make_dream(
         person_count=len(persons),
         term_count=3,
         edge_count=4,
-        guiding_question="Wie leben und bauen wir in zehn Jahren?",
         absorbed_persons=list(persons),
     )
     store.set_stage1(
@@ -50,7 +49,9 @@ def test_a_finished_dream_carries_every_field_the_record_needs(tmp_path):
     assert dream.term_count == 3
     assert dream.edge_count == 4
     assert dream.contradiction is False
-    assert dream.guiding_question == "Wie leben und bauen wir in zehn Jahren?"
+    # Leer, seit die Leitfrage am 2026-08-31 ersatzlos entfallen ist: die
+    # Spalte bleibt für die Zeilen von vorher, neue Zeilen tragen nichts mehr.
+    assert dream.guiding_question == ""
     assert dream.absorbed_persons == ["p1", "p2"]
     assert dream.stage1_prompt == "S1"
     assert dream.sentence == "Ein Satz."
@@ -76,7 +77,7 @@ def test_a_row_with_no_english_sentence_or_mood_or_tension_stays_readable(tmp_pa
 
     dream = store.create_dream(
         created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+        edge_count=1, absorbed_persons=["p1"],
     )
 
     assert dream.sentence_en is None
@@ -94,7 +95,7 @@ def test_a_row_with_no_image_description_or_tension_source_stays_readable(tmp_pa
 
     dream = store.create_dream(
         created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+        edge_count=1, absorbed_persons=["p1"],
     )
 
     assert dream.image_description is None
@@ -109,7 +110,7 @@ def test_a_stage1_call_that_omits_the_new_fields_still_writes_the_row(tmp_path):
     store = open_store(tmp_path)
     dream = store.create_dream(
         created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+        edge_count=1, absorbed_persons=["p1"],
     )
 
     store.set_stage1(dream.id, prompt="S1", sentence="Ein Satz.", model="claude-opus-5")
@@ -130,7 +131,7 @@ def test_an_empty_tension_source_is_stored_as_empty_not_as_missing(tmp_path):
     answered_none = make_dream(store, at=1.0, tension_source="")
     never_filled = store.create_dream(
         created_at=2.0, graph_generated_at=1.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p2"],
+        edge_count=1, absorbed_persons=["p2"],
     )
 
     assert answered_none.tension_source == ""
@@ -144,7 +145,7 @@ def test_a_dream_row_exists_before_the_first_cloud_call(tmp_path):
 
     dream = store.create_dream(
         created_at=1.0, graph_generated_at=0.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p1"],
+        edge_count=1, absorbed_persons=["p1"],
     )
 
     assert dream.status == "running"
@@ -225,7 +226,7 @@ def test_a_failed_dream_never_reaches_the_screen(tmp_path):
     make_dream(store, at=1.0, sentence="gut")
     broken = store.create_dream(
         created_at=2.0, graph_generated_at=1.5, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p9"],
+        edge_count=1, absorbed_persons=["p9"],
     )
 
     store.fail_dream(broken.id, "read timeout")
@@ -242,7 +243,7 @@ def test_a_stage_2_failure_still_records_the_sentence(tmp_path):
     store = open_store(tmp_path)
     dream = store.create_dream(
         created_at=1.0, graph_generated_at=0.0, person_count=6, term_count=9,
-        edge_count=12, guiding_question="Q", absorbed_persons=["p1"],
+        edge_count=12, absorbed_persons=["p1"],
     )
     store.set_stage1(dream.id, prompt="S1", sentence="Der Satz kam durch.", model="claude-opus-5")
     store.set_stage2_prompt(dream.id, prompt="S2", model="google/gemini-3-pro-image")
@@ -264,7 +265,7 @@ def test_last_started_at_counts_failed_and_discarded_dreams_too(tmp_path):
     make_dream(store, at=100.0)
     failed = store.create_dream(
         created_at=200.0, graph_generated_at=199.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p2"],
+        edge_count=1, absorbed_persons=["p2"],
     )
     store.fail_dream(failed.id, "timeout")
 
@@ -277,7 +278,7 @@ def test_last_started_at_counts_failed_and_discarded_dreams_too(tmp_path):
     # catch it.
     discarded = store.create_dream(
         created_at=300.0, graph_generated_at=299.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p3"],
+        edge_count=1, absorbed_persons=["p3"],
     )
     store.set_stage1(discarded.id, prompt="S1", sentence="s", model="claude-opus-5")
     store.set_stage2_prompt(discarded.id, prompt="S2", model="google/gemini-3-pro-image")
@@ -411,7 +412,6 @@ def test_create_dream_is_thread_safe_under_concurrent_creation(tmp_path):
                     person_count=1,
                     term_count=1,
                     edge_count=1,
-                    guiding_question="Q",
                     absorbed_persons=["p1"],
                 )
                 with dreams_lock:

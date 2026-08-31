@@ -117,7 +117,6 @@ class DreamStore:
         person_count: int,
         term_count: int,
         edge_count: int,
-        guiding_question: str,
         absorbed_persons: list[str],
     ) -> Dream:
         """Insert the row BEFORE the first cloud call.
@@ -130,13 +129,18 @@ class DreamStore:
         (kg2/condense.py, 2026-08-28), and every row from here on records 0 —
         written explicitly, not left to a schema default, so a reader of this
         code sees the decision rather than inferring it from db.py's DEFAULT.
+        `guiding_question` is no parameter for the same reason since
+        2026-08-31: die Leitfrage ist ersatzlos entfallen, neue Zeilen tragen
+        hier den leeren String. Ältere Zeilen behalten ihren Wortlaut — das
+        ist der ehrliche Datensatz dessen, was an dem Tag auf dem Schirm
+        stand, und der wird nicht rückwirkend umgeschrieben.
         """
         dream_id = self._next_id()
         self.conn.execute(
             "INSERT INTO dream(id, created_at, graph_generated_at, person_count,"
             " term_count, edge_count, contradiction, guiding_question,"
             " absorbed_persons, status)"
-            " VALUES (?,?,?,?,?,?,0,?,?, 'running')",
+            " VALUES (?,?,?,?,?,?,0,'',?, 'running')",
             (
                 dream_id,
                 created_at,
@@ -144,7 +148,6 @@ class DreamStore:
                 person_count,
                 term_count,
                 edge_count,
-                guiding_question,
                 json.dumps(sorted(absorbed_persons)),
             ),
         )

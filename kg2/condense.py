@@ -58,9 +58,10 @@ adding to it:
   system nor user message. It was a sixth question nobody in the room was
   actually asked (the five in `kg.extraction.GUIDING_QUESTIONS` were), and
   imposing it forced a reading direction the material may not contain — the
-  same failure mode as the contradiction clause. `DreamConfig.guiding_question`
-  still exists, but from here on it steers only the on-screen headline
-  (`kg2/server.py`), never the model.
+  same failure mode as the contradiction clause. Nach diesem Schritt steuerte
+  `DreamConfig.guiding_question` nur noch eine Überschrift auf dem Schirm; am
+  2026-08-31 ist sie deshalb ersatzlos entfallen (`kg2/config.py`), samt
+  Anzeige und Schaltern. Es gibt keine Leitfrage mehr, weder hier noch dort.
 """
 
 from __future__ import annotations

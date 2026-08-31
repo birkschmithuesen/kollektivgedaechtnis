@@ -337,7 +337,8 @@ def test_an_interview_becomes_a_dream_and_an_image_on_screen_b(tmp_path):
         assert state_payload["current"]["id"] == dream.id
         assert state_payload["current"]["sentence"] == dream.sentence
         assert state_payload["current"]["image"] == f"/media/images/{dream.image_path}"
-        assert state_payload["question"] == dream_cfg.guiding_question
+        # Keine Leitfrage mehr im Zustand (2026-08-31, ersatzlos entfallen).
+        assert "question" not in state_payload
         # The strip carries the EARLIER dreams only: `store.history()` is
         # `visible_dreams()[:-1]`, because the current dream hangs on the big
         # screen rather than in the strip beneath it (spec §6). With exactly

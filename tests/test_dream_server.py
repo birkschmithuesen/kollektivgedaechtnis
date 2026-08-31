@@ -27,8 +27,7 @@ def app(tmp_path):
 def add_dream(store, cfg, *, at, sentence, discarded=False):
     dream = store.create_dream(
         created_at=at, graph_generated_at=at - 1, person_count=6, term_count=5,
-        edge_count=9, guiding_question=cfg.guiding_question,
-        absorbed_persons=["p1"],
+        edge_count=9, absorbed_persons=["p1"],
     )
     store.set_stage1(dream.id, prompt="S1", sentence=sentence, model="claude-opus-5")
     store.set_stage2_prompt(dream.id, prompt="S2", model="google/gemini-3-pro-image")
@@ -42,14 +41,13 @@ def add_dream(store, cfg, *, at, sentence, discarded=False):
 # -- state ------------------------------------------------------------------
 
 
-def test_state_carries_the_question_the_current_dream_and_the_strip(app):
+def test_state_carries_the_current_dream_and_the_strip(app):
     client, store, cfg, _ = app
     add_dream(store, cfg, at=1.0, sentence="erst")
     add_dream(store, cfg, at=2.0, sentence="dann")
 
     state = client.get("/api/state").json()
 
-    assert state["question"] == cfg.guiding_question
     assert state["current"]["sentence"] == "dann"
     assert state["current"]["image"] == "/media/images/d2.png"
     assert [d["sentence"] for d in state["history"]] == ["erst"]
@@ -72,8 +70,6 @@ def test_display_settings_start_from_config_and_are_then_owned_by_the_operator(a
     assert state["fade_ms"] == cfg.default_fade_ms
     assert state["typewriter"] == cfg.default_typewriter
     assert state["strip_ratio"] == cfg.default_strip_ratio
-    assert state["question_visible"] == cfg.default_question_visible
-    assert state["question_seconds"] == cfg.default_question_seconds
 
     client.post("/api/display", json={"fade_ms": 400})
     seed_display_settings(store, cfg)  # a restart re-seeds; it must not win
@@ -138,8 +134,6 @@ def test_every_display_setting_can_be_changed(app):
     response = client.post(
         "/api/display",
         json={
-            "question_visible": False,
-            "question_seconds": 20,
             "fade_ms": 800,
             "strip_ratio": 0.2,
             "strip_max": 7,
@@ -149,8 +143,6 @@ def test_every_display_setting_can_be_changed(app):
 
     assert response.status_code == 200
     state = client.get("/api/state").json()
-    assert state["question_visible"] is False
-    assert state["question_seconds"] == 20
     assert state["fade_ms"] == 800
     assert state["strip_ratio"] == 0.2
     assert state["strip_max"] == 7
@@ -178,7 +170,6 @@ def test_a_partial_display_update_leaves_the_rest_alone(app):
         # the strip would start to rival the stage it is evidence for
         {"strip_max": 0},  # an empty strip is not what this control is for
         {"strip_max": 41},  # above the largest count the wall design was judged at
-        {"question_seconds": -1},
     ],
 )
 def test_out_of_range_display_values_are_rejected(app, payload):
@@ -252,30 +243,34 @@ def test_discarding_an_unknown_dream_is_a_400_not_a_500(app):
 # -- what the interface must NOT be able to do (spec §7) --------------------
 
 
-def test_no_route_can_change_the_guiding_question_or_the_register():
-    """Spec §7: changing the question mid-day destroys exactly the
-    comparability the strip exists for. Both are morning settings, in
-    config2.toml, and the API must have no way to touch them."""
+def test_no_route_knows_the_register_and_the_question_is_gone_entirely():
+    """Spec §7: das Bildregister ist eine Morgeneinstellung in config2.toml,
+    und die API darf keinen Weg dorthin haben.
+
+    Die Leitfrage stand bis zum 2026-08-31 unter derselben Regel; sie ist
+    seither ersatzlos entfallen, also darf sie im Server ueberhaupt nicht mehr
+    vorkommen — auch nicht lesend als Ueberschrift."""
     import kg2.server
     from pathlib import Path
 
     source = Path(kg2.server.__file__).read_text(encoding="utf-8")
 
-    assert "guiding_question=" not in source.replace("cfg.guiding_question", "")
+    assert "guiding_question" not in source
     assert "visual_register" not in source
 
 
-def test_no_request_can_move_the_guiding_question_however_it_is_spelled(app):
+def test_no_request_can_put_a_question_back_on_the_screen(app):
     """The behavioural half of the same guarantee.
 
-    The source check above only catches the literal spelling `guiding_question=`.
-    A future route storing a `question_override` setting would slip past it
-    while breaking the constraint outright — so this one ignores how the code
-    is written and asserts the property: whatever you POST, the question the
-    screen is told to display does not move.
+    Die Quelltextpruefung oben faengt nur die woertliche Schreibweise. Eine
+    kuenftige Route, die ein `question_override` in den Einstellungen ablegt
+    und in den Zustand spiegelt, kaeme daran vorbei und braechte genau die
+    Anzeige zurueck, die am 2026-08-31 entfernt wurde — dieser Test ignoriert
+    deshalb, wie der Code geschrieben ist, und prueft die Eigenschaft: was man
+    auch schickt, im Zustand fuer den Schirm steht keine Frage.
     """
     client, store, cfg, _ = app
-    before = client.get("/api/state").json()["question"]
+    assert "question" not in client.get("/api/state").json()
 
     for path in ("/api/display", "/api/pause", "/api/discard", "/api/dream_now"):
         for payload in (
@@ -287,7 +282,7 @@ def test_no_request_can_move_the_guiding_question_however_it_is_spelled(app):
         ):
             client.post(path, json=payload)
 
-    assert client.get("/api/state").json()["question"] == before == cfg.guiding_question
+    assert "question" not in client.get("/api/state").json()
     # And nothing smuggled itself into the store under a neighbouring key.
     for key in ("question", "guiding_question", "question_override",
                 "visual_register", "register"):
@@ -325,7 +320,7 @@ def test_the_operator_sees_failed_and_discarded_dreams_too(app):
     add_dream(store, cfg, at=1.0, sentence="verworfen", discarded=True)
     broken = store.create_dream(
         created_at=2.0, graph_generated_at=1.0, person_count=1, term_count=1,
-        edge_count=1, guiding_question="Q", absorbed_persons=["p2"],
+        edge_count=1, absorbed_persons=["p2"],
     )
     store.fail_dream(broken.id, "timeout")
 

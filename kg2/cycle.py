@@ -87,8 +87,8 @@ def run_dream(
         # works at 09:00 — or on a graph with only a photographed-but-not-yet-
         # processed person ("1 Menschen, 0 Begriffe") has nothing for stage 1
         # to condense. Stage 1's prompt does not know that: it still ends
-        # "Antworte mit genau einem Satz", so the model answers the guiding
-        # question anyway, and a confident sentence-and-image pair lands as
+        # "Antworte mit genau einem Satz", so the model answers out of thin
+        # air anyway, and a confident sentence-and-image pair lands as
         # dream #1 of a day whose strip is supposed to be evidence of what
         # people actually said. Applies equally to a forced and an automatic
         # cycle: the automatic trigger cannot reach this state today (spec
@@ -111,7 +111,6 @@ def run_dream(
         person_count=material.person_count,
         term_count=material.term_count,
         edge_count=material.edge_count,
-        guiding_question=cfg.guiding_question,
         absorbed_persons=absorbed,
     )
 

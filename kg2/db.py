@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS dream (
     -- entfernen bräuchte eine Migration, die kein bestehender Datensatz
     -- rechtfertigt. kg2/store.py::create_dream schreibt hier künftig immer 0.
     contradiction      INTEGER NOT NULL DEFAULT 0,
+    -- Ebenfalls Altbestand, ebenfalls ohne Migration: die Leitfrage ist am
+    -- 2026-08-31 ersatzlos entfallen (kg2/config.py). Die Spalte bleibt, weil
+    -- die Zeilen aus der Zeit davor festhalten, welche Frage damals über dem
+    -- Bild stand — das ist der Datensatz und wird nicht rückwirkend geleert.
+    -- kg2/store.py::create_dream schreibt hier künftig immer ''.
     guiding_question   TEXT NOT NULL DEFAULT '',
     absorbed_persons   TEXT NOT NULL DEFAULT '[]',
     stage1_prompt      TEXT,

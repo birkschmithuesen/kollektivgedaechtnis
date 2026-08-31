@@ -1,5 +1,7 @@
 // Spec §7. Display settings and flow control — and nothing that could change
-// the guiding question, the visual register or the weighting at runtime.
+// the visual register or the weighting at runtime. (Die Leitfrage stand hier
+// bis zum 2026-08-31 unveränderbar zum Nachlesen; sie ist ersatzlos entfallen,
+// weil sie nichts mehr steuerte und eine nie gestellte Frage zeigte.)
 
 // The last state the server actually CONFIRMED, not merely what we tried to
 // send. post() reverts to this on failure, which is this exhibition's only
@@ -82,9 +84,6 @@ function dreamRow(dream) {
 function render(state) {
   lastState = state;
 
-  document.getElementById('the-question').firstElementChild.textContent = state.question;
-  document.getElementById('question-visible').checked = Boolean(state.question_visible);
-  document.getElementById('question-seconds').value = String(state.question_seconds ?? 0);
   document.getElementById('fade-ms').value = String(state.fade_ms);
   document.getElementById('strip-ratio').value = String(state.strip_ratio);
   document.getElementById('strip-max').value = String(state.strip_max);
@@ -186,12 +185,6 @@ function refreshDreams() {
     .catch((error) => console.warn('could not load the dream record', error));
 }
 
-document
-  .getElementById('question-visible')
-  .addEventListener('change', (event) => display({ question_visible: event.target.checked }));
-document
-  .getElementById('question-seconds')
-  .addEventListener('change', (event) => display({ question_seconds: Number(event.target.value) }));
 document
   .getElementById('fade-ms')
   .addEventListener('change', (event) => display({ fade_ms: Number(event.target.value) }));

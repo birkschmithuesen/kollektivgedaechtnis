@@ -178,13 +178,20 @@ def test_the_image_contract_verification_status_is_always_stated():
         )
 
 
-def test_the_guiding_question_default_in_the_runbook_matches_the_config():
-    """The runbook may quote the current provisional wording for context, but
-    it must be the SAME string that ships in the example config — otherwise
-    the two documents contradict each other."""
-    question = re.search(r'^guiding_question\s*=\s*"([^"]+)"', EXAMPLE, re.M)
-    assert question
-    assert question.group(1) in tool2_section()
+def test_the_guiding_question_is_gone_from_both_documents():
+    """Ersetzt `test_the_guiding_question_default_in_the_runbook_matches_the_
+    config`: es gibt keinen Wortlaut mehr, der übereinstimmen könnte. Die
+    Leitfrage ist am 2026-08-31 ersatzlos entfallen — wie
+    `contradiction_min_persons` darüber darf keines der beiden Dokumente noch
+    einen Schlüssel oder Regler dafür beschreiben. Über die Entfernung
+    SCHREIBEN dürfen beide (und tun es), deshalb prüft dies auf Zuweisungen
+    und auf die Beschriftung des Schalters, nicht auf das Wort selbst."""
+    for key in ("guiding_question", "default_question_visible",
+                "default_question_seconds"):
+        assert not re.search(rf"^\s*{key}\s*=", EXAMPLE, re.M), (
+            f"{key} steht noch als Schlüssel in config2.example.toml"
+        )
+    assert "Leitfrage zeigen" not in tool2_section()
 
 
 def test_the_runbook_describes_only_controls_that_exist():
@@ -206,9 +213,10 @@ def test_the_runbook_names_no_control_absent_from_the_operator_ui():
     operator = Path("frontend2/operator.html").read_text(encoding="utf-8")
     section = tool2_section()
     if "Nicht im Interface, absichtlich" in section:
-        # Guiding question is shown read-only, never editable; register and
-        # weighting have no control at all.
+        # Register und Gewichtung haben gar keinen Regler; die Leitfrage hat
+        # seit dem 2026-08-31 nicht einmal mehr eine Anzeige.
         assert 'id="guiding-question"' not in operator
+        assert 'id="the-question"' not in operator
         assert "Gewichtung" not in operator
 
 
