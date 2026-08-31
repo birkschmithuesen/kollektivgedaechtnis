@@ -96,7 +96,7 @@ rem
 rem     infomaniak-whisper, nicht elevenlabs-scribe: die Station laeuft in
 rem     Europa, und das steht so auch auf der oeffentlichen Seite.
 rem ---------------------------------------------------------------------
-echo   [1/6] Spracherkennung (Infomaniak Whisper, Schweiz)
+echo   [1/5] Spracherkennung (Infomaniak Whisper, Schweiz)
 call :starte "Spracherkennung" "%DIENSTE%\dienst-stt.bat" stt
 
 call :warte_auf http://127.0.0.1:5051/status "Spracherkennung" 30
@@ -104,7 +104,7 @@ call :warte_auf http://127.0.0.1:5051/status "Spracherkennung" 30
 rem ---------------------------------------------------------------------
 rem  2. Der Kern: Graph, Telegram, Interviewablauf.
 rem ---------------------------------------------------------------------
-echo   [2/6] Kern (Graph, Telegram)
+echo   [2/5] Kern (Graph, Telegram)
 call :starte "Kern" "%DIENSTE%\dienst-kern.bat" kern
 
 call :warte_auf http://127.0.0.1:8800/api/state "Kern" 60
@@ -114,7 +114,7 @@ rem  3. Der Traum. Haengt NICHT vom Kern ab (Spec 9): er kommt auch hoch,
 rem     wenn der Kern fehlt, und traeumt weiter, sobald dieser antwortet.
 rem     Deshalb wird hier auch nicht auf den Kern gewartet.
 rem ---------------------------------------------------------------------
-echo   [3/6] Traum (Kimi K2.6 Schweiz, FLUX Deutschland)
+echo   [3/5] Traum (Kimi K2.6 Schweiz, FLUX Deutschland)
 call :starte "Traum" "%DIENSTE%\dienst-traum.bat" traum
 
 call :warte_auf http://127.0.0.1:8810/api/state "Traum" 60
@@ -126,55 +126,67 @@ rem     merkt im Haus niemand etwas ? deshalb steht er hier hinten.
 rem ---------------------------------------------------------------------
 if exist "%SPIEGEL%\mirror\spiegel-start.bat" (
   if exist "%USERPROFILE%\.kg-mirror-token" (
-    echo   [4/6] Oeffentlicher Spiegel  ^(%OEFFENTLICH%^)
+    echo   [4/5] Oeffentlicher Spiegel  ^(%OEFFENTLICH%^)
     call :starte "Spiegel" "%SPIEGEL%\mirror\spiegel-start.bat" spiegel
   ) else (
-    echo   [4/6] Spiegel UEBERSPRUNGEN: .kg-mirror-token fehlt.
+    echo   [4/5] Spiegel UEBERSPRUNGEN: .kg-mirror-token fehlt.
   )
 ) else (
-  echo   [4/6] Spiegel UEBERSPRUNGEN: %SPIEGEL% nicht vorhanden.
+  echo   [4/5] Spiegel UEBERSPRUNGEN: %SPIEGEL% nicht vorhanden.
 )
 
 rem ---------------------------------------------------------------------
-rem  5. Die Anzeigen. Kiosk auf der zweiten Anzeige, jeweils ein eigenes
-rem     Benutzerprofil je Fenster: ohne --user-data-dir macht Edge aus dem
-rem     zweiten Aufruf nur einen Tab im ersten Fenster, und dann steht
-rem     eine der beiden Projektionen nicht.
+rem  5. Die Anzeigen.
+rem
+rem     Nur auf ausdruecklichen Wunsch (%KG_FENSTER%=1). Vorgabe ist AUS,
+rem     und das ist Birks Entscheidung von 2026-08-31: die Fensterautomatik
+rem     scheiterte auf dieser Kiste still - kein Fenster ging auf, keine
+rem     Meldung kam. Ein Start, der die Adressen sauber HINSCHREIBT, ist
+rem     ehrlicher als einer, der Fenster verspricht und keine liefert.
+rem     Die Adressen stehen unten und lassen sich mit der Maus markieren.
+rem
+rem     Wer die Automatik doch will: `set KG_FENSTER=1` vor dem Aufruf.
+rem     Dann bekommt jedes Fenster ein eigenes Benutzerprofil, sonst macht
+rem     Edge aus dem zweiten Aufruf nur einen Tab im ersten.
 rem ---------------------------------------------------------------------
-echo   [5/6] Wand und Schirm B
-rem Alles auf EINER Zeile. Die Fortsetzung mit `^` zerbricht hier: cmd
-rem liest die Folgezeile als eigenen Befehl und meldet
-rem ?Der Befehl --user-data-dir ... konnte nicht gefunden werden"
-rem (gemessen 2026-08-31). Lang und unschoen, aber richtig.
-start "" "%EDGE%" --kiosk --window-position=%POS_WAND% --user-data-dir="%LOGS%\edge-wand" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8800/projection"
-
-ping -n 3 127.0.0.1 >nul
-
-start "" "%EDGE%" --kiosk --window-position=%POS_TRAUM% --user-data-dir="%LOGS%\edge-traum" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8810/dream"
-
-rem ---------------------------------------------------------------------
-rem  6. Die Bedienpulte auf dem Laptop. Zwei Tabs in EINEM Fenster, damit
-rem     man am Pult nicht zwischen Fenstern sucht.
-rem ---------------------------------------------------------------------
-echo   [6/6] Bedienpulte
-start "" "%EDGE%" --new-window --window-position=0,0 --window-size=1400,950 --user-data-dir="%LOGS%\edge-pult" --no-first-run "http://127.0.0.1:8800/operator" "http://127.0.0.1:8810/operator"
+if "%KG_FENSTER%"=="1" (
+  echo   [5/5] Fenster oeffnen ^(KG_FENSTER=1^)
+  rem Alles auf EINER Zeile. Die Fortsetzung mit ^ zerbricht hier: cmd liest
+  rem die Folgezeile als eigenen Befehl und meldet
+  rem "Der Befehl --user-data-dir ... konnte nicht gefunden werden".
+  start "" "%EDGE%" --kiosk --window-position=%POS_WAND% --user-data-dir="%LOGS%\edge-wand" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8800/projection"
+  ping -n 3 127.0.0.1 >nul
+  start "" "%EDGE%" --kiosk --window-position=%POS_TRAUM% --user-data-dir="%LOGS%\edge-traum" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8810/dream"
+  start "" "%EDGE%" --new-window --window-position=0,0 --window-size=1400,950 --user-data-dir="%LOGS%\edge-pult" --no-first-run "http://127.0.0.1:8800/operator" "http://127.0.0.1:8810/operator"
+) else (
+  echo   [5/5] Fenster: keine ^(Adressen stehen unten^)
+)
 
 echo.
-echo   ------------------------------------------------------------------
-echo   Es laeuft. Was wo liegt:
+echo   ==================================================================
 echo.
-echo     Wand ^(Graph^)       http://127.0.0.1:8800/projection
-echo     Schirm B ^(Traum^)   http://127.0.0.1:8810/dream
-echo     Pult Graph          http://127.0.0.1:8800/operator
-echo     Pult Traum          http://127.0.0.1:8810/operator
-echo     Am Telefon          %OEFFENTLICH%
+echo    ZUM OEFFNEN - Adresse markieren und in den Browser kopieren:
+echo.
+echo      Wand ^(Graph^)        http://127.0.0.1:8800/projection
+echo      Schirm B ^(Traum^)    http://127.0.0.1:8810/dream
+echo.
+echo      Pult Graph           http://127.0.0.1:8800/operator
+echo      Pult Traum           http://127.0.0.1:8810/operator
+echo.
+echo      Am Telefon           %OEFFENTLICH%
+echo.
+echo   ==================================================================
+echo.
+echo   Markieren geht mit der Maus; Rechtsklick kopiert. Ist der
+echo   Schnellbearbeitungsmodus aus, hilft: Rechtsklick auf die
+echo   Titelleiste, Bearbeiten, Markieren.
 echo.
 echo   Geht etwas schief: das Fenster des betroffenen Teils in der
- echo   Taskleiste oeffnen ? dort steht der Grund im Klartext.
-echo   ------------------------------------------------------------------
+echo   Taskleiste oeffnen - dort steht der Grund im Klartext. Dasselbe
+echo   steht in %%USERPROFILE%%\kg-logs\ als Datei.
 echo.
 echo   Dieses Fenster kann zu. Zum Beenden ALLER Teile:
-echo   kollektivtraum-stop.bat
+echo   "Kollektivtraum STOP" auf dem Schreibtisch.
 echo.
 pause
 exit /b 0
@@ -189,9 +201,10 @@ rem  dann nur ?Das System kann den angegebenen Pfad nicht finden.". Eine
 rem  eigene Datei hat dieses Problem nicht und ist ausserdem einzeln
 rem  startbar, wenn vor Ort genau ein Teil neu hochmuss.
 rem
-rem  Kein `> log`: die Ausgabe bleibt im Fenster sichtbar, und das Fenster
-rem  ist bei einer Live-Station das ehrlichere Werkzeug als eine Datei,
-rem  die niemand aufmacht. `tee` gibt es hier nicht.
+rem  Die Ausgabe geht ins Fenster UND in eine Datei unter
+rem  %USERPROFILE%\kg-logs (das erledigt die jeweilige dienst-*.bat per
+rem  Tee-Object). Das Fenster ist vor Ort das schnellere Werkzeug, die
+rem  Datei die einzige, die man aus der Ferne oder hinterher lesen kann.
 rem =====================================================================
 :starte
 start "Kollektivtraum: %~1" /min cmd /k "%~2"
