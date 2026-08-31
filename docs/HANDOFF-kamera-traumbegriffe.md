@@ -136,6 +136,24 @@ fertig. Fertig ist:
 - **Glow** mit runden Ecken (`underlay-corner-radius: 28`)
 - **Portrait-Feather**: harte Ellipsenmaske → Alpha-Verlauf; der goldene Ring
   IST der Übergang, kein Reifen außen herum (`kg/photos.py`, `ring_glow()`)
+- **Ladezeit** 78 s → 1,7 s, **Portraitringe** entfernt (`--ring-width: 0`),
+  **Kästchen enger** (`--plate-pad: 8`)
+
+Der Portrait-Verlauf war der zäheste Punkt und brauchte vier Anläufe. Auf der
+Wand gemessen — diese Zahlen sind der Beleg, dass er stimmt:
+
+```
+d= 6  (204,154,136)  Gesicht
+d=14  (192,172,113)  Übergang
+d=16  (195,166, 78)  Gold
+d=18  (123,100, 32)  Auslauf
+```
+
+Das Gewicht steigt **monoton** von 0 (volles Portrait) auf 255 (volles Gold)
+und bleibt dort — keine Glockenkurve, deshalb keine dunkle Lücke und kein
+separater Ring. Die Goldzone beginnt bei 45 % des Radius und ist damit breiter
+als die Alpha-Zone: Das Gold ist voll erreicht, **solange die Scheibe noch
+deckt**. Gold gemessen 34.232 px gegen Rot 288 (vorher 44.630).
 
 ### 🔴 Der eine offene Fehler: die Kästchen überlappen sich
 **30 überlappende Paare bei 110 Begriffen.** Zwei Ansätze sind **gemessen
