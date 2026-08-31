@@ -176,7 +176,9 @@ async def main_async(args) -> None:
     core = Core(cfg, store, bus, transcript_log, llm, embedder, wake_llm=wake_llm)
     write_graph_json(store, cfg.graph_json_path)  # state is reconstructed from SQLite
 
-    app = create_app(store, cfg, bus)
+    # Der Core wird mitgegeben, damit `/api/interview_switch` existiert: der
+    # Schalter am Mikrofon des STT-Servers beendet damit ein Interview.
+    app = create_app(store, cfg, bus, core=core)
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.server_host, port=cfg.server_port, log_level="info")
     )

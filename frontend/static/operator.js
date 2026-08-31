@@ -15,6 +15,9 @@ let lastState = {
   camera_speed: 1,
   portrait_size: 120,
   stt_connected: false,
+  // Der physische Schalter am Mikrofon (STT-Server, --mic-gate). Default an:
+  // eine Station ohne Schalter meldet nie etwas und hat ein offenes Mikrofon.
+  mic_on: true,
   interview: null,
 };
 
@@ -229,6 +232,11 @@ function render(graph, state) {
   document.getElementById('portrait-size').value = String(state.portrait_size ?? 120);
   showPortraitSizeValue(state.portrait_size ?? 120);
   document.getElementById('stt').classList.toggle('ok', Boolean(state.stt_connected));
+  // Bewusst ein eigenes Abzeichen neben STT und nicht dasselbe: das eine
+  // sagt, ob der Erkennungsserver erreichbar ist, das andere, ob das
+  // Mikrofon im Raum eingeschaltet ist. Genau die beiden auseinanderzuhalten
+  // ist der Moment, in dem jemand auf diese Leiste schaut.
+  document.getElementById('mic').classList.toggle('ok', state.mic_on !== false);
   document.getElementById('interview').textContent = state.interview
     ? 'Interview läuft'
     : 'kein Interview';
@@ -368,6 +376,9 @@ let state = {
   camera_speed: 1,
   portrait_size: 120,
   stt_connected: false,
+  // Der physische Schalter am Mikrofon (STT-Server, --mic-gate). Default an:
+  // eine Station ohne Schalter meldet nie etwas und hat ein offenes Mikrofon.
+  mic_on: true,
   interview: null,
 };
 const events = new EventSource('/events');

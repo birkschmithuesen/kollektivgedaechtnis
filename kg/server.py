@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import mimetypes
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -80,6 +81,14 @@ class PortraitSize(BaseModel):
     pixels: float = Field(ge=40.0, le=260.0)
 
 
+class InterviewSwitch(BaseModel):
+    # Der Schalter am Mikrofon, gemeldet vom STT-Server (fundusbot,
+    # `--mic-gate`). `source` ist bewusst frei und nur zur Nachvollziehbarkeit
+    # in den Logs -- entschieden wird allein an `on`.
+    on: bool
+    source: str = Field(default="mic_switch", max_length=40)
+
+
 class Point(BaseModel):
     x: float
     y: float
@@ -110,6 +119,11 @@ def current_state(store) -> dict:
         # exists yet.
         "portrait_size": float(store.get_setting("portrait_size", "120")),
         "stt_connected": store.get_setting("stt_connected", "0") == "1",
+        # Der physische Schalter am Mikrofon, getrennt von `stt_connected`
+        # (siehe Core.on_mic_switch). Default "1": eine Station ohne
+        # Schalter-Meldung hat ein dauerhaft offenes Mikrofon, und "aus"
+        # anzuzeigen waere dort schlicht falsch.
+        "mic_on": store.get_setting("mic_on", "1") == "1",
         "interview": None
         if person is None
         else {"person_id": person.id, "started_at": person.started_at},
@@ -124,7 +138,7 @@ def broadcast_state(store, bus) -> None:
     bus.publish({"type": "state", "state": current_state(store)})
 
 
-def create_app(store, cfg, bus) -> FastAPI:
+def create_app(store, cfg, bus, core=None) -> FastAPI:
     app = FastAPI(title="Kollektivgedächtnis")
     app.mount("/static", StaticFiles(directory=FRONTEND / "static"), name="static")
     app.mount("/media/portraits", StaticFiles(directory=cfg.portrait_dir), name="portraits")
@@ -217,6 +231,48 @@ def create_app(store, cfg, bus) -> FastAPI:
         store.set_setting("portrait_size", str(payload.pixels))
         broadcast_state(store, bus)
         return {"ok": True}
+
+    if core is not None:
+        # Nur mit Core registriert. Ein Prozess ohne Core (die reine
+        # Anzeige-Konfiguration, u.a. in den Tests) hat den Endpunkt dann gar
+        # nicht -- besser ein 404 als eine 200, die nichts tut.
+        @app.post("/api/interview_switch")
+        async def api_interview_switch(payload: InterviewSwitch) -> dict:
+            """Der Schalter am Mikrofon, gemeldet vom STT-Server.
+
+            Der zweite Weg, ein Interview zu beenden, neben der gesprochenen
+            Schlussphrase -- und ausdruecklich KEIN zweiter Weg, eins zu
+            beginnen: ein Interview ist hier ein Mensch mit Portraet, und das
+            Portraet kommt aus dem Foto (`SessionTracker.photo`). `on: true`
+            wird deshalb nur vermerkt und weitergemeldet; geschlossen wird bei
+            `on: false`, mit eigenem Grund "mic_switch", damit im Nachhinein
+            unterscheidbar bleibt, ob ein Interview per Schlusssatz oder per
+            Schalter endete.
+
+            Kehrt sofort zurueck: `Core.on_mic_switch` legt den Wechsel nur in
+            die Warteschlange, geschlossen wird im Worker. Der STT-Server ruft
+            aus einem Wegwerf-Thread heraus auf und darf nicht auf eine
+            Pipeline warten.
+
+            `async def`, und das ist hier nicht Geschmack: eine gewoehnliche
+            `def`-Route laesst FastAPI im Threadpool laufen, und
+            `Core.on_mic_switch` legt von dort aus mit `put_nowait` in eine
+            `asyncio.Queue`. Das ist nicht threadsicher -- das Wecken des
+            wartenden Workers geht ueber ein Future der Ereignisschleife.
+            Verloren ginge dabei nicht die Antwort, sondern das Schliessen des
+            Interviews, und zwar still. Alle anderen Einspeiser dieser
+            Warteschlange (Telegram, STT-Client, tick-Schleife) sitzen ohnehin
+            auf der Schleife; dieser hier muss es auch.
+
+            Kein Test faengt das ab, und das ist ausdruecklich vermerkt statt
+            verschwiegen: `put_nowait` aus einem fremden Thread geht in CPython
+            meistens gut, weil die Schleife ohnehin gleich wieder pollt. Es ist
+            ein Rennen, kein Fehler mit Ansage -- und genau deshalb steht das
+            `async` hier und nicht das Vertrauen darauf, dass es schon
+            auffiele.
+            """
+            core.on_mic_switch(payload.on, time.time())
+            return {"ok": True, "on": payload.on}
 
     @app.post("/api/positions")
     def api_positions(payload: Positions) -> dict:
