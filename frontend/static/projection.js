@@ -54,10 +54,13 @@ function styleSchwarzplan() {
         width: cssVar('--person-size', '110'),
         height: cssVar('--person-size', '110'),
         'background-color': cssVar('--person-fill', '#242424'),
-        'background-fill': 'radial-gradient',
-        'background-gradient-stop-colors':
-          `${cssVar('--person-fill', '#242424')} #000000`,
-        'background-gradient-stop-positions': '55% 100%',
+        // KEIN radial-gradient hinter dem Portrait mehr. Er stammte aus dem
+        // ersten Entwurf und sollte „die Scheibe dort fuellen, wo das Portrait
+        // durchscheinend auslaeuft" — genau diese Aufgabe hat seit 2026-08-30
+        // der Goldring im PNG (kg/photos.py, ring_glow). Der dunkle Verlauf
+        // (#1a1a1a -> #000000) lag praezise ueber der Uebergangszone und hat
+        // den Ring verschluckt: Am Bild gemessen war er im PNG da
+        // ((195,168,84) bei Alpha 254), auf der Wand aber unsichtbar.
         'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'background-clip': 'node',
