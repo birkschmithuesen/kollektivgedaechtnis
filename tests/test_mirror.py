@@ -427,6 +427,7 @@ def test_die_stillen_seiten_binden_nichts_von_dritten_ein(client):
             assert url.rstrip("/") in (
                 "https://artesmobiles.art",
                 "https://flashclash.de",
+                "https://yourmodelyourrules.ai",
             ), (weg, url)
 
 
