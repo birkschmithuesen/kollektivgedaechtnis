@@ -89,6 +89,9 @@ class Config:
     # explicitly fine here; the cache makes re-runs free and offline.
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_url: str = "https://openrouter.ai/api/v1/embeddings"
+    # Wie bei `llm_api_key_env`: nur der NAME der Umgebungsvariablen, nie der
+    # Schlüssel. Leer = OPENROUTER_API_KEY, also unverändert.
+    embedding_api_key_env: str = ""
     # Replaces the old `default_min_mentions` (a threshold on mention count):
     # spec 2026-08-29 found the threshold an indirect proxy for the real
     # constraint, how many term labels fit on the wall before they collide or
@@ -132,6 +135,13 @@ class Config:
         if self.wake_word_llm_api_key_env:
             return os.environ.get(self.wake_word_llm_api_key_env)
         return self.anthropic_api_key
+
+    @property
+    def embedding_api_key(self) -> str | None:
+        """Dasselbe für den Embedding-Endpunkt. Leer = OpenRouter wie bisher."""
+        if self.embedding_api_key_env:
+            return os.environ.get(self.embedding_api_key_env)
+        return self.openrouter_api_key
 
     @property
     def db_path(self) -> Path:
@@ -191,6 +201,7 @@ _FIELD_NAMES = {
     "llm_reasoning_effort",
     "embedding_model",
     "embedding_url",
+    "embedding_api_key_env",
     "default_max_terms",
     "default_camera_mode",
     "portrait_size",

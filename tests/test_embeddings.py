@@ -4,7 +4,9 @@ from kg.embeddings import (
     CachedEmbedder,
     EmbeddingCache,
     HashEmbedder,
+    OpenAICompatibleEmbedder,
     OpenRouterEmbedder,
+    build_embedder,
     cosine,
     nearest,
 )
@@ -176,3 +178,51 @@ def test_cache_is_keyed_by_model_as_well_as_text(tmp_path):
     CachedEmbedder(OpenRouterEmbedder("m1", "k", "u", post=post), cache, "m1").embed(["Holzbau"])
     CachedEmbedder(OpenRouterEmbedder("m2", "k", "u", post=post), cache, "m2").embed(["Holzbau"])
     assert len(post.bodies) == 2
+
+
+# --- anbieterneutral, ohne den alten Namen zu brechen ----------------------
+
+
+def test_the_old_class_name_still_works():
+    """Der Name `OpenRouterEmbedder` steht in Notizen, Probes und Tests. Der
+    Alias kostet eine Zeile und erspart einen Umbau, der nichts verbessert."""
+    assert OpenRouterEmbedder is OpenAICompatibleEmbedder
+
+
+def make_cfg(tmp_path, **overrides):
+    from kg.config import Config
+
+    return Config(data_dir=tmp_path / "state", openrouter_api_key="sk-or-test", **overrides)
+
+
+def test_build_embedder_stays_on_openrouter_without_new_keys(tmp_path):
+    """Fallback-Regel: eine unveränderte config.toml embedded wie bisher."""
+    embedder = build_embedder(make_cfg(tmp_path))
+
+    assert isinstance(embedder.inner, OpenAICompatibleEmbedder)
+    assert embedder.inner.url == "https://openrouter.ai/api/v1/embeddings"
+    assert embedder.inner.model == "openai/text-embedding-3-small"
+    assert embedder.inner.api_key == "sk-or-test"
+
+
+def test_build_embedder_can_be_pointed_at_infomaniak(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY", "sk-infomaniak")
+    cfg = make_cfg(
+        tmp_path,
+        embedding_model="bge_multilingual_gemma2",
+        embedding_url="https://api.infomaniak.com/2/ai/110416/openai/v1/embeddings",
+        embedding_api_key_env="HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY",
+    )
+
+    embedder = build_embedder(cfg)
+
+    assert embedder.inner.url == "https://api.infomaniak.com/2/ai/110416/openai/v1/embeddings"
+    assert embedder.inner.model == "bge_multilingual_gemma2"
+    assert embedder.inner.api_key == "sk-infomaniak"
+    # Der Cache-Schlüssel wandert mit dem Modell mit — alte Vektoren aus einem
+    # anderen Modell werden nie versehentlich mitbenutzt.
+    assert embedder.model == "bge_multilingual_gemma2"
+
+
+def test_the_hash_embedder_route_is_untouched(tmp_path):
+    assert isinstance(build_embedder(make_cfg(tmp_path), hash_only=True), HashEmbedder)

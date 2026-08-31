@@ -181,6 +181,31 @@ def test_the_wake_word_route_switches_independently_of_the_pipeline(tmp_path, mo
     assert cfg.wake_word_llm_model == "google/gemma-4-31B-it"
 
 
+def test_the_embedding_endpoint_switches_the_same_way(tmp_path, monkeypatch):
+    """Der Embedder war schon immer OpenAI-kompatibel — nötig war nur, dass
+    Modell, URL und Schlüssel gemeinsam woandershin zeigen können."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    monkeypatch.setenv("HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY", "sk-infomaniak")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\n', encoding="utf-8")
+    assert load_config(cfg_file).embedding_api_key == "sk-or"
+
+    cfg_file.write_text(
+        """
+        data_dir = "state"
+        embedding_model = "bge_multilingual_gemma2"
+        embedding_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/embeddings"
+        embedding_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+        """,
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_file)
+
+    assert cfg.embedding_model == "bge_multilingual_gemma2"
+    assert cfg.embedding_url.startswith("https://api.infomaniak.com/")
+    assert cfg.embedding_api_key == "sk-infomaniak"
+
+
 def test_a_missing_key_env_variable_reads_as_no_key_not_as_a_crash(tmp_path, monkeypatch):
     """Fehlt die Variable, muss der Fehler beim Aufruf mit klarer Meldung
     kommen (kg.llm), nicht schon beim Laden der Konfiguration."""

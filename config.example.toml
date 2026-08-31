@@ -137,8 +137,19 @@ llm_effort = "high"
 # bleibt es bei ANTHROPIC_API_KEY.
 llm_api_mode = "anthropic"
 
-# Embedding preselection via OpenRouter (spec 6.2). Cached by term text in
-# data_dir/embeddings.sqlite3, so simulation re-runs are free and offline.
+# Embedding-Vorauswahl über einen OpenAI-kompatiblen Endpunkt (spec 6.2).
+# Gecacht nach (Modell, Text) in data_dir/embeddings.sqlite3, damit
+# Simulationsläufe kostenlos und offline wiederholbar sind.
+#
+# Für Infomaniak (EU) stattdessen:
+#   embedding_model = "bge_multilingual_gemma2"
+#   embedding_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/embeddings"
+#   embedding_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+#
+# Der Wechsel braucht KEINE Migration: der Cache-Schlüssel enthält das Modell,
+# alte und neue Vektoren können also gar nicht kollidieren. Sie sind aber auch
+# nicht vergleichbar — der erste Lauf nach dem Wechsel bettet den ganzen Korpus
+# neu ein und kostet entsprechend einmal Zeit und Geld.
 embedding_model = "openai/text-embedding-3-small"
 embedding_url = "https://openrouter.ai/api/v1/embeddings"
 

@@ -1,12 +1,24 @@
 """Embeddings are preselection only — negligible cost (spec 6.2).
 
-Provider: OpenRouter's OpenAI-compatible /api/v1/embeddings. Deliberately NOT a
-local sentence-transformers model — Birk decided for the cloud endpoint
-(spec 6.2); do not reintroduce a local model.
+Any OpenAI-compatible ``/embeddings`` endpoint, chosen by configuration:
+OpenRouter (`openai/text-embedding-3-small`, the default and the route every
+run so far was measured on) or Infomaniak (`bge_multilingual_gemma2`, EU,
+2026-08-31). Deliberately NOT a local sentence-transformers model — Birk
+decided for a cloud endpoint (spec 6.2); **do not reintroduce a local model.**
+That decision is about the local model, not about which provider; swapping the
+provider does not reopen it.
 
 Every embedding is cached by (model, text) in SQLite. That is a requirement,
 not an optimisation: the simulation (spec 9) is a regression net that must be
 re-runnable for free and offline.
+
+**Vectors from two different models are not comparable**, and the cache key
+already says so: it carries the model name, so a provider change simply misses
+the cache and re-embeds. Nothing to clean up, nothing to migrate — but also
+nothing to save by hand-copying old rows onto a new model name. `cosine` and
+`nearest` only ever mean anything within one model's vectors; a run that
+switches the embedding model mid-way would compare two coordinate systems and
+silently preselect nonsense.
 
 The naming decision is the LLM's; see kg.merging.
 """
@@ -68,8 +80,13 @@ def _normalise(vector: Sequence[float]) -> list[float]:
     return [float(v) / norm for v in vector]
 
 
-class OpenRouterEmbedder:
+class OpenAICompatibleEmbedder:
     """OpenAI-compatible embeddings endpoint (spec 6.2).
+
+    Anbieterneutral benannt, weil die Klasse es immer schon war: sie schickt
+    `{"model": ..., "input": [...]}` und liest `data[].embedding` — dieselbe
+    Form bei OpenRouter wie bei Infomaniak. Nur URL, Modell und Schlüssel
+    unterscheiden sich, und die kommen alle drei aus der Konfiguration.
 
     `post` is injectable so the tests never touch the network.
     """
@@ -92,7 +109,8 @@ class OpenRouterEmbedder:
             return []
         if not self.api_key:
             raise RuntimeError(
-                "OPENROUTER_API_KEY is not set — embeddings need it on a cache miss"
+                "no embeddings api key — set OPENROUTER_API_KEY, or the variable "
+                "named by embedding_api_key_env; embeddings need it on a cache miss"
             )
         payload = self.post(
             self.url,
@@ -102,7 +120,7 @@ class OpenRouterEmbedder:
         rows = payload["data"]
         if len(rows) != len(texts):
             raise RuntimeError(
-                f"OpenRouter embeddings: expected {len(texts)} rows for "
+                f"embeddings: expected {len(texts)} rows for "
                 f"{len(texts)} inputs, got {len(rows)}"
             )
         # A row missing "index" (or two rows sharing one) would otherwise
@@ -112,15 +130,25 @@ class OpenRouterEmbedder:
         # is caught here instead of degrading preselection silently.
         indices = sorted(row.get("index", -1) for row in rows)
         if indices != list(range(len(texts))):
-            raise RuntimeError(
-                "OpenRouter embeddings: response rows are missing or duplicate an index"
-            )
+            raise RuntimeError("embeddings: response rows are missing or duplicate an index")
         rows = sorted(rows, key=lambda row: row["index"])
         return [_normalise(row["embedding"]) for row in rows]
 
 
+#: Der Name, unter dem diese Klasse bis zum 2026-08-31 lief. Bleibt als Alias,
+#: weil er in Probes, Notizen und Tests steht und ein Umbau dort nichts
+#: verbessert — die Klasse ist dieselbe, sie heißt nur ehrlicher.
+OpenRouterEmbedder = OpenAICompatibleEmbedder
+
+
 class EmbeddingCache:
-    """One embedding per (model, text), ever. Survives `rm -rf out/`."""
+    """One embedding per (model, text), ever. Survives `rm -rf out/`.
+
+    Der Primärschlüssel enthält das Modell, und das ist beim Anbieterwechsel
+    die ganze Migration: Vektoren zweier Modelle sind nicht vergleichbar
+    (Modul-Docstring), können hier aber auch gar nicht kollidieren. Ein Wechsel
+    kostet einmal das Neu-Einbetten des Korpus, nichts weiter.
+    """
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -177,9 +205,9 @@ def build_embedder(cfg, hash_only: bool = False) -> "Embedder":
     if hash_only:
         return HashEmbedder()
     return CachedEmbedder(
-        OpenRouterEmbedder(
+        OpenAICompatibleEmbedder(
             model=cfg.embedding_model,
-            api_key=cfg.openrouter_api_key,
+            api_key=cfg.embedding_api_key,
             url=cfg.embedding_url,
         ),
         EmbeddingCache(cfg.embedding_cache_path),
