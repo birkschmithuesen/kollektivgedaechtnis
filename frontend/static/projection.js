@@ -625,113 +625,6 @@ const DISC_COLLISION_WEIGHT = 5;
  * measures zero overlaps on the first iteration and changes nothing.
  * Person discs are fixed obstacles here — only the label moves.
  */
-/** Tafeln auseinanderschieben, wo die Schrift IM Knoten steht (theme-f).
- *
- * Der Gegenpart zu `declutterLabels`: Dort wandert die Beschriftung, hier der
- * Knoten selbst, weil in theme-f beides dasselbe ist. Portraits sind feste
- * Hindernisse — eine Person hat ihren Platz auf der Wand, und ihn nachträglich
- * zu verschieben würde die Migration zerreissen, die die Besucherin gerade
- * ansieht.
- *
- * Bewusst dieselbe Bauart wie `declutterLabels`: jede Iteration wird bewertet,
- * angewandt wird die BESTE — Iteration 0 (der unveränderte Eingang)
- * eingeschlossen. Ein Entspannungsverfahren dieser Art ist nicht monoton; ohne
- * diese Absicherung kann ein später Durchgang schlechter enden als ein früher.
- */
-//: Wie weit eine Tafel je Runde dem Zusammenstoss ausweicht. Kleiner als 1,
-//: weil alle Tafeln gleichzeitig ausweichen: bei vollem Schritt schaukeln sich
-//: zwei Nachbarn gegenseitig auf, statt sich zu trennen.
-const PLATE_SETTLE_STEP = 0.45;
-//: Wie weit eine Tafel sich insgesamt von ihrem Layout-Platz entfernen darf,
-//: in Modelleinheiten. Ohne Deckel wandert eine Tafel aus einem dichten Feld
-//: heraus bis an den Rand und ihre Kante zieht quer ueber die Wand.
-const PLATE_MAX_DISPLACEMENT = 220;
-
-export function declutterPlates(cy) {
-  const terms = cy.nodes('.term').sort(byId);
-  if (terms.length === 0) return;
-  const persons = cy.nodes('.person').toArray();
-
-  const start = terms.map((node) => ({ ...node.position() }));
-  const state = terms.map((node) => ({ node, ...node.position() }));
-  const applyState = () => state.forEach(({ node, x, y }) => node.position({ x, y }));
-
-  const boxOf = (node) => node.boundingBox({ includeLabels: true, includeNodes: true });
-  const score = () => {
-    let treffer = 0;
-    const kaesten = terms.map(boxOf);
-    for (let i = 0; i < kaesten.length; i += 1) {
-      for (let j = i + 1; j < kaesten.length; j += 1) {
-        if (boxesOverlap(kaesten[i], kaesten[j])) treffer += 1;
-      }
-      for (const person of persons) {
-        if (boxesOverlap(kaesten[i], person.boundingBox({ includeNodes: true, includeLabels: false }))) {
-          treffer += 1;
-        }
-      }
-    }
-    return treffer;
-  };
-
-  let best = { score: score(), positions: state.map(({ x, y }) => ({ x, y })) };
-  if (best.score === 0) return;
-
-  for (let runde = 0; runde < DECLUTTER_ITERATIONS; runde += 1) {
-    const kaesten = terms.map(boxOf);
-    const schub = state.map(() => ({ x: 0, y: 0 }));
-
-    for (let i = 0; i < kaesten.length; i += 1) {
-      for (let j = i + 1; j < kaesten.length; j += 1) {
-        if (!boxesOverlap(kaesten[i], kaesten[j])) continue;
-        const v = overlapVector(kaesten[i], kaesten[j]);
-        schub[i].x -= v.x / 2; schub[i].y -= v.y / 2;
-        schub[j].x += v.x / 2; schub[j].y += v.y / 2;
-      }
-      for (const person of persons) {
-        const pb = person.boundingBox({ includeNodes: true, includeLabels: false });
-        if (!boxesOverlap(kaesten[i], pb)) continue;
-        // Ganz ausweichen, nicht halb: Das Portrait bewegt sich nicht mit,
-        // also muss die Tafel den vollen Weg gehen.
-        const v = overlapVector(kaesten[i], pb);
-        schub[i].x -= v.x; schub[i].y -= v.y;
-      }
-    }
-
-    let bewegt = false;
-    state.forEach((s, i) => {
-      if (!schub[i].x && !schub[i].y) return;
-      // Begrenzung gegen den Ausgangsplatz: Eine Tafel darf ausweichen, aber
-      // nicht durch den halben Graphen wandern — sonst steht sie am Ende
-      // weit weg von der Person, die den Begriff gesagt hat, und die Kante
-      // zieht quer über die Wand.
-      const nx = s.x + schub[i].x * PLATE_SETTLE_STEP;
-      const ny = s.y + schub[i].y * PLATE_SETTLE_STEP;
-      const dx = nx - start[i].x;
-      const dy = ny - start[i].y;
-      const weite = Math.hypot(dx, dy);
-      if (weite > PLATE_MAX_DISPLACEMENT) {
-        const f = PLATE_MAX_DISPLACEMENT / weite;
-        s.x = start[i].x + dx * f;
-        s.y = start[i].y + dy * f;
-      } else {
-        s.x = nx;
-        s.y = ny;
-      }
-      bewegt = true;
-    });
-    if (!bewegt) break;
-
-    applyState();
-    const jetzt = score();
-    if (jetzt < best.score) {
-      best = { score: jetzt, positions: state.map(({ x, y }) => ({ x, y })) };
-    }
-    if (jetzt === 0) break;
-  }
-
-  terms.forEach((node, i) => node.position({ ...best.positions[i] }));
-}
-
 export function declutterLabels(cy) {
   const terms = cy.nodes('.term').sort(byId);
   if (terms.length === 0) return;
@@ -745,11 +638,18 @@ export function declutterLabels(cy) {
   // genau das: „die Portraits liegen wieder über den Begriffen").
   //
   // Dort ist die Fläche selbst der Knoten, also muss der KNOTEN ausweichen,
-  // nicht seine Beschriftung. Das erledigt `declutterPlates` unten.
-  if (terms.length > 0 && terms[0].style('text-valign') === 'center') {
-    declutterPlates(cy);
-    return;
-  }
+  // nicht seine Beschriftung — und das gehoert ins Layout, nicht hierher.
+  // theme-f: Die Schrift steht MITTIG im Knoten, ein text-margin verschiebt
+  // dort den Text aus seinem eigenen Ring heraus statt die Ueberlappung zu
+  // loesen. Also gar nicht erst versuchen.
+  //
+  // Ein eigenes Verfahren, das die KNOTEN schiebt, stand hier und ist wieder
+  // raus: gemessen brachte es NICHTS (before == after) und kostete 78
+  // Sekunden bis zum ersten Bild — 300 Runden ueber 110 Tafeln gegen 60
+  // Portraits. Der richtige Hebel sitzt im Layout (fcose kennt die
+  // Tafelgroesse ueber data(boxW/boxH) bereits), nicht in einer
+  // Nachbearbeitung.
+  if (terms.length > 0 && terms[0].style('text-valign') === 'center') return;
 
   const persons = cy.nodes('.person').toArray();
   const baseMarginY = Number(cssVar('--label-margin-y', '6'));

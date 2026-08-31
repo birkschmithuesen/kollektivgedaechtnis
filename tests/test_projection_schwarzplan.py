@@ -73,6 +73,8 @@ def test_ein_begriff_ist_eine_flaeche_und_kein_punkt(wall):
              const n = window.kgView.cy.$id('t1');
              return { w: n.width(), h: n.height(),
                       valign: n.style('text-valign'),
+                      radius: n.style('corner-radius'),
+                      randbreite: n.style('border-width'),
                       opacity: Number(n.style('background-opacity')) };
            }"""
     )
@@ -81,8 +83,12 @@ def test_ein_begriff_ist_eine_flaeche_und_kein_punkt(wall):
     assert masse["h"] > 20, f"Tafel zu flach: {masse}"
     # Die Schrift steht IM Knoten, nicht darunter.
     assert masse["valign"] == "center"
-    # Der Knotenkörper selbst ist unsichtbar: sichtbar ist allein die Tafel.
-    assert masse["opacity"] == 0
+    # Seit der zweiten Fassung (Birks echtes Rendering, 2026-08-30) ist der
+    # Knoten NICHT mehr unsichtbar: Er ist der runde, nur schwach gefüllte
+    # Ring, durch den der Grund durchscheint. Die frühere Fassung malte
+    # massive Rechtecke — Birk: „so'n quadratisches Kästchen ist auch nicht
+    # cool".
+    assert 0 < masse["opacity"] < 1, f"Ring, nicht Fläche: {masse}"
 
 
 def test_die_tafel_folgt_der_laenge_des_begriffs(wall):
@@ -100,17 +106,22 @@ def test_die_tafel_folgt_der_laenge_des_begriffs(wall):
     assert breiten["lang"] > breiten["kurz"], breiten
 
 
-def test_gelb_traegt_schwarze_schrift_weil_weiss_unlesbar_waere(wall):
-    """Gemessen, nicht gewählt: Weiß auf #F4C300 hat 1.66:1 — unlesbar. Auf
-    Rot (5.01) und Blau (8.01) bleibt Weiß. Der Test hält die MESSUNG fest,
-    nicht den Geschmack; wer die Palette ändert, muss neu rechnen."""
+def test_die_achsenfarben_faerben_den_ring_und_nicht_die_schrift(wall):
+    """Zweite Fassung, nach Birks echtem Rendering (2026-08-30).
+
+    Die erste Fassung füllte die Tafel mit der Achsenfarbe und musste dafür
+    die Schriftfarbe pro Fläche nachrechnen (weiß auf Gelb = 1.66:1,
+    unlesbar → schwarz). Mit dem RING entfällt das Problem an der Wurzel: Die
+    Schrift steht wieder auf schwarzem Grund, also überall 21:1, und die
+    Farbe sitzt dort, wo sie im Rendering sitzt — in der Kontur.
+    """
     zeige(wall)
 
     farben = wall.evaluate(
         """() => {
              const f = (id) => {
                const n = window.kgView.cy.$id(id);
-               return { tafel: n.style('text-background-color'), schrift: n.style('color') };
+               return { rand: n.style('border-color'), schrift: n.style('color') };
              };
              return { anker: f('t1'), nachbar: f('t2'), neu: f('t3') };
            }"""
@@ -120,14 +131,12 @@ def test_gelb_traegt_schwarze_schrift_weil_weiss_unlesbar_waere(wall):
         zahlen = [int(x) for x in wert.replace("rgb(", "").replace(")", "").split(",")[:3]]
         return sum(zahlen) / 3
 
-    # Auf der gelben Tafel steht dunkle Schrift.
-    assert hell(farben["neu"]["schrift"]) < 60, farben["neu"]
-    # Auf Rot und Blau helle.
-    assert hell(farben["anker"]["schrift"]) > 200, farben["anker"]
-    assert hell(farben["nachbar"]["schrift"]) > 200, farben["nachbar"]
-    # Und die drei Tafeln sind wirklich verschieden eingefärbt.
-    tafeln = {farben[k]["tafel"] for k in farben}
-    assert len(tafeln) == 3, tafeln
+    # Die Schrift ist ÜBERALL weiß — das ist der Gewinn des Rings.
+    for rolle in ("anker", "nachbar", "neu"):
+        assert hell(farben[rolle]["schrift"]) > 200, (rolle, farben[rolle])
+    # Und die drei Ringe tragen drei verschiedene Farben.
+    raender = {farben[k]["rand"] for k in farben}
+    assert len(raender) == 3, raender
 
 
 def test_ruhende_begriffe_treten_zurueck(wall):
@@ -136,13 +145,20 @@ def test_ruhende_begriffe_treten_zurueck(wall):
     zeige(wall)
 
     werte = wall.evaluate(
-        """() => ({
-             ruhend: Number(window.kgView.cy.$id('t4').style('text-background-opacity')),
-             imBild: Number(window.kgView.cy.$id('t1').style('text-background-opacity')),
-           })"""
+        """() => {
+             const f = (id) => {
+               const n = window.kgView.cy.$id(id);
+               return { rand: parseFloat(n.style('border-width')),
+                        fuell: Number(n.style('background-opacity')) };
+             };
+             return { ruhend: f('t4'), imBild: f('t1') };
+           }"""
     )
-    assert werte["imBild"] == 1
-    assert werte["ruhend"] < 1, werte
+    # Der Ring eines Bildbegriffs ist kräftiger als der eines ruhenden.
+    assert werte["imBild"]["rand"] > werte["ruhend"]["rand"], werte
+    # Und keiner von beiden ist massiv gefüllt: der Grund scheint durch.
+    assert werte["imBild"]["fuell"] < 1, werte
+    assert werte["ruhend"]["fuell"] < werte["imBild"]["fuell"], werte
 
 
 def test_kanten_sind_geschwungen_und_bleiben_es(wall):
