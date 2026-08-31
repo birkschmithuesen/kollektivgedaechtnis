@@ -63,23 +63,34 @@ if defined FEHLT (
   exit /b 1
 )
 
-rem Die Schluessel liegen in der Benutzerumgebung, nicht in dieser Datei.
-rem Geprueft wird nur, DASS sie da sind ? nie ihr Wert.
-if "%HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY%"=="" (
-  echo   FEHLER: HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY ist nicht gesetzt.
-  echo   Ohne ihn laufen weder Auswertung noch Spracherkennung.
+rem ---------------------------------------------------------------------
+rem  Die Schluessel liegen in der Benutzerumgebung, nicht in dieser Datei.
+rem
+rem  Sie werden hier AUS DER REGISTRY nachgeladen, nicht einfach aus %VAR%
+rem  gelesen. Der Grund (gemessen 2026-08-31, und es hat uns eine Stunde
+rem  gekostet): Windows reicht die Benutzerumgebung beim Anmelden EINMAL an
+rem  den Explorer weiter. Wird eine Variable spaeter gesetzt, sieht jedes
+rem  Programm, das per Doppelklick startet, sie NICHT - erst nach Ab- und
+rem  Anmelden. Ein frisch gestarteter Dienst sieht sie dagegen sofort.
+rem  Genau daran lag es, dass derselbe Start aus der Ferne lief und per
+rem  Doppelklick "API key fehlt" meldete.
+rem
+rem  Ausgegeben wird nur, OB ein Schluessel da ist - nie sein Wert.
+rem ---------------------------------------------------------------------
+for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "foreach($n in 'HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY','BFL_API_KEY','KG_TELEGRAM_TOKEN'){ $v=[Environment]::GetEnvironmentVariable($n,'User'); if(-not $v){ $v=[Environment]::GetEnvironmentVariable($n,'Machine') }; if($v){ 'set '+$n+'='+$v } }"`) do @%%K
+
+set FEHLTSCHLUESSEL=
+if "%HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY%"=="" set FEHLTSCHLUESSEL=%FEHLTSCHLUESSEL% Infomaniak
+if "%BFL_API_KEY%"=="" set FEHLTSCHLUESSEL=%FEHLTSCHLUESSEL% BFL
+if "%KG_TELEGRAM_TOKEN%"=="" set FEHLTSCHLUESSEL=%FEHLTSCHLUESSEL% Telegram
+
+if defined FEHLTSCHLUESSEL (
+  echo   FEHLER: diese Schluessel fehlen:%FEHLTSCHLUESSEL%
   echo.
-  pause
-  exit /b 1
-)
-if "%BFL_API_KEY%"=="" (
-  echo   FEHLER: BFL_API_KEY ist nicht gesetzt ? keine Traumbilder.
-  echo.
-  pause
-  exit /b 1
-)
-if "%KG_TELEGRAM_TOKEN%"=="" (
-  echo   FEHLER: KG_TELEGRAM_TOKEN ist nicht gesetzt ? kein Fotoeingang.
+  echo   Setzen ^(einmal, als der Benutzer der die Station startet^):
+  echo     setx HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY "..."
+  echo     setx BFL_API_KEY "..."
+  echo     setx KG_TELEGRAM_TOKEN "..."
   echo.
   pause
   exit /b 1
