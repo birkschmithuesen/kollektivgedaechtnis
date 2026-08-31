@@ -122,6 +122,30 @@ image_model = "google/gemini-3-pro-image"
 image_url = "https://openrouter.ai/api/v1/chat/completions"
 image_aspect_ratio = "16:9"
 
+# --- Zweiter Renderpfad: Black Forest Labs, EU (2026-08-31) ----------------
+#
+# "openrouter" ist der Default und der oben verifizierte Weg. "bfl" spricht
+# api.eu.bfl.ai an und funktioniert grundsätzlich anders: absenden, auf eine
+# batch-artige Antwort pollen, dann eine SIGNIERTE URL herunterladen, die nur
+# zehn Minuten gültig ist (Ablauf in kg2/imagegen.py, `_render_bfl`).
+#
+# Zum Umschalten:
+#   image_api_mode = "bfl"
+#   image_model = "flux-pro-1.1"                 # hier: der ENDPUNKT
+#   image_url = "https://api.eu.bfl.ai/v1"       # hier: die BASIS
+#   image_api_key_env = "BFL_API_KEY"
+#   image_width = 1344
+#   image_height = 768
+#
+# Der Schlüssel kommt wie alle anderen aus der Umgebung (`export BFL_API_KEY=…`)
+# und existiert Stand 2026-08-31 noch nicht — fehlt er, scheitert Stufe 2 mit
+# einer Meldung, die die Variable beim Namen nennt, statt mit einem 401.
+#
+# `image_aspect_ratio` gilt weiter nur für den OpenRouter-Weg (dort reist es als
+# `image_config.aspect_ratio`); BFL bekommt stattdessen Pixel. 1344x768 ist 16:9
+# in Vielfachen von 32.
+image_api_mode = "openrouter"
+
 # Startwerte der Anzeige. Danach gehören sie dem Operator-UI, und ein Neustart
 # stellt DESSEN Wert wieder her, nicht diesen hier.
 default_question_visible = true

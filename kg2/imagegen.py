@@ -112,6 +112,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -297,6 +298,22 @@ def _httpx_post(url: str, headers: dict, json: dict, timeout: float) -> dict:
     return response.json()
 
 
+def _httpx_get_json(url: str, headers: dict, timeout: float) -> dict:
+    import httpx
+
+    response = httpx.get(url, headers=headers, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
+
+
+def _httpx_get_bytes(url: str, timeout: float) -> bytes:
+    import httpx
+
+    response = httpx.get(url, timeout=timeout, follow_redirects=True)
+    response.raise_for_status()
+    return response.content
+
+
 def decode_image(payload: dict) -> bytes:
     """Pull the image bytes out of the response recorded in the contract
     document. Format-agnostic on purpose: the prefix check below only looks
@@ -358,6 +375,61 @@ def render_image(
     timeout: float,
     post=_httpx_post,
     aspect_ratio: str | None = None,
+    api_mode: str = "openrouter",
+    width: int = 1344,
+    height: int = 768,
+    get_json=_httpx_get_json,
+    get_bytes=_httpx_get_bytes,
+    sleep=time.sleep,
+) -> bytes:
+    """Ein Bild, ein Weg — welcher, entscheidet `api_mode`.
+
+    `"openrouter"` ist der Default und der unten dokumentierte, gemessene
+    Ablauf. `"bfl"` schickt denselben Prompt an Black Forest Labs' EU-Endpunkt
+    (`_render_bfl`), der anders funktioniert: absenden, pollen, herunterladen.
+    Beide Wege bleiben funktionsfähig; umgeschaltet wird ausschließlich über
+    `config2.toml` (Betriebsentscheidung Birk, 2026-08-31).
+
+    Was für beide gilt und nicht verhandelbar ist: kein Retry (spec §8), das
+    Format entscheidet `image_extension` aus den Magic Bytes, und geschrieben
+    wird über `save_image` mit exklusivem „xb".
+    """
+    if api_mode == "bfl":
+        return _render_bfl(
+            prompt,
+            endpoint=model,
+            api_key=api_key,
+            url=url,
+            timeout=timeout,
+            width=width,
+            height=height,
+            post=post,
+            get_json=get_json,
+            get_bytes=get_bytes,
+            sleep=sleep,
+        )
+    if api_mode != "openrouter":
+        raise ImageError(f"unknown image_api_mode {api_mode!r}")
+    return _render_openrouter(
+        prompt,
+        model=model,
+        api_key=api_key,
+        url=url,
+        timeout=timeout,
+        post=post,
+        aspect_ratio=aspect_ratio,
+    )
+
+
+def _render_openrouter(
+    prompt: str,
+    *,
+    model: str,
+    api_key: str | None,
+    url: str,
+    timeout: float,
+    post=_httpx_post,
+    aspect_ratio: str | None = None,
 ) -> bytes:
     """One call, no retry. `post` is injectable so no test touches the network.
 
@@ -401,6 +473,109 @@ def render_image(
         raise ImageError(f"image request failed: {exc}") from exc
 
     return decode_image(payload)
+
+
+#: Sekunden zwischen zwei Nachfragen beim BFL-Auftrag. Kein Konfigurationswert:
+#: die Zahl beschreibt den Anbieter, nicht die Station, und sie darf nicht so
+#: klein werden, dass das Pollen selbst zur Last wird.
+BFL_POLL_INTERVAL_S = 1.5
+
+#: Status-Werte, die BFL für „fertig" und für „daraus wird nichts" sendet.
+#: Alles andere (Pending, Request Moderated in Arbeit, …) heißt weiterwarten.
+_BFL_READY = "Ready"
+_BFL_FAILED = ("Error", "Content Moderated", "Request Moderated", "Task not found")
+
+
+def _render_bfl(
+    prompt: str,
+    *,
+    endpoint: str,
+    api_key: str | None,
+    url: str,
+    timeout: float,
+    width: int,
+    height: int,
+    post=_httpx_post,
+    get_json=_httpx_get_json,
+    get_bytes=_httpx_get_bytes,
+    sleep=time.sleep,
+) -> bytes:
+    """Black Forest Labs, EU-Endpunkt. Drei Schritte statt einem.
+
+    1. ``POST <url>/<endpoint>`` mit ``{"prompt", "width", "height"}``. Das
+       Modell IST der Endpunkt (``flux-pro-1.1``, …) — es gibt kein
+       ``model``-Feld im Body, und ``modalities``/``_image_only`` sind
+       OpenRouter-Eigenheiten, die hier nichts verloren haben.
+    2. Die Antwort trägt ``id`` und ``polling_url``. Gepollt wird die
+       gelieferte URL, nie eine selbst zusammengesetzte: sie enthält bereits
+       alles, was der Anbieter zur Zuordnung braucht.
+    3. ``result.sample`` ist eine **signierte URL mit 10 Minuten Gültigkeit**.
+       Sie wird sofort geladen und nirgends gespeichert — eine URL, die morgen
+       in der Datenbank steht, ist morgen ein toter Link.
+
+    **Der Header heißt ``x-key``, nicht ``Authorization: Bearer``.** Ein
+    Bearer-Token wird ignoriert und der Request scheitert mit 401 — ein Fehler,
+    der wie ein falscher Schlüssel aussieht und keiner ist.
+
+    **Pollen ist kein Retry** (spec §8): der Auftrag wird genau einmal erteilt,
+    danach wird nur noch nach seinem Ergebnis gefragt. Scheitert das Absenden,
+    ist der Traum vorbei — kein zweiter Versuch, keine Retry-Kaskade. Das
+    Zeitbudget ist dasselbe ``image_timeout_s`` wie beim OpenRouter-Weg; läuft
+    es ab, ohne dass der Auftrag fertig ist, wird der Traum ausgesessen und der
+    nächste Trigger versucht es neu.
+    """
+    if not api_key:
+        raise ImageError(
+            "BFL_API_KEY is not set (or image_api_key_env names an empty "
+            "variable) — stage 2 cannot render"
+        )
+
+    submit_url = f"{url.rstrip('/')}/{endpoint}"
+    headers = {"x-key": api_key}
+    try:
+        payload = post(
+            submit_url,
+            headers=headers,
+            json={"prompt": prompt, "width": width, "height": height},
+            timeout=timeout,
+        )
+    except ImageError:
+        raise
+    except Exception as exc:  # transport, HTTP status, JSON — all one failure
+        raise ImageError(f"image request failed: {exc}") from exc
+
+    polling_url = (payload or {}).get("polling_url")
+    if not polling_url:
+        raise ImageError(f"no polling_url in the submit response: {str(payload)[:120]!r}")
+
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            result = get_json(polling_url, headers=headers, timeout=timeout)
+        except Exception as exc:
+            raise ImageError(f"polling the image job failed: {exc}") from exc
+
+        status = (result or {}).get("status")
+        if status == _BFL_READY:
+            break
+        if status in _BFL_FAILED:
+            raise ImageError(f"the image job ended as {status!r}")
+        if time.monotonic() >= deadline:
+            raise ImageError(
+                f"the image job was still {status!r} and never became ready "
+                f"within {timeout}s"
+            )
+        sleep(BFL_POLL_INTERVAL_S)
+
+    sample = ((result or {}).get("result") or {}).get("sample")
+    if not sample:
+        raise ImageError("the image job is ready but carries no result.sample url")
+
+    try:
+        # Sofort, nicht später: die URL ist zehn Minuten gültig.
+        return get_bytes(sample, timeout=timeout)
+    except Exception as exc:
+        raise ImageError(f"downloading the finished image failed: {exc}") from exc
 
 
 def save_image(data: bytes, path: Path) -> Path:

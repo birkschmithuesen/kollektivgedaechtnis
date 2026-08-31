@@ -78,6 +78,20 @@ class DreamConfig:
     image_url: str = "https://openrouter.ai/api/v1/chat/completions"
     image_aspect_ratio: str = "16:9"
     image_timeout_s: float = 180.0
+    # Zweiter Renderpfad (2026-08-31): "openrouter" ist der Default und damit
+    # der gemessene Weg von vorher, "bfl" spricht Black Forest Labs' EU-Endpunkt
+    # an. Im bfl-Modus ist `image_url` die BASIS ("https://api.eu.bfl.ai/v1")
+    # und `image_model` der Endpunkt darunter ("flux-pro-1.1") — dort ist das
+    # Modell der Pfad, nicht ein Feld im Body.
+    image_api_mode: str = "openrouter"
+    # Nur der NAME der Umgebungsvariablen, nie der Schlüssel selbst. Leer =
+    # OPENROUTER_API_KEY wie bisher; für BFL: "BFL_API_KEY".
+    image_api_key_env: str = ""
+    # Nur im bfl-Modus benutzt: dort reist die Bildgröße als Pixel, nicht als
+    # Seitenverhältnis. 1344x768 ist 16:9 in Vielfachen von 32, was die
+    # flux-Modelle erwarten; `image_aspect_ratio` bleibt der OpenRouter-Weg.
+    image_width: int = 1344
+    image_height: int = 768
 
     # -- display start values, owned by the operator UI afterwards (spec §7)
     default_question_visible: bool = True
@@ -96,6 +110,18 @@ class DreamConfig:
 
     anthropic_api_key: str | None = None
     openrouter_api_key: str | None = None
+
+    @property
+    def image_api_key(self) -> str | None:
+        """Der Schlüssel für Stufe 2. Ohne `image_api_key_env` wie bisher der
+        von OpenRouter; sonst der Inhalt genau dieser Variablen. Fehlt sie,
+        ist das Ergebnis `None` und der Fehler fällt beim Rendern mit klarer
+        Meldung (kg2.imagegen) — nicht schon beim Laden der Konfiguration,
+        damit `kg2 --no-watch` ohne jeden Schlüssel startet.
+        """
+        if self.image_api_key_env:
+            return os.environ.get(self.image_api_key_env)
+        return self.openrouter_api_key
 
     @property
     def db_path(self) -> Path:
@@ -132,6 +158,10 @@ _FIELD_NAMES = {
     "image_url",
     "image_aspect_ratio",
     "image_timeout_s",
+    "image_api_mode",
+    "image_api_key_env",
+    "image_width",
+    "image_height",
     "default_question_visible",
     "default_question_seconds",
     "default_fade_ms",

@@ -154,9 +154,15 @@ def run_dream(
         data = render_fn(
             image_prompt,
             model=cfg.image_model,
-            api_key=cfg.openrouter_api_key,
+            api_key=cfg.image_api_key,
             url=cfg.image_url,
             timeout=cfg.image_timeout_s,
+            # Welcher Anbieter, entscheidet allein die config2.toml; Default
+            # ist unverändert OpenRouter. `width`/`height` benutzt nur der
+            # BFL-Weg, im OpenRouter-Weg sind sie folgenlos.
+            api_mode=cfg.image_api_mode,
+            width=cfg.image_width,
+            height=cfg.image_height,
         )
         # No extension here: the real one is decided by the bytes, not
         # assumed (contract document, „Abweichung 3" — PNG or JPEG per call).

@@ -526,6 +526,178 @@ def test_render_image_does_not_retry():
     assert len(calls) == 1
 
 
+# -- der zweite Renderpfad: Black Forest Labs (EU) ---------------------------
+#
+# Anderer Ablauf als bei OpenRouter: absenden, pollen, dann eine signierte URL
+# herunterladen. Wieder ist jeder Netzaufruf injiziert.
+
+
+class FakeBfl:
+    """Absenden, N-mal „Pending", dann „Ready" mit einer signierten URL."""
+
+    def __init__(self, pending=1, data=None, status="Ready", sample="https://signed.invalid/x"):
+        self.pending = pending
+        self.data = png_bytes() if data is None else data
+        self.status = status
+        self.sample = sample
+        self.posts = []
+        self.polls = []
+        self.downloads = []
+        self.slept = []
+
+    def post(self, url, headers, json, timeout):
+        self.posts.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return {"id": "job-1", "polling_url": "https://api.eu.bfl.ai/v1/get_result?id=job-1"}
+
+    def get_json(self, url, headers, timeout):
+        self.polls.append({"url": url, "headers": headers})
+        if len(self.polls) <= self.pending:
+            return {"status": "Pending"}
+        return {"status": self.status, "result": {"sample": self.sample}}
+
+    def get_bytes(self, url, timeout):
+        self.downloads.append(url)
+        return self.data
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+
+    def render(self, **overrides):
+        kwargs = dict(
+            model="flux-pro-1.1",
+            api_key="bfl-key",
+            url="https://api.eu.bfl.ai/v1",
+            timeout=180.0,
+            api_mode="bfl",
+            width=1344,
+            height=768,
+            post=self.post,
+            get_json=self.get_json,
+            get_bytes=self.get_bytes,
+            sleep=self.sleep,
+        )
+        kwargs.update(overrides)
+        return render_image("ein prompt", **kwargs)
+
+
+def test_the_default_route_is_still_openrouter():
+    """Fallback-Regel: ohne `api_mode` bleibt es beim gebauten und gemessenen
+    Weg. Nichts an dieser Datei oben ändert sich."""
+    seen = {}
+
+    def fake_post(url, headers, json, timeout):
+        seen.update(json=json, headers=headers)
+        return response_with(png_bytes())
+
+    render_image("p", model="m", api_key="k", url="u", timeout=1.0, post=fake_post)
+
+    assert seen["json"]["modalities"] == ["image", "text"]
+    assert seen["headers"]["Authorization"] == "Bearer k"
+
+
+def test_bfl_submits_polls_and_downloads_the_signed_url():
+    bfl = FakeBfl(pending=2)
+
+    data = bfl.render()
+
+    assert data == png_bytes()
+    # Absenden: POST auf <url>/<endpoint>, mit dem Modell als Endpunkt.
+    assert bfl.posts[0]["url"] == "https://api.eu.bfl.ai/v1/flux-pro-1.1"
+    assert bfl.posts[0]["json"] == {"prompt": "ein prompt", "width": 1344, "height": 768}
+    # Gepollt wird die URL aus der Antwort, nicht eine selbst gebaute.
+    assert {p["url"] for p in bfl.polls} == {"https://api.eu.bfl.ai/v1/get_result?id=job-1"}
+    assert len(bfl.polls) == 3  # zweimal Pending, einmal Ready
+    assert bfl.downloads == ["https://signed.invalid/x"]
+
+
+def test_bfl_authenticates_with_x_key_and_never_with_a_bearer_token():
+    """Gemessen: BFL will `x-key`. Ein Authorization-Header wird ignoriert und
+    der Request scheitert mit 401 — ein Fehler, der wie ein falscher Schlüssel
+    aussieht und keiner ist."""
+    bfl = FakeBfl()
+
+    bfl.render()
+
+    assert bfl.posts[0]["headers"]["x-key"] == "bfl-key"
+    assert "Authorization" not in bfl.posts[0]["headers"]
+    assert bfl.polls[0]["headers"]["x-key"] == "bfl-key"
+
+
+def test_bfl_never_sends_the_openrouter_peculiarities():
+    """`modalities` und die Sonderbehandlung für reine Bildmodelle gehören zu
+    OpenRouters Katalog, nicht zu BFL."""
+    bfl = FakeBfl()
+
+    bfl.render(model="flux-pro-1.1")
+
+    assert "modalities" not in bfl.posts[0]["json"]
+    assert "messages" not in bfl.posts[0]["json"]
+    assert "model" not in bfl.posts[0]["json"]  # das Modell IST der Endpunkt
+
+
+def test_bfl_gives_up_when_the_job_never_becomes_ready():
+    """Der Traum wird ausgesessen (spec §8), nicht endlos gepollt: das Zeitbudget
+    ist dasselbe wie für den OpenRouter-Aufruf."""
+    bfl = FakeBfl(pending=10_000)
+
+    with pytest.raises(ImageError, match="ready"):
+        bfl.render(timeout=0.0)
+
+
+def test_bfl_reports_a_failed_job_as_an_image_error():
+    bfl = FakeBfl(pending=0, status="Content Moderated")
+
+    with pytest.raises(ImageError, match="Content Moderated"):
+        bfl.render()
+
+
+def test_bfl_reports_a_ready_job_without_a_sample_url():
+    bfl = FakeBfl(pending=0, sample="")
+
+    with pytest.raises(ImageError):
+        bfl.render()
+
+
+def test_bfl_does_not_retry_the_submit():
+    """Spec §8 gilt hier genauso. Pollen ist kein Retry: es ist EIN Auftrag,
+    nach dessen Ergebnis gefragt wird, und er wird nie zweimal erteilt."""
+    calls = []
+
+    def dead_post(url, headers, json, timeout):
+        calls.append(1)
+        raise OSError("connection reset")
+
+    bfl = FakeBfl()
+    with pytest.raises(ImageError):
+        bfl.render(post=dead_post)
+
+    assert len(calls) == 1
+    assert bfl.polls == []
+
+
+def test_bfl_without_a_key_fails_loudly_and_names_the_variable():
+    """BFL_API_KEY existiert noch nicht. Fehlt er, muss das dastehen — nicht
+    ein undurchsichtiger 401 um 14:00 (wie beim OpenRouter-Pfad)."""
+    bfl = FakeBfl()
+
+    with pytest.raises(ImageError, match="BFL_API_KEY"):
+        bfl.render(api_key=None)
+
+    assert bfl.posts == []
+
+
+def test_bfl_download_failure_is_an_image_error_like_any_other():
+    """Die signierte URL gilt nur 10 Minuten. Läuft sie ab oder bricht der
+    Download, ist das ein gescheiterter Traum, kein Traceback."""
+
+    def dead_get(url, timeout):
+        raise OSError("410 gone")
+
+    bfl = FakeBfl()
+    with pytest.raises(ImageError):
+        bfl.render(get_bytes=dead_get)
+
+
 # -- format detection --------------------------------------------------------
 
 

@@ -99,6 +99,45 @@ def test_the_example_config_carries_no_credentials():
         assert forbidden not in text
 
 
+def test_the_image_route_defaults_to_openrouter(tmp_path, monkeypatch):
+    """Fallback-Regel: ohne neue Schlüssel rendert Stufe 2 wie bisher."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    cfg_file = tmp_path / "config2.toml"
+    cfg_file.write_text('data_dir = "dream-state"\n', encoding="utf-8")
+
+    cfg = load_dream_config(cfg_file)
+
+    assert cfg.image_api_mode == "openrouter"
+    assert cfg.image_url == "https://openrouter.ai/api/v1/chat/completions"
+    assert cfg.image_api_key == "sk-or-test"
+
+
+def test_the_image_route_can_be_switched_to_black_forest_labs(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("BFL_API_KEY", "bfl-key")
+    cfg_file = tmp_path / "config2.toml"
+    cfg_file.write_text(
+        """
+        data_dir = "dream-state"
+        image_api_mode = "bfl"
+        image_model = "flux-pro-1.1"
+        image_url = "https://api.eu.bfl.ai/v1"
+        image_api_key_env = "BFL_API_KEY"
+        image_width = 1344
+        image_height = 768
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = load_dream_config(cfg_file)
+
+    assert cfg.image_api_mode == "bfl"
+    assert cfg.image_api_key == "bfl-key"
+    assert (cfg.image_width, cfg.image_height) == (1344, 768)
+    # Der Schlüssel steht nie in der Datei, nur der Name seiner Variablen.
+    assert "bfl-key" not in cfg_file.read_text(encoding="utf-8")
+
+
 def test_the_example_config_loads(tmp_path, monkeypatch):
     """A template that does not parse is a 9 a.m. failure, so it is tested."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
