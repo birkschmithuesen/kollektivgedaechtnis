@@ -57,6 +57,9 @@ class _Person:
         self.portrait_path = None
         self.started_at = 0.0
         self.hidden = False
+        # Namenlos, wie fast jede Person: In diesen Tests geht es um die
+        # Begriffsknoten, aber der Export liest das Feld an jedem Personenknoten.
+        self.name = None
 
 
 class _Edge:

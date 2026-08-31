@@ -64,7 +64,52 @@ function termCountText(count) {
   return count === 1 ? '1 Begriff' : `${count} Begriffe`;
 }
 
-function entryRow(node, termCounts) {
+/** Die Personenzeile trägt statt eines Labels ein Namensfeld.
+ *
+ * Der Name kommt aus dem Transkript — die Person stellt sich zu Beginn des
+ * Interviews vor — und die Spracherkennung verhört Namen zuverlässiger als
+ * alles andere. Korrigiert wird deshalb genau dort, wo die Person in dieser
+ * Liste ohnehin identifiziert wird: neben ihrem Porträt.
+ *
+ * Ohne Namen bleibt das Feld leer und der `placeholder` zeigt weiter die
+ * Uhrzeit-Kennung von `personLabel()`. Eine namenlose Zeile bleibt damit
+ * genauso wiederzufinden wie vor dieser Änderung („die von kurz vor drei"),
+ * und der leere Kasten sagt zugleich, dass hier etwas fehlt, das man
+ * hinschreiben darf.
+ */
+function nameField(node, draft) {
+  const field = document.createElement('input');
+  field.type = 'text';
+  // Behält die Label-Klasse: Das Feld steht an der Stelle des Labels, nimmt
+  // dessen Breite in der Zeile ein und wird beim Ausblenden mit durchgestrichen.
+  field.className = 'label name';
+  field.dataset.nameFor = node.id;
+  field.placeholder = personLabel(node);
+  field.maxLength = 120; // dieselbe Grenze wie PersonName.name im Server
+  // Ein laufender Entwurf schlägt den Servertext: siehe editingDraft() unten.
+  field.value = draft && draft.personId === node.id ? draft.value : node.name || '';
+
+  // Gespeichert wird beim Verlassen des Feldes, nicht beim Tippen. `input`
+  // würde pro Tastendruck feuern und damit pro Buchstabe eine Graph-Rundmeldung
+  // an jeden SSE-Client schicken — dieselbe Überlegung wie bei den Reglern
+  // (frontend/operator.html) und mit derselben Antwort: `change`.
+  field.addEventListener('change', () =>
+    post('/api/person_name', { person_id: node.id, name: field.value.trim() }),
+  );
+  // Enter heißt „fertig" und wird deshalb genau darauf abgebildet: Das Feld
+  // gibt den Fokus ab, der Browser feuert daraufhin `change` — einmal, und nur
+  // wenn sich wirklich etwas geändert hat. Hier selbst zu posten würde bei
+  // geändertem Wert zweimal speichern, und der Fokus bliebe im Feld: Eine
+  // fehlgeschlagene Speicherung ließe den falschen Text dann stehen, statt ihn
+  // wie jeden anderen Bedienschritt auf den Serverstand zurückspringen zu
+  // lassen (siehe post()).
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') field.blur();
+  });
+  return field;
+}
+
+function entryRow(node, termCounts, draft) {
   const item = document.createElement('li');
   item.className = `entry ${node.type} ${node.hidden ? 'hidden' : ''}`.trim();
   item.id = `entry-${node.id}`;
@@ -79,10 +124,14 @@ function entryRow(node, termCounts) {
     item.appendChild(portrait);
   }
 
-  const label = document.createElement('span');
-  label.className = 'label';
-  label.textContent = node.type === 'person' ? personLabel(node) : node.label;
-  item.appendChild(label);
+  if (node.type === 'person') {
+    item.appendChild(nameField(node, draft));
+  } else {
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = node.label;
+    item.appendChild(label);
+  }
 
   const meta = document.createElement('span');
   meta.className = 'meta';
@@ -128,6 +177,44 @@ function showDensityCounts(graph) {
   }
 }
 
+/** Was gerade in ein Namensfeld getippt wird — oder `null`, wenn keines den
+ * Fokus hat.
+ *
+ * Die Liste wird bei JEDEM Push komplett neu gebaut (`replaceChildren()`
+ * unten). Für einen Knopf ist das folgenlos, für ein Textfeld nicht: Ein Push
+ * mitten im Tippen — ein beendetes Interview, ein anderer Bedienschritt, die
+ * eigene Speicherung — ersetzte sonst das halbfertige Wort durch den
+ * Servertext und schöbe den Cursor in eine Zeile, die es nicht mehr gibt.
+ * Genau das ist am Bedienpult nicht theoretisch: Interviews landen im Minutentakt.
+ *
+ * Also merkt sich render() vor dem Neubau dieses eine Feld mit Inhalt und
+ * Cursorposition und stellt es danach wieder her. Der Servertext gewinnt
+ * wieder, sobald das Feld den Fokus abgibt — dann ist gespeichert und beide
+ * sagen ohnehin dasselbe. Der Entwurf wird bewusst NICHT global gehalten,
+ * sondern pro Neubau frisch aus dem Dokument gelesen: So kann er nicht länger
+ * leben als der Fokus, den er beschreibt. */
+function editingDraft(list) {
+  const active = document.activeElement;
+  if (!active || active.dataset?.nameFor === undefined || !list.contains(active)) return null;
+  return {
+    personId: active.dataset.nameFor,
+    value: active.value,
+    start: active.selectionStart,
+    end: active.selectionEnd,
+  };
+}
+
+function restoreDraft(list, draft) {
+  if (!draft) return;
+  const field = list.querySelector(`input[data-name-for="${draft.personId}"]`);
+  // Die Person kann inzwischen aus der Liste verschwunden sein. Dann gibt es
+  // nichts wiederherzustellen — und nichts, was der Operator dort noch tippen
+  // könnte.
+  if (!field) return;
+  field.focus();
+  field.setSelectionRange(draft.start, draft.end);
+}
+
 function render(graph, state) {
   lastGraph = graph;
   lastState = state;
@@ -147,6 +234,7 @@ function render(graph, state) {
     : 'kein Interview';
 
   const list = document.getElementById('entries');
+  const draft = editingDraft(list);
   list.replaceChildren();
 
   // How many terms each person carries, for their row's meta text. One pass
@@ -184,8 +272,9 @@ function render(graph, state) {
     .sort((a, b) => a.label.localeCompare(b.label, 'de'));
 
   for (const node of [...persons, ...visibleTerms]) {
-    list.appendChild(entryRow(node, termCounts));
+    list.appendChild(entryRow(node, termCounts, draft));
   }
+  restoreDraft(list, draft);
 }
 
 function showTranscript(text) {

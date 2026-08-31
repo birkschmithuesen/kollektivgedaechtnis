@@ -69,6 +69,42 @@ def test_hiding_an_unknown_node_is_a_client_error(client):
     assert client.post("/api/hidden", json={"node_id": "nonsense:1", "hidden": True}).status_code == 400
 
 
+def test_the_operator_can_correct_and_clear_a_misheard_name(client):
+    """Die einzige Korrektur, die der Operator an einem fertigen Interview
+    vornimmt: Die Spracherkennung verhört Namen zuverlässig.
+
+    Und leeren muss er ihn können — ein leerer Wert ist kein Fehler, sondern
+    die Aussage „hier steht kein Name", die der Graph als null trägt.
+    """
+    person_id = client.store.list_persons()[0].id
+
+    assert (
+        client.post(
+            "/api/person_name", json={"person_id": person_id, "name": "Frau Kirchner"}
+        ).status_code
+        == 200
+    )
+    assert client.store.get_person(person_id).name == "Frau Kirchner"
+    graph = client.get("/graph.json").json()
+    assert [n for n in graph["nodes"] if n["id"] == person_id][0]["name"] == "Frau Kirchner"
+
+    assert (
+        client.post("/api/person_name", json={"person_id": person_id, "name": ""}).status_code
+        == 200
+    )
+    assert client.store.get_person(person_id).name is None
+    graph = client.get("/graph.json").json()
+    assert [n for n in graph["nodes"] if n["id"] == person_id][0]["name"] is None
+
+
+def test_a_name_the_size_of_a_transcript_is_refused(client):
+    """Was hier ankommt, steht später unter einem Zitat auf der Wand."""
+    person_id = client.store.list_persons()[0].id
+    antwort = client.post("/api/person_name", json={"person_id": person_id, "name": "A" * 200})
+    assert antwort.status_code == 422
+    assert client.store.get_person(person_id).name is None
+
+
 def test_camera_mode_round_trips(client):
     assert client.post("/api/camera", json={"mode": "pan"}).status_code == 200
     assert client.get("/api/state").json()["camera_mode"] == "pan"

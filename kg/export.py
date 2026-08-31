@@ -23,6 +23,10 @@ def build_graph(store) -> dict:
                 "id": person.id,
                 "type": "person",
                 "portrait": _portrait_url(person.portrait_path),
+                # Null, solange sich niemand vorgestellt hat oder der Operator
+                # den verhörten Namen gelöscht hat. Die Wand zeigt ihn nur im
+                # Zitat-Overlay beim Antippen, nie dauerhaft am Porträt.
+                "name": person.name,
                 "created_at": person.started_at,
                 "hidden": person.hidden,
                 "x": x,

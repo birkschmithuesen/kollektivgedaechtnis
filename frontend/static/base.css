@@ -79,6 +79,19 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   z-index: 9;
 }
 .quote-overlay.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* Wer da spricht — eine eigene Zeile ÜBER dem Zitat, nicht darin (der Name
+   stünde sonst zwischen den Anführungszeichen, die .quote-text sich unten
+   selbst zeichnet). Kleiner und aufrecht, damit das Zitat die Stimme bleibt
+   und der Name nur die Zuschreibung; gleiche Schriftfamilie wie die Karte, aus
+   der er sie erbt. Ohne Namen ist das Element `hidden` und nimmt keinen Platz. */
+.quote-name {
+  margin: 0 0 0.5em;
+  font-size: 22px;
+  line-height: 1.3;
+  color: inherit;
+  opacity: 0.62;
+  letter-spacing: 0.02em;
+}
 .quote-text {
   margin: 0;
   font-size: 34px;

@@ -64,3 +64,48 @@ def test_extract_clamps_the_end_index_into_the_transcript():
 
     llm = FakeLLM(ExtractionResult(interview_end_index=-5, terms=[], quotes=[]))
     assert extract(llm, transcript, max_terms=5).interview_end_index == 0
+
+
+def test_the_prompt_asks_for_the_self_given_name_and_forbids_guessing():
+    """Der Name steht später unter einem Zitat auf der Wand.
+
+    Ein geratener oder aus dem Gespräch aufgeschnappter Name wäre dort eine
+    Falschaussage über eine anwesende Person — teurer als gar kein Name.
+    """
+    assert "4. NAME." in EXTRACTION_SYSTEM
+    assert "Rate nicht." in EXTRACTION_SYSTEM
+    assert "lass die Liste leer" in EXTRACTION_SYSTEM
+    # Der Name ist ein eigenes Feld und hebt Punkt 2 nicht auf: Personennamen
+    # bleiben als BEGRIFFE verboten, sonst hinge die Person als Knoten im Netz.
+    assert "keine Personennamen" in EXTRACTION_SYSTEM
+
+
+def test_extract_caps_the_name_list_to_one_even_if_the_model_sends_more():
+    """Dieselbe Bauart wie bei `quotes`: eine Liste, die hier geschnitten wird.
+
+    Eine Person hat in diesem Datenmodell genau einen Namen; die Durchsetzung
+    steht in `extract()` und nicht im Typ, damit beide Felder auf demselben Weg
+    begrenzt werden.
+    """
+    result = ExtractionResult(
+        interview_end_index=10,
+        terms=[],
+        quotes=[],
+        names=[{"text": "Anna Weber"}, {"text": "Herr Neumann"}],
+    )
+
+    out = extract(FakeLLM(result), "irgendein transkript", max_terms=3)
+
+    assert len(out.names) == 1
+    assert out.names[0].text == "Anna Weber"
+
+
+def test_extract_leaves_the_name_empty_when_nobody_introduced_themselves():
+    """Kein Platzhalter, kein „Anonym" — am Zitat steht dann gar kein Name."""
+    out = extract(
+        FakeLLM(ExtractionResult(interview_end_index=10, terms=[], quotes=[], names=[])),
+        "irgendein transkript",
+        max_terms=3,
+    )
+
+    assert out.names == []

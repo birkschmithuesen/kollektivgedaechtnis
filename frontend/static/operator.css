@@ -8,6 +8,22 @@ select { font: inherit; padding: 0.2rem; }
 .entry { display: flex; gap: 1rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #2a2a33; }
 .entry .label { flex: 1; }
 .entry .meta { color: #8b8b96; }
+/* Das Namensfeld steht an der Stelle des Labels und soll auch so aussehen: ein
+   Kasten pro Personenzeile machte aus einer ruhigen Liste ein Formular. Der
+   Rahmen kommt erst beim Zeigen und Bearbeiten — dann aber deutlich, weil der
+   Operator im Halbdunkel der Station sehen muss, in welcher Zeile er tippt. */
+.entry input.label {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0.15rem 0.35rem;
+  min-width: 0; /* sonst zwingt die Standardbreite eines input die Zeile auseinander */
+}
+.entry input.label::placeholder { color: #8b8b96; }
+.entry input.label:hover { border-color: #2a2a33; }
+.entry input.label:focus { outline: none; border-color: #8b8b96; background: #1f1f26; }
 .entry.hidden .label { text-decoration: line-through; color: #7a7a85; }
 /* A person has no label, so the portrait does the identifying. Thumbnail-sized
    on purpose: enough to recognise a face at arm's length on the operator

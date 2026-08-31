@@ -23,7 +23,12 @@ CREATE TABLE IF NOT EXISTS person (
     transcript    TEXT,
     photo_path    TEXT,
     portrait_path TEXT,
-    hidden        INTEGER NOT NULL DEFAULT 0
+    hidden        INTEGER NOT NULL DEFAULT 0,
+    -- Der selbstgenannte Name aus dem Interview (kg.extraction), NULL wenn
+    -- sich niemand vorgestellt hat. Steht bewusst am Ende der Tabelle: so
+    -- sieht eine frisch angelegte Datenbank genauso aus wie eine, die die
+    -- Spalte über `_nachruesten` unten angehängt bekommen hat.
+    name          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS term (
@@ -73,11 +78,38 @@ CREATE TABLE IF NOT EXISTS setting (
 """
 
 
+#: Spalten, die erst nach dem ersten Betrieb dazugekommen sind — Tabelle,
+#: Spaltenname, SQL-Typ. Das ist absichtlich kein Migrationsframework: es gibt
+#: keine Versionsnummer, keine Reihenfolge und keinen Rückweg, nur „fehlt sie,
+#: dann häng sie an". Mehr braucht eine Station, die nichts umbenennt und
+#: nichts löscht, und weniger würde die eine Datenbank vergessen, auf die es
+#: ankommt.
+_NACHGEREICHTE_SPALTEN = (("person", "name", "TEXT"),)
+
+
+def _nachruesten(conn: sqlite3.Connection) -> None:
+    """Fehlende Spalten an eine bestehende Datenbank anfügen.
+
+    `CREATE TABLE IF NOT EXISTS` fasst eine Tabelle, die es schon gibt, nicht
+    mehr an. Eine neue Spalte in `SCHEMA` erreicht deshalb ausgerechnet die
+    Arbeitsdatenbank mit den echten Interviews nie — dort schlüge dann jede
+    Abfrage darauf fehl, während sie in jedem Test grün ist, weil der auf einer
+    frisch angelegten Datei läuft. Bestehende Zeilen behalten NULL, was hier
+    genau das Richtige heißt: von den vor der Änderung befragten Personen
+    kennen wir den Namen tatsächlich nicht.
+    """
+    for tabelle, spalte, typ in _NACHGEREICHTE_SPALTEN:
+        vorhanden = {row["name"] for row in conn.execute(f"PRAGMA table_info({tabelle})")}
+        if spalte not in vorhanden:
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
+
+
 def connect(path: Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _nachruesten(conn)
     conn.commit()
     return conn

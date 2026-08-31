@@ -29,6 +29,17 @@ export function attachQuoteOverlay(
   panel.id = 'quote-overlay';
   panel.hidden = true;
 
+  // The name goes ABOVE the quote and in its OWN element, never concatenated
+  // into the blockquote's text: the quotation marks are drawn by CSS
+  // (`.quote-text::before`/`::after` in base.css), so a name inside that text
+  // would end up inside the quotation marks — as if the person had said their
+  // own name. A <figcaption> because that is exactly what this figure needs:
+  // the caption naming who is speaking.
+  const name = document.createElement('figcaption');
+  name.className = 'quote-name';
+  name.hidden = true;
+  panel.appendChild(name);
+
   const text = document.createElement('blockquote');
   text.className = 'quote-text';
   panel.appendChild(text);
@@ -38,6 +49,11 @@ export function attachQuoteOverlay(
   // push: quotes arrive in the same payload as the nodes, so they can never
   // be staler than the wall.
   let byPerson = new Map();
+  // person_id -> name, rebuilt from the person nodes on the same push and for
+  // the same reason. Most persons have none: nobody introduced themselves, or
+  // the operator cleared a misheard one. Then the entry is simply absent and
+  // the panel shows the quote alone, exactly as it did before this existed.
+  let namesByPerson = new Map();
   let timer = null;
   let shownFor = null;
 
@@ -49,6 +65,15 @@ export function attachQuoteOverlay(
     panel.classList.remove('visible');
   }
 
+  function showName(personId) {
+    const person = namesByPerson.get(personId) || '';
+    name.textContent = person;
+    // Empty AND hidden, not just empty: an empty caption still occupies a line
+    // box and would open a gap over the quote of every person who never said
+    // their name — which is most of them.
+    name.hidden = person === '';
+  }
+
   function show(personId) {
     const quote = byPerson.get(personId);
     if (quote === undefined) {
@@ -58,6 +83,7 @@ export function attachQuoteOverlay(
       return false;
     }
     text.textContent = quote;
+    showName(personId);
     shownFor = personId;
     panel.hidden = false;
     panel.classList.add('visible');
@@ -94,6 +120,19 @@ export function attachQuoteOverlay(
         if (!next.has(quote.person_id)) next.set(quote.person_id, quote.text);
       }
       byPerson = next;
+
+      const nextNames = new Map();
+      for (const node of graph.nodes || []) {
+        if (node.type !== 'person') continue;
+        const person = (node.name || '').trim();
+        if (person) nextNames.set(node.id, person);
+      }
+      namesByPerson = nextNames;
+      // A name corrected by the operator has to reach a quote that is on the
+      // wall right now: the correction is usually made BECAUSE the wrong name
+      // is being read off the screen.
+      if (shownFor) showName(shownFor);
+
       // The person on screen may have just been hidden by the operator or
       // filtered away; a quote outliving its node would be a ghost.
       if (shownFor && !next.has(shownFor)) hide();

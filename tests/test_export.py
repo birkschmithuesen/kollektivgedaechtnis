@@ -44,6 +44,23 @@ def test_graph_carries_full_state_with_counts_flags_and_positions(store):
     assert graph["version"] == 1
 
 
+def test_a_person_node_carries_the_name_next_to_the_portrait(store):
+    """Der Graph ist der einzige Weg, auf dem der Name die Wand erreicht.
+
+    Er steht dort nur im Zitat-Overlay beim Antippen — aber transportiert wird
+    er wie das Porträt, im Personenknoten, weil `graph.json` den vollständigen
+    Zustand trägt (spec 11) und die Anzeige entscheidet, was sie davon zeigt.
+    """
+    p1, p2, _, _ = seed(store)
+    store.set_person_name(p1.id, "Frau Kirchner")
+
+    nodes = {n["id"]: n for n in build_graph(store)["nodes"]}
+    assert nodes[p1.id]["name"] == "Frau Kirchner"
+    # Kein Platzhalter für die, die sich nicht vorgestellt haben: null, und die
+    # Anzeige lässt die Zeile dann ganz weg.
+    assert nodes[p2.id]["name"] is None
+
+
 def test_hidden_entries_are_exported_with_the_flag_not_removed(store):
     p1, _, t1, _ = seed(store)
     store.set_hidden(f"term:{t1.id}", True)

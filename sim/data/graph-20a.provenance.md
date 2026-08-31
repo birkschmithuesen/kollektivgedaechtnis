@@ -29,6 +29,16 @@ starts depending on a non-null `x` is testing the wrong thing.
 Hidden-node exclusion (spec §5.1) is therefore tested against graphs derived
 from this one by flipping the flag, not against the file as it stands.
 
+**Jeder `name` in diesem File ist `null`, und auch das ist korrekt**
+(2026-08-31). Der Personenknoten trägt seit dem den selbstgenannten Namen aus
+dem Interview (`kg/extraction.py`, `kg/export.py`); der Lauf 20a ist älter und
+hat keinen erhoben. Genau dieses `null` schreibt `kg.export.build_graph` heute
+für jede Person aus einer Datenbank von vor der Änderung — die Spalte wird
+nachgereicht (`kg/db.py`) und bleibt für bestehende Zeilen leer. Der Schlüssel
+wurde deshalb nachgetragen statt den Lauf zu wiederholen: Ein erneuter Replay
+kostet zwei API-Schlüssel und mehrere Minuten und würde jeden Begriff im File
+mitverändern, ohne über den Namen mehr auszusagen als dieses `null`.
+
 If this file is ever regenerated, `tests/test_dream_contract.py` is what proves
 the new one still matches what `kg.export.build_graph` produces today.
 

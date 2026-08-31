@@ -171,6 +171,36 @@ def test_person_lifecycle(store):
     assert store.get_person(person.id).status == "done"
 
 
+def test_a_person_starts_without_a_name_and_can_be_given_one(store):
+    """Der Name kommt aus dem Transkript, nicht aus der Aufnahme — zwischen
+    `create_person` und dem Ende der Verdichtung ist er schlicht unbekannt."""
+    person = store.create_person(started_at=100.0)
+    assert person.name is None
+
+    store.set_person_name(person.id, "Frau Kirchner")
+    assert store.get_person(person.id).name == "Frau Kirchner"
+
+
+def test_clearing_a_misheard_name_stores_null_not_an_empty_string(store):
+    """Die Spracherkennung verhört Namen, also leert der Operator das Feld.
+
+    Das Ergebnis muss derselbe Zustand sein wie bei einer Person, die sich nie
+    vorgestellt hat — sonst gäbe es zwei Arten von „kein Name", und die
+    Anzeige müsste beide kennen.
+    """
+    person = store.create_person(started_at=100.0)
+    store.set_person_name(person.id, "Frau Kirchnau")
+
+    store.set_person_name(person.id, "")
+    assert store.get_person(person.id).name is None
+
+    # Auch reine Leerzeichen sind kein Name: sie stünden sonst als leere Zeile
+    # über dem Zitat auf der Wand.
+    store.set_person_name(person.id, "Frau Kirchner")
+    store.set_person_name(person.id, "   ")
+    assert store.get_person(person.id).name is None
+
+
 def test_terms_are_unique_by_label_and_aliases_resolve(store):
     t1 = store.get_or_create_term("Recycling-Beton", created_at=1.0)
     t2 = store.get_or_create_term("Recycling-Beton", created_at=2.0)

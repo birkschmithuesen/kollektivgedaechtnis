@@ -18,6 +18,10 @@ class Person:
     photo_path: str | None = None
     portrait_path: str | None = None
     hidden: bool = False
+    # Wie die Person sich zu Beginn des Interviews selbst vorgestellt hat.
+    # None, wenn sie es nicht getan hat — dann steht am Zitat schlicht kein
+    # Name, kein Platzhalter (Birk, 2026-08-31).
+    name: str | None = None
 
 
 @dataclass(frozen=True)

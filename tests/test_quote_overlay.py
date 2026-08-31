@@ -13,9 +13,11 @@ GRAPH = {
     "max_terms": 99,
     "nodes": [
         {"id": "p1", "type": "person", "portrait": "", "hidden": False, "created_at": 1,
-         "x": 100, "y": 100},
+         "x": 100, "y": 100, "name": "Frau Kirchner"},
+        # Zitat ja, Name nein: der Normalfall für jede Person, die sich nicht
+        # vorgestellt hat oder deren verhörten Namen der Operator gelöscht hat.
         {"id": "p2", "type": "person", "portrait": "", "hidden": False, "created_at": 2,
-         "x": 400, "y": 100},
+         "x": 400, "y": 100, "name": None},
         # A person with no quote at all: extraction can fail (status=failed in
         # the runbook) and the node still stands.
         {"id": "p3", "type": "person", "portrait": "", "hidden": False, "created_at": 3,
@@ -109,6 +111,76 @@ def test_tapping_the_same_face_again_does_not_change_the_quote(wall):
     assert wall.eval_on_selector("#quote-overlay .quote-text", "el => el.textContent") == (
         "Wir bauen viel zu viel neu."
     )
+
+
+def test_the_name_stands_above_the_quote_in_its_own_element(wall):
+    """Der Name gehört nicht in den Zitattext.
+
+    Die Anführungszeichen zeichnet `.quote-text` sich in CSS selbst
+    (`::before`/`::after`, base.css) — ein hineinkonkatenierter Name stünde
+    zwischen ihnen, als hätte die Person ihren eigenen Namen mitgesprochen.
+    """
+    _tap(wall, "p1")
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.textContent") == (
+        "Frau Kirchner"
+    )
+    assert wall.eval_on_selector("#quote-overlay .quote-text", "el => el.textContent") == (
+        "Wir bauen viel zu viel neu."
+    )
+    # Zuerst der Name, dann das Zitat — und beide sichtbar.
+    assert wall.eval_on_selector(
+        "#quote-overlay", "el => [...el.children].map(c => c.className)"
+    ) == ["quote-name", "quote-text"]
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.hidden") is False
+
+
+def test_a_person_without_a_name_leaves_no_gap_above_the_quote(wall):
+    """Leer allein reicht nicht: Ein leeres Element belegt weiter eine Zeile.
+
+    Die meisten Personen haben keinen Namen, also wäre die Lücke der
+    Normalfall — und das Zitat säße auf jeder zweiten Karte anders.
+    """
+    _tap(wall, "p2")
+    assert wall.evaluate("window.kgQuotes.visible") is True
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.textContent") == ""
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.hidden") is True
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.offsetHeight") == 0
+
+
+def test_the_name_follows_the_person_the_panel_is_showing(wall):
+    """Zwei Porträts nacheinander dürfen nicht denselben Namen tragen."""
+    _tap(wall, "p1")
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.textContent") == (
+        "Frau Kirchner"
+    )
+    _tap(wall, "p2")
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.hidden") is True
+
+
+def test_a_name_corrected_by_the_operator_reaches_the_open_panel(wall):
+    """Korrigiert wird gerade WEIL der falsche Name auf der Wand steht.
+
+    Der Namensspeicher wird — wie `byPerson` — bei jedem Graph-Push neu aus den
+    Personenknoten gebaut; das offene Overlay muss dabei mitgehen.
+    """
+    _tap(wall, "p1")
+    korrigiert = {
+        **GRAPH,
+        "nodes": [
+            {**n, "name": "Frau Kirchnauer"} if n["id"] == "p1" else n for n in GRAPH["nodes"]
+        ],
+    }
+    wall.evaluate("(g) => window.kgQuotes.setGraph(g)", korrigiert)
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.textContent") == (
+        "Frau Kirchnauer"
+    )
+
+    geleert = {
+        **GRAPH,
+        "nodes": [{**n, "name": None} if n["id"] == "p1" else n for n in GRAPH["nodes"]],
+    }
+    wall.evaluate("(g) => window.kgQuotes.setGraph(g)", geleert)
+    assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.hidden") is True
 
 
 def test_a_person_without_a_quote_opens_nothing(wall):

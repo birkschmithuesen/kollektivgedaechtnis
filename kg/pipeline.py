@@ -86,6 +86,13 @@ def process_interview(
         for quote in result.quotes:
             if quote.text.strip():
                 store.add_quote(person_id, quote.text.strip(), created_at=stopped_at)
+        # Der Name genauso: höchstens einer, und nur wenn wirklich etwas
+        # dasteht. Ein leerer Treffer wird gar nicht erst geschrieben, damit
+        # eine Person ohne Vorstellung nicht mit einem leeren Namen endet,
+        # sondern ohne Namen.
+        for name in result.names:
+            if name.text.strip():
+                store.set_person_name(person_id, name.text.strip())
         store.set_person_status(person_id, "done")
         status = "done"
     except Exception as exc:  # a bad LLM turn must never stop the station

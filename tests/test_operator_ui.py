@@ -6,8 +6,12 @@ GRAPH = {
         # Two persons: p1 the newer one and carrying a term, p2 older, hidden
         # and with nothing attached — the shape of the test portrait from the
         # morning's setup that Birk could not get off the wall (2026-08-30).
-        {"id": "p1", "type": "person", "portrait": "/portraits/p1.jpg", "hidden": False, "created_at": 2},
-        {"id": "p2", "type": "person", "portrait": "/portraits/p2.jpg", "hidden": True, "created_at": 1},
+        {"id": "p1", "type": "person", "portrait": "/portraits/p1.jpg", "hidden": False,
+         "created_at": 2, "name": "Frau Kirchner"},
+        # Ohne Namen: niemand hat sich vorgestellt, oder der Operator hat den
+        # verhörten Namen gelöscht. Die Zeile muss trotzdem identifizierbar bleiben.
+        {"id": "p2", "type": "person", "portrait": "/portraits/p2.jpg", "hidden": True,
+         "created_at": 1, "name": None},
         {"id": "t1", "type": "term", "label": "Holzbau", "mentions": 2, "hidden": False, "created_at": 3},
         {"id": "t2", "type": "term", "label": "Unfug", "mentions": 1, "hidden": True, "created_at": 4},
         # Below the cap and NOT hidden: the wall is filtering it out, so the
@@ -108,11 +112,16 @@ def test_persons_are_listed_and_show_their_portrait(ui):
 def test_a_person_row_says_when_it_was_recorded_and_what_it_carries(ui):
     """Two portraits of the same room look alike; the recording time and the
     number of terms behind them do not. "keine Begriffe" is what a portrait
-    from the morning's setup looks like."""
+    from the morning's setup looks like.
+
+    Die Uhrzeit-Kennung steht seit dem Namensfeld im `placeholder` statt im
+    Text: Sie identifiziert weiterhin jede Zeile, die keinen Namen trägt.
+    """
     import re
 
     assert re.fullmatch(
-        r"Person \d{2}:\d{2}", ui.eval_on_selector("#entry-p1 .label", "el => el.textContent")
+        r"Person \d{2}:\d{2}",
+        ui.eval_on_selector("#entry-p2 .label", "el => el.placeholder"),
     )
     assert ui.eval_on_selector("#entry-p1 .meta", "el => el.textContent") == "1 Begriff"
     assert ui.eval_on_selector("#entry-p2 .meta", "el => el.textContent") == "keine Begriffe"
@@ -451,6 +460,129 @@ def test_dragging_the_speed_slider_posts_only_on_release(ui):
            }"""
     )
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera_speed", {"factor": 0.4}]
+
+
+def _mit_namen(person_id, name):
+    """Derselbe Graph, aber der Server meldet für eine Person einen anderen Namen."""
+    return {
+        **GRAPH,
+        "nodes": [{**n, "name": name} if n["id"] == person_id else n for n in GRAPH["nodes"]],
+    }
+
+
+def test_a_person_row_carries_an_editable_name_field(ui):
+    """Die Spracherkennung verhört Namen. Korrigiert wird dort, wo die Person
+    ohnehin identifiziert wird: in ihrer Zeile, neben dem Porträt."""
+    assert ui.eval_on_selector("#entry-p1 .label", "el => el.tagName") == "INPUT"
+    assert ui.eval_on_selector("#entry-p1 .label", "el => el.value") == "Frau Kirchner"
+    # Ohne Namen bleibt das Feld leer — kein Platzhaltertext im Wert, den der
+    # Operator erst löschen müsste, bevor er den richtigen Namen tippen kann.
+    assert ui.eval_on_selector("#entry-p2 .label", "el => el.value") == ""
+    # Begriffe bleiben unverändert Text: nur Personen tragen einen Namen.
+    assert ui.eval_on_selector("#entry-t1 .label", "el => el.tagName") == "SPAN"
+    assert ui.eval_on_selector_all(".entry.person input.label", "els => els.length") == 2
+
+
+def test_typing_a_name_posts_nothing_until_the_field_is_left(ui):
+    """Wie bei den Reglern: `input` feuert pro Tastendruck, und jede
+    Speicherung schickt eine Graph-Rundmeldung an jeden SSE-Client — die Wand
+    bekäme pro Buchstabe einen vollständigen Graphen zugestellt."""
+    before = ui.evaluate("window.kgFetches.length")
+    ui.click("#entry-p2 .label")
+    ui.keyboard.type("Anna Weber")
+    assert ui.evaluate("window.kgFetches.length") == before
+
+    ui.click("#transcript")  # Feld verlassen
+    assert ui.evaluate("window.kgFetches.at(-1)") == [
+        "/api/person_name",
+        {"person_id": "p2", "name": "Anna Weber"},
+    ]
+
+
+def test_enter_saves_the_name_exactly_once(ui):
+    """Enter heißt „fertig". Umgesetzt als Fokusabgabe, damit der Browser genau
+    ein `change` feuert — selbst zu posten hieße bei anschließendem Verlassen
+    des Feldes zweimal speichern."""
+    ui.click("#entry-p2 .label")
+    ui.keyboard.type("Anna Weber")
+    before = ui.evaluate("window.kgFetches.length")
+
+    ui.keyboard.press("Enter")
+
+    assert ui.evaluate("window.kgFetches.length") == before + 1
+    assert ui.evaluate("window.kgFetches.at(-1)") == [
+        "/api/person_name",
+        {"person_id": "p2", "name": "Anna Weber"},
+    ]
+    assert ui.evaluate("document.activeElement.dataset.nameFor") is None
+
+
+def test_clearing_a_misheard_name_posts_the_empty_value(ui):
+    """Das Feld zu leeren ist die Aussage „hier steht kein Name" — kein
+    Nichtstun, sondern eine Speicherung, die der Server als NULL ablegt."""
+    ui.click("#entry-p1 .label")
+    ui.keyboard.press("Control+a")
+    ui.keyboard.press("Delete")
+    ui.keyboard.press("Enter")
+
+    assert ui.evaluate("window.kgFetches.at(-1)") == [
+        "/api/person_name",
+        {"person_id": "p1", "name": ""},
+    ]
+
+
+def test_a_graph_push_while_typing_keeps_the_draft_and_the_cursor(ui):
+    """Der Fallstrick dieser Liste: Sie wird bei JEDEM Push komplett neu gebaut.
+
+    Am Bedienpult laufen Interviews im Minutentakt ein, und jedes davon löst
+    einen Push aus. Ein halb getippter Name darf davon weder überschrieben noch
+    aus dem Fokus geschoben werden — sonst tippt der Operator ins Leere weiter
+    und merkt es erst am Ergebnis.
+    """
+    ui.click("#entry-p2 .label")
+    ui.keyboard.type("Anna")
+
+    # Der Server meldet währenddessen einen anderen Namen für genau diese Person.
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [_mit_namen("p2", "Frau Nau"), STATE],
+    )
+
+    assert ui.eval_on_selector("#entry-p2 .label", "el => el.value") == "Anna"
+    assert ui.evaluate("document.activeElement.dataset.nameFor") == "p2"
+    assert ui.evaluate("document.activeElement.selectionStart") == 4
+    # Und das Tippen geht am Cursor weiter, nicht am Anfang.
+    ui.keyboard.type("s")
+    assert ui.eval_on_selector("#entry-p2 .label", "el => el.value") == "Annas"
+
+
+def test_a_push_leaves_every_other_name_field_alone(ui):
+    """Geschützt wird der Entwurf, nicht die Liste: Jede andere Zeile zeigt
+    weiter das, was der Server sagt."""
+    ui.click("#entry-p2 .label")
+    ui.keyboard.type("Anna")
+
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [_mit_namen("p1", "Frau Kirchnauer"), STATE],
+    )
+
+    assert ui.eval_on_selector("#entry-p1 .label", "el => el.value") == "Frau Kirchnauer"
+    assert ui.eval_on_selector("#entry-p2 .label", "el => el.value") == "Anna"
+
+
+def test_once_the_field_is_left_the_server_text_wins_again(ui):
+    """Nach dem Verlassen ist gespeichert — dann muss die Zeile wieder zeigen,
+    was wirklich in der Datenbank steht, und nicht den letzten Entwurf."""
+    ui.click("#entry-p1 .label")
+    ui.click("#transcript")
+
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [_mit_namen("p1", "Frau Kirchnauer"), STATE],
+    )
+
+    assert ui.eval_on_selector("#entry-p1 .label", "el => el.value") == "Frau Kirchnauer"
 
 
 def test_the_transcript_area_shows_partials(ui):

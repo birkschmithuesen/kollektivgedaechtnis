@@ -39,6 +39,16 @@ class HiddenFlag(BaseModel):
     hidden: bool
 
 
+class PersonName(BaseModel):
+    person_id: str
+    # Nach oben begrenzt, aus demselben Grund wie bei den Reglern: was hier
+    # ankommt, landet unter einem Zitat auf einer 1920px-Wand. 120 Zeichen
+    # fassen jeden wirklichen Namen und schließen ein versehentlich
+    # hineinkopiertes Transkript aus. Leer ist ausdrücklich erlaubt — so
+    # löscht der Operator einen verhörten Namen wieder (kg.store).
+    name: str = Field(max_length=120)
+
+
 class CameraMode(BaseModel):
     mode: Literal["fit", "manual", "pan"]
 
@@ -156,6 +166,21 @@ def create_app(store, cfg, bus) -> FastAPI:
             store.set_hidden(payload.node_id, payload.hidden)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        broadcast_graph(store, cfg, bus)
+        return {"ok": True}
+
+    @app.post("/api/person_name")
+    def api_person_name(payload: PersonName) -> dict:
+        # Die Spracherkennung verhört Namen zuverlässig, also muss der Operator
+        # sie richtigstellen können — das ist die einzige Korrektur, die er an
+        # einem fertigen Interview vornimmt.
+        #
+        # Nur `broadcast_graph`, kein `broadcast_state`: genau wie /api/hidden
+        # darüber, und aus demselben Grund — der Name reist im Graphen mit
+        # (kg.export), `current_state` kennt ihn nicht, und eine zweite
+        # Rundmeldung mit unverändertem Inhalt würde die Bedienliste nur ein
+        # weiteres Mal neu bauen.
+        store.set_person_name(payload.person_id, payload.name)
         broadcast_graph(store, cfg, bus)
         return {"ok": True}
 

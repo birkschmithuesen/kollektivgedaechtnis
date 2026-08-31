@@ -93,6 +93,10 @@ def live_graph(tmp_path) -> dict:
     store.add_edge(without.id, shared.id, created_at=220.0)
     store.add_edge(without.id, lonely.id, created_at=221.0)
     store.add_quote(with_portrait.id, "Wir bauen zu viel Neues.", created_at=130.0)
+    # Eine Person mit Namen, eine ohne — dieselbe Disziplin wie beim Porträt:
+    # die meisten Personen stellen sich nicht vor, und beide Fälle müssen im
+    # Typmap unter `.nodes[].name` auftauchen.
+    store.set_person_name(with_portrait.id, "Frau Kirchner")
     store.set_hidden(f"term:{lonely.id}", True)
     store.save_positions({shared.id: (12.0, -8.0)})  # the other nodes stay null
     graph = build_graph(store)

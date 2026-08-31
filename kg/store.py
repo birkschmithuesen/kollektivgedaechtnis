@@ -175,6 +175,21 @@ class Store:
         self._commit()
 
     @_locked
+    def set_person_name(self, person_id: str, name: str | None) -> None:
+        """Der Name der befragten Person — aus der Extraktion oder vom Operator.
+
+        Leer heißt NULL, nicht Leerstring: Die Spracherkennung verhört Namen,
+        also muss der Operator ein falsch verstandenes Feld leeren können, und
+        das Ergebnis davon ist derselbe Zustand wie bei einer Person, die sich
+        nie vorgestellt hat — nicht ein zweiter, leerer Name, den die Anzeige
+        dann als eigene Zeile über dem Zitat mitschleppen würde.
+        """
+        self.conn.execute(
+            "UPDATE person SET name=? WHERE id=?", ((name or "").strip() or None, person_id)
+        )
+        self._commit()
+
+    @_locked
     def set_person_status(self, person_id: str, status: str) -> None:
         self.conn.execute("UPDATE person SET status=? WHERE id=?", (status, person_id))
         self._commit()
@@ -472,6 +487,7 @@ def _person(row: sqlite3.Row) -> Person:
         photo_path=row["photo_path"],
         portrait_path=row["portrait_path"],
         hidden=bool(row["hidden"]),
+        name=row["name"],
     )
 
 

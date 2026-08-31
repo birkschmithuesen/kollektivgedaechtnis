@@ -75,7 +75,7 @@ abgebrochene Sätze, Wiederholungen, Hörfehler. Es reicht absichtlich über das
 Ende des Interviews hinaus — dort stehen Smalltalk, Verabschiedungen, Stimmen \
 der nächsten Person oder Raumgeräusch.
 
-Deine drei Aufgaben:
+Deine vier Aufgaben:
 
 1. ENDE FINDEN. Bestimme `interview_end_index`: den Zeichen-Index im Transkript, \
 an dem das Interview inhaltlich endet. Alles danach ignorierst du vollständig. \
@@ -104,6 +104,16 @@ insgesamt mehr auf Nachhaltigkeit achten."
    Keine brave Zusammenfassung der Position der Person — ein echter Satz aus \
 dem Transkript.
 
+4. NAME. Am Anfang des Interviews stellt sich die befragte Person in der Regel \
+vor. Gib diesen Namen an, genau einen, und zwar so, wie sie ihn selbst nennt — \
+ein Vorname allein ist völlig in Ordnung. Nur der SELBSTGENANNTE Name der \
+befragten Person: nicht die Namen Dritter, die im Gespräch vorkommen, nicht \
+der Name der fragenden Person. Rate nicht. Stellt sich niemand vor oder bist \
+du unsicher, wer da spricht, lass die Liste leer — kein Name ist richtig, ein \
+falscher Name steht später unter einem fremden Zitat. Der Name ist ein eigenes \
+Feld und wird dadurch NICHT zum Begriff: Punkt 2 verbietet Personennamen unter \
+den Begriffen weiterhin.
+
 Antworte ausschließlich im geforderten JSON-Schema.
 """
 
@@ -117,6 +127,10 @@ class ExtractedQuote(BaseModel):
     text: str
 
 
+class ExtractedName(BaseModel):
+    text: str
+
+
 class ExtractionResult(BaseModel):
     interview_end_index: int
     terms: list[ExtractedTerm]
@@ -125,6 +139,17 @@ class ExtractionResult(BaseModel):
     # after the call — so the two fields share one enforcement pattern instead
     # of the cap living in the type for one and in code for the other.
     quotes: list[ExtractedQuote]
+    # Same shape and the same reason as `quotes` above: the "at most one" cap
+    # lives in `extract()`, not in the type. Empty is the normal answer for
+    # somebody who never said their name — the field stays blank, no
+    # placeholder (Birk, 2026-08-31).
+    #
+    # The default is only for CALLERS: `kg.llm.strict_schema` puts every
+    # property into the schema's `required` list, so the model is still asked
+    # for the field on every call. It spares the many existing constructions
+    # that are about terms or quotes from carrying an empty list they do not
+    # care about.
+    names: list[ExtractedName] = []
 
 
 def build_extraction_prompt(transcript: str, max_terms: int) -> str:
@@ -144,8 +169,10 @@ def extract(llm, transcript: str, max_terms: int) -> ExtractionResult:
     end = max(0, min(int(result.interview_end_index), len(transcript)))
     # The cap is enforced here too: graph density must not depend on the model's mood.
     # Same discipline for quotes: exactly one per person, never the prompt's word alone.
+    # And for the name, which a person has exactly one of here.
     return ExtractionResult(
         interview_end_index=end,
         terms=list(result.terms)[:max_terms],
         quotes=list(result.quotes)[:1],
+        names=list(result.names)[:1],
     )

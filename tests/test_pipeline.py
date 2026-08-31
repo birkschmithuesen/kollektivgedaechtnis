@@ -126,6 +126,48 @@ def test_a_blank_quote_text_is_dropped(env):
     assert store.list_quotes() == []
 
 
+def test_the_self_given_name_is_persisted_with_the_rest_of_the_interview(env):
+    """Schritt 5 schreibt Transkript, Kanten, Zitat — und den Namen.
+
+    Kein eigener Bedienschritt und keine zusätzliche Frage an der Station: Die
+    Person stellt sich ohnehin zu Beginn vor, also kommt der Name aus demselben
+    einen Modellaufruf wie alles andere.
+    """
+    cfg, store, log = env
+    fill_log(log, [("Mein Name ist Anna Weber. Recycling-Beton ist die Zukunft.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [
+            ExtractionResult(
+                interview_end_index=9999,
+                terms=[],
+                quotes=[{"text": "Recycling-Beton ist die Zukunft."}],
+                names=[{"text": "Anna Weber"}],
+            )
+        ]
+    )
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert store.get_person(person.id).name == "Anna Weber"
+    graph = json.loads(cfg.graph_json_path.read_text(encoding="utf-8"))
+    assert [n["name"] for n in graph["nodes"] if n["type"] == "person"] == ["Anna Weber"]
+
+
+def test_a_blank_name_is_dropped_exactly_like_a_blank_quote(env):
+    """Wer sich nicht vorgestellt hat, bleibt namenlos — nicht leer benannt."""
+    cfg, store, log = env
+    fill_log(log, [("Recycling-Beton ist die Zukunft.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [ExtractionResult(interview_end_index=9999, terms=[], quotes=[], names=[{"text": "  "}])]
+    )
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert store.get_person(person.id).name is None
+
+
 def test_the_stop_command_is_stripped_before_the_llm_sees_the_text(env):
     cfg, store, log = env
     fill_log(log, [("Holzbau ist gut.", 105.0), ("Interview beendet", 150.0)])
