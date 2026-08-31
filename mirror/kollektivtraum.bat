@@ -45,6 +45,42 @@ echo   ==============
 echo.
 
 rem ---------------------------------------------------------------------
+rem  0. Stand vom GitHub holen (Birk, 2026-09-01: "bei der Start.bat am
+rem     Anfang immer vom github gepulled werden").
+rem
+rem     Warum ueberhaupt: Am 2026-09-01 stand die Station 28 Commits hinter
+rem     `master`. Fertig gebaute Sachen liefen deshalb nicht - der Name der
+rem     Person erschien nicht am Zitat, weil die Datenbankspalte dort nie
+rem     angelegt worden war. Das sah wie ein Programmfehler aus und war
+rem     keiner. Ein Pull beim Start schliesst genau diese Luecke.
+rem
+rem     Gezogen wird ins REPO (%KG%), nicht in dieses Startverzeichnis:
+rem     diese Datei laeuft aus einer Kopie unter kg-start\, das Repo mit
+rem     den Diensten liegt woanders.
+rem
+rem     🔴 Der Pull darf den Ausstellungstag NIE blockieren. Deshalb:
+rem     - `--ff-only`: nur vorspulen. Gibt es lokale Commits oder ist der
+rem       Baum auseinandergelaufen, bricht der Pull ab statt einen Merge
+rem       (womoeglich mit Konflikt) mitten in den Start zu legen.
+rem     - Kein `pause` im Fehlerfall: die Station startet mit dem
+rem       vorhandenen Stand weiter. Ein alter Stand ist unangenehm, eine
+rem       Station die gar nicht hochkommt ist schlimmer.
+rem     - Ein Zeitlimit, damit ein totes Netz im Festivalhaus den Start
+rem       nicht minutenlang haengen laesst.
+rem
+rem     Ueberspringen (kein Netz, bewusst alter Stand): `set KG_KEIN_PULL=1`
+rem     vor dem Aufruf.
+rem ---------------------------------------------------------------------
+if "%KG_KEIN_PULL%"=="1" (
+  echo   [0/5] Aktualisierung uebersprungen ^(KG_KEIN_PULL=1^)
+) else (
+  echo   [0/5] Stand von GitHub holen
+  call :aktualisiere "%KG%" "Kollektivgedaechtnis"
+  if exist "%SPIEGEL%\.git" call :aktualisiere "%SPIEGEL%" "Spiegel"
+)
+echo.
+
+rem ---------------------------------------------------------------------
 rem  Erst pruefen, dann starten. Ein fehlender Schluessel darf sich nicht
 rem  als leerer Graph drei Interviews spaeter zeigen.
 rem ---------------------------------------------------------------------
@@ -221,6 +257,70 @@ rem  %USERPROFILE%\kg-logs (das erledigt die jeweilige dienst-*.bat per
 rem  Tee-Object). Das Fenster ist vor Ort das schnellere Werkzeug, die
 rem  Datei die einzige, die man aus der Ferne oder hinterher lesen kann.
 rem =====================================================================
+rem =====================================================================
+rem  Holt den Stand eines Repos von GitHub - vorspulen oder gar nicht.
+rem
+rem  Der Ausstellungstag hat Vorrang vor Aktualitaet. Diese Routine darf
+rem  deshalb unter keinen Umstaenden haengen bleiben oder auf eine Eingabe
+rem  warten; sie meldet, was war, und gibt IMMER 0 zurueck.
+rem
+rem  `--ff-only` ist die eigentliche Sicherung: gibt es auf der Station
+rem  lokale Commits, wird NICHT gemerged. Ein Merge-Konflikt mitten im
+rem  Start waere genau der Ausfall, den ein Pull verhindern soll. Statt
+rem  dessen bleibt der vorhandene Stand stehen und es kommt ein Hinweis.
+rem
+rem  Uncommittete Aenderungen an versionierten Dateien blockieren einen
+rem  Pull ebenfalls - deshalb wird vorher geprueft und im Zweifel gar
+rem  nicht gezogen. config.toml, config2.toml und die Interviewdaten sind
+rem  ohnehin ignoriert (.gitignore), die stoeren also nie.
+rem
+rem  GIT_TERMINAL_PROMPT=0: ohne das fragt git bei fehlendem Zugang nach
+rem  Benutzername und Passwort - und der Start stuende still, bis jemand
+rem  Enter drueckt. Genau das darf am Ausstellungsmorgen nicht passieren.
+rem =====================================================================
+:aktualisiere
+setlocal
+set "ZIEL=%~1"
+set "WIE=%~2"
+set "GIT_TERMINAL_PROMPT=0"
+
+if not exist "%ZIEL%\.git" (
+  echo         %WIE%: kein Repo, uebersprungen.
+  endlocal & exit /b 0
+)
+
+pushd "%ZIEL%" 2>nul
+if errorlevel 1 (
+  echo         %WIE%: Ordner nicht erreichbar, uebersprungen.
+  endlocal & exit /b 0
+)
+
+rem Erst schauen, ob etwas Eigenes im Weg liegt. Ein Pull, der an einer
+rem geaenderten Datei scheitert, soll gar nicht erst versucht werden.
+set "SCHMUTZIG="
+for /f "delims=" %%S in ('git status --porcelain 2^>nul') do set "SCHMUTZIG=1"
+if defined SCHMUTZIG (
+  echo         %WIE%: lokale Aenderungen - NICHT gezogen, alter Stand bleibt.
+  popd
+  endlocal & exit /b 0
+)
+
+rem Zeitlimit ueber PowerShell: ein totes Netz im Festivalhaus darf den
+rem Start nicht minutenlang aufhalten. 45 s sind ein Vielfaches dessen,
+rem was ein normaler Pull braucht.
+powershell -NoProfile -Command "$p = Start-Process git -ArgumentList 'pull','--ff-only','--quiet' -NoNewWindow -PassThru; if (-not $p.WaitForExit(45000)) { $p.Kill(); exit 2 }; exit $p.ExitCode" >nul 2>&1
+
+if errorlevel 2 (
+  echo         %WIE%: Zeitlimit ^(Netz?^) - alter Stand bleibt, weiter.
+) else if errorlevel 1 (
+  echo         %WIE%: Pull nicht moeglich - alter Stand bleibt, weiter.
+) else (
+  echo         %WIE%: aktuell.
+)
+
+popd
+endlocal & exit /b 0
+
 :starte
 start "Kollektivtraum: %~1" /min cmd /k "%~2"
 exit /b 0
