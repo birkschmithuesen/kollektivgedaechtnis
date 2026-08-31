@@ -1,0 +1,11 @@
+# Was im BETRIEB hier entsteht, gehört nicht ins öffentliche Repo.
+#
+# `mirror-uploaded.json` merkt sich, welche Bilder schon oben liegen — und das
+# sind Dateinamen echter Portraits, also Spuren realer Besucherinnen und
+# Besucher (dieselbe Regel wie für data/ und dream-data/, Birk 2026-08-29).
+mirror-uploaded.json
+
+# Der Stand, den der Empfänger auf Platte hält: der gewachsene Graph des Tages,
+# die Traumsätze und jedes hochgeladene Bild. Läuft der Empfänger einmal aus
+# diesem Verzeichnis heraus, liegt das hier — und darf nie mitcommittet werden.
+mirror-data/

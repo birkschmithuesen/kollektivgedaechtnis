@@ -1,0 +1,140 @@
+/* Die Traumseite am Handy.
+
+   Kein Zuschneiden einzelner Bilder (Birks Entscheidung 2026-08-26). An der
+   Wand liegt das Bild seit dem Vollbild-Umbau formatfüllend und wird dafür
+   beschnitten — dort ist der Schirm 16:9 und das Bild fast auch. Am Telefon im
+   Hochformat läge zwischen 9:16 und einem quadratischen Traumbild ein
+   Beschnitt von der halben Fläche. `contain`, nicht `cover`. */
+
+#buehne {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px calc(14px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(14px + var(--safe-left));
+  gap: 12px;
+}
+
+#bild-rahmen {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#bild {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  /* Das Bild ist die Hauptsache; ein Erscheinen ohne Übergang wirkt am Handy
+     wie ein Umschaltfehler. */
+  transition: opacity 400ms ease;
+}
+#bild[hidden] { display: none; }
+
+#satz {
+  flex: 0 0 auto;
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  /* Ein sehr langer Satz darf den Streifen nicht aus dem Bild schieben; er
+     wird dann selbst scrollbar. */
+  max-height: 26vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---- Der Streifen der letzten Träume -------------------------------- */
+
+#streifen {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Waagerecht wischbar, und der Wisch bleibt im Streifen: ohne
+     `overscroll-behavior` zieht ein Wisch am Ende die ganze Seite mit. */
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+#streifen::-webkit-scrollbar { display: none; }
+#streifen[hidden] { display: none; }
+
+#streifen li {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+#streifen button {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--linie);
+  border-radius: 3px;
+  background: #17181c;
+  /* 44 px ist die Untergrenze für einen Finger — die Miniaturen sind höher,
+     damit vom Bild überhaupt etwas zu erkennen ist. */
+  height: 72px;
+  min-width: var(--tap);
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#streifen img {
+  display: block;
+  height: 100%;
+  width: auto;
+  /* Auch hier kein Beschnitt: die Miniatur zeigt dasselbe Bild, nur klein. */
+  object-fit: contain;
+  opacity: 0.85;
+}
+
+/* ---- Die Lupe: ein Traum aus dem Streifen, gross -------------------- */
+
+#lupe {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: calc(10px + var(--safe-top)) calc(14px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(14px + var(--safe-left));
+  background: rgba(6, 7, 8, 0.96);
+}
+#lupe[hidden] { display: none; }
+
+#lupe .kopfzeile { display: flex; justify-content: flex-end; flex: 0 0 auto; }
+
+#lupe .schliessen {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  touch-action: manipulation;
+}
+
+#lupe img {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+}
+
+#lupe p {
+  flex: 0 0 auto;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+  max-height: 30vh;
+  overflow-y: auto;
+}

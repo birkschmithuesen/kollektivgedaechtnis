@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivgedächtnis</title>
+<!-- viewport-fit=cover: die Seite reicht bis unter die Notch, und die
+     sicheren Ränder werden in CSS über env(safe-area-inset-*) wieder
+     freigehalten. Ohne cover bleiben oben und unten graue Balken. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d0e10">
+<!-- Absolute Pfade: der Spiegel hängt im vhost immer an der Wurzel
+     (mirror/nginx-kg-mirror.conf), und /traum liegt eine Ebene tiefer als /. -->
+<link rel="stylesheet" href="/static/mirror.css">
+<link rel="stylesheet" href="/static/graph.css">
+
+<nav id="kopf">
+  <a href="/" aria-current="page">Netz</a>
+  <a href="/traum">Traum</a>
+</nav>
+<div id="alter" role="status" hidden></div>
+
+<main>
+  <div id="cy"></div>
+
+  <div class="warten" id="warten">
+    <div>Die Station ist gerade nicht verbunden.</div>
+    <small>Sobald sie wieder sendet, erscheint das Netz hier von selbst.</small>
+  </div>
+
+  <div id="legende" hidden>
+    <span class="anker">im Bild: Anker</span>
+    <span class="nachbar">Nachbarschaft</span>
+    <span class="neu">gerade gesagt</span>
+  </div>
+
+  <aside id="blatt" aria-live="polite">
+    <div class="griff"></div>
+    <div class="kopfzeile">
+      <img id="blatt-bild" alt="" hidden>
+      <button class="schliessen" id="blatt-zu" aria-label="Schliessen">&times;</button>
+    </div>
+    <blockquote id="blatt-zitat"></blockquote>
+    <p class="kein-zitat" id="blatt-leer" hidden>Von dieser Person ist kein Zitat hinterlegt.</p>
+  </aside>
+</main>
+
+<script src="/static/vendor/cytoscape.min.js"></script>
+<script type="module">
+  import { verbindeSpiegel } from '/static/mirror.js';
+  import { createMobileGraph, begriffsZahl } from '/static/graph.js';
+
+  const warten = document.getElementById('warten');
+  const legende = document.getElementById('legende');
+  const blatt = document.getElementById('blatt');
+  const bild = document.getElementById('blatt-bild');
+  const zitatEl = document.getElementById('blatt-zitat');
+  const leerEl = document.getElementById('blatt-leer');
+
+  // person_id -> Zitat. Wird bei jedem Push neu gebaut: die Zitate kommen im
+  // selben Dokument wie die Knoten und können deshalb nie älter sein als das
+  // Netz, das gerade zu sehen ist.
+  let zitate = new Map();
+  let portraits = new Map();
+
+  // Ein Portrait, das noch nicht oben ist (der Uploader schickt den Graphen
+  // vor der Datei), darf kein kaputtes Bildsymbol im Blatt hinterlassen.
+  bild.addEventListener('error', () => { bild.hidden = true; });
+  bild.addEventListener('load', () => { bild.hidden = false; });
+
+  function zeigePerson(personId) {
+    if (!personId) {
+      blatt.classList.remove('offen');
+      return;
+    }
+    const portrait = portraits.get(personId);
+    bild.hidden = !portrait;
+    if (portrait) bild.src = portrait;
+    const zitat = zitate.get(personId);
+    zitatEl.textContent = zitat || '';
+    zitatEl.hidden = !zitat;
+    leerEl.hidden = Boolean(zitat);
+    blatt.classList.add('offen');
+  }
+
+  document.getElementById('blatt-zu').addEventListener('click', () => zeigePerson(null));
+
+  const graph = createMobileGraph(document.getElementById('cy'), { aufPerson: zeigePerson });
+  window.kgSpiegel = graph;
+
+  verbindeSpiegel({
+    art: 'graph',
+    alterEl: document.getElementById('alter'),
+    aufDaten: (daten) => {
+      if (!daten || !Array.isArray(daten.nodes)) return;
+      zitate = new Map((daten.quotes || []).map((q) => [q.person_id, q.text]));
+      portraits = new Map(
+        daten.nodes.filter((n) => n.type === 'person' && n.portrait).map((n) => [n.id, n.portrait]),
+      );
+      // Die Zahl der Begriffe folgt dem Gerät UND dem Regler an der Station:
+      // stellt der Operator die Wand auf fünf Begriffe, zeigt das Handy nicht
+      // siebzehn. Der kleinere der beiden Werte gewinnt.
+      const passend = begriffsZahl(window.innerWidth, window.innerHeight);
+      const grenze = Math.min(passend, Math.max(1, Number(daten.max_terms) || passend));
+      graph.update(daten, grenze);
+
+      const leer = daten.nodes.length === 0;
+      warten.hidden = !leer;
+      legende.hidden = leer;
+      // Eine Person, deren Knoten gerade weggefiltert wurde, darf nicht als
+      // Blatt über einem Netz stehen bleiben, in dem es sie nicht mehr gibt.
+      if (blatt.classList.contains('offen') && zitate.size === 0) zeigePerson(null);
+    },
+  });
+
+  // Drehen ändert, wie viel nebeneinanderpasst. Der nächste Push rechnet die
+  // Zahl der Begriffe neu; der Ausschnitt wird sofort wieder auf ein lesbares
+  // Mass gebracht, statt bis dahin schief zu stehen.
+  window.addEventListener('orientationchange', () => window.setTimeout(graph.ersteAnsicht, 350));
+</script>
+</html>

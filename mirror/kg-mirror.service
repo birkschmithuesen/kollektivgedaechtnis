@@ -1,0 +1,57 @@
+# systemd --user-Unit für herkules (User `fundusbot`).
+#
+# Ablegen als ~/.config/systemd/user/kg-mirror.service, dann:
+#
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now kg-mirror
+#   loginctl enable-linger fundusbot     # läuft weiter, wenn niemand angemeldet ist
+#
+# Das Token steht NICHT hier, sondern in ~/.config/kg-mirror.env (chmod 600):
+#
+#   KG_MIRROR_TOKEN=…
+#
+# Diese Datei liegt im öffentlichen Repo. Käme das Token hier hinein, stünde es
+# in der Git-Historie und wäre auch nach dem Löschen noch da.
+
+[Unit]
+Description=Kollektivgedächtnis — mobiler Spiegel (Empfänger)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/kollektivgedaechtnis
+EnvironmentFile=%h/.config/kg-mirror.env
+Environment=KG_MIRROR_HOST=127.0.0.1
+Environment=KG_MIRROR_PORT=8820
+Environment=KG_MIRROR_DATA=%h/mirror-data
+ExecStart=%h/kollektivgedaechtnis/.venv/bin/python -m mirror.receiver
+
+# Nach einem Absturz wieder hoch. `always` statt `on-failure`: auch ein sauberer
+# Ausstieg (OOM-Killer, ein versehentliches SIGTERM) soll den öffentlichen
+# Dienst nicht für den Rest der Konferenz beenden.
+Restart=always
+RestartSec=3
+
+# Auf diesen Maschinen füllen gesprächige Units die Logs. Alles über `notice`
+# wird verworfen, bevor es ins Journal geht — der Empfänger sagt im Normalbetrieb
+# ohnehin nichts (uvicorn läuft auf log_level=warning).
+LogLevelMax=notice
+
+# Ein öffentlich erreichbarer Dienst ohne Login: die Angriffsfläche wird so klein
+# gehalten, wie es ohne Container geht. Schreiben darf er ausschliesslich in sein
+# eigenes Datenverzeichnis.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/mirror-data
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=default.target
