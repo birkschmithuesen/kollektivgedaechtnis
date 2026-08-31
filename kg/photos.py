@@ -58,7 +58,7 @@ def soft_disc_mask(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.
 RING_RGB = (201, 162, 39)
 
 
-def ring_glow(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image:
+def ring_glow(size: int, inner: float = 0.45, gamma: float = 1.6) -> Image.Image:
     """Das GEWICHT des Rings im Verlauf des Portraits (Graustufenmaske).
 
     Gibt bewusst eine Maske zurueck und kein eingefaerbtes Bild: Die zweite
@@ -78,12 +78,24 @@ def ring_glow(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image
     genau des Verlaufs, den er ersetzen soll. Deshalb wird der Ring hier ins
     RGB des PNG gemalt und die Alpha-Maske darüber gelegt.
 
-    Das Maximum sitzt bei 0.18 der Übergangszone, also FRÜH. Zwei Fassungen
-    lagen weiter außen (0.75, dann 0.45) und waren nachgemessen zu dunkel: Das
-    kräftigste Gold traf dort auf Alpha 19 bzw. 141, und was das Auge sieht,
-    ist Farbe MAL Deckkraft. Bei 0.18 liegt die Spitze bei Alpha ≈ 245 — der
-    Ring leuchtet, und weil das Gewicht selbst der weiche Verlauf ist, bleibt
-    der Übergang trotzdem stufenlos.
+    MONOTON STEIGEND, keine Glocke (Birk, 2026-08-30, am Bild): „Der Fade-out
+    soll einfach von hundert Prozent Porträt den Verlauf in hundert Prozent
+    Gold machen." Und ausdrücklich: dahinter kein Ring mehr.
+
+    Alle früheren Fassungen waren Glockenkurven mit einer Spitze irgendwo in
+    der Zone — dadurch entstand genau das, was er wegwollte: erst das Bild,
+    dann eine dunkle Lücke, dann ein separat wirkender Ring. Am gelieferten
+    Bild nachgemessen fiel das Profil zwischen d=36 und d=48 auf (48,27,6) ab,
+    bevor bei d=54 das Gold kam.
+
+    Jetzt steigt das Gewicht stetig von 0 (innen, volles Portrait) auf 255
+    (außen, volles Gold) und bleibt dort. Es gibt keine Stelle mehr, an der
+    der Goldanteil wieder abnimmt, also auch keine Lücke und keinen zweiten
+    Ring. Das Ausblenden übernimmt allein die Alpha-Maske.
+
+    Der Exponent 0.8 macht den Verlauf leicht vorderlastig: Gold ist früh
+    erkennbar, solange die Scheibe noch gut deckt — sichtbar ist Farbe MAL
+    Deckkraft, und das Alpha fällt zum Rand hin ohnehin.
     """
     glow = Image.new("L", (size, size), 0)
     px = glow.load()
@@ -98,9 +110,10 @@ def ring_glow(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image
             if d <= r_inner or d >= radius:
                 continue
             t = (d - r_inner) / (radius - r_inner)  # 0 innen … 1 außen
-            # Glockenkurve mit Spitze bei t = 0.75.
-            staerke = math.exp(-(((t - 0.18) / 0.30) ** 2))
-            px[x, y] = int(round(255 * staerke))
+            # Voll bei t = 0.6 statt erst ganz aussen: Dort deckt die Scheibe
+            # noch (Alpha ~200), und sichtbar ist Farbe MAL Deckkraft. Waere
+            # das Gold erst bei t = 1 voll, faende es nur noch Alpha 0 vor.
+            px[x, y] = int(round(255 * min(1.0, (t / 0.6) ** 0.9)))
     return glow
 
 
