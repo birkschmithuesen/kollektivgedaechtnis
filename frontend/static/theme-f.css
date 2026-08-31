@@ -60,7 +60,20 @@
      die Farbtafeln bestehen" — am realen Graphen gemessen ueberlappten sich
      dann die Portraits untereinander (67 Paare). */
   --person-size: 56;
-  --person-fill: #1a1a1a;
+  /* SCHWARZ, nicht #1a1a1a (Birk, 2026-08-31: „Gold, dann wird's grau und dann
+     wird's schwarz, und der Übergang von grau zu schwarz ist immer noch
+     eindeutig sichtbar").
+
+     Das Grau war exakt dieser Wert: Am Wandbild gemessen lag bei d=22..24
+     (26,26,26) bzw. (23,23,23) — die Knotenflaeche, die hinter dem
+     durchscheinenden Portraitrand liegt. Sie ist ueberall dort sichtbar, wo
+     das PNG-Alpha unter 255 faellt, und bricht an der Knotenkante HART auf
+     Schwarz ab. Genau diese Kante hat er gesehen.
+
+     Auf Schwarz gesetzt gibt es keinen Sprung mehr: Die Flaeche hat dieselbe
+     Farbe wie der Grund, also verschwindet ihre Kante. Sichtbar bleibt nur
+     der Alpha-Verlauf des Bildes selbst, und der laeuft stufenlos aus. */
+  --person-fill: #000000;
 
   /* KEIN Ring mehr um die Portraits (Birk, 2026-08-30: „Die goldenen Kreise
      um die Porträts sind viel zu viel. Der Glow-Fader ist schön, die dickeren
