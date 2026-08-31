@@ -130,22 +130,19 @@ TESTPATTERN = (
 # (window.kgView.camera), never cy.zoom/cy.pan directly: what is shot here is
 # what the wall would actually do.
 #
-# `clearDream()` zuerst, in jeder Ansicht: Seit 2026-08-31 koppelt die Kamera
-# an die fünf Traumbegriffe und FÄHRT dorthin, statt hart zu rahmen. Das ist
-# auf der Wand gewollt und hier falsch — diese Serie soll definierte Ansichten
-# vergleichbar machen, und der Screenshot fällt unmittelbar nach dem Setzen.
-# Ohne das Vergessen zeigte „the whole net in frame" ein Standbild mitten in
-# einer Fahrt (gemessen: 93 % der Knoten statt 100 %).
+# Die Traumkopplung ist für diese Aufnahmen abgeschaltet — `_open_projection`
+# ruft `setDreamCamera(false)`. Sonst zeigte „the whole net in frame" ein
+# Standbild mitten in der Fahrt aufs Traumgebiet (gemessen: 93 % der Knoten).
 CAMERA_VIEWS = [
     (
         "camera-1-fit-all-reference",
         "Camera 1: fit mode, the whole net in frame — the reference view.",
-        "() => { const c = window.kgView.camera; c.clearDream(); c.setZoomFactor(1); c.setMode('fit'); }",
+        "() => { const c = window.kgView.camera; c.setZoomFactor(1); c.setMode('fit'); }",
     ),
     (
         "camera-2-zoom2x-half-the-net",
         "Camera 2: fit mode at zoom factor 2 — half the net's width across the wall, centred.",
-        "() => { const c = window.kgView.camera; c.clearDream(); c.setMode('fit'); c.setZoomFactor(2); }",
+        "() => { const c = window.kgView.camera; c.setMode('fit'); c.setZoomFactor(2); }",
     ),
     (
         "camera-3-cluster-closeup",
@@ -162,7 +159,6 @@ CAMERA_VIEWS = [
                  best = { area, id: person.id(), cluster };
                }
              });
-             window.kgView.camera.clearDream();
              window.kgView.camera.focus(best.cluster);
            }""",
     ),
@@ -385,6 +381,22 @@ def _open_projection(page, base_url: str, theme: str, migration_ms: int | None =
     if migration_ms:
         query += f"&migration={migration_ms}"
     page.goto(f"{base_url}/projection?{query}")
+    # Die Traumkopplung abschalten, BEVOR die Kamera losfahren kann (2026-08-31).
+    #
+    # Der Zeitpunkt ist der ganze Punkt: Die Fahrt aufs Traumgebiet startet mit
+    # dem ERSTEN Graph-Push, also noch während der Wartezeiten unten. Ein
+    # Abschalten danach friert sie nur ein — an einer Stelle, die von der realen
+    # Uhr abhängt und pro Lauf verschieden ist. Genau das war gemessen: zwei
+    # kalte Läufe mit identischen Knotenpositionen, aber Zoom-Abweichung 9,2e-3
+    # in Frame 0, über die Frames abklingend — die Signatur einer Fahrt, die in
+    # beiden Läufen unterschiedlich weit gekommen war.
+    #
+    # `kgView` entsteht erst, wenn das Modul geladen und das Theme da ist —
+    # also auf das Objekt warten und dann schalten, statt zu hoffen, dass es
+    # schon steht. Das Warten ist billig: es ist dieselbe Bedingung, auf die
+    # `window.kgReady` unten ohnehin folgt, nur eine Stufe früher.
+    page.wait_for_function("() => window.kgView !== undefined", timeout=60000)
+    page.evaluate("() => window.kgView.setDreamCamera(false)")
     # The 50-person / ~75-term graph, its fcose layout, the placement passes
     # and a 2.5s glide take real wall-clock time — 60s is the budget, not a
     # guess to shrink.

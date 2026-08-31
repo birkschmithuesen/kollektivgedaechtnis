@@ -1247,6 +1247,17 @@ export function createGraphView(
     onModeChanged: () => applyPortraitSize(true),
   });
   let lastGraph = { nodes: [], edges: [], max_terms: DEFAULT_MAX_TERMS };
+  // Ob die Kamera dem Traum folgt (Birk, 2026-08-31). Auf der Wand immer; in
+  // einer Aufnahme, die eine definierte Bewegung zeigen soll, nicht — siehe
+  // `aimCameraAtDream()` weiter unten, dort steht der Grund.
+  //
+  // HIER deklariert und nicht neben der Funktion, die es liest: `settle()`
+  // ruft `aimCameraAtDream()` und ist selbst schon vor dieser Stelle definiert.
+  // Ein `let` weiter unten läge für den ersten `render()`-Durchlauf in seiner
+  // temporalen Todeszone — genau die Falle, die in dieser Datei bereits die
+  // ganze Wand lahmgelegt hat (siehe `let camera = null` und der Kommentar
+  // dort).
+  let dreamCameraEnabled = true;
   let maxTerms = DEFAULT_MAX_TERMS;
   // Hysteresis (spec §7: measured 2026-08-29 -- raw churn is far above "less
   // than one change per interview", but the specific case the spec worries
@@ -1437,8 +1448,22 @@ export function createGraphView(
   }
 
   /** Der Kamera sagen, wo das aktuelle Bild herkommt. Ein No-op, solange kein
-   * Traum markiert ist — dann verhält sich die Wand wie vorher. */
+   * Traum markiert ist — dann verhält sich die Wand wie vorher.
+   *
+   * Abschaltbar über `setDreamCamera(false)`, und das ist keine Bequemlichkeit
+   * für Tests: `sim/prerender.py` filmt EINE Bewegung und braucht danach ein
+   * Standbild. Diese Funktion läuft aber in `settle()`, also bei JEDER
+   * Migration — auch bei einer rein mechanischen wie einem Dial-Wechsel, den
+   * der Prerender selbst auslöst. Ein `clearDream()` vor der Aufnahme reicht
+   * deshalb nicht: die Migration, die gefilmt wird, setzt die Kopplung mitten
+   * im Film neu (gemessen 2026-08-31 — nach der Migration stand `dream: 23,
+   * handover: läuft`, obwohl unmittelbar davor beides gelöscht war).
+   *
+   * Ein Schalter und nicht ein wiederholtes Löschen, weil „diese Aufnahme
+   * erzählt nicht, sie zeigt" eine Aussage über den ganzen Lauf ist und nicht
+   * über einen Zeitpunkt. Die Wand schaltet ihn nie. */
   function aimCameraAtDream() {
+    if (!dreamCameraEnabled) return;
     const nodes = dreamNodes();
     if (!nodes || nodes.empty()) return;
     camera.focusDream(nodes);
@@ -1491,6 +1516,16 @@ export function createGraphView(
       if (value !== undefined) maxTerms = value;
       else if (graph.max_terms) maxTerms = graph.max_terms;
       render();
+    },
+    /** Ob die Kamera dem Traum folgt. Die Wand lässt das an; abgeschaltet wird
+     * es nur von Werkzeugen, die eine definierte statt einer erzählenden
+     * Aufnahme brauchen (`sim/prerender.py`) — der Grund steht bei
+     * `aimCameraAtDream()`. Schaltet man es ab, wird auch das gemerkte Gebiet
+     * samt laufender Fahrt verworfen: sonst bliebe die Kopplung, die gerade
+     * gilt, bis zum Ende der Aufnahme in Kraft. */
+    setDreamCamera(enabled) {
+      dreamCameraEnabled = enabled !== false;
+      if (!dreamCameraEnabled) camera.clearDream();
     },
     setMaxTerms(value) {
       maxTerms = value;

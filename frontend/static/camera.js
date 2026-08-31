@@ -109,6 +109,32 @@ function lerpZoom(from, to, t) {
   return from * Math.pow(to / from, t);
 }
 
+/** Die Uhr, auf der die Traumkopplung läuft.
+ *
+ * `performance.now()` und NICHT `Date.now()`, und das ist hier keine
+ * Geschmacksfrage: `sim/prerender.py` installiert für seine Aufnahmen eine
+ * kontrollierte Uhr (`_FRAME_CLOCK`), die `requestAnimationFrame` und
+ * `performance.now` übernimmt, damit zwei kalte Läufe Bild für Bild
+ * übereinstimmen. `Date.now()` fasst sie NICHT an — eine Kopplung, die daran
+ * hinge, liefe also gegen die freie Wanduhr weiter, während der Rest der Seite
+ * auf der kontrollierten steht.
+ *
+ * Gemessen 2026-08-31, nachdem genau das passiert war: zwei Läufe mit
+ * identischen Knotenpositionen, aber Zoom 0.8053954 gegen 0.8050733 — die
+ * Aufweitung war in beiden Läufen um Sekundenbruchteile verschieden weit
+ * gelaufen. `tests/test_prerender.py::test_two_cold_runs_produce_the_same_motion`
+ * hat es gefangen. Die Datei fuhr immer schon auf dieser Uhr (projection.js
+ * differenziert `performance.now()` für `camera.step()`); die zweite
+ * Zeitquelle war der Fremdkörper.
+ *
+ * Über eine Funktion und nicht als Vorgabewert im Parameter, damit es EINE
+ * Stelle gibt, an der die Uhr steht — drei `now = performance.now()` in drei
+ * Signaturen wären drei Stellen, an denen die nächste Änderung eine vergessen
+ * kann. */
+function jetzt() {
+  return performance.now();
+}
+
 /** Keep a speed inside [0.25, 1], treating anything unusable as full speed.
  *
  * `Number(x) || 1` is the obvious spelling and is WRONG here: 0 is falsy, so a
@@ -329,7 +355,7 @@ export class Camera {
    * unbrauchbar (Birk). Gemerkt wird das Gebiet trotzdem — beim Rückfall in
    * den Automatik-Modus ist es das Erste, was die Wand zeigt. Genau dafür
    * fragt `_automaticView()` es ab. */
-  focusDream(nodes, { now = Date.now() } = {}) {
+  focusDream(nodes, { now = jetzt() } = {}) {
     if (!nodes || nodes.length === 0) return;
     // Die Menge einfrieren, nicht die Collection halten: Cytoscape-Collections
     // sind an die Elemente gebunden, und ein Knoten, den das nächste Update
@@ -391,7 +417,7 @@ export class Camera {
    * Knoten, die inzwischen aus dem Graphen verschwunden sind, fallen dabei
    * heraus (`.filter` auf der Collection, nicht auf den ids): eine Auswahl,
    * die auf einen entfernten Knoten zeigt, strandete die Fahrt im Nichts. */
-  _dreamNodes(now = Date.now()) {
+  _dreamNodes(now = jetzt()) {
     if (!this._dream) return null;
     if (now >= this._dream.until) {
       this._dream = null;
@@ -415,7 +441,7 @@ export class Camera {
    * Ende, den jemand als eine Geste sieht, sondern ein vier Minuten langes
    * Driften — eine Kurve mit weichen Enden ließe es zwischendurch schneller
    * laufen als am Rand, und genau das würde als Bewegung auffallen. */
-  _dreamSpread(now = Date.now()) {
+  _dreamSpread(now = jetzt()) {
     if (!this._dream) return DREAM.spreadFrom;
     const t = Math.min(1, Math.max(0, (now - this._dream.since) / DREAM.holdMs));
     return DREAM.spreadFrom + (DREAM.spreadTo - DREAM.spreadFrom) * t;

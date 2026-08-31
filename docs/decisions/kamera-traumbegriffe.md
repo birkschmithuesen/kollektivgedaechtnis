@@ -160,43 +160,90 @@ mit; `tests/test_camera.py::test_fit_and_pan_modes_disable_panning_zooming_and_g
 fing das ab. Der Test beschreibt einen echten Schutz und wurde deshalb NICHT
 angepasst — die Trennlinie oben ist die Antwort darauf.
 
-## Was der Prerender davon merkt — und warum `clearDream()` existiert
+## Was der Prerender davon merkt — und warum die Kopplung abschaltbar ist
 
-`sim/prerender.py` schießt Referenzaufnahmen: es setzt eine Ansicht und macht
-im nächsten Atemzug (200 ms) den Screenshot. Ansicht 1 heißt „fit mode, the
-whole net in frame" und wird darauf geprüft, dass **alle** Knoten im Bild sind.
+`sim/prerender.py` schießt Referenzaufnahmen und filmt Sequenzen. Beides
+braucht eine DEFINIERTE Ansicht, nicht die, die die Station gerade erzählt:
+Ansicht 1 heißt „fit mode, the whole net in frame" und wird darauf geprüft,
+dass alle Knoten im Bild sind; eine Sequenz zeigt EINE Bewegung und danach
+einen Schweif, der stillstehen muss. Zwei kalte Läufe werden Bild für Bild auf
+Gleichheit verglichen.
 
-Die Kopplung brach das: `test_the_camera_views_frame_progressively_less_of_the_net`
-meldete `0.931 == 1.0` fehlgeschlagen. Der Prerender erwischte ein Standbild
-mitten in der Fahrt aufs Traumgebiet.
+Die Kopplung brach alle drei Zusagen. Die Reparatur ist eine Zeile —
+`_open_projection()` ruft `window.kgView.setDreamCamera(false)` — aber sie
+richtig zu finden hat drei Anläufe gekostet, und **das** ist der Teil, der hier
+festgehalten gehört.
 
-Die Ursache war **zweiteilig**, und der erste Fix behandelte nur die Hälfte —
-sichtbar daran, dass die Zahl sich bewegte, statt grün zu werden:
+### Der Weg dahin: zwei falsche Diagnosen
+
+**Falsche Fährte 1: „das gemerkte Gebiet muss weg."** `clearDream()` gebaut,
+das `_dream` löscht. Ergebnis: 0.931 → 0.966. Die Zahl BEWEGTE sich, statt grün
+zu werden — das Signal, dass die Ursache mehrteilig ist. Nachgelegt: auch den
+laufenden Handover verwerfen. Damit war Ansicht 1 grün, die Sequenzen aber
+nicht.
+
+**Falsche Fährte 2: „die Aufweitung ist nicht reproduzierbar."** `motion.json`
+rundet Knotenpositionen auf drei Nachkommastellen, den Zoom aber nicht — also
+schien eine zeitabhängige Zoomberechnung die Erklärung. Die Aufweitung wurde
+in 250-ms-Stufen quantisiert. Ergebnis: die Abweichung wurde GRÖSSER. Damit war
+die Hypothese widerlegt, und die Quantisierung ist wieder entfernt — sie löste
+ein Problem, das es nicht gab.
+
+Auch der dritte Verdacht (der Frühausstieg in `setMode`) fiel, und zwar an der
+Messung: ein wiederholtes `setMode('fit')` und ein explizites `_frame()`
+liefern bitgleich denselben Zoom (Differenz exakt 0), der Zoom ist über
+Sekunden stabil.
+
+### Die tatsächliche Ursache: der Zeitpunkt, nicht der Mechanismus
+
+Gefunden, indem die beiden `motion.json` Frame für Frame verglichen wurden,
+statt weiter zu raten:
 
 ```
-ohne Fix              0.931
-nur Gebiet vergessen  0.966   ← verrät, dass noch etwas anderes wirkt
-Gebiet + Handover     1.000
+frame   0  t=  0.0  dzoom=9.240e-03  dpan=(1.19, 10.45)  positionen_gleich=True
+frame   1  t= 40.0  dzoom=9.228e-03  dpan=(1.19, 10.43)  positionen_gleich=True
+frame   4  t=160.0  dzoom=9.167e-03  dpan=(1.18, 10.36)  positionen_gleich=True
 ```
 
-1. **Das gemerkte Gebiet** — `_dream` muss weg, sonst rahmt `setMode('fit')`
-   über `_dreamNodes()` wieder den Ausschnitt.
-2. **Der bereits LAUFENDE Handover** — die Fahrt startet schon beim ersten
-   Graph-Push, also während `_open_projection()` auf `layoutPending === false`
-   wartet. Sie dauert 5 s, der Prerender schießt nach 200 ms. `step()` gibt
-   dem Handover Vorrang vor allem anderen, also blieb die Fahrt in Kraft, egal
-   wie gründlich das Gebiet vergessen war.
+Drei Aussagen auf einmal: die Abweichung ist **schon in Frame 0** da (also vor
+jedem Tick der kontrollierten Uhr), sie **klingt ab** (also konvergieren beide
+Läufe gegen dasselbe Ziel), und die **Knotenpositionen sind identisch** (also
+liegt es allein an der Kamera). Das ist die Signatur einer laufenden Fahrt, die
+in beiden Läufen unterschiedlich weit gekommen ist — kein Rundungsproblem.
 
-`clearDream()` tut deshalb beides. Es ist öffentlich und kein Sonderfall in
-`setMode`, weil „ich will die Gesamtansicht" eine Absicht des Aufrufers ist und
-keine Eigenschaft eines Modus. **Die Wand ruft es nie** — nur Werkzeuge, die
-eine definierte statt einer erzählenden Ansicht brauchen. Alle drei
-`CAMERA_VIEWS` rufen es zuerst, auch die dritte, die nur `focus()` benutzt:
-ein laufender Handover überschriebe auch die.
+`setDreamCamera(false)` stand nach den Wartezeiten in `_open_projection()`. Die
+Fahrt startet aber mit dem ERSTEN Graph-Push, also währenddessen. Das
+Abschalten fror sie damit nur ein, an einer Stelle, die von der realen Uhr
+abhängt. Jetzt steht der Aufruf direkt nach `page.goto()`, sobald `kgView`
+existiert — bevor die Kamera überhaupt losfahren kann.
 
-Gegenprobe, dass der Fehlschlag wirklich meiner war und nicht schon vorher
-bestand: derselbe Test gegen `c6347bd` (der Stand vor dieser Arbeit) läuft
-grün durch.
+### Warum ein Schalter und nicht ein Aufräumen vor jeder Aufnahme
+
+`aimCameraAtDream()` hängt in `settle()` und läuft damit bei JEDER Migration —
+auch bei der, die der Prerender selbst als Trigger auslöst, mitten im Film.
+Gemessen: nach einem Dial-Wechsel stand `dream: 23, handover: läuft`, obwohl
+unmittelbar davor beides gelöscht war. Ein punktuelles Aufräumen kuriert also
+Symptome; „diese Aufnahme erzählt nicht, sie zeigt" ist eine Aussage über den
+ganzen Lauf. **Die Wand schaltet nie ab** — nur Werkzeuge.
+
+`clearDream()` bleibt daneben bestehen (es löscht Gebiet und laufende Fahrt)
+und wird von `setDreamCamera(false)` benutzt.
+
+### Die Lehre
+
+Zwei geratene Fixes kosteten je zwölf Minuten Testlauf und führten in die
+Irre. Die Sonde, die zwei `motion.json` vergleicht, war in zwei Minuten
+geschrieben und beantwortete die Frage sofort. Das ist wörtlich, was Abschnitt
+4 des Handoffs fordert — und es wurde hier trotzdem erst im dritten Anlauf
+befolgt. **Wenn eine Kennzahl sich BEWEGT, statt grün zu werden, ist die
+Diagnose unvollständig — nicht der Fix zu schwach.** Beide Male war das der
+Moment, an dem die Messung fällig war und stattdessen weitergeraten wurde.
+
+Gegenprobe, dass die Fehlschläge wirklich von dieser Arbeit stammten und nicht
+vorbestanden: dieselben Tests gegen `c6347bd` (der Stand davor) laufen grün
+durch. Eine frühere Behauptung, der Determinismus-Test sei ohnehin instabil,
+war falsch — sie beruhte auf einem Stash, der nur die uncommitteten Änderungen
+zurücknahm, während die committeten aktiv blieben.
 
 ## Verifikation am gerenderten Bild
 
