@@ -94,8 +94,13 @@ function styleSchwarzplan() {
         'corner-radius': cssVar('--plate-radius', '2'),
         width: 'data(boxW)',
         height: 'data(boxH)',
-        'background-opacity': 0,
-        'border-width': 0,
+        // NICHT gefuellt, nur umrandet — das echte Rendering zeigt Konturen,
+        // durch die der Grund durchscheint, keine massiven Kaestchen.
+        'background-color': '#000000',
+        'background-opacity': cssVar('--term-plate-idle-opacity', '0.35'),
+        'border-width': cssVar('--term-ring-width', '1.5'),
+        'border-color': cssVar('--term-ring-idle', '#6E6656'),
+        'border-opacity': 0.85,
         label: 'data(label)',
         color: cssVar('--label-color', '#FFFFFF'),
         'font-family': FF,
@@ -109,10 +114,6 @@ function styleSchwarzplan() {
         // Ruhende Begriffe: Kontur, keine Tafel. Sie sollen zurücktreten.
         'text-outline-width': cssVar('--label-outline-width', '4'),
         'text-outline-color': cssVar('--label-outline-color', '#000000'),
-        'text-background-color': cssVar('--term-plate-idle', '#000000'),
-        'text-background-opacity': cssVar('--term-plate-idle-opacity', '0.55'),
-        'text-background-shape': 'rectangle',
-        'text-background-padding': cssVar('--plate-pad', '10'),
         'z-index': 10,
       },
     },
@@ -125,8 +126,15 @@ function styleSchwarzplan() {
     {
       selector: 'node.term.in-dream',
       style: {
-        'text-background-opacity': 1,
-        'text-outline-width': 0,
+        'border-width': cssVar('--term-ring-dream-width', '3'),
+        'background-opacity': cssVar('--term-plate-dream-opacity', '0.55'),
+        // Der Lichthof, der im Rendering jedes Element traegt. Auf additiver
+        // Projektion die einzige Richtung, die wirkt: Licht addiert sich,
+        // ein Schatten auf Schwarz waere unsichtbar.
+        'underlay-color': cssVar('--halo-color', '#C9A227'),
+        'underlay-opacity': 0.16,
+        'underlay-padding': 10,
+        'underlay-shape': 'round-rectangle',
         'z-index': 15,
       },
     },
@@ -140,22 +148,22 @@ function styleSchwarzplan() {
     {
       selector: 'node.term.dream-anchor',
       style: {
-        'text-background-color': cssVar('--dream-anchor-color', '#D62828'),
-        color: cssVar('--term-ink-on-red', '#FFFFFF'),
+        'border-color': cssVar('--dream-anchor-color', '#D62828'),
+        'underlay-color': cssVar('--dream-anchor-color', '#D62828'),
       },
     },
     {
       selector: 'node.term.dream-neighbour',
       style: {
-        'text-background-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
-        color: cssVar('--term-ink-on-blue', '#FFFFFF'),
+        'border-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
+        'underlay-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
       },
     },
     {
       selector: 'node.term.dream-recent',
       style: {
-        'text-background-color': cssVar('--dream-recent-color', '#F4C300'),
-        color: cssVar('--term-ink-on-yellow', '#000000'),
+        'border-color': cssVar('--dream-recent-color', '#F4C300'),
+        'underlay-color': cssVar('--dream-recent-color', '#F4C300'),
       },
     },
 
@@ -617,9 +625,132 @@ const DISC_COLLISION_WEIGHT = 5;
  * measures zero overlaps on the first iteration and changes nothing.
  * Person discs are fixed obstacles here — only the label moves.
  */
+/** Tafeln auseinanderschieben, wo die Schrift IM Knoten steht (theme-f).
+ *
+ * Der Gegenpart zu `declutterLabels`: Dort wandert die Beschriftung, hier der
+ * Knoten selbst, weil in theme-f beides dasselbe ist. Portraits sind feste
+ * Hindernisse — eine Person hat ihren Platz auf der Wand, und ihn nachträglich
+ * zu verschieben würde die Migration zerreissen, die die Besucherin gerade
+ * ansieht.
+ *
+ * Bewusst dieselbe Bauart wie `declutterLabels`: jede Iteration wird bewertet,
+ * angewandt wird die BESTE — Iteration 0 (der unveränderte Eingang)
+ * eingeschlossen. Ein Entspannungsverfahren dieser Art ist nicht monoton; ohne
+ * diese Absicherung kann ein später Durchgang schlechter enden als ein früher.
+ */
+//: Wie weit eine Tafel je Runde dem Zusammenstoss ausweicht. Kleiner als 1,
+//: weil alle Tafeln gleichzeitig ausweichen: bei vollem Schritt schaukeln sich
+//: zwei Nachbarn gegenseitig auf, statt sich zu trennen.
+const PLATE_SETTLE_STEP = 0.45;
+//: Wie weit eine Tafel sich insgesamt von ihrem Layout-Platz entfernen darf,
+//: in Modelleinheiten. Ohne Deckel wandert eine Tafel aus einem dichten Feld
+//: heraus bis an den Rand und ihre Kante zieht quer ueber die Wand.
+const PLATE_MAX_DISPLACEMENT = 220;
+
+export function declutterPlates(cy) {
+  const terms = cy.nodes('.term').sort(byId);
+  if (terms.length === 0) return;
+  const persons = cy.nodes('.person').toArray();
+
+  const start = terms.map((node) => ({ ...node.position() }));
+  const state = terms.map((node) => ({ node, ...node.position() }));
+  const applyState = () => state.forEach(({ node, x, y }) => node.position({ x, y }));
+
+  const boxOf = (node) => node.boundingBox({ includeLabels: true, includeNodes: true });
+  const score = () => {
+    let treffer = 0;
+    const kaesten = terms.map(boxOf);
+    for (let i = 0; i < kaesten.length; i += 1) {
+      for (let j = i + 1; j < kaesten.length; j += 1) {
+        if (boxesOverlap(kaesten[i], kaesten[j])) treffer += 1;
+      }
+      for (const person of persons) {
+        if (boxesOverlap(kaesten[i], person.boundingBox({ includeNodes: true, includeLabels: false }))) {
+          treffer += 1;
+        }
+      }
+    }
+    return treffer;
+  };
+
+  let best = { score: score(), positions: state.map(({ x, y }) => ({ x, y })) };
+  if (best.score === 0) return;
+
+  for (let runde = 0; runde < DECLUTTER_ITERATIONS; runde += 1) {
+    const kaesten = terms.map(boxOf);
+    const schub = state.map(() => ({ x: 0, y: 0 }));
+
+    for (let i = 0; i < kaesten.length; i += 1) {
+      for (let j = i + 1; j < kaesten.length; j += 1) {
+        if (!boxesOverlap(kaesten[i], kaesten[j])) continue;
+        const v = overlapVector(kaesten[i], kaesten[j]);
+        schub[i].x -= v.x / 2; schub[i].y -= v.y / 2;
+        schub[j].x += v.x / 2; schub[j].y += v.y / 2;
+      }
+      for (const person of persons) {
+        const pb = person.boundingBox({ includeNodes: true, includeLabels: false });
+        if (!boxesOverlap(kaesten[i], pb)) continue;
+        // Ganz ausweichen, nicht halb: Das Portrait bewegt sich nicht mit,
+        // also muss die Tafel den vollen Weg gehen.
+        const v = overlapVector(kaesten[i], pb);
+        schub[i].x -= v.x; schub[i].y -= v.y;
+      }
+    }
+
+    let bewegt = false;
+    state.forEach((s, i) => {
+      if (!schub[i].x && !schub[i].y) return;
+      // Begrenzung gegen den Ausgangsplatz: Eine Tafel darf ausweichen, aber
+      // nicht durch den halben Graphen wandern — sonst steht sie am Ende
+      // weit weg von der Person, die den Begriff gesagt hat, und die Kante
+      // zieht quer über die Wand.
+      const nx = s.x + schub[i].x * PLATE_SETTLE_STEP;
+      const ny = s.y + schub[i].y * PLATE_SETTLE_STEP;
+      const dx = nx - start[i].x;
+      const dy = ny - start[i].y;
+      const weite = Math.hypot(dx, dy);
+      if (weite > PLATE_MAX_DISPLACEMENT) {
+        const f = PLATE_MAX_DISPLACEMENT / weite;
+        s.x = start[i].x + dx * f;
+        s.y = start[i].y + dy * f;
+      } else {
+        s.x = nx;
+        s.y = ny;
+      }
+      bewegt = true;
+    });
+    if (!bewegt) break;
+
+    applyState();
+    const jetzt = score();
+    if (jetzt < best.score) {
+      best = { score: jetzt, positions: state.map(({ x, y }) => ({ x, y })) };
+    }
+    if (jetzt === 0) break;
+  }
+
+  terms.forEach((node, i) => node.position({ ...best.positions[i] }));
+}
+
 export function declutterLabels(cy) {
   const terms = cy.nodes('.term').sort(byId);
   if (terms.length === 0) return;
+
+  // In theme-f („Schwarzplan") steht die Schrift MITTIG IM Knoten, nicht als
+  // Beschriftung darunter. Ein text-margin verschiebt dort zwar den Text,
+  // aber nicht die Tafel, auf der er liegt — die Schrift liefe aus ihrer
+  // eigenen Fläche heraus, und die Überlappung mit den Portraits bliebe
+  // bestehen. Gemessen am realen Graphen: 113 Überschneidungen, und
+  // before == after, das Verfahren lief vollständig ins Leere (Birk sah
+  // genau das: „die Portraits liegen wieder über den Begriffen").
+  //
+  // Dort ist die Fläche selbst der Knoten, also muss der KNOTEN ausweichen,
+  // nicht seine Beschriftung. Das erledigt `declutterPlates` unten.
+  if (terms.length > 0 && terms[0].style('text-valign') === 'center') {
+    declutterPlates(cy);
+    return;
+  }
+
   const persons = cy.nodes('.person').toArray();
   const baseMarginY = Number(cssVar('--label-margin-y', '6'));
 

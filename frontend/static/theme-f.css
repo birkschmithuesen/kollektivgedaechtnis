@@ -1,41 +1,42 @@
-/* F: SCHWARZPLAN — Bauhaus, zweite Fassung (Entwurf 2026-08-30)
+/* F: LICHTNETZ — nach dem echten Rendering, nicht nach einem Moodboard.
 
-   Baut auf theme-e.css auf und ändert genau drei Dinge:
+   Vorlage: `konzept-livegraph-touchscreen.png` im Vault (Birk, 2026-08-30:
+   „Dein Designer hat da nicht so gut gearbeitet, daher hier ein echtes
+   Rendering"). Aus dem Bild GEMESSEN statt geschätzt:
 
-   1. DER PUNKT IST WEG. Ein Begriff ist eine beschriftete FLÄCHE, kein
-      Punkt mit Text daneben. Der Punkt war ein Anfasser, kein Zeichen — er
-      kostete den Blick einen Sprung und trug nie Bedeutung. Bauhaus setzt
-      Schrift auf Fläche (Bayers Universal, die Dessauer Signaletik, jedes
-      Blatt der Druckwerkstatt), nicht Schrift neben Marke.
+     77,6 %  reines Schwarz — der Grund trägt fast alles
+      7,4 %  helle Pixel überhaupt
+      1,3 %  wirklich helle Stellen, Kernfarbe #BEB497
+             warme Mitteltöne um #836951, Bernstein/Gold
+     KEIN flächiges Rot, KEIN Blau, KEINE gefüllten Kästchen
 
-   2. DIE FARBE WIRD FLÄCHE STATT SCHRIFTFARBE. Vorher trugen Punkt und
-      Schrift die Achsenfarbe; farbige Schrift auf Schwarz ist der
-      schwächste Träger, den eine Farbe haben kann — dünn, und bei Blau auf
-      Schwarz (2.62:1 gegen den Grund) an der Wand fast verloren. Jetzt
-      steht die Schrift AUF der Farbe. Der Umschlag von "Kontur auf
-      Schwarz" zu "massive Farbtafel" ist der stärkste verfügbare Sprung,
-      und er kostet keine Größenänderung.
+   Daraus die drei Korrekturen an der ersten Fassung:
 
-   3. DAS PORTRAIT BEKOMMT LICHT STATT SCHATTEN. Auf additiver Projektion
-      ist Schwarz das, was der Beamer nicht anleuchtet — ein dunkler
-      Schlagschatten ist an der Wand buchstäblich nichts. Der Schatten wird
-      darum umgedreht: ein schwaches helles Halo (--halo-*) trägt die
-      Scheibe, und ein zweiter, schwacher Ring in Abstand (--ring-echo-*)
-      gibt ihr die konzentrische Zirkelgeometrie.
+   1. RINGE STATT FLÄCHEN. Der Begriff bekommt ein rundes Kästchen, das
+      NICHT ausgefüllt ist — im Rendering sind es Konturen, durch die der
+      Hintergrund durchscheint. Die erste Fassung malte massive Rechtecke;
+      Birk: „so'n quadratisches Kästchen ist auch nicht cool".
 
-   SCHRIFTFARBE AUF DEN TAFELN IST GEMESSEN, NICHT GEWÄHLT (WCAG-Kontrast):
-       Weiß auf Rot  #D62828 :  5.01:1   ok
-       Weiß auf Blau #1D4E9C :  8.01:1   ok
-       Weiß auf Gelb #F4C300 :  1.66:1   UNLESBAR
-       Schwarz auf Gelb      : 12.65:1   ok
-   Gelb trägt deshalb schwarze Schrift. Das ist keine Geschmacksfrage, und
-   es ist auch kein Bruch: Schwarz auf Gelb ist die klassischste
-   Bauhaus-Paarung überhaupt.
+   2. GOLD STATT ROT AM PORTRAIT. Birk: „Rot sieht so nach Alarm aus."
+      Das Rendering gibt ihm recht — es kennt kein Rot. Der Ring ist warmes
+      Gold, und er ist GRÖSSER als in der ersten Fassung, wo er verloren
+      wirkte.
 
-   DIE SCHRIFTGRÖSSE BLEIBT. 26px, unverändert aus theme-e. Die Kalibrierung
-   über die Themen a/b/c wird nicht angefasst, und in-dream ist weiterhin
-   NICHT größer als der Rest — der Unterschied ist allein die Fläche. */
+   3. GLOW. Im Rendering hat jedes Element einen Lichthof; das ist der
+      Grund, warum das Bild auf Schwarz nicht flach aussieht. Auf additiver
+      Projektion ist das auch die einzige Richtung, die funktioniert: Licht
+      addiert sich, Schatten wären schlicht unsichtbar.
 
+   DIE ACHSENFARBEN BLEIBEN BEDEUTUNGSTRÄGER, aber als Ring statt als
+   Fläche — Rot/Blau/Gelb zeichnen die Kontur der fünf Bildbegriffe. Damit
+   trägt die Farbe weiter ihre Funktion, ohne dass die Wand bunt wird: Bei
+   110 Begriffen sind fünf Ringe farbig und der Rest bleibt Licht auf
+   Schwarz.
+
+   SCHRIFT IMMER WEISS. Die Kontrastmessung der ersten Fassung (weiß auf
+   gefülltem Gelb = 1.66:1, unlesbar) entfällt hier: Die Schrift steht nicht
+   mehr auf der Farbe, sondern auf dem schwarzen Grund IM Ring. Damit gilt
+   überall 21:1, und das Gelb-Problem verschwindet mit der Füllung. */
 :root {
   /* Schaltet projection.js auf styleSchwarzplan(). Die Wahl steht bewusst
      HIER und nicht am ?theme=-Parameter: das Theme bestimmt den Stil, und
@@ -48,26 +49,36 @@
   --bauhaus-gelb: #F4C300;
   --bauhaus-blau: #1D4E9C;
 
+  /* Aus dem Rendering gemessen: die Kernfarbe der hellsten Stellen und der
+     warme Mittelton, den die Lichthöfe tragen. */
+  --licht: #BEB497;
+  --licht-warm: #C9A227;
+
   /* ---- Personen ---------------------------------------------------------
-     Etwas größer als theme-e (56), weil die Portraits jetzt gegen massive
-     Farbtafeln bestehen müssen statt gegen 14px-Punkte. Der Wert ist eine
-     Modell-Einheit; die Deckelung in DEFAULT_PORTRAIT_SIZE bleibt gültig. */
-  --person-size: 110;
-  --person-fill: #242424;
-  --ring-color: #D62828;
-  --ring-width: 5;
+     56 wie in theme-e: Der Wert ist gegen die NETZDICHTE kalibriert. Die
+     erste Fassung hatte ihn auf 110 verdoppelt, „damit die Portraits gegen
+     die Farbtafeln bestehen" — am realen Graphen gemessen ueberlappten sich
+     dann die Portraits untereinander (67 Paare). */
+  --person-size: 56;
+  --person-fill: #1a1a1a;
 
-  /* Das Halo. NICHT höher als ~0.14 drehen: auf Schwarz wird daraus sonst
-     ein sichtbarer grauer Hof, und der Beamer zeichnet ihn als Rechteck-
-     Aufhellung nach, wenn die Wand nicht perfekt weiß ist. */
-  --halo-color: #FFFFFF;
-  --halo-opacity: 0.10;
-  --halo-padding: 14;
+  /* Gold, nicht Rot (Birk: „Rot sieht nach Alarm aus"). Und breiter als
+     zuvor: bei 5 wirkte der Ring wie ein Haarstrich um ein Loch. */
+  --ring-color: #C9A227;
+  --ring-width: 7;
 
-  /* Das Ringecho — der zweite Kreis in Abstand. */
-  --ring-echo-width: 1;
-  --ring-echo-offset: 7;
-  --ring-echo-opacity: 0.35;
+  /* Der Lichthof um die Person. Kraeftiger als in der ersten Fassung (0.10),
+     weil er im Rendering das tragende Gestaltungsmittel ist — aber nicht
+     darueber: auf einer nicht perfekt weissen Wand zeichnet der Beamer einen
+     zu starken Hof als Rechteck-Aufhellung nach. */
+  --halo-color: #C9A227;
+  --halo-opacity: 0.22;
+  --halo-padding: 20;
+
+  /* Das Ringecho — der zweite Kreis in Abstand, Zirkelgeometrie. */
+  --ring-echo-width: 2;
+  --ring-echo-offset: 11;
+  --ring-echo-opacity: 0.45;
 
   /* ---- Schrift ---------------------------------------------------------- */
   --label-color: #FFFFFF;
@@ -77,38 +88,37 @@
   --label-outline-color: #000000;
   --label-max-width: 220px;
 
-  /* ---- Die Tafeln -------------------------------------------------------
-     --plate-pad geht in ZWEI Dinge zugleich: in text-background-padding
-     und in termBox() in projection.js. Wer ihn hier ändert, ändert damit
-     auch die Knotengröße, mit der fcose rechnet — das ist Absicht, sonst
-     liefen Fläche und Layout auseinander.
+  /* ---- Die Kästchen -----------------------------------------------------
+     RUND und NICHT gefuellt (das Rendering). --plate-pad geht zugleich in
+     text-background-padding und in termBox() in term-plate.js: Wer ihn
+     aendert, aendert die Knotengroesse, mit der fcose rechnet. Das ist
+     Absicht, sonst laufen Flaeche und Layout auseinander. */
+  --plate-pad: 14;
+  --plate-radius: 22;
 
-     --plate-radius: 2 und nicht 0. Eine ganz scharfe Ecke flimmert auf der
-     Projektion an der Kante; 2px nehmen das Flirren, ohne dass die Tafel
-     rund wirkt. */
-  --plate-pad: 10;
-  --plate-radius: 2;
-
-  /* Ruhende Begriffe: eine fast unsichtbare Tafel, die nur den Untergrund
-     beruhigt, wo Kanten hinter der Schrift durchlaufen. Zusammen mit der
-     4px-Kontur ist das die Lesbarkeitsreserve. */
+  /* Ruhende Begriffe: eine duenne Kontur in Licht, kaum Fuellung. So bleibt
+     der Grund sichtbar und die Wand luftig statt gekachelt. */
+  --term-ring-idle: #6E6656;
+  --term-ring-width: 1.5;
   --term-plate-idle: #000000;
-  --term-plate-idle-opacity: 0.55;
+  --term-plate-idle-opacity: 0.35;
 
-  /* Schriftfarbe je Tafel — siehe Kontrastmessung oben. */
-  --term-ink-on-red: #FFFFFF;
-  --term-ink-on-blue: #FFFFFF;
-  --term-ink-on-yellow: #000000;
+  /* Im Bild: der Ring nimmt die Achsenfarbe an und wird kraeftiger. Die
+     Fuellung bleibt dunkel — die Schrift steht auf Schwarz, nicht auf der
+     Farbe, also gilt ueberall voller Kontrast. */
+  --term-ring-dream-width: 3;
+  --term-plate-dream-opacity: 0.55;
 
-  /* ---- Kanten ----------------------------------------------------------- */
-  --edge-color: #858585;
-  --edge-width: 2;
-  --edge-opacity: 0.75;
-  --edge-width-dream: 3;
-  --edge-opacity-dream: 0.9;
-
-  /* ---- Die drei Achsen -------------------------------------------------- */
   --dream-anchor-color: var(--bauhaus-rot);
   --dream-neighbour-color: var(--bauhaus-blau);
   --dream-recent-color: var(--bauhaus-gelb);
+
+  /* ---- Kanten -----------------------------------------------------------
+     Warm und halbdurchsichtig statt neutralgrau: im Rendering sind die
+     Verbindungen Licht, keine Striche. */
+  --edge-color: #7A6A4A;
+  --edge-width: 2;
+  --edge-opacity: 0.55;
+  --edge-width-dream: 3;
+  --edge-opacity-dream: 0.85;
 }
