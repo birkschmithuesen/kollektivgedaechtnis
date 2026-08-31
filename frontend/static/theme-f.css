@@ -62,10 +62,14 @@
   --person-size: 56;
   --person-fill: #1a1a1a;
 
-  /* Gold, nicht Rot (Birk: „Rot sieht nach Alarm aus"). Und breiter als
-     zuvor: bei 5 wirkte der Ring wie ein Haarstrich um ein Loch. */
+  /* KEIN Ring mehr um die Portraits (Birk, 2026-08-30: „Die goldenen Kreise
+     um die Porträts sind viel zu viel. Der Glow-Fader ist schön, die dickeren
+     Kreise können weg"). Der weiche Rand aus dem PNG (soft_disc_mask) und der
+     Lichthof tragen die Scheibe jetzt allein — ein harter Ring drumherum
+     schneidet den Feather wieder ab, den er umgibt, und macht damit genau die
+     Weichheit kaputt, für die er da war. */
   --ring-color: #C9A227;
-  --ring-width: 7;
+  --ring-width: 0;
 
   /* Der Lichthof um die Person. Kraeftiger als in der ersten Fassung (0.10),
      weil er im Rendering das tragende Gestaltungsmittel ist — aber nicht
@@ -75,10 +79,10 @@
   --halo-opacity: 0.22;
   --halo-padding: 20;
 
-  /* Das Ringecho — der zweite Kreis in Abstand, Zirkelgeometrie. */
-  --ring-echo-width: 2;
+  /* Das Ringecho ebenfalls aus: es war der zweite der „dickeren Kreise". */
+  --ring-echo-width: 0;
   --ring-echo-offset: 11;
-  --ring-echo-opacity: 0.45;
+  --ring-echo-opacity: 0;
 
   /* ---- Schrift ---------------------------------------------------------- */
   --label-color: #FFFFFF;
@@ -93,8 +97,8 @@
      text-background-padding und in termBox() in term-plate.js: Wer ihn
      aendert, aendert die Knotengroesse, mit der fcose rechnet. Das ist
      Absicht, sonst laufen Flaeche und Layout auseinander. */
-  --plate-pad: 14;
-  --plate-radius: 22;
+  --plate-pad: 8;
+  --plate-radius: 18;
 
   /* Ruhende Begriffe: eine duenne Kontur in Licht, kaum Fuellung. So bleibt
      der Grund sichtbar und die Wand luftig statt gekachelt. */

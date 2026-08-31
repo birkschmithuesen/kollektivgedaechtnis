@@ -833,6 +833,10 @@ export function frameToAspect(cy, target = CANVAS_ASPECT) {
 // 0.35 is the value theme B needs no loosening at all for, which keeps the
 // common case fast; theme A (22px type on bigger discs) does need it.
 const TARGET_INK_FRACTION = 0.35;
+// theme-f: Dieselbe Groesse, aber als Flaeche statt als Punkt mit Text — das
+// Netz braucht mehr Luft, damit die Kaestchen sich nicht beruehren. Kleiner
+// heisst weiter auseinander.
+const PLATE_INK_FRACTION = 0.18;
 
 /** Spread or gather a placement uniformly about its own centre.
  *
@@ -907,7 +911,20 @@ const LOOSEN_ATTEMPTS = 8;
  * layout-utilities option shapes a single connected component to an aspect
  * ratio (`desiredAspectRatio` applies to randomized component PACKING only).
  */
-export function settlePlacement(cy, { inkFraction = TARGET_INK_FRACTION } = {}) {
+export function settlePlacement(cy, { inkFraction = null } = {}) {
+  // Die Zieldichte ist THEMENABHAENGIG — der Kommentar an TARGET_INK_FRACTION
+  // sagt es selbst: „der Kliff bewegt sich mit dem Theme". Der Wert 0.35 ist
+  // gegen Punkt-plus-Beschriftung kalibriert; in theme-f ist ein Begriff ein
+  // Kaestchen von 185x75 statt eines Punktes mit Text daneben, und dieselbe
+  // Dichte presst es wieder zusammen, sobald das Aufweiten gewirkt hat.
+  // Gemessen: 30 ueberlappende Paare bei 110 Begriffen, unabhaengig davon wie
+  // oft die Schleife lockerte (Birk, 2026-08-30: „die Kaestchen ueberlappen
+  // sich").
+  if (inkFraction === null) {
+    const kaestchen =
+      cy.nodes('.term').length > 0 && cy.nodes('.term')[0].style('text-valign') === 'center';
+    inkFraction = kaestchen ? PLATE_INK_FRACTION : TARGET_INK_FRACTION;
+  }
   normaliseDensity(cy, inkFraction);
   frameToAspect(cy);
   const nodes = cy.nodes().sort(byId);
@@ -945,6 +962,7 @@ export function settlePlacement(cy, { inkFraction = TARGET_INK_FRACTION } = {}) 
       }
     }
     if (clear) break;
+    const current0 = score();
 
     // The two levers are not equal. Moving a label is free; spreading the net
     // costs type size, because the camera then has more to fit onto the same
@@ -954,10 +972,21 @@ export function settlePlacement(cy, { inkFraction = TARGET_INK_FRACTION } = {}) 
     // to grow. Measured 2026-08-15 on the seeded graph: asking here keeps the
     // net one loosening step tighter, which is 12.7px of type on the wall
     // instead of 11.4px, at zero overlaps either way.
-    resetLabelOffsets(cy);
-    declutterLabels(cy);
-    const assisted = score();
-    resetLabelOffsets(cy);
+    // In theme-f steht die Schrift IM Knoten: declutterLabels kann dort nichts
+    // verschieben (siehe dort), also ist das Aufweiten der EINZIGE Hebel und
+    // muss ohne diesen Zwischenschritt weiterlaufen. Ohne die Fallunter-
+    // scheidung endete die Schleife hier mit „das Label hat nicht geholfen",
+    // obwohl sie es nie versucht hatte — gemessen 30 ueberlappende Paare bei
+    // 110 Begriffen (Birk, 2026-08-30: „die Kaestchen ueberlappen sich").
+    const schriftImKnoten =
+      cy.nodes('.term').length > 0 && cy.nodes('.term')[0].style('text-valign') === 'center';
+    let assisted = current0;
+    if (!schriftImKnoten) {
+      resetLabelOffsets(cy);
+      declutterLabels(cy);
+      assisted = score();
+      resetLabelOffsets(cy);
+    }
     if (assisted === 0) {
       best = { score: 0, positions: snapshot() };
       break;
