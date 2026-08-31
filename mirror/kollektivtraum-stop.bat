@@ -11,7 +11,7 @@ rem =====================================================================
 setlocal
 title Kollektivtraum ? Stopp
 
-set "LOGS=C:\Users\birk\kg-logs"
+set "LOGS=%USERPROFILE%\kg-logs"
 
 echo.
 echo   Kollektivtraum beenden
@@ -26,6 +26,10 @@ powershell -NoProfile -Command ^
   "$treffer = Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $z=$_.CommandLine; $muster | Where-Object { $z -like ('*'+$_+'*') } };" ^
   "if (-not $treffer) { Write-Output '  Es lief nichts.' } else { foreach ($p in $treffer) { $was = switch -Wildcard ($p.CommandLine) { '*stt_server*' {'Spracherkennung'} '*-m kg --config*' {'Kern'} '*-m kg2*' {'Traum'} '*uploader*' {'Spiegel'} default {'unbekannt'} }; Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; Write-Output ('  beendet: ' + $was + ' (PID ' + $p.ProcessId + ')') } }"
 
+rem Gefiltert wird auf 'kg-logs\edge-', nicht auf einen Benutzerpfad: die
+rem Station wird mal als `birk`, mal als `SF-Tracking` bedient, und beide
+rem legen ihre Profile unter ihrem eigenen %USERPROFILE%\kg-logs an.
+rem
 rem Die Anzeigefenster: nur die mit UNSEREN Benutzerprofilen. Deshalb wurde
 rem beim Start ueberhaupt --user-data-dir vergeben ? es ist die einzige
 rem Spur, an der sich die Stationsfenster von Birks eigenem Browser

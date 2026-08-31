@@ -22,7 +22,12 @@ set "FB=C:\Users\birk\fundusbot"
 set "SPIEGEL=C:\Users\birk\kg-spiegel"
 rem Nicht mehr fuer Logdateien (die Dienste zeigen ihre Ausgabe im eigenen
 rem Fenster), sondern fuer die Browser-Profile der Anzeigefenster.
-set "LOGS=C:\Users\birk\kg-logs"
+rem
+rem Unter %USERPROFILE%, nicht fest unter birk: die Station wird mal als
+rem `birk`, mal als `SF-Tracking` bedient. Zwei Benutzer, die sich denselben
+rem Profilordner teilen, sperren einander den Browser aus ("profile is in
+rem use") - und das faellt erst auf, wenn die Wand schwarz bleibt.
+set "LOGS=%USERPROFILE%\kg-logs"
 set "DIENSTE=%~dp0dienste"
 set "OEFFENTLICH=https://kollektivgedaechtnis.flashclash.de"
 set "EDGE=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -139,7 +144,7 @@ rem ---------------------------------------------------------------------
 echo   [5/6] Wand und Schirm B
 rem Alles auf EINER Zeile. Die Fortsetzung mit `^` zerbricht hier: cmd
 rem liest die Folgezeile als eigenen Befehl und meldet
-rem „Der Befehl --user-data-dir ... konnte nicht gefunden werden"
+rem ?Der Befehl --user-data-dir ... konnte nicht gefunden werden"
 rem (gemessen 2026-08-31). Lang und unschoen, aber richtig.
 start "" "%EDGE%" --kiosk --window-position=%POS_WAND% --user-data-dir="%LOGS%\edge-wand" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8800/projection"
 
