@@ -135,6 +135,14 @@ function styleSchwarzplan() {
         'underlay-opacity': 0.16,
         'underlay-padding': 10,
         'underlay-shape': 'round-rectangle',
+        // Ohne diesen Radius zeichnet Cytoscape den Lichthof mit SCHARFEN
+        // Ecken, obwohl die Form 'round-rectangle' heisst — der Radius wird
+        // NICHT vom Knoten geerbt (Birk, 2026-08-30: „Der Glow um die
+        // markierten Kaestchen ist quadratisch"). Im Bundle 3.30.2 vorhanden,
+        // nachgeprueft. Etwas groesser als der Knotenradius, weil der Hof
+        // 10 Einheiten weiter aussen liegt und sonst enger wirkt als das
+        // Kaestchen, das er umgibt.
+        'underlay-corner-radius': cssVar('--plate-radius-glow', '28'),
         'z-index': 15,
       },
     },
