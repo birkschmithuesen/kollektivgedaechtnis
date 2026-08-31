@@ -1,4 +1,4 @@
-Kollektivtraum — was hier auf dem Schreibtisch liegt
+Kollektivtraum ? was hier auf dem Schreibtisch liegt
 ====================================================
 
 
@@ -12,13 +12,25 @@ ZUM STARTEN
 
   Kollektivtraum STOP       Beendet alles wieder.
 
-Nach dem Start steht in dem Fenster, was wo liegt. Kurzfassung:
+  Kollektivtraum Ansichten  Ordner mit anklickbaren Verknuepfungen auf
+                            alle Ansichten - kein Abtippen noetig.
 
-  Wand (Graph)        http://127.0.0.1:8800/projection
+Nach dem Start stehen die Adressen auch im Fenster. Kurzfassung:
+
+  Wand (Graph)        http://127.0.0.1:8800/projection?theme=f&touch=1
+  Wand nur Anzeige    http://127.0.0.1:8800/projection?theme=f
   Schirm B (Traum)    http://127.0.0.1:8810/dream
   Pult Graph          http://127.0.0.1:8800/operator
   Pult Traum          http://127.0.0.1:8810/operator
   Am Telefon          https://kollektivgedaechtnis.flashclash.de
+
+Zu den beiden Zusaetzen an der Wandadresse:
+
+  theme=f   Der Schwarzplan-Entwurf: der Begriff IST die beschriftete
+            Flaeche. Ohne den Zusatz kommt das aeltere Bauhaus-Theme.
+  touch=1   Schaltet die Beruehrsteuerung frei. Gehoert NUR auf den
+            Touchscreen. Der zweite Schirm im Plenum laedt dieselbe
+            Seite ohne das Flag und bleibt reine Anzeige.
 
 
 WENN ETWAS NICHT LAEUFT
@@ -26,7 +38,7 @@ WENN ETWAS NICHT LAEUFT
 
 Jeder Teil hat sein eigenes Fenster in der Taskleiste, benannt:
 "Kollektivtraum: Spracherkennung", "...: Kern", "...: Traum",
-"...: Spiegel". Faellt etwas aus, dieses Fenster oeffnen — dort steht der
+"...: Spiegel". Faellt etwas aus, dieses Fenster oeffnen ? dort steht der
 Grund im Klartext, keine Logdatei noetig.
 
 Im Ordner "Kollektivtraum Einzelteile" liegt jeder Teil noch einmal
@@ -38,13 +50,13 @@ Fenster schliessen, sonst ist der Anschluss noch belegt.
 DIE REIHENFOLGE, FALLS VON HAND
 -------------------------------
 
-  1. Spracherkennung    muss vor dem Kern stehen — der Kern verbindet
+  1. Spracherkennung    muss vor dem Kern stehen ? der Kern verbindet
                         sich beim Start zu ihr
   2. Kern
   3. Traum              haengt bewusst NICHT vom Kern ab: er kommt auch
                         hoch, wenn der Kern fehlt, und traeumt weiter,
                         sobald dieser antwortet
-  4. Spiegel            faellt er aus, merkt im Haus niemand etwas —
+  4. Spiegel            faellt er aus, merkt im Haus niemand etwas ?
                         nur die Handy-Seite friert auf ihrem letzten
                         Stand ein
 
@@ -56,7 +68,7 @@ https://kollektivgedaechtnis.flashclash.de
 
 Sie zeigt eine ruhige Wartemeldung, solange die Station nicht laeuft, und
 schaltet sich von selbst wieder scharf, sobald der Spiegel Daten schickt.
-Ist der letzte Stand aelter als 90 Sekunden, sagt sie das dezent an —
+Ist der letzte Stand aelter als 90 Sekunden, sagt sie das dezent an ?
 lieber ein ehrlicher alter Stand als eine Seite, die Aktualitaet
 vortaeuscht.
 
