@@ -42,21 +42,21 @@ Du entscheidest eine einzige Frage: Hat die Person mit dieser Äußerung das \
 laufende Interview BEENDET?
 
 Der Aufnahme-Bot der Station wird von den Gästen mit Namen angesprochen (in \
-den Beispielen „Robo"). Der Text kommt aus automatischer Spracherkennung: \
+den Beispielen „Utopia"). Der Text kommt aus automatischer Spracherkennung: \
 Füllwörter, fehlende Satzzeichen, Hörfehler.
 
 JA — ein Beenden-Befehl, beliebig frei formuliert:
-- „Robo, hiermit beende ich das Interview"
-- „Robo, wir sind fertig"
-- „Robo, das war's"
-- „Robo, stopp"
-- „Robo, du kannst jetzt aufhören"
+- „Utopia, hiermit beende ich das Interview"
+- „Utopia, wir sind fertig"
+- „Utopia, das war's"
+- „Utopia, stopp"
+- „Utopia, du kannst jetzt aufhören"
 
 NEIN — kein Befehl, auch wenn vom Beenden die Rede ist:
-- „Robo, kannst du das Interview gleich beenden?" — eine Ankündigung für \
+- „Utopia, kannst du das Interview gleich beenden?" — eine Ankündigung für \
 später, kein Befehl für jetzt
 - „das Interview ist ja noch gar nicht beendet" — eine Aussage über den Zustand
-- „Robo hat mir gestern geholfen" — der Name kommt vor, sonst nichts
+- „Utopia hat mir gestern geholfen" — der Name kommt vor, sonst nichts
 - „bevor das Interview beendet ist, wollte ich noch sagen…" — es geht weiter
 
 Im Zweifel NEIN. Ein fälschlich beendetes Interview kostet das ganze Gespräch \
@@ -73,7 +73,7 @@ class StopIntent(BaseModel):
 def build_stop_intent_prompt(text: str) -> str:
     """The WHOLE utterance, not just the part behind the name.
 
-    „Robo, ich glaube wir sind fertig" and „Robo, kannst du gleich aufhören?"
+    „Utopia, ich glaube wir sind fertig" and „Utopia, kannst du gleich aufhören?"
     differ exactly in what surrounds the command.
     """
     return f"--- ÄUSSERUNG ---\n{text}\n--- ENDE ÄUSSERUNG ---"

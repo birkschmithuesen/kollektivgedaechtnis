@@ -56,7 +56,7 @@ def test_defaults_apply_when_keys_missing(tmp_path, monkeypatch):
     assert cfg.embedding_url == "https://openrouter.ai/api/v1/embeddings"
     assert cfg.embedding_model == "openai/text-embedding-3-small"
     # The bot's name, spoken in front of a stop phrase (Birk, 2026-08-30).
-    assert cfg.wake_word == "Robo"
+    assert cfg.wake_word == "Utopia"
 
 
 def test_the_llm_gate_behind_the_wake_word_is_on_by_default_and_runs_cheap(tmp_path):

@@ -33,24 +33,24 @@ class FakeLLM:
 def test_the_prompt_separates_a_command_from_a_mention():
     """The whole difficulty of the task, and it is not in the schema."""
     assert "beende ich das Interview" in STOP_INTENT_SYSTEM
-    assert "Robo hat mir gestern geholfen" in STOP_INTENT_SYSTEM
+    assert "Utopia hat mir gestern geholfen" in STOP_INTENT_SYSTEM
     assert "kannst du das Interview gleich beenden" in STOP_INTENT_SYSTEM
 
 
 def test_the_prompt_carries_the_whole_utterance():
-    prompt = build_stop_intent_prompt("Robo, ich glaube wir sind fertig")
-    assert "Robo, ich glaube wir sind fertig" in prompt
+    prompt = build_stop_intent_prompt("Utopia, ich glaube wir sind fertig")
+    assert "Utopia, ich glaube wir sind fertig" in prompt
 
 
 def test_a_yes_and_a_no_come_back_as_booleans():
-    assert is_stop_command(FakeLLM(is_stop=True), "Robo, das war's") is True
-    assert is_stop_command(FakeLLM(is_stop=False), "Robo hat geholfen") is False
+    assert is_stop_command(FakeLLM(is_stop=True), "Utopia, das war's") is True
+    assert is_stop_command(FakeLLM(is_stop=False), "Utopia hat geholfen") is False
 
 
 def test_the_call_is_kept_short():
     """Cheap by construction: one utterance in, one boolean out."""
     llm = FakeLLM()
-    is_stop_command(llm, "Robo, das war's")
+    is_stop_command(llm, "Utopia, das war's")
     system, user = llm.calls[0]
     assert len(user) < 400
     assert list(StopIntent.model_fields) == ["is_stop_command"]
@@ -89,7 +89,7 @@ def test_call_with_timeout_passes_the_error_through():
 
 def test_the_asker_answers_within_its_budget():
     intent = make_stop_intent(FakeLLM(is_stop=True), timeout_s=5.0)
-    assert intent("Robo, hiermit beende ich das Interview") is True
+    assert intent("Utopia, hiermit beende ich das Interview") is True
 
 
 def test_a_slow_answer_is_dropped_rather_than_waited_for():
@@ -98,5 +98,5 @@ def test_a_slow_answer_is_dropped_rather_than_waited_for():
     intent = make_stop_intent(FakeLLM(is_stop=True, delay=30.0), timeout_s=0.05)
     began = time.monotonic()
     with pytest.raises(TimeoutError):
-        intent("Robo, hiermit beende ich das Interview")
+        intent("Utopia, hiermit beende ich das Interview")
     assert time.monotonic() - began < 5.0

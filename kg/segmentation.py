@@ -80,7 +80,7 @@ _MAX_GAP_TOKENS = 1
 _MAX_TRAILING_TOKENS = 2
 
 # Second, deliberately looser way in: the bot's name in front of the phrase
-# („Robo, Interview beendet", Birk 2026-08-30). Additive — the phrase alone
+# („Utopia, Interview beendet", Birk 2026-08-30). Additive — the phrase alone
 # keeps working exactly as above; whoever calls the bot by its name, though,
 # means it, so behind a wake word the same phrase may be spoken more freely:
 _WAKE_MAX_GAP_TOKENS = 2  # two fillers inside the command instead of one…
@@ -90,7 +90,7 @@ _WAKE_MAX_TRAILING_TOKENS = 4  # …and a whole "vielen Dank für das Gespräch"
 # What stays strict is the distance between name and command: at most this many
 # foreign words may sit between them. That is what keeps the address a form of
 # address and not a topic. It also settles the brief's borderline case,
-# "Robo, kannst du das Interview gleich beenden?" — DOES NOT STOP: three words
+# "Utopia, kannst du das Interview gleich beenden?" — DOES NOT STOP: three words
 # ("kannst du das") stand between name and phrase, so it never reaches the
 # looser gap budget at all. Deliberate: that sentence asks about an end still
 # to come, it does not declare one, and the whole tuning of this module leans
@@ -149,7 +149,7 @@ def _find_wake_matches(
     """(first, last) token indices of every "<wake word> … <phrase>" occurrence.
 
     `first` is the wake word's own first token, so a caller that cuts the span
-    cuts the name away with the command — otherwise "Robo" would be left
+    cuts the name away with the command — otherwise "Utopia" would be left
     standing in the extraction input (spec 5).
     """
     wake_spans = _find_phrase_matches(wake, haystack, 0)
@@ -218,9 +218,9 @@ def strip_stop_phrases(text: str, phrases: Sequence[str], wake_word: str | None 
     term in it.
 
     With a wake word configured the cut starts at the name, not at the phrase:
-    "Robo, das Interview ist beendet" must not leave "Robo" behind, or the
-    extraction turns the bot's name into a term. A "Robo" NOT followed by a
-    command stays — there the name is part of a real sentence ("Robo hat mir
+    "Utopia, das Interview ist beendet" must not leave "Utopia" behind, or the
+    extraction turns the bot's name into a term. A "Utopia" NOT followed by a
+    command stays — there the name is part of a real sentence ("Utopia hat mir
     gestern geholfen"), and cutting words out of it would change what the
     person said.
     """

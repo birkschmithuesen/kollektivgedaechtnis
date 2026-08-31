@@ -405,7 +405,7 @@ async def test_a_freely_worded_stop_behind_the_name_closes_the_interview(tmp_pat
 
     core.on_final(
         TranscriptionEvent(
-            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+            type="final", text="Utopia, hiermit beende ich das Interview", timestamp=180.0
         )
     )
     await core.drain()
@@ -424,7 +424,7 @@ async def test_a_no_from_the_llm_keeps_the_recording_running(tmp_path):
     await core.drain()
 
     core.on_final(
-        TranscriptionEvent(type="final", text="Robo hat mir gestern geholfen", timestamp=180.0)
+        TranscriptionEvent(type="final", text="Utopia hat mir gestern geholfen", timestamp=180.0)
     )
     await core.drain()
 
@@ -443,7 +443,7 @@ async def test_a_dead_proxy_leaves_the_mechanical_way_untouched(tmp_path):
 
     core.on_final(
         TranscriptionEvent(
-            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+            type="final", text="Utopia, hiermit beende ich das Interview", timestamp=180.0
         )
     )
     await core.drain()
@@ -463,7 +463,7 @@ async def test_switched_off_nothing_is_ever_asked(tmp_path):
 
     core.on_final(
         TranscriptionEvent(
-            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+            type="final", text="Utopia, hiermit beende ich das Interview", timestamp=180.0
         )
     )
     await core.drain()
@@ -513,7 +513,7 @@ async def test_a_slow_answer_neither_blocks_the_loop_nor_the_next_utterance(tmp_
     began = time.monotonic()
     core.on_final(
         TranscriptionEvent(
-            type="final", text="Robo, hiermit beende ich das Interview", timestamp=180.0
+            type="final", text="Utopia, hiermit beende ich das Interview", timestamp=180.0
         )
     )
     core.on_final(

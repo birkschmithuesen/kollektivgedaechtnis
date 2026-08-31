@@ -32,7 +32,7 @@ def llm_tracker(answer=True):
     intent = CountingIntent(answer)
     return (
         SessionTracker(
-            timeout_s=900, stop_phrases=PHRASES, wake_word="Robo", stop_intent=intent
+            timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia", stop_intent=intent
         ),
         intent,
     )
@@ -61,17 +61,17 @@ def test_spoken_command_in_the_transcript_stops_it():
 
 def test_the_bot_addressed_by_name_stops_it():
     """Both entrances run through find_stop_phrase — spoken text as well."""
-    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Robo")
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
     t.photo(at=100.0)
-    assert t.transcript("Robo, das Interview ist damit beendet", at=200.0) == [
+    assert t.transcript("Utopia, das Interview ist damit beendet", at=200.0) == [
         Transition("closed", 200.0, "spoken")
     ]
 
 
 def test_the_bots_name_alone_does_not_stop_it():
-    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Robo")
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
     t.photo(at=100.0)
-    assert t.transcript("Robo hat mir gestern geholfen", at=150.0) == []
+    assert t.transcript("Utopia hat mir gestern geholfen", at=150.0) == []
     assert t.open_since == 100.0
 
 
@@ -84,14 +84,14 @@ def test_a_freely_worded_stop_behind_the_name_closes_the_interview():
     t, intent = llm_tracker(answer=True)
     t.photo(at=100.0)
 
-    assert t.transcript("Robo, hiermit beende ich das Interview", at=200.0) == [
+    assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == [
         Transition("closed", 200.0, "spoken_llm")
     ]
     assert t.open_since is None
-    # The whole utterance, not just the part behind the name: "Robo, ich glaube
-    # wir sind fertig" and "Robo, kannst du gleich aufhören?" differ exactly in
+    # The whole utterance, not just the part behind the name: "Utopia, ich glaube
+    # wir sind fertig" and "Utopia, kannst du gleich aufhören?" differ exactly in
     # what surrounds the command.
-    assert intent.asked == ["Robo, hiermit beende ich das Interview"]
+    assert intent.asked == ["Utopia, hiermit beende ich das Interview"]
 
 
 def test_the_mechanical_hit_never_costs_an_llm_call():
@@ -121,7 +121,7 @@ def test_a_no_from_the_llm_leaves_the_interview_running():
     t, intent = llm_tracker(answer=False)
     t.photo(at=100.0)
 
-    assert t.transcript("Robo hat mir gestern geholfen", at=200.0) == []
+    assert t.transcript("Utopia hat mir gestern geholfen", at=200.0) == []
     assert t.open_since == 100.0
     assert len(intent.asked) == 1
 
@@ -133,17 +133,17 @@ def test_a_failing_llm_leaves_the_interview_running_and_is_logged(caplog):
     t.photo(at=100.0)
 
     with caplog.at_level(logging.ERROR):
-        assert t.transcript("Robo, hiermit beende ich das Interview", at=200.0) == []
+        assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == []
 
     assert t.open_since == 100.0
     assert "proxy is dead" in caplog.text
 
 
 def test_switched_off_the_tracker_behaves_exactly_as_before():
-    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Robo")
+    t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
     t.photo(at=100.0)
 
-    assert t.transcript("Robo, hiermit beende ich das Interview", at=200.0) == []
+    assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == []
     assert t.open_since == 100.0
 
 

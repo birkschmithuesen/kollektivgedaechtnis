@@ -16,9 +16,16 @@ DEFAULT_STOP_PHRASES = [
 
 # The name the guests address the bot with. Spoken in front of a stop phrase it
 # is the sure-fire way to end an interview (Birk, 2026-08-30) — nobody says
-# "Robo" in passing. Configurable because the bot can be renamed; the detection
-# never hardcodes it (kg/segmentation.py).
-DEFAULT_WAKE_WORD = "Robo"
+# "Utopia" in passing. Configurable because the bot can be renamed; the
+# detection never hardcodes it (kg/segmentation.py).
+#
+# "Utopia", not "Utopie" (Birk, 2026-08-31). On this subject the two are one
+# vowel apart and the wrong one is a word guests genuinely use — "wir brauchen
+# eine Utopie" must not buy a model call, let alone end a recording. That
+# holds because contains_wake_word matches whole tokens: "Utopie", "Utopien"
+# and "utopisch" are all different tokens and none of them matches. Verified
+# 2026-08-31; the case is pinned in tests/test_segmentation.py.
+DEFAULT_WAKE_WORD = "Utopia"
 
 # …and behind that name, when no configured phrase matches, one small model
 # decides whether a stop was meant (Birk, 2026-08-30: „Hiermit beende ich das

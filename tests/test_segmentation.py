@@ -167,25 +167,25 @@ def test_what_counts_as_a_stop_is_also_removed_from_the_transcript():
 @pytest.mark.parametrize(
     "text",
     [
-        "Robo, Interview beendet.",
+        "Utopia, Interview beendet.",
         # STT rarely sets the comma after an address.
-        "Robo Interview beendet",
-        "Robo, das Interview ist beendet.",
-        "Robo, das Interview ist damit beendet.",
+        "Utopia Interview beendet",
+        "Utopia, das Interview ist beendet.",
+        "Utopia, das Interview ist damit beendet.",
         # Typed into Telegram rather than spoken.
-        "Robo: Interview beendet",
+        "Utopia: Interview beendet",
         # The address in the middle of a transcript chunk, which is how the
         # STT actually delivers it: the previous sentence is still in there.
-        "Wir brauchen mehr Holzbau. Robo, das Interview ist jetzt damit beendet.",
+        "Wir brauchen mehr Holzbau. Utopia, das Interview ist jetzt damit beendet.",
         # Freer than the phrase-only path allows — two fillers inside the
         # command and a whole thank-you behind it. Both were negative before
-        # 2026-08-30; behind a "Robo" they are unambiguous.
-        "Robo, das Interview ist jetzt damit beendet",
-        "Robo, Interview beendet, vielen Dank fürs Zuhören",
+        # 2026-08-30; behind a "Utopia" they are unambiguous.
+        "Utopia, das Interview ist jetzt damit beendet",
+        "Utopia, Interview beendet, vielen Dank fürs Zuhören",
     ],
 )
 def test_the_bot_addressed_by_name_stops_the_interview(text):
-    """Birk, 2026-08-30: 'Robo, Interview beendet' is the sure-fire way."""
+    """Birk, 2026-08-30: 'Utopia, Interview beendet' is the sure-fire way."""
     assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
 
 
@@ -193,15 +193,15 @@ def test_the_bot_addressed_by_name_stops_the_interview(text):
     "text",
     [
         # The name alone is not a command — guests talk about the bot.
-        "Robo hat mir gestern geholfen",
-        "Robo ist ein guter Zuhörer",
+        "Utopia hat mir gestern geholfen",
+        "Utopia ist ein guter Zuhörer",
         # A question about a future end, not a command. Decided negative:
         # a wrong stop costs a whole interview, a missed one a text message.
-        "Robo, kannst du das Interview gleich beenden?",
-        "Robo, können wir die Aufnahme später mal beenden?",
+        "Utopia, kannst du das Interview gleich beenden?",
+        "Utopia, können wir die Aufnahme später mal beenden?",
         # Still talking about the end, name or no name: a whole clause behind
         # the command is what no spoken command has.
-        "Robo, bevor das Interview beendet ist, wollte ich noch sagen…",
+        "Utopia, bevor das Interview beendet ist, wollte ich noch sagen…",
         # The wake word must not soften the phrase-only path behind it.
         "das Interview ist ja noch gar nicht beendet",
         "war das Interview eigentlich schon beendet",
@@ -219,17 +219,17 @@ def test_the_name_without_a_command_behind_it_does_not_stop(text):
     ],
 )
 def test_the_phrases_alone_still_stop_with_a_wake_word_configured(text):
-    """Additive: a guest who never says 'Robo' must still get through."""
+    """Additive: a guest who never says 'Utopia' must still get through."""
     assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
 
 
 def test_the_wake_word_is_removed_from_the_transcript_with_the_command():
-    """Spec 5: otherwise 'Robo' reaches the extraction and becomes a term."""
-    text = "Beton ist wichtig. Robo, das Interview ist beendet."
+    """Spec 5: otherwise 'Utopia' reaches the extraction and becomes a term."""
+    text = "Beton ist wichtig. Utopia, das Interview ist beendet."
     assert find_stop_phrase(text, CONFIGURED, wake_word=WAKE) is not None
 
     stripped = strip_stop_phrases(text, CONFIGURED, wake_word=WAKE)
-    assert "robo" not in stripped.lower()
+    assert "utopia" not in stripped.lower()
     assert "beendet" not in stripped.lower()
     assert "Beton ist wichtig." in stripped
 
@@ -248,10 +248,10 @@ def test_a_renamed_bot_is_a_config_change_not_a_code_change():
 @pytest.mark.parametrize(
     "text",
     [
-        "Robo, hiermit beende ich das Interview",
-        "Robo hat mir gestern geholfen",
-        "robo, wir sind fertig",
-        "Ich glaube, Robo. Wir hören auf.",
+        "Utopia, hiermit beende ich das Interview",
+        "Utopia hat mir gestern geholfen",
+        "utopia, wir sind fertig",
+        "Ich glaube, Utopia. Wir hören auf.",
     ],
 )
 def test_the_name_anywhere_in_the_utterance_opens_the_gate(text):
@@ -266,6 +266,15 @@ def test_the_name_anywhere_in_the_utterance_opens_the_gate(text):
         # Not a substring match: the name has to be a word of its own, or every
         # "Robotik" in a conference about building would buy an LLM call.
         "Robotik verändert die Baustelle",
+        # The name is "Utopia", NOT "Utopie" (Birk, 2026-08-31). One vowel
+        # apart, and the wrong one is a word guests on THIS subject genuinely
+        # use — so these are the sentences that must never reach the model,
+        # let alone end a recording. They stay shut because the gate matches
+        # whole tokens.
+        "wir brauchen eine Utopie",
+        "meine Utopie ist ein Dorf ohne Autos",
+        "Utopien sind wichtig für die Planung",
+        "das klingt ziemlich utopisch",
         "",
     ],
 )
@@ -274,5 +283,5 @@ def test_anything_else_keeps_the_gate_shut(text):
 
 
 def test_without_a_configured_name_the_gate_never_opens():
-    assert contains_wake_word("Robo, wir sind fertig", None) is False
-    assert contains_wake_word("Robo, wir sind fertig", "") is False
+    assert contains_wake_word("Utopia, wir sind fertig", None) is False
+    assert contains_wake_word("Utopia, wir sind fertig", "") is False
