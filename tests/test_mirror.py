@@ -399,10 +399,16 @@ def test_die_transparenzseite_steht_ohne_jede_aufnahme(client):
     # der Grund, warum der Rest glaubwürdig ist (Nachtrag 3).
     assert "Was dabei offen bleibt" in antwort.text
     assert "Die Schweiz gehört nicht zur EU" in antwort.text
-    assert "Telegram" in antwort.text
+    # Die Zusagen, auf die es Birk ankommt (2026-08-31). Sie stehen hier als
+    # Test, weil ein spaeteres Umformulieren sie sonst lautlos verlieren kann.
+    assert "DSGVO" in antwort.text
+    assert "verlässt Europa" in antwort.text
     # Kein Datum auf der Seite: ein sichtbarer Stand, der nicht nachgepflegt
-    # wird, ist schlechter als keiner.
-    assert not re.search(r"\b20\d\d-\d\d-\d\d\b", antwort.text)
+    # wird, ist schlechter als keiner. Gemeint ist, was der Besucher SIEHT —
+    # in den Quelltext-Kommentaren steht bewusst, wer wann was entschieden
+    # hat, und diese Herkunft soll nicht dem Test zum Opfer fallen.
+    sichtbar = re.sub(r"<!--.*?-->", "", antwort.text, flags=re.S)
+    assert not re.search(r"\b20\d\d-\d\d-\d\d\b", sichtbar)
 
 
 def test_die_stillen_seiten_binden_nichts_von_dritten_ein(client):
@@ -419,8 +425,8 @@ def test_die_stillen_seiten_binden_nichts_von_dritten_ein(client):
         # nach draussen. Die einzigen fremden URLs sind Ziele zum Anklicken.
         for url in re.findall(r'(?:src|href)="(https?://[^"]*)"', text):
             assert url.rstrip("/") in (
-                "https://birkschmithuesen.com",
                 "https://artesmobiles.art",
+                "https://flashclash.de",
             ), (weg, url)
 
 
