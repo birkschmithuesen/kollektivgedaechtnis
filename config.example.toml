@@ -57,14 +57,29 @@ wake_word = "Utopia"
 # sichere Weg. `false` verhält sich exakt wie vor dem 2026-08-30.
 wake_word_llm = true
 # Bewusst nicht `llm_model`: hier fällt ein einziges Ja/Nein, nicht die
-# Verdichtung eines Interviews. Sonnet und nicht Haiku 4.5, weil kg/llm.py
-# immer `output_config.effort` mitschickt und Haiku 4.5 das ablehnt.
+# Verdichtung eines Interviews. Sonnet und nicht Haiku 4.5, weil kg/llm.py im
+# Anthropic-Modus immer `output_config.effort` mitschickt und Haiku 4.5 das
+# ablehnt. Dieser Grund gilt NUR für den Anthropic-Modus: `output_config` reist
+# im `chat_completions`-Modus nicht mit, dort ist die Modellwahl also frei.
+# Gemessen am 2026-08-31 gegen Infomaniak mit dem echten Extraktionsschema:
+# `google/gemma-4-31B-it` (1,3 s, 5/5 valides JSON) oder
+# `mistralai/Mistral-Small-4-119B-2603` (0,6 s, 5/5) sind hier gute Kandidaten;
+# `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8` ist billiger, aber nur 4/5 — im
+# 6-Sekunden-Budget unkritisch, weil ein Fehlschlag hier nichts beendet.
+# Die Qwen-Modelle (28-37 s) sind für diesen Pfad unbrauchbar.
 wake_word_llm_model = "claude-sonnet-5"
 # Hartes Budget für diesen einen Aufruf — er liegt im heißen Pfad einer
 # laufenden Aufnahme. Eine Antwort, die später kommt, wird verworfen. Gemessen
 # am 2026-08-30 über Birks Proxy: 1,8-2,9 s für die fünf Beispiele oben, also
 # rund das Doppelte des Schlechtesten als Budget.
 wake_word_llm_timeout_s = 6.0
+# Eigener Anbieter-Schalter für diesen zweiten Client, absichtlich unabhängig
+# von `llm_api_mode` weiter unten: es sind zwei verschiedene Aufgaben, und wer
+# nur eine umstellt, bekommt genau das. Wird hier auf `chat_completions`
+# umgestellt, gelten `wake_word_llm_url`, `wake_word_llm_api_key_env` und
+# (nur wenn nötig) `wake_word_llm_reasoning_effort` analog zu den
+# `llm_*`-Feldern. Default = Anthropic, also der Weg von vor dem 2026-08-31.
+wake_word_llm_api_mode = "anthropic"
 
 # Calibrated in simulation (spec 6.3), NOT runtime-adjustable.
 # Run 19b (60 interviews, out/sim19b/sim.db, .superpowers/sdd/task-19-report.md):
@@ -92,6 +107,35 @@ merge_neighbours = 12
 
 llm_model = "claude-opus-5"
 llm_effort = "high"
+
+# --- Zweiter API-Weg: OpenAI-kompatible Endpunkte (EU-Umbau, 2026-08-31) ----
+#
+# `anthropic` ist der Default und exakt das Verhalten von vor dem Umbau: der
+# Anthropic-Client mit `output_config` (`effort` + `json_schema`). Der
+# Referenzlauf 19c ist über diesen Weg gefahren, er bleibt der Fallback.
+#
+# `chat_completions` spricht jeden OpenAI-kompatiblen Endpunkt an, gemessen
+# gegen Infomaniak (Konto SpekulationsRaum GbR, Produkt 110416). Zum
+# Umschalten die vier Zeilen unten einkommentieren:
+#
+#   llm_api_mode = "chat_completions"
+#   llm_model = "moonshotai/Kimi-K2.6"
+#   llm_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"
+#   llm_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+#   llm_reasoning_effort = "none"
+#
+# `llm_reasoning_effort` ist bei Kimi-K2.6 nicht optional, sondern die
+# Bedingung, unter der das Modell überhaupt brauchbar ist (Messung 2026-08-31,
+# echtes Extraktionsschema, `strict: true`): ohne das Feld 0 von 5 valide
+# Antworten bei 4,2 s, mit "low" 0 von 8 bei 6,4 s, mit "none" 8 von 8 bei
+# 1,3 s. Andere Modelle kennen das Feld nicht — deshalb wird es nur gesendet,
+# wenn es hier gesetzt ist. Die Qwen-Modelle brauchen 28-37 s und sind für den
+# laufenden Betrieb unbrauchbar, auch wenn ihr JSON stimmt.
+#
+# Der API-Schlüssel steht NIE in dieser Datei — `llm_api_key_env` nennt nur den
+# NAMEN der Umgebungsvariablen, aus der er gelesen wird. Ohne `llm_api_key_env`
+# bleibt es bei ANTHROPIC_API_KEY.
+llm_api_mode = "anthropic"
 
 # Embedding preselection via OpenRouter (spec 6.2). Cached by term text in
 # data_dir/embeddings.sqlite3, so simulation re-runs are free and offline.

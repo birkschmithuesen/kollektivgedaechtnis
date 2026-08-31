@@ -17,7 +17,7 @@ from kg.config import load_config
 from kg.core import Core
 from kg.embeddings import build_embedder
 from kg.export import write_graph_json
-from kg.llm import LLMClient
+from kg.llm import build_llm
 from kg.server import create_app
 from kg.stop_intent import build_stop_intent_llm
 from kg.store import Store
@@ -162,12 +162,9 @@ async def main_async(args) -> None:
     store.set_setting_default("camera_mode", cfg.default_camera_mode)
     bus = EventBus()
     transcript_log = TranscriptLog(cfg.transcript_log_path)
-    llm = LLMClient(
-        model=cfg.llm_model,
-        effort=cfg.llm_effort,
-        max_tokens=cfg.llm_max_tokens,
-        api_key=cfg.anthropic_api_key,
-    )
+    # Anthropic oder ein OpenAI-kompatibler Endpunkt — entschieden allein von
+    # der config.toml, Default unverändert Anthropic (kg/llm.py).
+    llm = build_llm(cfg)
     # OpenRouter + persistent cache (spec 6.2). Nothing to warm up: no local
     # model, and repeated terms are served from the cache.
     embedder = build_embedder(cfg)

@@ -106,3 +106,88 @@ def test_embedding_cache_lives_outside_the_run_directory(tmp_path):
     cfg = load_config(cfg_file)
 
     assert cfg.embedding_cache_path == (tmp_path / "state" / "embeddings.sqlite3").resolve()
+
+
+# --- der zweite LLM-Weg: Umschaltung ausschließlich über Konfiguration -----
+
+
+def test_an_unchanged_config_stays_on_the_anthropic_route(tmp_path, monkeypatch):
+    """Die Fallback-Regel als Test: ohne neue Schlüssel in der config.toml
+    verhält sich die Station wie vor dem EU-Umbau."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('data_dir = "state"\n', encoding="utf-8")
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.llm_api_mode == "anthropic"
+    assert cfg.llm_url == ""
+    assert cfg.llm_api_key_env == ""
+    assert cfg.llm_reasoning_effort == ""
+    # Ohne eigene Env-Variable ist der Schlüssel weiter der von Anthropic.
+    assert cfg.llm_api_key == "sk-anthropic"
+    assert cfg.wake_word_llm_api_mode == "anthropic"
+    assert cfg.wake_word_llm_api_key == "sk-anthropic"
+
+
+def test_the_llm_route_switches_to_a_chat_completions_endpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic")
+    monkeypatch.setenv("HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY", "sk-infomaniak")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        """
+        data_dir = "state"
+        llm_api_mode = "chat_completions"
+        llm_model = "moonshotai/Kimi-K2.6"
+        llm_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"
+        llm_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+        llm_reasoning_effort = "none"
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.llm_api_mode == "chat_completions"
+    assert cfg.llm_reasoning_effort == "none"
+    # Der Schlüssel steht NIE in der Datei, nur der Name seiner Env-Variablen.
+    assert "sk-infomaniak" not in cfg_file.read_text(encoding="utf-8")
+    assert cfg.llm_api_key == "sk-infomaniak"
+
+
+def test_the_wake_word_route_switches_independently_of_the_pipeline(tmp_path, monkeypatch):
+    """Zwei getrennte Schalter, weil es zwei getrennte Modelle sind: eines
+    verdichtet ein Interview, das andere entscheidet ein Ja/Nein im heißen
+    Pfad. Wer nur einen umstellt, muss das genau so bekommen."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY", "sk-infomaniak")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        """
+        data_dir = "state"
+        wake_word_llm_api_mode = "chat_completions"
+        wake_word_llm_model = "google/gemma-4-31B-it"
+        wake_word_llm_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"
+        wake_word_llm_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.llm_api_mode == "anthropic"
+    assert cfg.wake_word_llm_api_mode == "chat_completions"
+    assert cfg.wake_word_llm_api_key == "sk-infomaniak"
+    assert cfg.wake_word_llm_model == "google/gemma-4-31B-it"
+
+
+def test_a_missing_key_env_variable_reads_as_no_key_not_as_a_crash(tmp_path, monkeypatch):
+    """Fehlt die Variable, muss der Fehler beim Aufruf mit klarer Meldung
+    kommen (kg.llm), nicht schon beim Laden der Konfiguration."""
+    monkeypatch.delenv("GIBT_ES_NICHT", raising=False)
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        'data_dir = "state"\nllm_api_key_env = "GIBT_ES_NICHT"\n', encoding="utf-8"
+    )
+
+    assert load_config(cfg_file).llm_api_key is None

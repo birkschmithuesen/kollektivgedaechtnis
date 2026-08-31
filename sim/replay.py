@@ -168,7 +168,7 @@ def main() -> None:
     from kg.config import load_config
     from kg.embeddings import build_embedder
     from kg.export import write_graph_json
-    from kg.llm import LLMClient
+    from kg.llm import build_llm
     from kg.store import Store
 
     parser = argparse.ArgumentParser(prog="sim.replay")
@@ -196,12 +196,9 @@ def main() -> None:
     audit_path.unlink(missing_ok=True)
 
     store = Store.open(db_path)
-    llm = LLMClient(
-        model=cfg.llm_model,
-        effort=cfg.llm_effort,
-        max_tokens=cfg.llm_max_tokens,
-        api_key=cfg.anthropic_api_key,
-    )
+    # Genau derselbe Weg wie an der Station (kg/llm.py: build_llm) — sonst
+    # misst der Regressionslauf nicht das, was am 01.09. läuft.
+    llm = build_llm(cfg)
     # NB: built from `cfg`, not `run_cfg` — the embedding cache must live in the
     # real data_dir so a second run over the same corpus is free and offline.
     embedder = build_embedder(cfg, hash_only=args.hash_embedder)

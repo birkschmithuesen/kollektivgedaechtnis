@@ -4,8 +4,10 @@ import time
 import pytest
 
 from kg.stop_intent import (
+    STOP_INTENT_EFFORT,
     STOP_INTENT_SYSTEM,
     StopIntent,
+    build_stop_intent_llm,
     build_stop_intent_prompt,
     call_with_timeout,
     is_stop_command,
@@ -100,3 +102,48 @@ def test_a_slow_answer_is_dropped_rather_than_waited_for():
     with pytest.raises(TimeoutError):
         intent("Utopia, hiermit beende ich das Interview")
     assert time.monotonic() - began < 5.0
+
+
+# --- Verdrahtung des zweiten Clients ---------------------------------------
+
+
+def make_cfg(tmp_path, **overrides):
+    from kg.config import Config
+
+    return Config(data_dir=tmp_path / "state", anthropic_api_key="sk-anthropic", **overrides)
+
+
+def test_the_second_client_goes_to_anthropic_unless_the_config_says_otherwise(tmp_path):
+    """Fallback-Regel: ohne neue Schlüssel exakt der Weg von vor dem Umbau."""
+    llm = build_stop_intent_llm(make_cfg(tmp_path))
+
+    assert llm.api_mode == "anthropic"
+    assert llm.model == "claude-sonnet-5"
+    assert llm.effort == STOP_INTENT_EFFORT
+    # Ein Versuch, nicht zwei: ein Retry im heißen Pfad verdoppelt die Wartezeit.
+    assert llm.max_attempts == 1
+
+
+def test_the_second_client_can_be_pointed_at_a_chat_completions_endpoint(tmp_path):
+    llm = build_stop_intent_llm(
+        make_cfg(
+            tmp_path,
+            wake_word_llm_api_mode="chat_completions",
+            wake_word_llm_model="google/gemma-4-31B-it",
+            wake_word_llm_url="https://example.invalid/v1/chat/completions",
+            wake_word_llm_reasoning_effort="none",
+            wake_word_llm_timeout_s=6.0,
+        )
+    )
+
+    assert llm.api_mode == "chat_completions"
+    assert llm.url == "https://example.invalid/v1/chat/completions"
+    assert llm.reasoning_effort == "none"
+    # Das Zeitbudget des Threads ist auch das des HTTP-Aufrufs: ein Request,
+    # der länger offen bleibt als der Thread wartet, kostet nur noch Geld.
+    assert llm.timeout == 6.0
+
+
+def test_switching_the_way_off_still_builds_no_client_at_all(tmp_path):
+    assert build_stop_intent_llm(make_cfg(tmp_path, wake_word_llm=False)) is None
+    assert build_stop_intent_llm(make_cfg(tmp_path, wake_word="")) is None

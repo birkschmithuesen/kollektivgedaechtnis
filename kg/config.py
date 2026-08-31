@@ -56,6 +56,15 @@ class Config:
     # Hard budget for that call. It sits on the hot path of a running
     # recording, so a late answer is dropped rather than waited for.
     wake_word_llm_timeout_s: float = 6.0
+    # Eigener Anbieter-Schalter für diesen zweiten Client, unabhängig vom
+    # Pipeline-Modell darunter: es sind zwei verschiedene Aufgaben (ein Ja/Nein
+    # im heißen Pfad gegen die Verdichtung eines ganzen Interviews), und wer
+    # nur eine davon umstellt, soll genau das bekommen. Defaults = Anthropic,
+    # also der Weg von vor dem 2026-08-31.
+    wake_word_llm_api_mode: str = "anthropic"
+    wake_word_llm_url: str = ""
+    wake_word_llm_api_key_env: str = ""
+    wake_word_llm_reasoning_effort: str = ""
     terms_per_interview: int = 5
     # Run 19c: 5 was too narrow — in 7 of 8 near-misses of run 19b the
     # concept's own node sat at rank 7-56 in the candidate pool and was never
@@ -66,6 +75,16 @@ class Config:
     llm_model: str = "claude-opus-5"
     llm_effort: str = "high"
     llm_max_tokens: int = 16000
+    # Der zweite API-Weg (kg/llm.py, 2026-08-31). "anthropic" ist der Default
+    # und damit das Verhalten vor dem EU-Umbau; "chat_completions" spricht
+    # jeden OpenAI-kompatiblen Endpunkt an. `llm_url` und `llm_api_key_env`
+    # gelten nur im zweiten Modus, `llm_reasoning_effort` wird nur gesendet,
+    # wenn es gesetzt ist. Der Schlüssel selbst steht NIE in der config.toml —
+    # hier steht nur der NAME seiner Umgebungsvariablen.
+    llm_api_mode: str = "anthropic"
+    llm_url: str = ""
+    llm_api_key_env: str = ""
+    llm_reasoning_effort: str = ""
     # Embeddings: OpenRouter, OpenAI-compatible endpoint (spec 6.2). Cloud is
     # explicitly fine here; the cache makes re-runs free and offline.
     embedding_model: str = "openai/text-embedding-3-small"
@@ -92,6 +111,27 @@ class Config:
     anthropic_api_key: str | None = None
     telegram_token: str | None = None
     openrouter_api_key: str | None = None
+
+    @property
+    def llm_api_key(self) -> str | None:
+        """Der Schlüssel für den Pipeline-Client.
+
+        Ohne `llm_api_key_env` der Anthropic-Schlüssel wie bisher; mit ihm der
+        Inhalt genau dieser Umgebungsvariablen. Fehlt sie, ist das Ergebnis
+        `None` und der Fehler fällt beim Aufruf mit klarer Meldung (kg.llm) —
+        nicht beim Laden der Konfiguration, damit `kg --no-stt` und die Tests
+        ohne jeden Schlüssel starten.
+        """
+        if self.llm_api_key_env:
+            return os.environ.get(self.llm_api_key_env)
+        return self.anthropic_api_key
+
+    @property
+    def wake_word_llm_api_key(self) -> str | None:
+        """Dasselbe für den kleinen Client hinter dem Wake-Word."""
+        if self.wake_word_llm_api_key_env:
+            return os.environ.get(self.wake_word_llm_api_key_env)
+        return self.anthropic_api_key
 
     @property
     def db_path(self) -> Path:
@@ -135,12 +175,20 @@ _FIELD_NAMES = {
     "wake_word_llm",
     "wake_word_llm_model",
     "wake_word_llm_timeout_s",
+    "wake_word_llm_api_mode",
+    "wake_word_llm_url",
+    "wake_word_llm_api_key_env",
+    "wake_word_llm_reasoning_effort",
     "terms_per_interview",
     "merge_neighbours",
     "merge_style",
     "llm_model",
     "llm_effort",
     "llm_max_tokens",
+    "llm_api_mode",
+    "llm_url",
+    "llm_api_key_env",
+    "llm_reasoning_effort",
     "embedding_model",
     "embedding_url",
     "default_max_terms",

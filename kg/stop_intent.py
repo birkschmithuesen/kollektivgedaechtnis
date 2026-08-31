@@ -129,7 +129,14 @@ def make_stop_intent(llm, timeout_s: float) -> Callable[[str], bool]:
 
 
 def build_stop_intent_llm(cfg):
-    """The second, cheap client. `None` when the way is switched off."""
+    """The second, cheap client. `None` when the way is switched off.
+
+    Der Anbieter wird über die eigenen `wake_word_llm_*`-Schlüssel gewählt und
+    NICHT vom Pipeline-Modell geerbt (2026-08-31): hier fällt ein Ja/Nein im
+    heißen Pfad, dort wird ein ganzes Interview verdichtet, und wer nur eines
+    von beiden umstellt, soll genau das bekommen. Ohne diese Schlüssel ist es
+    unverändert Anthropic.
+    """
     if not (cfg.wake_word_llm and cfg.wake_word):
         return None
     from kg.llm import LLMClient
@@ -138,7 +145,15 @@ def build_stop_intent_llm(cfg):
         model=cfg.wake_word_llm_model,
         effort=STOP_INTENT_EFFORT,
         max_tokens=STOP_INTENT_MAX_TOKENS,
-        api_key=cfg.anthropic_api_key,
+        api_key=cfg.wake_word_llm_api_key,
+        api_mode=cfg.wake_word_llm_api_mode,
+        url=cfg.wake_word_llm_url,
+        reasoning_effort=cfg.wake_word_llm_reasoning_effort,
+        # Dasselbe Budget wie der Thread darüber (call_with_timeout): ein
+        # Request, der länger offen bleibt, als hier gewartet wird, kostet nur
+        # noch Geld. Gilt nur im chat_completions-Modus; der Anthropic-Client
+        # bringt sein eigenes Timeout mit.
+        timeout=cfg.wake_word_llm_timeout_s,
         # One attempt, not two: kg.llm's retry would double the wall time on
         # the hot path, and a retry that lands after the guest has walked away
         # is worth nothing. The mechanical way and the text message stay.
