@@ -80,3 +80,61 @@ ElevenLabs' server VAD sends `committed_transcript`
 curl -s http://127.0.0.1:5051/status
 curl -N -s --max-time 20 http://127.0.0.1:5051/events | head -20
 ```
+
+---
+
+# Zweiter Vertrag: Batch (`infomaniak-whisper`, 2026-08-31)
+
+**Der Vertrag oben gilt unverändert weiter.** Dies hier ist ein zweites
+Backend desselben Servers, kein Ersatz: derselbe Prozess, dieselben Endpunkte,
+dieselbe Wire-Form. Umgeschaltet wird beim Start des STT-Servers
+(`python -m fundusapps.stt_server infomaniak-whisper --language de`), nicht in
+der `config.toml` des Cores.
+
+Quelltext und Einspielanleitung: `stt_backends/` in diesem Repo.
+
+## Was sich ändert — und was ausdrücklich nicht
+
+| | `elevenlabs-scribe` (Vertrag oben) | `infomaniak-whisper` |
+|---|---|---|
+| Betriebsart | Streaming (`wants_streaming() → True`) | Segmented (`→ False`) |
+| Äußerungsgrenzen | Server-VAD von ElevenLabs | lokaler `VadChunker` (`vad.py`) |
+| `final` | pro committed transcript | **pro VAD-Chunk, unverändert im Format** |
+| `partial` mit Text | ja | **nein** |
+| `partial` als Status | — | `speech_detected`, `transcribing` (vom Recognizer) |
+| `turn_id` | ULID pro Äußerung | ULID pro Chunk, durchgereicht |
+| `confidence` | nicht gesetzt | nicht gesetzt |
+| `extending` | `True`/`False` bei Partials | immer `null` |
+| Latenz | quasi-live | ~3 s Overhead + Chunklänge |
+
+**Für den Core ändert sich nichts.** `kg/stt_client.py` konsumiert
+ausschließlich `type == "final"` und kennt die Herkunft nicht. Es gibt keinen
+Codepfad im Core, der auf `partial` reagiert — Partials gehen an die
+Operator-Anzeige, und dort ist ihr Ausbleiben eine Anzeigefrage, keine
+Funktionsfrage. Wake-Word- und Stopp-Erkennung arbeiten auf `final`-Texten und
+laufen weiter, nur mit Chunk-Latenz; der 15-Minuten-Timeout und die
+Textnachricht an den Bot bleiben die sicheren Wege.
+
+## Der Endpunkt (gemessen am 2026-08-31 gegen die echten Adressen)
+
+* **Absenden:** `POST https://api.infomaniak.com/1/ai/{produkt}/openai/audio/transcriptions`
+  (multipart: `file`, `model=whisper`, `language=de`,
+  `response_format=verbose_json`) → `{"batch_id": "..."}`.
+  ⚠️ **Nicht** unter `/2/.../openai/v1/` — dort 404. Der Chat-Endpunkt liegt
+  auf `/2/`, die Transkription auf `/1/`.
+* **Ergebnis:** `GET https://api.infomaniak.com/1/ai/{produkt}/results/{batch_id}`
+  → `{"status": "success", "data": "<JSON-String>"}`. `data` ist ein **String**
+  mit `text`, `segments` (je `start`/`end`), `language`, `duration`.
+* **Grenzen:** 25 MB pro Datei; mp3/mp4/aac/wav/flac/ogg/opus/wma/m4a/webm.
+* **Schlüssel:** Umgebungsvariable, Header `Authorization: Bearer …`.
+
+**Ende-zu-Ende-Latenz** (Upload + Transkription + Polling): 2,9 s für 5,3 s
+Audio · 3,6 s für 10,7 s · 3,8 s für 21,4 s · 4,7 s für 32,0 s. Der Overhead
+ist mit ~3 s fast konstant — längere Chunks sind effizienter, aber träger.
+
+## Fehlerbild
+
+Ein fehlgeschlagener Upload oder Poll verwirft den Chunk und läuft weiter; der
+Server hält nie an, und es gibt keinen Retry pro Chunk. Auf der Konsumentenseite
+sieht das aus wie eine Äußerung, die nie gesprochen wurde — dieselbe Klasse von
+Verlust wie ein nicht erkanntes Wort, und derselbe Umgang damit: aussitzen.
