@@ -16,8 +16,18 @@ herkules 91.98.143.165  (Ubuntu 24.04, nginx auf :80/:443, LE-Certbot)
   nginx  ──proxy_pass──▶  mirror/receiver.py  auf 127.0.0.1:8820
         │
         ▼
-  Besucher:innen-Handy   https://<host>/  (Graph)  und  /traum
+  Besucher:innen-Handy   https://<host>/   (Startseite)
 ```
+
+| Pfad | Was dort steht |
+|---|---|
+| `/` | Startseite: Begrüssung, zwei Knöpfe, kurzer Datenschutzabsatz. Statisch. |
+| `/graph` | die Graph-Ansicht |
+| `/traum` | Traumbild, Traumsatz und der Streifen der letzten Träume |
+| `/transparenz` | „Was wo läuft" — welcher Schritt bei welchem Anbieter liegt. Statisch. |
+
+Startseite und Transparenzseite hängen an keinem Zustand: sie stehen
+vollständig da, auch wenn nie eine Aufnahme eingegangen ist.
 
 PUSH, nicht PULL: der Server kann den Ausstellungsrechner nicht erreichen
 (NAT, fremdes WLAN). Der Uploader läuft dort und schiebt hoch.
@@ -177,10 +187,25 @@ curl -s -o /dev/null -w "%{http_code} %{content_type} %{size_download}\n" \
 **7. Und die Seiten selbst** — am besten wirklich mit einem Telefon, sonst:
 
 ```bash
-for p in / /traum /static/graph.js /static/vendor/cytoscape.min.js; do
+for p in / /graph /traum /transparenz /static/graph.js /static/vendor/cytoscape.min.js; do
   curl -s -o /dev/null -w "$p -> %{http_code}\n" $HOST$p
 done
 ```
+
+## 🔴 Vor der Veröffentlichung: der Wortlaut
+
+Startseite (`mirror/web/start.html`, Abschnitt „Wo diese Daten verarbeitet
+werden") und `mirror/web/transparenz.html` machen Zusagen über den Umgang mit
+personenbezogenen Daten Dritter. Sie gehen erst online, wenn Birk den Wortlaut
+freigegeben hat, und der Wortlaut wird **am Ausstellungstag gegen den
+tatsächlich laufenden Stand geprüft** — der Text steht im Präsens und
+beschreibt damit einen Zustand, keinen Vorsatz.
+
+Die vier Dienste stehen in `transparenz.html` an genau einer Stelle, zwischen
+`==== Die Dienste ====` und `==== Ende der Dienste ====`. Ändert sich der
+Stack, ändert sich dort eine Zeile — sonst nichts. Was ungeklärt ist, steht
+bewusst nicht auf der Seite; der Abschnitt „Was dabei offen bleibt" wird nicht
+gekürzt.
 
 ## Fehlerbilder
 

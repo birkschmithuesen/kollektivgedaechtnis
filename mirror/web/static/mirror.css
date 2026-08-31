@@ -134,4 +134,39 @@ main {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  /* Muss clippen: das geschlossene Blatt der Graphseite steht mit
+     translateY(101%) absichtlich UNTER der Unterkante und läge sonst über der
+     Fussleiste. */
+  overflow: hidden;
+}
+
+/* ---- Fussleiste der beiden Live-Seiten ------------------------------ */
+
+/* Der Weg zurück zur Startseite und zur Transparenzseite. Unten ist auf
+   diesen beiden Seiten nichts zu verschenken — also eine einzige schmale
+   Zeile, dezent wie eine Bildunterschrift. Getroffen werden muss sie
+   trotzdem: das 44-px-Mass steckt in den Links, nicht in der Zeile. */
+#fuss {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+  border-top: 1px solid var(--linie);
+  background: var(--ground);
+  font-size: 13px;
+  color: var(--dim);
+  z-index: 5;
+}
+
+#fuss a {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--dim);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }

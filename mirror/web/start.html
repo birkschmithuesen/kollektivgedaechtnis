@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivgedächtnis</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d0e10">
+<meta name="description" content="Kollektivgedächtnis und Kollektivtraum — eine Arbeit von Birk Schmithüsen und ArtesMobiles.">
+<!-- Diese Seite ist ein Wegweiser, keine Bühne: kein Skript, kein
+     EventSource, kein Aufruf von /api/…. Sie steht vollständig da, auch wenn
+     die Station gar nicht verbunden ist — sie wird im Stehen auf einem Flur
+     gelesen, und dort darf nichts erst laden müssen.
+
+     Und: nichts von einem fremden Server. Kein CDN, keine Schrift von
+     ausserhalb, kein Zählpixel. Sonst wäre der Satz weiter unten, dass diese
+     Seite nichts von Dritten einbindet, schlicht unwahr. -->
+<link rel="stylesheet" href="/static/mirror.css">
+<link rel="stylesheet" href="/static/seite.css">
+
+<main class="seite">
+  <h1>Kollektivgedächtnis</h1>
+
+  <p class="willkommen">Während der Konferenz führen wir Interviews. Aus dem,
+    was gesagt wird, wächst hier live ein gemeinsamer Graph — und daraus
+    entsteht in Runden ein Traumbild. Beides läuft im Haus auf den Projektionen
+    und ist auf dieser Seite auch von Ihrem Telefon aus zu sehen.</p>
+
+  <p class="urheber">Eine Arbeit von Birk Schmithüsen und ArtesMobiles.</p>
+
+  <nav class="knoepfe">
+    <a class="knopf" href="/graph">
+      <span class="knopf-titel">Der Graph</span>
+      <span class="knopf-zeile">Wer was gesagt hat, und wie es zusammenhängt.</span>
+    </a>
+    <a class="knopf" href="/traum">
+      <span class="knopf-titel">Der Traum</span>
+      <span class="knopf-zeile">Was die Maschine daraus gerade träumt.</span>
+    </a>
+  </nav>
+
+  <section class="hinweis">
+    <h2>Wo diese Daten verarbeitet werden</h2>
+
+    <p>Diese Seite läuft auf einem Server in Deutschland, setzt keine Cookies,
+      misst keine Zugriffe und bindet nichts von Dritten ein.</p>
+
+    <!-- Der Pfeil-Link ist ein normaler Link und kein Knopf: er darf die
+         beiden Haupt-Knöpfe darüber nicht überstimmen. -->
+    <p>Auch die Auswertung der Interviews läuft auf europäischer Infrastruktur,
+      mit offen verfügbaren Modellen. → <a href="/transparenz">Was wo läuft</a></p>
+  </section>
+
+  <!-- Die Trenner setzt das Stilblatt (`.fuss a + a::before`), damit auf einem
+       schmalen Schirm kein „·" allein am Zeilenende hängen bleibt. -->
+  <footer class="fuss">
+    <a href="/transparenz">Was wo läuft</a>
+    <a href="https://birkschmithuesen.com" target="_blank" rel="noopener">birkschmithuesen.com</a>
+    <a href="https://artesmobiles.art" target="_blank" rel="noopener">artesmobiles.art</a>
+  </footer>
+</main>
+</html>

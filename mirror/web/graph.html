@@ -9,12 +9,14 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0d0e10">
 <!-- Absolute Pfade: der Spiegel hängt im vhost immer an der Wurzel
-     (mirror/nginx-kg-mirror.conf), und /traum liegt eine Ebene tiefer als /. -->
+     (mirror/nginx-kg-mirror.conf), und alle Seiten liegen nebeneinander. -->
 <link rel="stylesheet" href="/static/mirror.css">
 <link rel="stylesheet" href="/static/graph.css">
 
+<!-- Die beiden Reiter bleiben: zwischen Netz und Traum wechselt man, ohne den
+     Umweg über die Startseite. Der Weg zurück steht unten in der Fusszeile. -->
 <nav id="kopf">
-  <a href="/" aria-current="page">Netz</a>
+  <a href="/graph" aria-current="page">Netz</a>
   <a href="/traum">Traum</a>
 </nav>
 <div id="alter" role="status" hidden></div>
@@ -43,6 +45,12 @@
     <p class="kein-zitat" id="blatt-leer" hidden>Von dieser Person ist kein Zitat hinterlegt.</p>
   </aside>
 </main>
+
+<footer id="fuss">
+  <a href="/">Start</a>
+  <span aria-hidden="true">·</span>
+  <a href="/transparenz">Was wo läuft</a>
+</footer>
 
 <script src="/static/vendor/cytoscape.min.js"></script>
 <script type="module">

@@ -12,6 +12,7 @@ ausschliesslich aus der Prozessumgebung (Auftrag, „Keine Geheimnisse im Repo")
 from __future__ import annotations
 
 import json
+import re
 import secrets
 
 import httpx
@@ -330,14 +331,18 @@ def test_ein_alter_stand_wird_als_alt_gemeldet(daten, token):
 
 
 def test_beide_seiten_und_ihre_dateien_werden_ausgeliefert(client):
-    for weg in ("/", "/traum"):
+    for weg in ("/graph", "/traum"):
         antwort = client.get(weg)
         assert antwort.status_code == 200
         assert "viewport-fit=cover" in antwort.text
-        # Beide Reiter stehen auf beiden Seiten.
-        assert 'href="/"' in antwort.text and 'href="/traum"' in antwort.text
+        # Beide Reiter stehen auf beiden Seiten — seit der Startseite auf der
+        # Wurzel liegt, zeigt der Netz-Reiter auf /graph.
+        assert 'href="/graph"' in antwort.text and 'href="/traum"' in antwort.text
+        # Und von beiden geht es zurück zur Startseite und zur Transparenz.
+        assert 'href="/"' in antwort.text and 'href="/transparenz"' in antwort.text
     for datei in (
         "/static/mirror.css",
+        "/static/seite.css",
         "/static/mirror.js",
         "/static/graph.js",
         "/static/dream.js",
@@ -349,10 +354,84 @@ def test_beide_seiten_und_ihre_dateien_werden_ausgeliefert(client):
 def test_die_seiten_haengen_an_nichts_aus_frontend(client):
     """Der Spiegel ist eigenständig (Auftrag): an der Wand wird parallel
     gebaut, und ein Pfad nach frontend/ würde beide Baustellen verkoppeln."""
-    for weg in ("/", "/traum"):
+    for weg in ("/", "/graph", "/traum", "/transparenz"):
         text = client.get(weg).text
         assert "frontend" not in text
         assert client.get(f"{weg.rstrip('/')}/../frontend/projection.html").status_code in (400, 404)
+
+
+# --------------------------------------------------------------------------
+# Die beiden stillen Seiten: Startseite und Transparenz
+# --------------------------------------------------------------------------
+
+
+def test_die_wurzel_ist_die_startseite_und_zeigt_auf_beide_ansichten(client):
+    """Ohne jede Aufnahme. Die Startseite ist der Wegweiser im Flur — sie muss
+    dastehen, auch wenn die Station gar nicht verbunden ist."""
+    antwort = client.get("/")
+    assert antwort.status_code == 200
+    assert "viewport-fit=cover" in antwort.text
+    assert 'href="/graph"' in antwort.text
+    assert 'href="/traum"' in antwort.text
+    assert "Der Graph" in antwort.text and "Der Traum" in antwort.text
+    # Der Weg zum langen Text ist von hier aus da.
+    assert 'href="/transparenz"' in antwort.text
+    # Und der Graph liegt jetzt woanders, nicht mehr auf der Wurzel.
+    assert "cytoscape" not in antwort.text
+
+
+def test_die_graphansicht_liegt_auf_graph(client):
+    antwort = client.get("/graph")
+    assert antwort.status_code == 200
+    assert 'id="cy"' in antwort.text
+    assert "/static/vendor/cytoscape.min.js" in antwort.text
+
+
+def test_die_transparenzseite_steht_ohne_jede_aufnahme(client):
+    antwort = client.get("/transparenz")
+    assert antwort.status_code == 200
+    assert "Was wo läuft" in antwort.text
+    # Die vier Dienste stehen an einer Stelle; dass sie überhaupt dastehen, ist
+    # der Sinn der Seite.
+    for dienst in ("Spracherkennung", "Ähnlichkeitsvergleich", "Black Forest Labs"):
+        assert dienst in antwort.text, dienst
+    # Der Abschnitt über die eigenen Lücken wird nicht wegoptimiert — er ist
+    # der Grund, warum der Rest glaubwürdig ist (Nachtrag 3).
+    assert "Was dabei offen bleibt" in antwort.text
+    assert "Die Schweiz gehört nicht zur EU" in antwort.text
+    assert "Telegram" in antwort.text
+    # Kein Datum auf der Seite: ein sichtbarer Stand, der nicht nachgepflegt
+    # wird, ist schlechter als keiner.
+    assert not re.search(r"\b20\d\d-\d\d-\d\d\b", antwort.text)
+
+
+def test_die_stillen_seiten_binden_nichts_von_dritten_ein(client):
+    """Beide behaupten das über sich selbst. Eine Schrift von einem fremden
+    Server oder ein nachgeladenes Skript würde die Aussage zur Unwahrheit
+    machen — und das auf der Seite, auf der es am meisten zählt."""
+    for weg in ("/", "/transparenz"):
+        # Ohne die Kommentare: dort steht (als Begründung) genau das, was hier
+        # verboten wird, und der Browser holt daraus nichts.
+        text = re.sub(r"<!--.*?-->", "", client.get(weg).text, flags=re.S)
+        assert "<script" not in text, weg
+        assert "EventSource" not in text, weg
+        # Alles, was der Browser von woanders HOLEN würde: nichts davon zeigt
+        # nach draussen. Die einzigen fremden URLs sind Ziele zum Anklicken.
+        for url in re.findall(r'(?:src|href)="(https?://[^"]*)"', text):
+            assert url.rstrip("/") in (
+                "https://birkschmithuesen.com",
+                "https://artesmobiles.art",
+            ), (weg, url)
+
+
+def test_die_beiden_ausseren_links_oeffnen_sicher(client):
+    """`target=_blank` ohne `rel=noopener` gibt der fremden Seite Zugriff auf
+    das eigene `window.opener` (Auftrag: „in neuem Tab, rel=noopener")."""
+    for weg in ("/", "/transparenz"):
+        text = client.get(weg).text
+        for anker in re.findall(r"<a\s[^>]*https?://[^>]*>", text):
+            assert 'target="_blank"' in anker, (weg, anker)
+            assert 'rel="noopener"' in anker, (weg, anker)
 
 
 async def test_der_ereignisstrom_beginnt_mit_dem_aktuellen_stand(daten, token):

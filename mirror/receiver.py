@@ -281,13 +281,25 @@ def create_app(data_dir: Path | str | None = None, token: str | None = None) -> 
 
     # ---- Öffentlich, nur lesend --------------------------------------
 
+    # Die Wurzel ist der Wegweiser, nicht die Ansicht: wer den Link im Haus
+    # abtippt, landet zuerst bei der Erklärung und entscheidet dann selbst.
+    # Start- und Transparenzseite sind rein statisch — sie funktionieren auch,
+    # wenn nie eine Aufnahme eingegangen ist, und hängen an keinem Zustand.
     @app.get("/")
+    def seite_start() -> FileResponse:
+        return FileResponse(WEB / "start.html")
+
+    @app.get("/graph")
     def seite_graph() -> FileResponse:
         return FileResponse(WEB / "graph.html")
 
     @app.get("/traum")
     def seite_traum() -> FileResponse:
         return FileResponse(WEB / "traum.html")
+
+    @app.get("/transparenz")
+    def seite_transparenz() -> FileResponse:
+        return FileResponse(WEB / "transparenz.html")
 
     @app.get("/favicon.ico")
     def favicon() -> Response:
