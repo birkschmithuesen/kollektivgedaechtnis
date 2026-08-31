@@ -71,13 +71,20 @@
   --ring-color: #C9A227;
   --ring-width: 0;
 
-  /* Der Lichthof um die Person. Kraeftiger als in der ersten Fassung (0.10),
-     weil er im Rendering das tragende Gestaltungsmittel ist — aber nicht
-     darueber: auf einer nicht perfekt weissen Wand zeichnet der Beamer einen
-     zu starken Hof als Rechteck-Aufhellung nach. */
+  /* KEIN Lichthof mehr um die Person (Birk, 2026-08-31, am Bild auf der Wand:
+     „Auf der Wand ist dann wieder der extrem breite, leicht transparente
+     goldene Kreis um das eigentliche Porträt. Der soll komplett weg").
+
+     Er war mit padding 20 bei einer Scheibe von 56 fast doppelt so breit wie
+     das Portrait selbst — und er tat mit anderen Mitteln genau das, was seit
+     heute der Goldverlauf IM PNG macht, nur als harte zweite Scheibe
+     dahinter. Zwei Sachen, die dasselbe wollen, und die aeussere gewinnt.
+
+     Der Verlauf im PNG bleibt (kg/photos.py, ring_glow): Er ist Teil des
+     Bildes, skaliert mit ihm und hat keine eigene Kante. */
   --halo-color: #C9A227;
-  --halo-opacity: 0.22;
-  --halo-padding: 20;
+  --halo-opacity: 0;
+  --halo-padding: 0;
 
   /* Das Ringecho ebenfalls aus: es war der zweite der „dickeren Kreise". */
   --ring-echo-width: 0;
