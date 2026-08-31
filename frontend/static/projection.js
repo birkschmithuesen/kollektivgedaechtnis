@@ -1382,6 +1382,7 @@ export function createGraphView(
     const settle = () =>
       atPlacementSize(() => {
         labelOverlapStats = settleLabels(cy);
+        aimCameraAtDream();
         camera.onGraphChanged();
       });
 
@@ -1414,6 +1415,33 @@ export function createGraphView(
           layoutPending = false;
         }
       });
+  }
+
+  /** Die Knoten, aus denen das Bild gerade entsteht — Ausschnitt für die
+   * Kamera (Birk, 2026-08-31).
+   *
+   * Die fünf Begriffe mit `.in-dream` PLUS die Personen, die sie genannt
+   * haben. Gemessen am Replay-Stand: die fünf allein ergäben Zoom 1.45 (1,6x
+   * enger als die kalibrierte Wand), mit ihren 18 Personen 1.07 — und die
+   * Portraits sind die andere Hälfte der Aussage, weil sie zeigen, WER das
+   * Material geliefert hat.
+   *
+   * `.neighborhood()` und nicht `.closedNeighborhood()`: beide existieren im
+   * vendorierten Bundle 3.30.2 (geprüft), aber das Ergebnis wird ohnehin mit
+   * den Traumknoten vereinigt, und `neighborhood()` macht sichtbar, dass hier
+   * die PERSONEN dazukommen und nicht versehentlich weitere Begriffe. */
+  function dreamNodes() {
+    const dream = cy.nodes('.in-dream');
+    if (dream.empty()) return null;
+    return dream.union(dream.neighborhood().nodes('.person'));
+  }
+
+  /** Der Kamera sagen, wo das aktuelle Bild herkommt. Ein No-op, solange kein
+   * Traum markiert ist — dann verhält sich die Wand wie vorher. */
+  function aimCameraAtDream() {
+    const nodes = dreamNodes();
+    if (!nodes || nodes.empty()) return;
+    camera.focusDream(nodes);
   }
 
   let last = performance.now();

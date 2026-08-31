@@ -46,6 +46,47 @@ const ROAM = {
   handoverMs: 5000,
 };
 
+// Die Kopplung an den Traum (Birk, 2026-08-31). Die Wand soll den Ausschnitt
+// zeigen, aus dem das Bild gerade entsteht — „was an der Wand hängt, ist
+// sichtbar aus DIESEM Teil des Netzes entstanden“.
+//
+// Zwei Auslöser, beide in Tool 1 sichtbar: das Portrait zu Interviewbeginn und
+// die neuen Begriffe. Ein dritter („Bild fertig“) wurde am 2026-08-31 verworfen
+// und das ist eine Entscheidung, keine Lücke: Tool 2 wählt seine fünf Begriffe
+// zu Beginn des Zyklus und behält sie bis zum fertigen Bild, `in_dream` zeigt
+// also während der ganzen Generierung schon dieselben fünf. Ein Schwenk zum
+// Bildende führe dorthin, wo die Kamera längst steht — und wäre nur über einen
+// Rückkanal von Tool 2 nach Tool 1 erreichbar, den `kg2/graph_client.py` per
+// Konstruktion nicht hat und `tests/test_dream_contract.py` am Quelltext
+// verbietet.
+const DREAM = {
+  // Wie weit der Ausschnitt gefasst wird: die fünf Begriffe PLUS die Personen,
+  // die sie genannt haben. Gemessen am Replay-Stand (60 Personen, 110
+  // Begriffe): die fünf allein sind 1240x346 groß und ergäben Zoom 1.45 — 1,6x
+  // enger als die auf der Wand kalibrierte Ansicht (0.886) und für Labels wie
+  // „Pseudo-Abstimmung vor Baubeginn“ zu wenig Fläche. Mit ihren 18 Personen
+  // sind es 1685x884 und Zoom 1.07, also nah an dem, was schon als lesbar
+  // beurteilt wurde. Und inhaltlich ist es die vollständigere Aussage: die
+  // Begriffe sind das Material, die Portraits sind, wer es gesagt hat.
+  withPersons: true,
+  // Wie lange die Kamera nach einem Auslöser im Traumgebiet bleibt, bevor sie
+  // wieder frei durchs ganze Netz wandert. Ein Traum entsteht alle 4-5 Minuten
+  // (kg2 `min_interval_s: 240`), eine Runde aus Fahrt und Rast dauert 9,4 s —
+  // in vier Minuten also rund 25 Stationen. Ohne Begrenzung sähe die Wand
+  // stundenlang nur dieses eine Gebiet; ohne Bindung wäre sie nach zehn
+  // Sekunden wieder irgendwo und die Kopplung praktisch wirkungslos.
+  holdMs: 240000,
+  // „Erst den Traum erklären, dann immer mehr Kontext geben“ (Birk,
+  // 2026-08-31). Der Rundgang bleibt im Traumgebiet, aber der Ausschnitt
+  // weitet sich über die Haltezeit: zu Beginn eins zu eins auf den fünf
+  // Begriffen und ihren Personen, am Ende ein Stück weiter draußen, sodass die
+  // Umgebung dazukommt. Als ZOOM-Faktor auf die gemessene Box, nicht als
+  // wachsende Knotenmenge: eine Menge, die Knoten dazunimmt, springt bei jedem
+  // neuen Knoten in der Bildgröße, ein Faktor wächst stetig.
+  spreadFrom: 1.0,
+  spreadTo: 2.1,
+};
+
 /** Ease in and out — no abrupt starts, no arrivals that slam to a halt.
  *
  * cosine rather than a cubic: its derivative is zero at BOTH ends, so a leg
@@ -127,6 +168,13 @@ export class Camera {
     // four times as long per leg. Clamped rather than validated-and-thrown: a
     // bad value must slow the wall down, never stop it rendering.
     this._roamSpeed = clampRoamSpeed(roamSpeed);
+    // Das Traumgebiet, solange eines gilt: `{ ids, until }`. `ids` friert die
+    // Knotenmenge zum Zeitpunkt des Auslösers ein, statt sie bei jedem Zugriff
+    // neu aus `.in-dream` zu lesen — sonst zöge ein Graph-Update mitten in
+    // einer Fahrt das Ziel unter der laufenden Bewegung weg, und genau das
+    // (ein Ruck mitten im Gleiten) ist das, was das Easing hier verhindern
+    // soll. Ein neuer Auslöser ersetzt die Menge als Ganzes.
+    this._dream = null;
     // At an unattended exhibition a stray touch/mouse must never be able to
     // pan the viewport off-frame or drag a node off its persisted position.
     // `manual` is the only mode where a visitor is meant to move anything;
@@ -183,7 +231,25 @@ export class Camera {
     if (!MODES.includes(mode)) throw new Error(`unknown camera mode: ${mode}`);
     const previous = this._mode;
     this._mode = mode;
+    // IMMER, auch wenn der Modus derselbe bleibt: Das ist die Zusicherung, dass
+    // an einer unbeaufsichtigten Ausstellung keine Besucherhand den Viewport
+    // verschieben oder einen Knoten aus der Anordnung ziehen kann, und sie wird
+    // bei jedem Aufruf neu behauptet statt einmal gesetzt und gehofft
+    // (tests/test_camera.py: „no sequence of modes ever makes a node
+    // grabbable"). Idempotent, also kostet die Wiederholung nichts.
     this._applyInteractivity(mode);
+    // Ab hier NUR bei einem echten Wechsel (gemessen 2026-08-31): `/events`
+    // liefert nach jedem `graph` auch ein `state`, und projection.html reicht
+    // dessen `camera_mode` ungeprüft durch — meist derselbe Wert wie eben.
+    // Ohne diesen Ausstieg löschte jeder Graph-Push den gerade gestarteten
+    // Handover und framte über `_frame()` wieder das ganze Netz: die
+    // Traumkopplung startete korrekt und war einen Wimpernschlag später wieder
+    // weg. Genau die Fehlerart aus dem Handoff — gebaut, plausibel,
+    // wirkungslos, und nur am gerenderten Bild zu sehen.
+    //
+    // Die Trennlinie liegt zwischen „behaupten, was ohnehin gilt" (oben, immer)
+    // und „die Ansicht neu werfen" (unten, nur bei Wechsel).
+    if (mode === previous) return;
     // Entering pan starts a fresh traversal; leaving it drops the state so a
     // later return does not resume a leg whose target may no longer exist.
     this._roam = mode === 'pan' ? { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 } : null;
@@ -196,8 +262,15 @@ export class Camera {
     // away — it is their own view being taken back. Everywhere else the hard
     // framing stays: the operator's push, a graph change, and above all the
     // pre-render, which shoots a screenshot right after setting a view.
+    //
+    // Gilt ein Traumgebiet, ist auch der Weg nach `fit` eine Fahrt statt eines
+    // harten Frames: `_frame()` zeigt das ganze Netz und risse die Kopplung
+    // auf, `_startHandover()` fährt über `_automaticView()` auf das Gebiet.
     if (previous === 'manual' && mode !== 'manual') this._startHandover();
-    else if (mode === 'fit') this._frame();
+    else if (mode === 'fit') {
+      if (this._dreamNodes()) this._startHandover();
+      else this._frame();
+    }
     this._onModeChanged(mode);
   }
 
@@ -240,6 +313,91 @@ export class Camera {
     this._fitWith(() => this.cy.fit(eles, padding));
   }
 
+  /** Der Ausschnitt, aus dem das Bild gerade entsteht (Birk, 2026-08-31).
+   *
+   * Gerufen von der Projektion bei den beiden Auslösern, die Tool 1 sieht: ein
+   * Portrait erscheint (Interviewbeginn) und neue Begriffe kommen dazu. Beide
+   * enden im selben Graph-Push, deshalb genügt EIN Einstieg.
+   *
+   * Bewegt hier NICHTS sofort. Der Sprung wäre genau der Ruck, gegen den die
+   * ganze Datei gebaut ist; stattdessen wird das Gebiet gemerkt und die
+   * laufende Fahrt zieht von selbst dorthin — im `pan`-Modus über die
+   * Zielauswahl in `_pickTarget`, im Übergang aus `manual` über den Handover.
+   *
+   * Wirkt NICHT im manuellen Modus: dort hat der Besucher die Wand in der
+   * Hand, und eine Kamera, die ihm alle vier Minuten wegspringt, wäre
+   * unbrauchbar (Birk). Gemerkt wird das Gebiet trotzdem — beim Rückfall in
+   * den Automatik-Modus ist es das Erste, was die Wand zeigt. Genau dafür
+   * fragt `_automaticView()` es ab. */
+  focusDream(nodes, { now = Date.now() } = {}) {
+    if (!nodes || nodes.length === 0) return;
+    // Die Menge einfrieren, nicht die Collection halten: Cytoscape-Collections
+    // sind an die Elemente gebunden, und ein Knoten, den das nächste Update
+    // entfernt, machte jede spätere Messung an dieser Menge unbrauchbar.
+    const ids = nodes.map((n) => n.id());
+    this._dream = { ids, until: now + DREAM.holdMs, since: now };
+    // Im manuellen Modus bleibt die Ansicht, wie sie ist — aber gemerkt ist
+    // gemerkt. Sonst ist ein laufender Handover auf das neue Gebiet
+    // umzulenken, aus demselben Grund wie in setZoomFactor: ein hartes Framing
+    // mitten im Flug ist der Ruck, den der Handover gerade vermeidet.
+    if (this._mode === 'manual') return;
+    // Kein hartes Framing, sondern eine Fahrt: der Handover ist bereits die
+    // Bewegung, die genau dafür gebaut wurde — 5 s Cosinus, von Birk am
+    // 2026-08-30 an der Wand auf diesen Wert gesetzt, weil 1,5 s „als Ruck
+    // ankamen". Ein Traum entsteht alle vier Minuten, also ist eine
+    // Fünf-Sekunden-Fahrt reichlich selten, und sie ist das Erzählmoment: das
+    // Netz wandert sichtbar dorthin, wo das nächste Bild herkommt.
+    //
+    // Gilt für BEIDE getriebenen Modi. In `fit` gäbe `_frame()` sonst wieder
+    // das ganze Netz, und `fit` ist die Vorgabe der Station (`camera_mode`
+    // default in kg/server.py) — die Kopplung wäre dort also wirkungslos.
+    if (this._handover) this._handover.to = this._automaticView();
+    else this._startHandover();
+  }
+
+  /** Die Knoten des Traumgebiets, oder null wenn gerade keines gilt.
+   *
+   * Läuft die Haltezeit ab, verfällt das Gebiet und die Wand wandert wieder
+   * frei — der Rest des Netzes darf nicht stundenlang unsichtbar bleiben.
+   * Knoten, die inzwischen aus dem Graphen verschwunden sind, fallen dabei
+   * heraus (`.filter` auf der Collection, nicht auf den ids): eine Auswahl,
+   * die auf einen entfernten Knoten zeigt, strandete die Fahrt im Nichts. */
+  _dreamNodes(now = Date.now()) {
+    if (!this._dream) return null;
+    if (now >= this._dream.until) {
+      this._dream = null;
+      return null;
+    }
+    const live = this.cy.collection(
+      this._dream.ids.map((id) => this.cy.getElementById(id)).filter((n) => n.length > 0),
+    );
+    if (live.empty()) {
+      this._dream = null;
+      return null;
+    }
+    return live;
+  }
+
+  /** Wie weit der Traumausschnitt gerade aufgezogen ist, 1 = eins zu eins.
+   *
+   * „Erst den Traum erklären, dann immer mehr Kontext geben" (Birk): der
+   * Faktor wächst über die Haltezeit von spreadFrom auf spreadTo. Linear und
+   * nicht über easeInOut: das hier ist kein Bewegungsabschnitt mit Anfang und
+   * Ende, den jemand als eine Geste sieht, sondern ein vier Minuten langes
+   * Driften — eine Kurve mit weichen Enden ließe es zwischendurch schneller
+   * laufen als am Rand, und genau das würde als Bewegung auffallen. */
+  _dreamSpread(now = Date.now()) {
+    if (!this._dream) return DREAM.spreadFrom;
+    const t = Math.min(1, Math.max(0, (now - this._dream.since) / DREAM.holdMs));
+    return DREAM.spreadFrom + (DREAM.spreadTo - DREAM.spreadFrom) * t;
+  }
+
+  /** Ob die Kamera gerade an einen Traum gebunden ist — für Tests und Sonden. */
+  get dreamState() {
+    if (!this._dream) return null;
+    return { ids: [...this._dream.ids], until: this._dream.until, since: this._dream.since };
+  }
+
   _frame() {
     this._fitWith(() => this.cy.fit(this.padding));
     if (this._zoomFactor === 1) return;
@@ -280,7 +438,15 @@ export class Camera {
     // handover moves the destination, so the handover is redirected rather
     // than overwritten.
     if (this._handover) this._handover.to = this._automaticView();
-    else if (this._mode === 'fit') this._frame();
+    // `_frame()` zeigt das GANZE Netz. Gilt ein Traumgebiet, wäre das der
+    // Rückschritt hinter die Kopplung: jeder Graph-Push (also genau der
+    // Moment, in dem ein neuer Traum entsteht) risse die Wand wieder auf die
+    // Gesamtansicht auf. Dann fährt sie stattdessen auf das Gebiet — dieselbe
+    // Fahrt, die focusDream() auslöst.
+    else if (this._mode === 'fit') {
+      if (this._dreamNodes()) this._startHandover();
+      else this._frame();
+    }
     // A target that just left the graph (density raised, term hidden) must not
     // strand the traversal mid-leg pointing at nothing.
     if (this._roam && this._roam.targetId && this.cy.getElementById(this._roam.targetId).empty()) {
@@ -299,9 +465,24 @@ export class Camera {
    *
    * Weighted by degree so the traversal favours shared concepts, and never
    * returns the node it is already sitting on — revisiting immediately would
-   * look like the camera got stuck. */
+   * look like the camera got stuck.
+   *
+   * Gilt ein Traumgebiet, wird NUR daraus gewählt (Birk, 2026-08-31, Variante
+   * C): die Kamera wandert weiter — die Wand soll nie einfrieren, dafür gibt
+   * es sogar die Atembewegung — aber sie bleibt dort, wo das Bild entsteht.
+   * Ohne das wäre der Ausschnitt nach einer Fahrt von 5,2 s wieder verlassen
+   * und die Kopplung bei einem Traum alle vier Minuten praktisch wirkungslos.
+   *
+   * Fällt auf das ganze Netz zurück, sobald das Gebiet abgelaufen ist oder aus
+   * einem einzigen Knoten besteht — aus dem einen Knoten wäre kein Ziel mehr
+   * wählbar, das nicht der aktuelle ist, und die Fahrt bliebe stehen. */
   _pickTarget() {
-    const candidates = this.cy.nodes('.term').filter((n) => n.id() !== this._roam?.targetId);
+    const dream = this._dreamNodes();
+    const pool = dream ? dream.nodes('.term') : this.cy.nodes('.term');
+    let candidates = pool.filter((n) => n.id() !== this._roam?.targetId);
+    if (candidates.empty()) {
+      candidates = this.cy.nodes('.term').filter((n) => n.id() !== this._roam?.targetId);
+    }
     if (candidates.empty()) return null;
     const weights = candidates.map((n) => Math.pow(n.degree(false) || 1, ROAM.degreeBias));
     const total = weights.reduce((a, b) => a + b, 0);
@@ -343,6 +524,25 @@ export class Camera {
    * jump landed. */
   _automaticView() {
     const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
+    // Gilt ein Traumgebiet, ist DAS das Ziel — auch und gerade beim Rückfall
+    // aus dem manuellen Modus (Birk, 2026-08-31: „wenn's dann auf den
+    // automatischen Modus geht, dann ist das Erste, wo es hinfährt, auch der
+    // Bereich, der jetzt gerade für das Bild verantwortlich ist"). Der Besucher
+    // hat die Wand vielleicht minutenlang gehalten, während zwei Interviews
+    // liefen; sie kehrt dorthin zurück, wo das aktuelle Bild herkommt, nicht
+    // zur Gesamtansicht.
+    const dream = this._dreamNodes();
+    if (dream) {
+      const level = this._levelForBox(dream, this._dreamSpread());
+      if (level > 0) {
+        const centre = this._dreamCentre(dream);
+        return {
+          x: this.cy.width() / 2 - centre.x * level,
+          y: this.cy.height() / 2 - centre.y * level,
+          zoom: level,
+        };
+      }
+    }
     if (this._mode === 'fit') {
       this._frame();
     } else {
@@ -435,8 +635,20 @@ export class Camera {
 
   /** The zoom level the traversal travels at, derived from the calibrated
    * factor the same way `_frame` derives it — so "1.8×" means the same thing
-   * whether the operator is in fit or in pan. */
+   * whether the operator is in fit or in pan.
+   *
+   * Gilt ein Traumgebiet, wird stattdessen DESSEN Box vermessen und über die
+   * Haltezeit aufgezogen (`_dreamSpread`) — „erst den Traum eins zu eins, dann
+   * immer mehr Kontext". Dieser Zweig wird bewusst NICHT gecacht: der Faktor
+   * ändert sich per Definition jede Sekunde, ein Cache wäre hier genau das
+   * Gegenteil dessen, was er sonst leistet. Der Cache bleibt für den
+   * ungebundenen Fall, wo `cy.fit()` sonst in jedem Frame liefe. */
   _travelLevel() {
+    const dream = this._dreamNodes();
+    if (dream) {
+      const level = this._levelForBox(dream, this._dreamSpread());
+      if (level > 0) return level;
+    }
     if (this._roamBaseLevel === undefined || this._roamBaseFactor !== this._zoomFactor) {
       const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
       this._fitWith(() => this.cy.fit(this.padding));
@@ -446,6 +658,29 @@ export class Camera {
       this.cy.pan(before.pan);
     }
     return this._roamBaseLevel;
+  }
+
+  /** Der Zoom, bei dem `eles` ins Fenster passt, geteilt durch `spread`.
+   *
+   * Gemessen wie `cy.fit()` es rechnet, statt fit() aufzurufen und das
+   * Ergebnis abzulesen: fit() schreibt Pan UND Zoom, und diese Funktion läuft
+   * in JEDEM Frame der Fahrt. Ein Schreiben-und-Zurücksetzen pro Frame wäre
+   * ein zweiter Schreiber auf dem Viewport neben step() — dieselbe Falle, die
+   * der Handover mit dem Verzicht auf cy.animate() umgeht. */
+  _levelForBox(eles, spread = 1) {
+    const bb = eles.boundingBox({ includeLabels: false });
+    if (!(bb.w > 0) || !(bb.h > 0)) return 0;
+    const w = this.cy.width() - 2 * this.padding;
+    const h = this.cy.height() - 2 * this.padding;
+    if (!(w > 0) || !(h > 0)) return 0;
+    const level = Math.min(w / bb.w, h / bb.h) / Math.max(1, spread);
+    return level > 0 && Number.isFinite(level) ? level : 0;
+  }
+
+  /** Die Mitte des Traumgebiets, oder null. Ziel des Handovers aus `manual`. */
+  _dreamCentre(nodes) {
+    const bb = nodes.boundingBox({ includeLabels: false });
+    return { x: (bb.x1 + bb.x2) / 2, y: (bb.y1 + bb.y2) / 2 };
   }
 
   _applyZoom(level) {
