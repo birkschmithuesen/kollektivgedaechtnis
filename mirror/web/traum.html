@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivtraum</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d0e10">
+<link rel="stylesheet" href="/static/mirror.css">
+<link rel="stylesheet" href="/static/dream.css">
+
+<nav id="kopf">
+  <a href="/graph">Netz</a>
+  <a href="/traum" aria-current="page">Traum</a>
+</nav>
+<div id="alter" role="status" hidden></div>
+
+<main>
+  <div id="buehne">
+    <div id="bild-rahmen">
+      <!-- Der Alternativtext wird auf den Traumsatz gesetzt, sobald einer da
+           ist (dream.js): das Bild IST der Satz, nur anders. -->
+      <img id="bild" alt="" hidden>
+    </div>
+    <div id="satz"></div>
+    <ul id="streifen" aria-label="Die letzten Träume" hidden></ul>
+  </div>
+
+  <div class="warten" id="warten">
+    <div>Die Station ist gerade nicht verbunden.</div>
+    <small>Sobald der nächste Traum entsteht, erscheint er hier von selbst.</small>
+  </div>
+</main>
+
+<footer id="fuss">
+  <a href="/">Start</a>
+  <span aria-hidden="true">·</span>
+  <a href="/transparenz">Was wo läuft</a>
+</footer>
+
+<div id="lupe" hidden>
+  <div class="kopfzeile">
+    <button class="schliessen" id="lupe-zu" aria-label="Schliessen">&times;</button>
+  </div>
+  <img id="lupe-bild" alt="">
+  <p id="lupe-satz"></p>
+</div>
+
+<script type="module">
+  import { verbindeSpiegel } from '/static/mirror.js';
+  import { createTraumAnsicht } from '/static/dream.js';
+
+  const ansicht = createTraumAnsicht(document);
+  window.kgSpiegelTraum = ansicht;
+
+  verbindeSpiegel({
+    art: 'dream',
+    alterEl: document.getElementById('alter'),
+    aufDaten: (daten) => ansicht.applyState(daten || {}),
+  });
+</script>
+</html>

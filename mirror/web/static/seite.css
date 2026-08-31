@@ -1,0 +1,193 @@
+/* Die beiden stillen Seiten: Startseite (/) und Transparenz (/transparenz).
+
+   Sie sind Text und sonst nichts — kein Cytoscape, kein Ereignisstrom, keine
+   Abhängigkeit von einer eingegangenen Aufnahme. Deshalb liegen sie NICHT im
+   Vollbild-Korsett der beiden Live-Seiten: die dürfen nie scrollen, diese
+   sollen es.
+
+   Wird nach mirror.css geladen und nimmt von dort Farben, Schrift, sichere
+   Ränder und das 44-px-Mass. Keine zweite Formensprache, nur ein anderer
+   Fluss. Nichts von einem fremden Server — sonst stimmt der Satz „bindet
+   nichts von Dritten ein" auf der Seite selbst nicht mehr. */
+
+html, body {
+  height: auto;
+  overflow: visible;
+}
+
+body {
+  display: block;
+  min-height: 100dvh;
+  /* Auf dem Telefon steht der Text im Fluss; auf einem breiten Schirm hört
+     eine Zeile bei ~34 em auf, statt quer über die Fläche zu laufen. */
+  padding: calc(28px + var(--safe-top)) calc(20px + var(--safe-right))
+           calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left));
+}
+
+.seite {
+  max-width: 34em;
+  margin: 0 auto;
+}
+
+/* ---- Kopf ----------------------------------------------------------- */
+
+h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.willkommen {
+  margin-top: 16px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.urheber {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+/* ---- Die beiden Knöpfe ---------------------------------------------- */
+
+/* Nebeneinander, wenn zwei nebeneinanderpassen (Querformat, Tablet), sonst
+   untereinander — ohne Medienabfrage: `flex-basis` entscheidet das selbst.
+   Auf 390 px breit heisst das untereinander, und beide bleiben zusammen mit
+   Titel und Willkommenstext ohne Wischen sichtbar. */
+.knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.knopf {
+  flex: 1 1 15em;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: var(--tap);
+  padding: 16px 18px;
+  color: var(--ink);
+  text-decoration: none;
+  background: #17181c;
+  border: 1px solid var(--linie);
+  border-radius: 10px;
+  /* Dieselbe rote Unterkante wie beim aktiven Reiter der Live-Seiten
+     (mirror.css) — kein neues Zeichen, nur dasselbe eine Stufe grösser. */
+  box-shadow: inset 0 -2px 0 var(--rot);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.knopf-titel {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.knopf-zeile {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+/* ---- Fliesstext, Abschnitte ----------------------------------------- */
+
+.seite h2 {
+  margin-top: 26px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.seite h2 + p,
+.seite h2 + ul { margin-top: 8px; }
+
+.seite p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+
+.seite ul {
+  margin-top: 12px;
+  padding-left: 1.1em;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+.seite li { margin-top: 6px; }
+
+.seite a {
+  color: var(--ink);
+  /* Der Pfeil-Link im Datenschutzabsatz soll ein Link sein und kein Knopf:
+     unterstrichen, in der Textfarbe, ohne Fläche. */
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--linie);
+}
+
+/* Die Knöpfe sind keine Links im Fliesstext: keine Unterstreichung. Mit
+   `.seite` davor, sonst gewinnt die Regel darüber. */
+.seite .knopf { text-decoration: none; }
+
+/* Der kurze Datenschutzabsatz auf der Startseite: er darf unter den Knöpfen
+   liegen (Auftrag), also bekommt er Abstand und eine dünne Trennlinie statt
+   eines Kastens. */
+.hinweis {
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px solid var(--linie);
+}
+.hinweis h2 { margin-top: 0; }
+
+/* ---- Zurück und Fusszeile ------------------------------------------- */
+
+.seite .zurueck {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--dim);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.fuss {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  margin-top: 30px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linie);
+  font-size: 14px;
+  color: var(--dim);
+}
+
+.fuss a {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+  color: var(--dim);
+}
+
+/* Der Trenner gehört zum FOLGENDEN Link, nicht zwischen die beiden: bricht die
+   Zeile auf einem schmalen Schirm um, hängt er sonst allein am Zeilenende. */
+.fuss a + a::before {
+  content: "·";
+  color: var(--linie);
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Was wo läuft — Kollektivgedächtnis</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d0e10">
+<!-- Statisch wie die Startseite: kein Skript, kein EventSource, nichts von
+     einem fremden Server. Eine Seite, die behauptet, sie binde nichts von
+     Dritten ein, darf das nicht durch ihre eigenen Verweise widerlegen.
+
+     Kein Datum auf dieser Seite. Ein sichtbarer Stand, der nicht nachgepflegt
+     wird, ist schlechter als keiner.
+
+     Wo die WEBSEITE liegt, steht bewusst nicht mehr hier (Birk, 2026-08-31):
+     interessant ist das Sprachmodell und die Spracherkennung, nicht der
+     Webserver. -->
+<link rel="stylesheet" href="/static/mirror.css">
+<link rel="stylesheet" href="/static/seite.css">
+
+<main class="seite">
+  <a class="zurueck" href="/">← Kollektivgedächtnis</a>
+
+  <h1>Was wo läuft</h1>
+
+  <p>Diese Installation verhandelt Künstliche Intelligenz als
+    gesellschaftliches Thema. Sie dabei auf den Rechenzentren amerikanischer
+    Konzerne laufen zu lassen, wäre ein stiller Widerspruch. <strong>Kein
+    Wort aus diesen Gesprächen verlässt Europa.</strong> Das Sprachmodell, das
+    die Interviews auswertet, und die Spracherkennung, die sie überhaupt erst
+    zu Text macht, laufen auf europäischer Infrastruktur — mit offen
+    verfügbaren Modellen, nicht mit den geschlossenen Systemen amerikanischer
+    Anbieter. Beratung dazu:
+    <a href="https://yourmodelyourrules.ai" target="_blank" rel="noopener">Your
+    Model, Your Rules</a>.</p>
+
+  <h2>Die Auswertung der Interviews</h2>
+
+  <!-- ==== Die Dienste — die einzige Stelle im Quelltext ===============
+       Diese Zeilen ändern sich, wenn sich der Stack ändert. Sie stehen genau
+       hier und nirgends sonst; ein Wechsel des Anbieters ist dann eine
+       geänderte Zeile und kein Umbau der Seite.
+       Reihenfolge nach Wichtigkeit, nicht nach Ablauf (Birk, 2026-08-31):
+       das Sprachmodell zuerst.
+       Nichts dazuschreiben, was nicht geklärt ist. Insbesondere steht hier
+       bewusst NICHT, dass der Anbieter der Bildgenerierung nicht mit den
+       Eingaben trainiert — das ist ungeklärt. -->
+  <ul>
+    <li>Auswertung der Gespräche — offen verfügbares Sprachmodell bei
+      Infomaniak, Schweiz</li>
+    <li>Spracherkennung — Infomaniak, Schweiz</li>
+    <li>Ähnlichkeitsvergleich der Begriffe — Infomaniak, Schweiz</li>
+    <li>Erzeugung der Traumbilder — Black Forest Labs, Deutschland</li>
+  </ul>
+  <!-- ==== Ende der Dienste =========================================== -->
+
+  <p>Die Verarbeitung ist DSGVO-konform. Infomaniak verarbeitet nach eigener
+    Auskunft ausschliesslich in der Schweiz und trainiert seine Modelle nicht
+    mit Kundendaten: Was hier gesagt wird, verbessert kein fremdes Produkt und
+    bleibt bei keinem Anbieter liegen.</p>
+
+  <!-- Kein Loeschversprechen (Birk, 2026-08-31): Das Audio wird nie
+       gespeichert - es gibt also nichts zu loeschen. Portrait und Zitat
+       bleiben dagegen, und zwar ueber das Festival hinaus. Eine Frist, die
+       niemand einhaelt, waere schlimmer als gar keine Zusage. -->
+  <p>Es wird kein Ton aufgezeichnet: Das Gesprochene läuft durch die
+    Spracherkennung und ist als Aufnahme danach fort. Was bleibt, ist, was Sie
+    auf der Wand sehen — Ihr Portrait, Ihr Zitat und die Begriffe daraus. Sie
+    gehören zur Arbeit und bleiben Teil von ihr.</p>
+
+  <!-- Dieser Abschnitt wird nicht gekürzt. Er ist der Grund, warum der Rest
+       der Seite glaubwürdig ist. -->
+  <h2>Was dabei offen bleibt</h2>
+  <p>Wir schreiben das dazu, weil eine Transparenzseite ohne ihre eigenen
+    Lücken nichts wert ist.</p>
+
+  <p>Die Schweiz gehört nicht zur EU. Sie hat ein eigenes Datenschutzgesetz und
+    ist von der EU-Kommission als sicheres Drittland anerkannt — der praktische
+    Gewinn ist, dass amerikanisches Recht hier nicht zugreift.</p>
+
+  <p>Wir betreiben für diese Installation keine automatische Anonymisierung.
+    Wer interviewt wird, wird vorher gefragt und stimmt zu.</p>
+
+  <h2>Der Quelltext</h2>
+  <p>Diese Installation ist keine gekaufte Lösung, sondern selbst geschrieben —
+    und offen: Der vollständige Quelltext steht unter der MIT-Lizenz auf
+    <a href="https://github.com/birkschmithuesen/kollektivgedaechtnis"
+      target="_blank" rel="noopener">GitHub</a>. Wer wissen will, was hier mit
+    seinen Worten passiert, muss uns nicht glauben, sondern kann nachlesen —
+    und das Ganze für eigene Arbeiten weiterverwenden.</p>
+
+  <h2>Warum wir das machen</h2>
+  <p>Nicht weil ein Gesetz es verlangt, sondern weil es zur Arbeit gehört. Die
+    Kette vom Interview über die Begriffe bis zum erzeugten Bild ist im Haus
+    bewusst nachvollziehbar ausgestellt. Diese Seite setzt das eine Ebene
+    tiefer fort: auch die Infrastruktur ist Teil des Werks.</p>
+
+  <p>Dass es so geht, ist keine Selbstverständlichkeit und keine Nebensache:
+    Wer ein KI-System baut, wählt damit auch, wem er die Daten anderer
+    Menschen anvertraut.</p>
+
+  <footer class="fuss">
+    <span>Fragen dazu:</span>
+    <a href="https://artesmobiles.art" target="_blank" rel="noopener">artesmobiles.art</a>
+    <a href="https://flashclash.de" target="_blank" rel="noopener">flashclash.de</a>
+  </footer>
+</main>
+</html>

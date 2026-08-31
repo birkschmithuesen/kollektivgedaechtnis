@@ -1,0 +1,133 @@
+/* Die Graphseite am Handy. */
+
+#cy {
+  position: absolute;
+  inset: 0;
+  /* Cytoscape bekommt die Gesten selbst (Wischen, Zwei-Finger-Zoom). Ohne
+     `touch-action: none` schiebt der Browser stattdessen die Seite und der
+     Graph reagiert erst gar nicht. `manipulation` allein reicht nicht: es
+     verhindert nur den Doppeltipp-Zoom, nicht das Scrollen. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- Das Blatt von unten: Portrait + Zitat -------------------------- */
+
+/* Muster von frontend/static/quote-overlay.js, aber eigene mobile Umsetzung:
+   an der Wand ist das eine eingeblendete Tafel für 4 m Breite, hier ein Blatt,
+   das von der Unterkante hereinfährt — die Bewegung erklärt am Telefon, wo es
+   herkommt und wie man es wieder loswird. */
+
+#blatt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  max-height: 72%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px calc(18px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(18px + var(--safe-left));
+  background: #17181c;
+  border-top: 1px solid var(--linie);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+  /* Geschlossen liegt es KOMPLETT unter der Kante, nicht nur unsichtbar:
+     sonst fängt es Tipps ab, die dem Graphen gelten. */
+  transform: translateY(101%);
+  transition: transform 220ms ease-out;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#blatt.offen { transform: translateY(0); }
+
+/* Der Griff: sagt ohne Wort, dass sich das Blatt schieben lässt. */
+#blatt .griff {
+  align-self: center;
+  width: 42px;
+  height: 4px;
+  margin-bottom: 12px;
+  border-radius: 2px;
+  background: rgba(242, 239, 233, 0.28);
+  flex: 0 0 auto;
+}
+
+#blatt .kopfzeile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+#blatt img {
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid var(--rot);
+  background: #242424;
+}
+#blatt img[hidden] { display: none; }
+
+#blatt .schliessen {
+  margin-left: auto;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  touch-action: manipulation;
+}
+
+#blatt blockquote {
+  margin-top: 14px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--ink);
+  /* Lange Begriffe ohne Leerzeichen dürfen die Seite nicht breiter machen. */
+  overflow-wrap: anywhere;
+}
+
+#blatt .kein-zitat {
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--dim);
+}
+
+/* ---- Fusszeile: die Legende der drei Farben ------------------------- */
+
+/* Ohne sie ist die Farbe an der Wand erklärt (durch den Raum, durch die
+   Begleitung) und am Handy nicht. Winzig, ausserhalb jeder Bedienung. */
+#legende {
+  position: absolute;
+  left: calc(10px + var(--safe-left));
+  bottom: calc(8px + var(--safe-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--dim);
+  pointer-events: none;
+  text-shadow: 0 0 6px var(--ground), 0 0 3px var(--ground);
+}
+#legende span::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: currentColor;
+  vertical-align: baseline;
+}
+#legende .anker { color: var(--rot); }
+#legende .nachbar { color: var(--blau); }
+#legende .neu { color: var(--gelb); }
+#legende[hidden] { display: none; }
