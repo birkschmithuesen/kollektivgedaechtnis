@@ -121,26 +121,51 @@ image_aspect_ratio = "16:9"
 
 # --- Zweiter Renderpfad: Black Forest Labs, EU (2026-08-31) ----------------
 #
-# "openrouter" ist der Default und der oben verifizierte Weg. "bfl" spricht
-# api.eu.bfl.ai an und funktioniert grundsätzlich anders: absenden, auf eine
-# batch-artige Antwort pollen, dann eine SIGNIERTE URL herunterladen, die nur
-# zehn Minuten gültig ist (Ablauf in kg2/imagegen.py, `_render_bfl`).
+# ENTSCHIEDEN von Birk am 2026-08-31: BFL als ANBIETER, EU-Endpunkt, weg von
+# OpenRouter. Grund ist der Rechtsraum — `api.eu.bfl.ai` routet ausschließlich
+# in EU-Regionen, BFL GmbH (Freiburg) ist laut Privacy Policy Controller für
+# EEA-Nutzer. Bei OpenRouter lief die Bildstufe über einen US-Anbieter; nur
+# das Modell kam von BFL.
 #
-# Zum Umschalten:
+# VERIFIZIERT am 2026-08-31 durch den Produktionspfad (kg2.cycle → imagegen →
+# save_image): 1344x768 angefordert, 1344x768 geliefert, 478 kB JPEG in 14 s.
+# Flux hält die Pixelmaße wirklich ein — anders als zwei der drei
+# OpenRouter-Modelle, die den aspect_ratio-Parameter mit HTTP 200 quittierten
+# und trotzdem quadratisch renderten.
+#
+# "openrouter" ist der Default und der oben verifizierte Weg. "bfl" spricht
+# api.eu.bfl.ai DIREKT an und funktioniert grundsätzlich anders: absenden, auf
+# eine batch-artige Antwort pollen, dann eine SIGNIERTE URL herunterladen, die
+# nur zehn Minuten gültig ist (Ablauf in kg2/imagegen.py, `_render_bfl`).
+# "bfl_proxy" spricht denselben Anbieter über einen lokalen Loopback-Broker an.
+#
+# ── WELCHER MODUS AUF WELCHE MASCHINE? ─────────────────────────────────────
+#
+# TRAUM-MASCHINE (Windows, am Ausstellungstag) → "bfl", KEIN Proxy nötig:
 #   image_api_mode = "bfl"
-#   image_model = "flux-pro-1.1"                 # hier: der ENDPUNKT
+#   image_model = "flux-2-pro-preview"           # hier: der ENDPUNKT
 #   image_url = "https://api.eu.bfl.ai/v1"       # hier: die BASIS
 #   image_api_key_env = "BFL_API_KEY"
 #   image_width = 1344
 #   image_height = 768
+#   Der Schlüssel kommt aus der Umgebung (`set BFL_API_KEY=…`), nie aus dieser
+#   Datei. Der vServer ist NICHT im Pfad — die Traum-Maschine holt von dort nur
+#   `graph.json` (tool1_url) und erzeugt Bilder selbst.
 #
-# Der Schlüssel kommt wie alle anderen aus der Umgebung (`export BFL_API_KEY=…`)
-# und existiert Stand 2026-08-31 noch nicht — fehlt er, scheitert Stufe 2 mit
-# einer Meldung, die die Variable beim Namen nennt, statt mit einem 401.
+# vSERVER (Entwicklung) → "bfl_proxy":
+#   image_api_mode = "bfl_proxy"
+#   image_url = "http://127.0.0.1:8791/render"
+#   image_api_key_env = ""                        # nur der Proxy kennt den Key
+#   Dort hat uid `birk` per nftables KEINEN Egress zu bfl.ai, und BFL verlangt
+#   eine Wildcard-Freigabe (`delivery.*.bfl.ai`), die nftables nicht leisten
+#   kann. Deshalb der Umweg über einen eigenen OS-User. Begründung + Messungen:
+#   ~/.hermes/profiles/birk/docs/bfl-wildcard-egress-loesungsweg.md
+#   Installation: deploy/bfl-proxy/install.sh (einmal als admin).
 #
 # `image_aspect_ratio` gilt weiter nur für den OpenRouter-Weg (dort reist es als
 # `image_config.aspect_ratio`); BFL bekommt stattdessen Pixel. 1344x768 ist 16:9
-# in Vielfachen von 32.
+# in Vielfachen von 32 (exakt 1,750 gegen 1,778 — die Kantenlängen müssen durch
+# 32 teilbar sein).
 image_api_mode = "openrouter"
 
 # Startwerte der Anzeige. Danach gehören sie dem Operator-UI, und ein Neustart
