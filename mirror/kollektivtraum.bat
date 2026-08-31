@@ -176,15 +176,19 @@ if "%KG_FENSTER%"=="1" (
 echo.
 echo   ==================================================================
 echo.
-echo    ZUM OEFFNEN - Adresse markieren und in den Browser kopieren:
+echo    ZUM OEFFNEN - anklickbar im Ordner "Kollektivtraum Ansichten"
+echo    auf dem Schreibtisch. Oder hier markieren und kopieren:
 echo.
-echo      Wand ^(Graph^)        http://127.0.0.1:8800/projection
+echo      Wand ^(Graph^)        http://127.0.0.1:8800/projection?theme=f^&touch=1
 echo      Schirm B ^(Traum^)    http://127.0.0.1:8810/dream
 echo.
 echo      Pult Graph           http://127.0.0.1:8800/operator
 echo      Pult Traum           http://127.0.0.1:8810/operator
 echo.
 echo      Am Telefon           %OEFFENTLICH%
+echo.
+echo    Die Wand ohne Beruehrung ^(zweiter Schirm, nur Anzeige^):
+echo      http://127.0.0.1:8800/projection?theme=f
 echo.
 echo   ==================================================================
 echo.
