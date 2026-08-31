@@ -115,6 +115,24 @@ class Core:
         self.store.set_setting("stt_connected", "1" if connected else "0")
         broadcast_state(self.store, self.bus)
 
+    def on_mic_switch(self, on: bool, at: float) -> None:
+        """The physical switch on the microphone moved (STT server → /api/interview_switch).
+
+        A separate setting from `stt_connected` on purpose. That one says
+        whether the STT server's event stream is reachable — a property of the
+        network. This says whether the microphone in the room is switched on —
+        a property of the visitor's hand. Folding the second into the first
+        would make a switched-off microphone indistinguishable from a crashed
+        STT server on the operator page, at the one moment when telling them
+        apart matters.
+
+        Like every other inbound callback here: never blocks. The close itself
+        happens in the worker.
+        """
+        self.store.set_setting("mic_on", "1" if on else "0")
+        broadcast_state(self.store, self.bus)
+        self._queue.put_nowait(("mic_switch", on, at))
+
     # -- queue processing ---------------------------------------------------
 
     async def run_worker(self) -> None:
@@ -146,6 +164,8 @@ class Core:
             transitions = self.tracker.photo(at)
         elif kind == "text":
             transitions = self.tracker.text_message(at)
+        elif kind == "mic_switch":
+            transitions = self.tracker.mic_switch(payload, at)
         elif kind == "final":
             if self.tracker.stop_intent is None:
                 transitions = self.tracker.transcript(payload, at)

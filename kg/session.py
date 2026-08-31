@@ -24,6 +24,7 @@ class Transition:
     at: float
     # opened: "photo"
     # closed: "text" | "spoken" | "spoken_llm" | "timeout" | "new_photo"
+    #       | "mic_switch"
     reason: str
 
 
@@ -99,6 +100,29 @@ class SessionTracker:
             log.error("stop-intent check failed, interview stays open: %s", exc)
             return []
         return self._close(at, "spoken_llm") if meant_it else []
+
+    def mic_switch(self, on: bool, at: float) -> list[Transition]:
+        """The physical switch on the microphone moved (STT server, 2026-08-31).
+
+        A fourth way out of "open", next to the text message, the spoken
+        phrase and the timeout, and the only one that is not a judgement about
+        language: the microphone was switched off, so the conversation is over.
+        Its own reason, "mic_switch", so store and logs keep it apart from a
+        spoken goodbye afterwards.
+
+        Switching ON deliberately opens NOTHING. An interview here is a person
+        with a portrait — `photo()` is the only entrance, and `Core._open`
+        needs the photo paths to create the person at all. An interview opened
+        by a switch would have no face and no node on the wall. The ON signal
+        is still worth having (the operator page shows it, see
+        `Core.on_mic_switch`), it just cannot be a session boundary.
+
+        Idempotent in both directions: a repeated OFF on an already-closed
+        session returns nothing, exactly like `_close` everywhere else.
+        """
+        if on:
+            return []
+        return self._close(at, "mic_switch")
 
     def tick(self, now: float) -> list[Transition]:
         if self._open_since is None or now - self._open_since < self.timeout_s:

@@ -138,3 +138,65 @@ Ein fehlgeschlagener Upload oder Poll verwirft den Chunk und läuft weiter; der
 Server hält nie an, und es gibt keinen Retry pro Chunk. Auf der Konsumentenseite
 sieht das aus wie eine Äußerung, die nie gesprochen wurde — dieselbe Klasse von
 Verlust wie ein nicht erkanntes Wort, und derselbe Umgang damit: aussitzen.
+
+---
+
+# Dritter Vertrag: der Mikrofonschalter (2026-08-31)
+
+**Neu ist hier die Richtung.** Die beiden Verträge oben beschreiben, was wir
+vom STT-Server *lesen*. Dieser beschreibt, was der STT-Server bei uns
+*aufruft* — der einzige Fall, in dem er das tut.
+
+Ausgelöst wird er vom `--mic-gate` des STT-Servers: am Mikrofon hängt ein
+physischer Schalter, „aus" heißt, der Pegel fällt auf das Grundrauschen des
+Wandlers. Hysterese (an über der Schwelle, aus erst unter der halben) und eine
+Mindestdauer (Default 1500 ms) machen daraus einen Zustand statt eines
+Flatterns.
+
+## Der Aufruf
+
+```
+POST http://<core>:8800/api/interview_switch
+{"on": false, "source": "mic_switch"}   ->  200 {"ok": true, "on": false}
+```
+
+Der STT-Server ruft aus einem Wegwerf-Thread heraus auf, Timeout (2 s, 5 s),
+kein Retry. Ein nicht erreichbarer Core wird dort geloggt und sonst
+ausgesessen — genau wie ein verworfener Chunk oben.
+
+## Was der Core damit macht — und was nicht
+
+| | |
+|---|---|
+| `on: false` | schließt das offene Interview, `stop_reason="mic_switch"` (`SessionTracker.mic_switch` → `_close`). Die Pipeline läuft an wie nach einer gesprochenen Schlussphrase. |
+| `on: true` | öffnet **nichts**. |
+| beides | setzt die Einstellung `mic_on` und meldet sie über `/events` an die Bedienseite (Abzeichen `MIC` neben `STT`). |
+
+**Warum `on: true` nichts öffnet:** ein Interview ist hier ein Mensch mit
+Porträt, und das Porträt kommt aus dem Foto — `SessionTracker.photo()` ist der
+einzige Eingang, und `Core._open` braucht die beiden Bildpfade, um die Person
+überhaupt anzulegen. Ein per Schalter geöffnetes Interview hätte kein Gesicht
+und keinen Knoten auf der Wand. Das Signal wird trotzdem geschickt und
+angezeigt, es ist nur keine Sitzungsgrenze.
+
+`mic_on` ist ausdrücklich **nicht** `stt_connected`. Das eine sagt, ob der
+Erkennungsserver erreichbar ist, das andere, ob das Mikrofon im Raum
+eingeschaltet ist. Sie zusammenzulegen hieße, ein abgeschaltetes Mikrofon nicht
+mehr von einem abgestürzten STT-Server unterscheiden zu können — in genau dem
+Moment, in dem jemand auf die Leiste schaut.
+
+## Nebenwirkung auf den SSE-Strom
+
+Der STT-Server legt den Schalterwechsel zusätzlich als Ereignis auf seinen Bus
+und damit in `/events`:
+
+```
+data: {"type": "mic_gate", "mic_on": false, "level_rms": 0.0004,
+       "threshold": 0.002, "timestamp": 1756..., "recognizer_id": "mic_gate"}
+```
+
+**Für uns folgenlos, aber nachgeprüft:** `TranscriptionEvent.from_dict` ist
+tolerant gegenüber unbekannten Schlüsseln und fehlenden Feldern, und
+`STTClient._dispatch` verzweigt allein auf `type in ("final", "partial")`.
+Ein `"mic_gate"` läuft also durch, ohne etwas anzufassen. Das Ereignis ist für
+die Operator-Anzeige des STT-Servers da, nicht für uns.
