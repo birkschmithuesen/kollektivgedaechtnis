@@ -56,9 +56,15 @@ FERN
     # ab. Von dort liest es das Startskript des Uploaders — der Wert steht damit
     # nie in einer Verknuepfung, nie in der Aufgabenplanung, nie im Verlauf der
     # PowerShell.
+    #
+    # Die Standard-Shell des Windows-OpenSSH-Servers ist `cmd`, nicht bash:
+    # ein `cat > "$HOME/..."` scheitert dort mit „Das System kann den
+    # angegebenen Pfad nicht finden." Deshalb schreibt PowerShell die Datei,
+    # und zwar ueber die Standardeingabe — der Wert steht nirgends auf einer
+    # Kommandozeile und taucht damit auch in keiner Prozessliste auf.
     ziel="${2:?Aufruf: $0 windows <tailscale-name-oder-ip>}"
     token_holen | ssh -o BatchMode=yes "$ziel" \
-      'cat > "$HOME/.kg-mirror-token" && chmod 600 "$HOME/.kg-mirror-token" 2>/dev/null; echo "abgelegt in ~/.kg-mirror-token"'
+      'powershell -NoProfile -Command "$t=[Console]::In.ReadToEnd().Trim(); $p=Join-Path $env:USERPROFILE \".kg-mirror-token\"; [IO.File]::WriteAllText($p,$t); $a=Get-Acl $p; $a.SetAccessRuleProtection($true,$false); $a.Access | ForEach-Object { $a.RemoveAccessRule($_) | Out-Null }; $a.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($env:USERNAME,\"FullControl\",\"Allow\"))); Set-Acl $p $a; Write-Output (\"abgelegt: \" + $p + \" (\" + $t.Length + \" Zeichen, nur \" + $env:USERNAME + \")\")"'
     ;;
 
   datei)
