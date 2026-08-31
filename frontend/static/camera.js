@@ -588,7 +588,14 @@ export class Camera {
     // zur Gesamtansicht.
     const dream = this._dreamNodes();
     if (dream) {
-      const level = this._levelForBox(dream, this._dreamSpread());
+      // Mal `_zoomFactor`, genau wie `_frame()` und `_travelLevel()` es tun:
+      // der Regler bedeutet „so viel enger als die Vollansicht" und muss auf
+      // dem Traumgebiet dasselbe bedeuten wie auf dem ganzen Netz. Ohne diese
+      // Multiplikation verwarf jedes geltende Traumgebiet die Reglerstellung
+      // stillschweigend — gemessen 2026-09-01: Faktor 3 ergab 1,00x statt 3x,
+      // und weil im Betrieb fast immer ein Traumgebiet gilt, wirkte der Regler
+      // an der Wand gar nicht (Birk, 2026-08-31).
+      const level = this._levelForBox(dream, this._dreamSpread()) * this._zoomFactor;
       if (level > 0) {
         const centre = this._dreamCentre(dream);
         return {
@@ -701,7 +708,11 @@ export class Camera {
   _travelLevel() {
     const dream = this._dreamNodes();
     if (dream) {
-      const level = this._levelForBox(dream, this._dreamSpread());
+      // Mal `_zoomFactor` aus demselben Grund wie in `_automaticView()`: der
+      // gecachte Zweig unten multipliziert ihn ebenfalls (`* this._zoomFactor`),
+      // und die Fahrt darf nicht auf einem anderen Niveau laufen als das Ziel,
+      // auf das der Handover sie setzt.
+      const level = this._levelForBox(dream, this._dreamSpread()) * this._zoomFactor;
       if (level > 0) return level;
     }
     if (this._roamBaseLevel === undefined || this._roamBaseFactor !== this._zoomFactor) {
