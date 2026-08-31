@@ -31,12 +31,19 @@
   // Flaechen statt Punkt+Text, Achsenfarbe in der Flaeche, Kantenboegen.
   // 'e' bleibt daneben bestehen, damit beide vergleichbar sind.
   // 'd' fehlt hier absichtlich: theme-d.css ist das Testbild (/testpattern),
-  // kein Graph-Theme. 'e' ist das Bauhaus-Theme (Birk, 2026-08-30) und seit
-  // dann die Vorgabe — es traegt die Farbcodierung der drei Auswahlachsen,
-  // ohne die die Markierung an der Wand nur ein Ja/Nein waere.
+  // kein Graph-Theme. 'e' war ab 2026-08-30 die Vorgabe; seit 2026-09-01 ist
+  // es 'f' (Birk: „das Standard-Graph-Layout soll f sein, wenn kein Kommentar
+  // kommt, soll immer f geladen werden"). Beide tragen die Farbcodierung der
+  // drei Auswahlachsen, ohne die die Markierung an der Wand nur ein Ja/Nein
+  // waere — der Wechsel kostet sie also nicht.
+  //
+  // Die Vorgabe steht bewusst HIER und nicht nur in der Wandadresse: die
+  // oeffentliche Handy-Seite und jeder Aufruf ohne `?theme=` gehen durch
+  // genau diese Zeile, und dort fehlte das Theme bisher (Birk, 2026-09-01:
+  // „bei kollektivgedaechtnis.flashclash.de wird das zbsp nicht geladen").
   const KNOWN_THEMES = ['a', 'b', 'c', 'e', 'f'];
   const requestedTheme = params.get('theme');
-  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'e';
+  const theme = KNOWN_THEMES.includes(requestedTheme) ? requestedTheme : 'f';
   const themeHref = `static/theme-${theme}.css`;
   // Swapping `href` starts an async fetch. createGraphView() reads the
   // stylesheet synchronously via getComputedStyle (projection.js's cssVar()),
