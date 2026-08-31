@@ -428,6 +428,7 @@ def test_die_stillen_seiten_binden_nichts_von_dritten_ein(client):
                 "https://artesmobiles.art",
                 "https://flashclash.de",
                 "https://yourmodelyourrules.ai",
+                "https://github.com/birkschmithuesen/kollektivgedaechtnis",
             ), (weg, url)
 
 
