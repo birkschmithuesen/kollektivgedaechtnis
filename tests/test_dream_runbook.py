@@ -361,27 +361,78 @@ def test_the_runbook_tells_the_operator_how_to_start_a_new_festival_day_empty():
 
 
 def test_the_runbook_says_to_save_the_day_before_wiping_it():
-    """Der Löschbefehl und die Sicherung gehören in DENSELBEN Abschnitt.
+    """Der Schnittbefehl und die Sicherung gehören in DENSELBEN Abschnitt.
 
-    Echte Interviewdaten sind personenbezogen und existieren genau einmal;
-    `rm -rf dream-data/images/` ist unumkehrbar. Stünde die Sicherung
-    woanders im Dokument, läse jemand am Morgen des zweiten Tages nur den
-    Löschbefehl — der Abschnitt heißt schließlich nach dem, was er tun will.
+    Echte Interviewdaten sind personenbezogen und existieren genau einmal.
+    Stünde die Sicherung woanders im Dokument, läse jemand am Morgen des
+    zweiten Tages nur den Schnittbefehl — der Abschnitt heißt schließlich
+    nach dem, was er tun will.
+
+    Seit 2026-09-01 schneidet das Runbook per `scripts/neuer-durchlauf.sh`,
+    das ARCHIVIERT statt zu löschen (Birks stehende Regel: nie endgültig
+    löschen, er entscheidet über Löschungen). Die Festlegung dieses Tests
+    ändert das nicht — sie gilt der REIHENFOLGE, und die gilt für einen
+    archivierenden Schnitt genauso: die Nextcloud-Sicherung ist die externe
+    Kopie, das Archiv nur der lokale Schnitt, und auf einer vollen Platte
+    ist ein lokales Archiv kein Ersatz. Verankert ist die Prüfung deshalb am
+    Schnittbefehl selbst statt an `rm -rf` — sonst hinge sie am Mechanismus
+    statt an der Entscheidung.
     """
     section = new_festival_day_section()
 
     assert "sichere-ausstellungstag.sh" in section, (
-        "der Abschnitt löscht den Tag, ohne auf die Sicherung zu verweisen"
+        "der Abschnitt schneidet den Tag, ohne auf die Sicherung zu verweisen"
     )
     skript = Path("scripts/sichere-ausstellungstag.sh")
     assert skript.exists(), "das Runbook nennt ein Sicherungsskript, das es nicht gibt"
     assert skript.stat().st_mode & 0o111, "das Sicherungsskript ist nicht ausführbar"
 
-    # Die Reihenfolge ist die eigentliche Aussage: erst sichern, dann löschen.
-    assert section.index("sichere-ausstellungstag.sh") < section.index("rm -rf"), (
-        "der Löschbefehl steht vor der Sicherung — am Ausstellungsmorgen liest "
+    schnitt = Path("scripts/neuer-durchlauf.sh")
+    assert schnitt.exists(), "das Runbook nennt ein Schnittskript, das es nicht gibt"
+    assert schnitt.stat().st_mode & 0o111, "das Schnittskript ist nicht ausführbar"
+
+    # Die Reihenfolge ist die eigentliche Aussage: erst sichern, dann schneiden.
+    assert section.index("sichere-ausstellungstag.sh") < section.index(
+        "neuer-durchlauf.sh"
+    ), (
+        "der Schnittbefehl steht vor der Sicherung — am Ausstellungsmorgen liest "
         "niemand rückwärts"
     )
+
+
+def test_the_new_run_script_archives_instead_of_deleting():
+    """Birk, 2026-08-31: „nie etwas endgültig löschen, immer archivieren."
+
+    Bis dahin standen im Runbook zwei `rm`-Zeilen — das Gegenteil des
+    Wunsches und ein Widerspruch zu seiner stehenden Regel, dass ER über
+    Löschungen entscheidet. Dieser Test hält fest, dass der Schnitt
+    verschiebt und niemals selbst löscht; dieselbe Festlegung, die
+    `test_the_backup_script_verifies_before_anything_may_be_deleted` für das
+    Sicherungsskript trifft.
+    """
+    for pfad in ("scripts/neuer-durchlauf.sh", "scripts/neuer-durchlauf.bat"):
+        skript = Path(pfad)
+        assert skript.exists(), f"{pfad} fehlt — der Schnitt ist nicht erreichbar"
+        text = skript.read_text(encoding="utf-8")
+
+        assert "archiv" in text.lower(), f"{pfad} legt kein Archiv an"
+
+        # Kein Loeschbefehl, in keiner der beiden Schalen. Zeilenweise geprueft
+        # und nicht per Substring: „rm " kommt auch in Prosa vor, und ein
+        # Kommentar, der das alte Verhalten ERKLAERT, ist kein Loeschbefehl.
+        for zeile in text.splitlines():
+            blank = zeile.strip()
+            if blank.startswith("#") or blank.lower().startswith("rem "):
+                continue
+            assert not blank.startswith("rm "), f"{pfad} löscht selbst: {blank}"
+            assert not blank.lower().startswith("del "), f"{pfad} löscht selbst: {blank}"
+            assert not blank.lower().startswith("rmdir "), f"{pfad} löscht selbst: {blank}"
+
+    # Der Einbettungs-Cache ist der Ausnahmefall: er wandert mit ins Archiv,
+    # muss aber zurueck, sonst kostet jeder neue Durchlauf erneut Geld und
+    # verliert die Offlinefaehigkeit (docs/operations.md).
+    sh = Path("scripts/neuer-durchlauf.sh").read_text(encoding="utf-8")
+    assert "embeddings.sqlite3" in sh, "der Einbettungs-Cache wird nicht zurückgeholt"
 
 
 def test_the_backup_script_verifies_before_anything_may_be_deleted():

@@ -871,13 +871,38 @@ akkumulierte Sammlung. Vor dem zweiten (und jedem weiteren) Ausstellungstag,
 auf der Traum-Maschine, bei gestopptem Prozess:
 
 ```bash
-rm dream-data/dreams.sqlite3
-rm -rf dream-data/images/
+scripts/neuer-durchlauf.sh "Ausstellungstag 1"
 ```
+
+Auf dem Ausstellungsrechner (Windows) dasselbe per Doppelklick:
+`scripts\neuer-durchlauf.bat`, Verknüpfung neben START und STOP.
+
+**Das Skript archiviert, es löscht nichts** (Birk, 2026-08-31: nie etwas
+endgültig löschen, immer archivieren — über Löschungen entscheidet er selbst).
+Es verschiebt `data/` und `dream-data/` nach `archiv/<zeitstempel>/` — also
+insbesondere `dream-data/dreams.sqlite3` und `dream-data/images/`, die beiden
+Bestände, die einen Tag sonst in den nächsten tragen. Dort landet eine
+`NOTIZ.txt` mit der Zeile, wofür der Durchlauf war; ohne sie weiß in einer
+Woche niemand mehr, welcher Ordner der echte Ausstellungstag war. Verschieben
+ist auf demselben Datenträger atomar und kostet auch bei tausenden Bildern
+keine Zeit.
+
+Zwei Dinge, die das Skript selbst absichert:
+
+- **Es weigert sich, wenn noch etwas läuft.** SQLite hält offene Handles; ein
+  Verschieben unter laufendem Prozess ergäbe eine halbe Datenbank. Erst STOP
+  drücken.
+- **`data/embeddings.sqlite3` wird zurückkopiert.** Der Cache spart Geld und
+  macht Wiederholungen offlinefähig (siehe oben) — er wandert mit ins Archiv,
+  aber der frische Durchlauf bekommt ihn wieder.
+
+Es fragt vor dem Verschieben nach; ein versehentlicher Doppelklick mitten am
+Ausstellungstag wäre teuer.
 
 Beide Pfade werden beim nächsten Start automatisch neu angelegt (leere
 Datenbank, leerer Bilderordner) — dasselbe Verzeichnis, das `config2.toml`
-unter `data_dir` nennt.
+unter `data_dir` nennt. Was im Archiv am Ende wirklich weg soll, löscht später
+jemand von Hand; das ist eine Entscheidung, keine Routine.
 
 ### Kalibrierte Werte (Tool 2)
 
