@@ -27,3 +27,10 @@ config2.toml
 # Commit. Wuerden sie mitlaufen, waere nach kurzer Zeit nicht mehr
 # unterscheidbar, welcher Brief noch gilt und welcher laengst abgearbeitet ist.
 .task-*.md
+
+# Sicherungskopie des alten Fuenf-Fragen-Korpus vom 2026-08-30. Redundant: Der
+# Stand liegt in der Historie (d8c1f33), die Kopie entstand nur, weil der
+# Generator vorhandene Dateien NIE ueberschreibt und der Ordner leer sein
+# musste. Nicht committet, aber auch nicht geloescht - ueber Loeschungen
+# entscheidet Birk.
+sim/data/interviews-5fragen-archiv/
