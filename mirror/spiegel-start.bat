@@ -10,7 +10,12 @@ rem Doppelklick genuegt. Das Fenster bleibt offen und zeigt, was hochgeht.
 
 setlocal
 
-set "SPIEGEL=%USERPROFILE%\kg-spiegel"
+rem Feste Pfade, kein %USERPROFILE%: Die Station wird mal als `birk`, mal
+rem als `SF-Tracking` bedient (beide melden sich an derselben Kiste an), und
+rem der Quelltext liegt nur einmal - unter `birk`. Das Token dagegen gehoert
+rem dem jeweils angemeldeten Benutzer, weil nur er es lesen darf.
+set "SPIEGEL=C:\Users\birk\kg-spiegel"
+set "KGVENV=C:\Users\birk\kollektivgedaechtnis\.venv\Scripts\python.exe"
 set "TOKENDATEI=%USERPROFILE%\.kg-mirror-token"
 
 if not exist "%TOKENDATEI%" (
@@ -38,7 +43,7 @@ echo Beenden mit Strg+C. Das Fenster darf den ganzen Tag offen bleiben:
 echo der Uploader steht Netzaussetzer durch und faengt sich von selbst.
 echo.
 
-"%USERPROFILE%\kollektivgedaechtnis\.venv\Scripts\python.exe" -m mirror.uploader
+"%KGVENV%" -m mirror.uploader
 
 echo.
 echo Der Uploader ist beendet.
