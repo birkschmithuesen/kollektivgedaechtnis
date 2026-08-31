@@ -155,7 +155,39 @@ separater Ring. Die Goldzone beginnt bei 45 % des Radius und ist damit breiter
 als die Alpha-Zone: Das Gold ist voll erreicht, **solange die Scheibe noch
 deckt**. Gold gemessen 34.232 px gegen Rot 288 (vorher 44.630).
 
-### 🔴 Der eine offene Fehler: die Kästchen überlappen sich
+### ✅ Die Kästchen überlappen sich — ERLEDIGT 2026-08-31, Diagnose war falsch
+
+**Ergebnis: 42 → 4 überlappende Paare bei 110 Begriffen, ohne eine Zeile Code.**
+Ausführlich in `docs/HANDOFF-namen-am-zitat.md`, Abschnitt 3.
+
+Die unten stehende Vermutung („eine Zeile", Erkennung über `--schwarzplan`)
+hat sich **nicht bestätigt**. Gemessen:
+
+```
+text-valign im Aufruf         'center'   → die Erkennung greift sehr wohl
+settlePlacement(cy)           42 → 0 Paare
+settlePlacement(cy, 0.18)     42 → 0 Paare (erzwungen, gleiches Ergebnis)
+```
+
+`settlePlacement` war die ganze Zeit in Ordnung — es wurde beim Laden nur nie
+ausgeführt. Greift `restoring` (Crash-Recovery, Spec 10.5: jeder Knoten hat
+eine persistierte Position), überspringt `render()` die Migration und damit
+`settlePlacement`. Die 42 Paare steckten in den **gespeicherten Positionen**,
+eingefroren unter theme-e mit seiner anderen Geometrie (Punkt plus Text statt
+185×75-Kästchen). Belegt: von 170 persistierten Positionen wich keine einzige
+von der gerenderten ab.
+
+Gelöst durch Verwerfen der Positionen (`delete from position`) und ein frisches
+Layout. Gegenprobe auf einer DB-Kopie: 0 Paare bei 110 Begriffen.
+
+> **Die Lehre:** Eine geerbte Diagnose ist eine Hypothese, kein Befund — auch
+> wenn sie in einem Handoff wie eine Tatsache steht. Zehn Minuten Messung haben
+> gezeigt, dass die verdächtigte Funktion korrekt ist und schlicht nicht
+> aufgerufen wird.
+
+<details>
+<summary>Die ursprüngliche, widerlegte Diagnose (historisch)</summary>
+
 **30 überlappende Paare bei 110 Begriffen.** Zwei Ansätze sind **gemessen
 gescheitert** — nicht wiederholen:
 
@@ -179,7 +211,15 @@ Das ist **eine Zeile**. Sie wurde bewusst nicht mehr um 23:40 eingebaut, weil am
 selben Abend zweimal etwas eingebaut wurde, das plausibel klang und nachweislich
 nichts tat.
 
-**Prüfvorschrift danach** (nicht am Prompt raten, am Bild messen):
+*(Nachtrag 2026-08-31: Der Befund „0 Durchläufe" von Punkt 2 ließ sich nicht
+reproduzieren — die Erkennung greift. Der Zähler maß vermutlich einen anderen
+Aufrufpfad als den, der beim Laden tatsächlich läuft. Genau deshalb steht der
+Abschnitt hier noch: als Beispiel dafür, wie eine Messung richtig sein und die
+daraus gezogene Schlussfolgerung trotzdem falsch sein kann.)*
+
+</details>
+
+**Prüfvorschrift** (nicht am Prompt raten, am Bild messen):
 ```
 uv run pytest tests/test_projection_schwarzplan.py -q     # 6 Tests
 # und die Überlappungen zählen, Muster siehe unten
