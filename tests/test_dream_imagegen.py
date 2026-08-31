@@ -834,3 +834,105 @@ def test_save_image_reports_a_full_disk_as_an_image_error(tmp_path, monkeypatch)
 
     monkeypatch.undo()
     assert not (tmp_path / "d1.png").exists()
+
+
+# --- api_mode="bfl_proxy": der Weg über den Loopback-Egress-Broker ---------
+#
+# Der Proxy existiert, weil uid `birk` per nftables keinen Egress zu bfl.ai
+# hat und BFL Wildcard-Freigaben verlangt, die nftables nicht kann (Messungen:
+# ~/.hermes/profiles/birk/docs/bfl-wildcard-egress-loesungsweg.md). Diese
+# Tests sichern die drei Eigenschaften, auf die es dabei ankommt: kein Key im
+# Stationsprozess, keine Fehlerseite auf der Wand, und der Default bleibt.
+
+def test_bfl_proxy_schickt_prompt_und_bekommt_bytes():
+    gesehen = {}
+
+    def fake_post_bytes(url, json, timeout):
+        gesehen["url"] = url
+        gesehen["json"] = json
+        return png_bytes()
+
+    data = render_image(
+        "ein Betonwuerfel",
+        model="flux-2-pro-preview",
+        api_key=None,
+        url="http://127.0.0.1:8791/render",
+        timeout=180.0,
+        api_mode="bfl_proxy",
+        width=1344,
+        height=768,
+        post_bytes=fake_post_bytes,
+    )
+
+    assert data == png_bytes()
+    assert gesehen["url"] == "http://127.0.0.1:8791/render"
+    assert gesehen["json"]["prompt"] == "ein Betonwuerfel"
+    assert gesehen["json"]["model"] == "flux-2-pro-preview"
+    assert gesehen["json"]["width"] == 1344
+    assert gesehen["json"]["height"] == 768
+
+
+def test_bfl_proxy_schickt_niemals_einen_api_key():
+    """Der Kern des Proxy-Gewinns: das Geheimnis bleibt im Proxy.
+
+    Selbst wenn ein Key konfiguriert ist, darf er den Stationsprozess nicht
+    verlassen — sonst wäre der Umweg sinnlos.
+    """
+    gesehen = {}
+
+    def fake_post_bytes(url, json, timeout):
+        gesehen["json"] = json
+        return png_bytes()
+
+    render_image(
+        "p",
+        model="flux-2-pro-preview",
+        api_key="streng-geheim",
+        url="http://127.0.0.1:8791/render",
+        timeout=10.0,
+        api_mode="bfl_proxy",
+        post_bytes=fake_post_bytes,
+    )
+
+    assert "streng-geheim" not in str(gesehen["json"])
+    assert not any("key" in k.lower() for k in gesehen["json"])
+
+
+def test_bfl_proxy_lehnt_nicht_bild_antwort_ab():
+    """Eine durchgereichte HTML-Fehlerseite darf nicht auf der Wand landen."""
+    def fake_post_bytes(url, json, timeout):
+        return b"<html>Fehler</html>"
+
+    with pytest.raises(ImageError):
+        render_image(
+            "p",
+            model="flux-2-pro-preview",
+            api_key=None,
+            url="http://127.0.0.1:8791/render",
+            timeout=10.0,
+            api_mode="bfl_proxy",
+            post_bytes=fake_post_bytes,
+        )
+
+
+def test_bfl_proxy_meldet_unerreichbaren_proxy_verstaendlich():
+    def fake_post_bytes(url, json, timeout):
+        raise ConnectionRefusedError("connection refused")
+
+    with pytest.raises(ImageError, match="nicht erreichbar"):
+        render_image(
+            "p",
+            model="flux-2-pro-preview",
+            api_key=None,
+            url="http://127.0.0.1:8791/render",
+            timeout=10.0,
+            api_mode="bfl_proxy",
+            post_bytes=fake_post_bytes,
+        )
+
+
+def test_default_bleibt_openrouter_trotz_neuem_modus():
+    """Fallback-Regel: eine unveränderte Config verhält sich wie vorher."""
+    from kg2.config import DreamConfig
+
+    assert DreamConfig.__dataclass_fields__["image_api_mode"].default == "openrouter"

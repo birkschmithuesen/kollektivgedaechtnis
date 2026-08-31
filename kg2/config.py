@@ -6,22 +6,24 @@ sharing that does not exist.
 
 Two kinds of value live here and they must not be confused:
 
-* `guiding_question` and `visual_register` are set in the morning and are
-  **never** runtime-adjustable (spec §7). Changing the question mid-day destroys
-  exactly the comparability the history strip exists for.
+* `visual_register` is set in the morning and is **never** runtime-adjustable
+  (spec §7). A register that wanders mid-day destroys exactly the
+  comparability the history strip exists for.
 * the `default_*` fields only SEED the store on a fresh database. After that the
   operator UI owns them and a restart must restore the operator's value, not the
   file's — the same `set_setting_default` discipline Tool 1 uses for
   `default_min_mentions`.
 
-**`guiding_question` no longer reaches stage 1's prompt** (decided 2026-08-28,
-`kg2/condense.py`). It steers exactly one thing now: the on-screen headline
-(`kg2/server.py`'s `dream_state`, `question` key). The dream itself is
-condensed with a fixed, neutral instruction that does not name a question at
-all — a sixth question nobody in the room was actually asked would force a
-reading direction the material may not contain. This field stays here rather
-than moving into display-only config because it is still set once in the
-morning and never runtime-adjustable, the same rule `visual_register` follows.
+**`guiding_question` ist am 2026-08-31 ersatzlos entfallen**, mit ihm
+`default_question_visible` und `default_question_seconds`. Seit dem
+2026-08-28 erreichte die Frage kein Modell mehr (`kg2/condense.py`) und
+steuerte nur noch eine Überschrift auf dem Schirm — eine Anzeige ohne
+Funktion, die zudem eine vierte Frage zeigte, die den Gästen nie gestellt
+wurde: gefragt wird nach `kg.extraction.GUIDING_QUESTIONS` in Tool 1, und die
+sind andere. Birk an der Station: „Ja, ganz weg." Ein `guiding_question` in
+einer bestehenden `config2.toml` ist damit ein unbekannter Schlüssel — und
+`load_dream_config` überliest unbekannte Schlüssel seit jeher (siehe
+`_FIELD_NAMES` unten), der Start scheitert daran also nicht.
 """
 
 from __future__ import annotations
@@ -30,12 +32,6 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-
-# PLACEHOLDER. The wording is decided by Birk at Task 16, from sentences the
-# calibration run prints — not chosen here (spec §10, brainstorm §7). It must
-# stay wide enough to carry all three interview themes: future of building,
-# AI in building, new forms of living together.
-DEFAULT_GUIDING_QUESTION = "Wie leben und bauen wir in zehn Jahren?"
 
 # PLACEHOLDER. The register is decided by Birk AT IMAGES at Task 15, not in
 # words (spec §10, brainstorm §10). This starting value describes the register
@@ -63,9 +59,6 @@ class DreamConfig:
     min_interval_s: int = 240
 
     # -- the dream (spec §5, calibrated at Tasks 15/16) ---------------------
-    # `guiding_question` no longer steers stage 1's prompt — see the module
-    # docstring. It sets only the headline shown above the dream.
-    guiding_question: str = DEFAULT_GUIDING_QUESTION
     visual_register: str = DEFAULT_VISUAL_REGISTER
 
     # -- stage 1 (spec §5.1) ------------------------------------------------
@@ -83,6 +76,19 @@ class DreamConfig:
     # an. Im bfl-Modus ist `image_url` die BASIS ("https://api.eu.bfl.ai/v1")
     # und `image_model` der Endpunkt darunter ("flux-pro-1.1") — dort ist das
     # Modell der Pfad, nicht ein Feld im Body.
+    #
+    # Dritter Modus "bfl_proxy" (2026-08-31): derselbe Anbieter, aber über den
+    # lokalen Loopback-Broker. `image_url` ist dann die Proxy-Adresse
+    # ("http://127.0.0.1:8791/render"), `image_model` der BFL-Endpunktname,
+    # und `image_api_key_env` bleibt LEER — der Schlüssel liegt ausschließlich
+    # im Proxy (uid bflproxy), nie im Stationsprozess.
+    #
+    # Auf dem vServer ist "bfl_proxy" der einzige funktionierende BFL-Weg: uid
+    # birk hat per nftables keinen Egress zu bfl.ai, und BFL verlangt eine
+    # Wildcard-Freigabe (`delivery.*.bfl.ai`), die nftables nicht leisten kann.
+    # Begründung und Messungen: ~/.hermes/profiles/birk/docs/
+    # bfl-wildcard-egress-loesungsweg.md. Auf einer Maschine ohne diesen Filter
+    # funktioniert "bfl" direkt — beide bleiben deshalb erhalten.
     image_api_mode: str = "openrouter"
     # Nur der NAME der Umgebungsvariablen, nie der Schlüssel selbst. Leer =
     # OPENROUTER_API_KEY wie bisher; für BFL: "BFL_API_KEY".
@@ -94,8 +100,6 @@ class DreamConfig:
     image_height: int = 768
 
     # -- display start values, owned by the operator UI afterwards (spec §7)
-    default_question_visible: bool = True
-    default_question_seconds: int = 0  # 0 = permanent
     default_fade_ms: int = 1200  # spec §6: cross-fade, default 1.2 s
     default_strip_ratio: float = 0.22
     # 40 gleichzeitige Träume erwiesen sich als zu viel (Birk, 2026-08-26, an
@@ -149,7 +153,6 @@ _FIELD_NAMES = {
     "poll_interval_s",
     "fetch_timeout_s",
     "min_interval_s",
-    "guiding_question",
     "visual_register",
     "condense_model",
     "condense_effort",
@@ -162,8 +165,6 @@ _FIELD_NAMES = {
     "image_api_key_env",
     "image_width",
     "image_height",
-    "default_question_visible",
-    "default_question_seconds",
     "default_fade_ms",
     "default_strip_ratio",
     "default_strip_max",
@@ -182,6 +183,13 @@ def load_dream_config(path: Path | None = None) -> DreamConfig:
     base = path.parent.resolve()
     data_dir = (base / raw.get("data_dir", "dream-data")).resolve()
 
+    # Nur bekannte Schlüssel, alles andere wird überlesen statt zu werfen. Das
+    # ist der Grund, warum eine schon vorhandene config2.toml vom
+    # Ausstellungsrechner mit dem am 2026-08-31 entfallenen `guiding_question`
+    # weiterhin startet: der Schlüssel landet gar nicht erst in kwargs, wo er
+    # ein unerwartetes Argument für DreamConfig wäre. Ein Startfehler am
+    # Ausstellungsmorgen wegen einer Zeile, die nichts mehr tut, wäre die
+    # teuerste denkbare Art, diese Entfernung zu melden.
     kwargs = {k: v for k, v in raw.items() if k in _FIELD_NAMES}
     return DreamConfig(
         data_dir=data_dir,

@@ -314,6 +314,31 @@ def _httpx_get_bytes(url: str, timeout: float) -> bytes:
     return response.content
 
 
+def _httpx_post_bytes(url: str, json: dict, timeout: float) -> bytes:
+    """POST mit JSON hinein, rohe Bytes heraus — der Vertrag des BFL-Proxys.
+
+    Eigene Funktion neben `_httpx_post`, weil der Proxy KEIN JSON zurückgibt,
+    sondern das fertige Bild. Ein gemeinsamer Helfer müsste raten, was er
+    gerade vor sich hat; getrennte Funktionen machen den Unterschied im
+    Aufrufer sichtbar.
+
+    Fehlerfall: der Proxy antwortet mit JSON (`{"error": ...}`) und einem
+    Status ≥ 400. Der Text wird mitgenommen, damit im Log steht, WAS schiefging
+    (fehlende Credits, Rate-Limit, abgelehnter Host) statt nur der Statuscode.
+    """
+    import httpx
+
+    response = httpx.post(url, json=json, timeout=timeout)
+    if response.status_code >= 400:
+        detail = ""
+        try:
+            detail = str(response.json().get("error", ""))[:200]
+        except Exception:
+            detail = response.text[:200]
+        raise ImageError(f"bfl-proxy HTTP {response.status_code}: {detail}")
+    return response.content
+
+
 def decode_image(payload: dict) -> bytes:
     """Pull the image bytes out of the response recorded in the contract
     document. Format-agnostic on purpose: the prefix check below only looks
@@ -380,6 +405,7 @@ def render_image(
     height: int = 768,
     get_json=_httpx_get_json,
     get_bytes=_httpx_get_bytes,
+    post_bytes=_httpx_post_bytes,
     sleep=time.sleep,
 ) -> bytes:
     """Ein Bild, ein Weg — welcher, entscheidet `api_mode`.
@@ -387,13 +413,25 @@ def render_image(
     `"openrouter"` ist der Default und der unten dokumentierte, gemessene
     Ablauf. `"bfl"` schickt denselben Prompt an Black Forest Labs' EU-Endpunkt
     (`_render_bfl`), der anders funktioniert: absenden, pollen, herunterladen.
-    Beide Wege bleiben funktionsfähig; umgeschaltet wird ausschließlich über
-    `config2.toml` (Betriebsentscheidung Birk, 2026-08-31).
+    `"bfl_proxy"` spricht denselben Anbieter an, aber über den lokalen
+    Loopback-Proxy — siehe `_render_bfl_proxy`. Alle Wege bleiben
+    funktionsfähig; umgeschaltet wird ausschließlich über `config2.toml`
+    (Betriebsentscheidung Birk, 2026-08-31).
 
-    Was für beide gilt und nicht verhandelbar ist: kein Retry (spec §8), das
+    Was für alle gilt und nicht verhandelbar ist: kein Retry (spec §8), das
     Format entscheidet `image_extension` aus den Magic Bytes, und geschrieben
     wird über `save_image` mit exklusivem „xb".
     """
+    if api_mode == "bfl_proxy":
+        return _render_bfl_proxy(
+            prompt,
+            endpoint=model,
+            url=url,
+            timeout=timeout,
+            width=width,
+            height=height,
+            post_bytes=post_bytes,
+        )
     if api_mode == "bfl":
         return _render_bfl(
             prompt,
@@ -484,6 +522,62 @@ BFL_POLL_INTERVAL_S = 1.5
 #: Alles andere (Pending, Request Moderated in Arbeit, …) heißt weiterwarten.
 _BFL_READY = "Ready"
 _BFL_FAILED = ("Error", "Content Moderated", "Request Moderated", "Task not found")
+
+
+def _render_bfl_proxy(
+    prompt: str,
+    *,
+    endpoint: str,
+    url: str,
+    timeout: float,
+    width: int,
+    height: int,
+    post_bytes=_httpx_post_bytes,
+) -> bytes:
+    """Derselbe Anbieter wie `_render_bfl`, aber über den Loopback-Proxy.
+
+    Warum dieser Umweg existiert (Kurzfassung; die Messungen stehen in
+    `~/.hermes/profiles/birk/docs/bfl-wildcard-egress-loesungsweg.md`):
+
+    Die nftables-Firewall der Maschine gibt uid `birk` nur eine enge
+    Domain-Allowlist frei. BFL passt dort prinzipiell nicht hinein — die
+    Bilder kommen von `delivery.*.bfl.ai`, und BFL rät selbst dazu, die
+    WILDCARD freizugeben statt einzelner Regionshostnamen, weil sich die
+    Region-Kennungen ändern. nftables kann keine Wildcards (es matcht IPs,
+    kein SNI), und die beteiligten Azure-IPs sind geteilte Infrastruktur:
+    sie freizugeben öffnete Egress zu fremden Azure-Kunden.
+
+    Deshalb läuft der Netzzugang in einem eigenen OS-User (`bflproxy`), der
+    in der bestehenden `broker_egress`-Chain hängt. Dieser Aufruf hier geht
+    also nur bis `127.0.0.1` — und braucht folgerichtig **keinen API-Key**:
+    den kennt ausschließlich der Proxy. Genau das ist der Gewinn gegenüber
+    `api_mode="bfl"`, wo der Schlüssel im Stationsprozess liegt.
+
+    Der Proxy gibt die fertigen Bildbytes zurück, nicht die signierte URL —
+    er nimmt uns also auch das Zehn-Minuten-Fenster und das Polling ab. Für
+    die Aufrufer bleibt alles gleich: `image_extension` entscheidet weiter
+    aus den Magic Bytes, `save_image` schreibt weiter mit exklusivem „xb",
+    und es gibt weiterhin keinen Retry (spec §8).
+    """
+    payload = {
+        "prompt": prompt,
+        "model": endpoint,
+        "width": width,
+        "height": height,
+    }
+    try:
+        data = post_bytes(url, payload, timeout)
+    except ImageError:
+        raise
+    except Exception as exc:  # Transport, Verbindung verweigert, Timeout
+        raise ImageError(f"bfl-proxy nicht erreichbar ({url}): {exc}") from exc
+
+    if not data:
+        raise ImageError("bfl-proxy lieferte eine leere Antwort")
+    # Wirft, wenn es kein Bild ist — dieselbe Prüfung wie auf allen anderen
+    # Wegen, damit eine durchgereichte Fehlerseite nicht auf der Wand landet.
+    image_extension(data)
+    return data
 
 
 def _render_bfl(
