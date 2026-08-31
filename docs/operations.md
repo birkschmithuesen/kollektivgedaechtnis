@@ -15,6 +15,11 @@ die es im UI nicht gibt.
    export OPENROUTER_API_KEY=...     # nur Embeddings, darf ein eigener Schlüssel sein
    ```
 
+   Fahren Modell oder Embeddings über einen europäischen Anbieter (Abschnitt
+   „Anbieter umstellen" unten), tritt dessen Schlüssel an die Stelle des
+   jeweiligen — welcher, sagt das `*_api_key_env`-Feld in der `config.toml`.
+   Die Regel bleibt: **in die Umgebung, nie in die Datei.**
+
    **Vor Ort ist das der einzige Weg** — der Ausstellungsrechner hat keine
    Hermes-Installation. Nur auf Birks vServer, für Vorbereitungsläufe
    (Register-Muster, Kalibrierung, Pre-Render), dürfen die Schlüssel stattdessen
@@ -80,6 +85,174 @@ die es im UI nicht gibt.
    Meldet sich das Gerät als HID-Maus statt als Multitouch-Digitizer, gibt es
    nur einen Kontaktpunkt und keine Gesten. Dann Kamera auf „automatisch
    schwenken" stellen — dieser Modus ist der vorgesehene Fallback.
+
+## Anbieter umstellen — die EU-Wege (seit 2026-08-31)
+
+Vier Stellen können auf europäische Anbieter zeigen: das Pipeline-Modell, das
+kleine Modell hinter dem Wake-Word, die Embeddings und die Bildstufe. **Alle
+vier sind Ergänzungen, keine Ersetzungen.** Ohne die unten genannten Schlüssel
+in `config.toml` / `config2.toml` verhält sich die Station exakt wie vorher —
+Anthropic, OpenRouter, OpenRouter/Gemini. Es gibt keinen Umweg über eine
+Umgebungsvariable und keinen Automatismus: umgeschaltet wird in der Datei, und
+nur dort.
+
+**Kein Schlüssel steht je in einer `config.toml`.** Die neuen `*_api_key_env`-
+Felder nennen nur den **Namen** der Umgebungsvariablen, aus der gelesen wird —
+dieselbe Regel wie für `ANTHROPIC_API_KEY` und `OPENROUTER_API_KEY`.
+
+### Tool 1 (`config.toml`)
+
+```toml
+# Pipeline: Extraktion und Merge-Judge
+llm_api_mode = "chat_completions"
+llm_model = "moonshotai/Kimi-K2.6"
+llm_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"
+llm_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+llm_reasoning_effort = "none"
+
+# Das kleine Modell hinter dem Wake-Word (eigener Schalter, absichtlich)
+wake_word_llm_api_mode = "chat_completions"
+wake_word_llm_model = "google/gemma-4-31B-it"
+wake_word_llm_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/chat/completions"
+wake_word_llm_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+
+# Embeddings
+embedding_model = "bge_multilingual_gemma2"
+embedding_url = "https://api.infomaniak.com/2/ai/110416/openai/v1/embeddings"
+embedding_api_key_env = "HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"
+```
+
+`llm_api_mode` und `wake_word_llm_api_mode` sind **getrennt**, weil es zwei
+verschiedene Aufgaben sind: eine verdichtet ein Interview, die andere
+entscheidet ein Ja/Nein im heißen Pfad einer laufenden Aufnahme. Wer nur eine
+umstellt, bekommt genau das.
+
+### Tool 2 (`config2.toml`)
+
+```toml
+image_api_mode = "bfl"
+image_model = "flux-pro-1.1"              # hier: der ENDPUNKT
+image_url = "https://api.eu.bfl.ai/v1"    # hier: die BASIS
+image_api_key_env = "BFL_API_KEY"
+image_width = 1344
+image_height = 768
+```
+
+Die Bildstufe hat bei BFL einen anderen Ablauf: absenden, pollen, dann eine
+**signierte URL mit zehn Minuten Gültigkeit** herunterladen. Das Bild wird
+sofort geholt und liegt danach wie immer als Datei in `dream-data/images/`;
+gespeichert wird nie eine URL. `image_aspect_ratio` gilt weiter nur für den
+OpenRouter-Weg, BFL bekommt Pixel.
+
+### STT
+
+Der Batch-Weg wird **nicht** hier umgeschaltet, sondern beim Start des externen
+STT-Servers (`docs/stt-contract.md`, „Zweiter Vertrag: Batch";
+Einspielanleitung: `stt_backends/README.md`):
+
+```bash
+python -m fundusapps.stt_server infomaniak-whisper --language de
+```
+
+`stt_url` in der `config.toml` bleibt unverändert — der Core konsumiert nur
+`final`-Events und sieht nicht, woher sie kommen.
+
+### Was gemessen ist, bevor jemand ein Modell wechselt
+
+Am 2026-08-31 live gegen Infomaniak, mit dem echten Extraktionsschema
+(`response_format: json_schema`, `strict: true`), je 5-8 Läufe:
+
+| Modell | valides JSON | Ø Latenz |
+|---|---|---|
+| `moonshotai/Kimi-K2.6` **ohne** `reasoning_effort` | 0 / 5 | 4,2 s |
+| `moonshotai/Kimi-K2.6` mit `"low"` | 0 / 8 | 6,4 s |
+| **`moonshotai/Kimi-K2.6` mit `"none"`** | **8 / 8** | **1,3 s** |
+| `mistralai/Mistral-Small-4-119B-2603` | 5 / 5 | 0,6 s |
+| `google/gemma-4-31B-it` | 5 / 5 | 1,3 s |
+| `Qwen/Qwen3.5-397B-A17B-FP8` | 5 / 5 | 36,9 s |
+| `Qwen/Qwen3.5-122B-A10B-FP8` | 5 / 5 | 27,9 s |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8` | 4 / 5 | 3,2 s |
+
+**`llm_reasoning_effort = "none"` ist bei Kimi keine Feinheit, sondern die
+Bedingung, unter der das Modell überhaupt brauchbar ist.** Die Qwen-Modelle
+liefern gutes JSON und sind mit 28-37 s trotzdem unbrauchbar für den laufenden
+Betrieb.
+
+### Fehlerbilder der neuen Wege
+
+| Symptom | Bedeutung | Maßnahme |
+|---|---|---|
+| Im Log `llm attempt … content: null` | Reasoning ist an, das Modell schreibt seinen Gedankengang nach `message.reasoning` | `llm_reasoning_effort = "none"` setzen |
+| Im Log `answer began with '{{'` | Der gemessene Kimi-Fehlermodus; die Antwort wurde repariert und benutzt | Nichts. Häuft es sich, ist `reasoning_effort` nicht gesetzt |
+| `no api key for the chat_completions route` | Die in `llm_api_key_env` genannte Variable ist nicht exportiert | Variable setzen; der Name in der `config.toml` ist nur der Name |
+| `BFL_API_KEY is not set` | Bildstufe ohne Schlüssel | Exportieren oder `image_api_mode` zurück auf `"openrouter"` |
+| `the image job … never became ready` | BFL-Auftrag lief in `image_timeout_s` | Nichts tun (Spec §8): der nächste Trigger versucht es neu |
+| Erster Lauf nach Embedding-Wechsel ist langsam | Der Cache-Schlüssel enthält das Modell, das neue Modell trifft ihn nie | Erwartet. Einmalig der ganze Korpus, danach wieder kostenlos |
+
+**Der Rückweg ist immer derselbe:** die neuen Zeilen aus `config.toml` /
+`config2.toml` entfernen (oder auf `"anthropic"` / `"openrouter"` setzen), und
+die Station fährt wieder den Weg, mit dem sie gebaut und gemessen wurde.
+
+### 🔴 Regressionslauf: was der Wechsel des Pipeline-Modells wirklich kostet
+
+Der Umbau ist fertig und funktioniert — **das Pipeline-Modell trotzdem nicht
+umstellen.** Zwei volle Replay-Läufe über dieselben 60 synthetischen Interviews
+(`sim/data/`, `uv run python -m sim.replay`), 2026-08-31, gegen den
+Referenzlauf 19c:
+
+| | 19c (`claude-opus-5`, effort high) | `moonshotai/Kimi-K2.6` (`reasoning_effort "none"`) | `mistralai/Mistral-Small-4-119B-2603` |
+|---|---|---|---|
+| Personen | 60 | 60 | 60 |
+| Begriffe | **163** | **36** | **1** |
+| Kanten | 267 | 129 | 58 |
+| Begriffe pro Interview | 4,45 | 2,15 | 0,97 |
+| Zitate | 117 | 55 | 57 |
+| Aliase | 273 | 247 | 273 |
+| Einmal-Begriffe | 114 | 14 | 0 |
+| gepflanzte Konzepte erfüllt | 2 / 5 | **0 / 5** | (4 / 5, wertlos — siehe unten) |
+| Laufzeit | — | 5 min 38 s | 3 min 25 s |
+| ungültiges JSON / Retries | — | **0** | **0** |
+
+**Technisch ist der neue Weg einwandfrei.** In keinem der beiden Läufe gab es
+einen einzigen Retry, kein `content: null`, keine `{{`-Reparatur — mit
+`reasoning_effort = "none"` liefert Kimi über 60 Interviews hinweg durchgehend
+schema-gültiges JSON, und zwar dreimal schneller als der bisherige Weg.
+
+**Inhaltlich fällt er durch, und zwar an zwei Stellen:**
+
+1. **Die Extraktion zieht halb so viel heraus.** Opus schöpft die Obergrenze von
+   5 in 41 von 60 Interviews aus (4,45 im Schnitt), Kimi kommt auf 2,15 und
+   liefert für 18 Interviews genau einen Begriff und für 2 gar keinen. Die
+   Zitate halbieren sich mit. Nicht generischer, sondern **weniger** — die
+   Begriffe, die Kimi zieht, sind teils sehr konkret („Kinderwagen-Gehwegbreite",
+   „German Angst bei Radwegen"), teils ganze Sätze, die als Wandbeschriftung
+   nicht taugen („Fachexpertise mit demokratischer Legitimation verschränken"),
+   und einige sind schlicht kaputt getrennt („Alts chutt neu anmischen").
+2. **Der Merge-Judge verschmilzt, was nicht zusammengehört.** Das ist der
+   ernstere Befund. Bei Kimi hängen an einem Knoten
+   „Klebepunkt-Veranstaltungen" 52 Aliase, darunter „3D-Beton-Drucker vor Ort"
+   und „Haus als Verein"; an „Entrümpelung der Normen" 58. Bei Mistral-Small
+   endet der ganze Korpus in **einem einzigen** Knoten namens „Werkzeuge statt
+   Urteile", mit allen 273 Aliasen daran.
+
+> **Der Score von 0,8 bei Mistral ist ein Artefakt und keine gute Nachricht.**
+> Er misst, ob alle Interviews eines gepflanzten Konzepts auf denselben Knoten
+> zeigen — bei genau einem Knoten im ganzen Graphen ist das trivial erfüllt.
+> Wer künftig Modelle vergleicht, liest **zuerst** `term_count` und die
+> Aliasverteilung, dann den Score.
+
+Die Ursache ist kein Fehler in der Verdrahtung: die Merge-Entscheidungen in
+`merge_decision` zeigen wohlgeformte Gruppen mit korrekten Kandidatenlisten,
+das Schema greift, `strict: true` wird eingehalten. Es ist die Aufgabe selbst —
+ein Judge, der entscheidet, ob zwei Formulierungen dasselbe meinen, ist genau
+die Sorte Urteil, für die `llm_effort = "high"` da ist, und `reasoning_effort =
+"none"` ist dessen Gegenteil.
+
+**Praktische Folge:** Der zweite Weg bleibt eingebaut und getestet, `llm_model`
+und `llm_api_mode` bleiben unangetastet auf Anthropic. Für das kleine Modell
+hinter dem Wake-Word (ein Ja/Nein, kein Urteil über Bedeutungsgleichheit) und
+für die Embeddings gilt dieser Befund **nicht** — die sind von diesem Lauf gar
+nicht berührt.
 
 ## Start am Ausstellungstag
 
