@@ -355,6 +355,35 @@ export class Camera {
     else this._startHandover();
   }
 
+  /** Das Traumgebiet vergessen — die Wand rahmt wieder das ganze Netz.
+   *
+   * Für Werkzeuge, die eine DEFINIERTE Ansicht brauchen statt der Ansicht, die
+   * die Station gerade erzählt: `sim/prerender.py` setzt einen Modus und
+   * schießt im nächsten Atemzug den Screenshot („fit mode, the whole net in
+   * frame — the reference view"). Eine Kamera, die stattdessen auf das
+   * Traumgebiet FÄHRT, liefert dort ein Bild mitten in der Bewegung, und die
+   * Referenzaufnahme wäre keine Referenz mehr.
+   *
+   * Öffentlich und nicht als Sonderfall in `setMode`: „ich will die
+   * Gesamtansicht" ist eine Absicht des Aufrufers, keine Eigenschaft eines
+   * Modus. Die Wand ruft das nie. */
+  clearDream() {
+    this._dream = null;
+    // Auch einen LAUFENDEN Handover beenden, nicht nur das Gebiet vergessen.
+    // Das war der zweite Teil des Fehlers und der Grund, warum das Vergessen
+    // allein nicht reichte (gemessen: 0.931 -> 0.966 statt 1.0): Die Fahrt
+    // aufs Traumgebiet startet schon beim ersten Graph-Push, also WÄHREND
+    // `_open_projection` auf `layoutPending === false` wartet. Sie dauert 5 s,
+    // der Prerender schießt nach 200 ms — er erwischt also die Fahrt, egal wie
+    // gründlich das Gebiet vergessen wurde. `step()` gibt dem Handover den
+    // Vorrang vor allem anderen, deshalb muss er hier wirklich weg sein.
+    //
+    // Ohne Neu-Rahmen: Der Aufrufer setzt unmittelbar danach die Ansicht, die
+    // er haben will (`setMode`/`setZoomFactor`/`focus`). Hier zusätzlich zu
+    // rahmen hieße, sie zweimal zu werfen.
+    this._handover = null;
+  }
+
   /** Die Knoten des Traumgebiets, oder null wenn gerade keines gilt.
    *
    * Läuft die Haltezeit ab, verfällt das Gebiet und die Wand wandert wieder

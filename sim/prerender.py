@@ -129,16 +129,23 @@ TESTPATTERN = (
 # Camera views over the identical graph. They call the live Camera component
 # (window.kgView.camera), never cy.zoom/cy.pan directly: what is shot here is
 # what the wall would actually do.
+#
+# `clearDream()` zuerst, in jeder Ansicht: Seit 2026-08-31 koppelt die Kamera
+# an die fünf Traumbegriffe und FÄHRT dorthin, statt hart zu rahmen. Das ist
+# auf der Wand gewollt und hier falsch — diese Serie soll definierte Ansichten
+# vergleichbar machen, und der Screenshot fällt unmittelbar nach dem Setzen.
+# Ohne das Vergessen zeigte „the whole net in frame" ein Standbild mitten in
+# einer Fahrt (gemessen: 93 % der Knoten statt 100 %).
 CAMERA_VIEWS = [
     (
         "camera-1-fit-all-reference",
         "Camera 1: fit mode, the whole net in frame — the reference view.",
-        "() => { const c = window.kgView.camera; c.setZoomFactor(1); c.setMode('fit'); }",
+        "() => { const c = window.kgView.camera; c.clearDream(); c.setZoomFactor(1); c.setMode('fit'); }",
     ),
     (
         "camera-2-zoom2x-half-the-net",
         "Camera 2: fit mode at zoom factor 2 — half the net's width across the wall, centred.",
-        "() => { const c = window.kgView.camera; c.setMode('fit'); c.setZoomFactor(2); }",
+        "() => { const c = window.kgView.camera; c.clearDream(); c.setMode('fit'); c.setZoomFactor(2); }",
     ),
     (
         "camera-3-cluster-closeup",
@@ -155,6 +162,7 @@ CAMERA_VIEWS = [
                  best = { area, id: person.id(), cluster };
                }
              });
+             window.kgView.camera.clearDream();
              window.kgView.camera.focus(best.cluster);
            }""",
     ),

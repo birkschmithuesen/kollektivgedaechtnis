@@ -160,6 +160,44 @@ mit; `tests/test_camera.py::test_fit_and_pan_modes_disable_panning_zooming_and_g
 fing das ab. Der Test beschreibt einen echten Schutz und wurde deshalb NICHT
 angepasst — die Trennlinie oben ist die Antwort darauf.
 
+## Was der Prerender davon merkt — und warum `clearDream()` existiert
+
+`sim/prerender.py` schießt Referenzaufnahmen: es setzt eine Ansicht und macht
+im nächsten Atemzug (200 ms) den Screenshot. Ansicht 1 heißt „fit mode, the
+whole net in frame" und wird darauf geprüft, dass **alle** Knoten im Bild sind.
+
+Die Kopplung brach das: `test_the_camera_views_frame_progressively_less_of_the_net`
+meldete `0.931 == 1.0` fehlgeschlagen. Der Prerender erwischte ein Standbild
+mitten in der Fahrt aufs Traumgebiet.
+
+Die Ursache war **zweiteilig**, und der erste Fix behandelte nur die Hälfte —
+sichtbar daran, dass die Zahl sich bewegte, statt grün zu werden:
+
+```
+ohne Fix              0.931
+nur Gebiet vergessen  0.966   ← verrät, dass noch etwas anderes wirkt
+Gebiet + Handover     1.000
+```
+
+1. **Das gemerkte Gebiet** — `_dream` muss weg, sonst rahmt `setMode('fit')`
+   über `_dreamNodes()` wieder den Ausschnitt.
+2. **Der bereits LAUFENDE Handover** — die Fahrt startet schon beim ersten
+   Graph-Push, also während `_open_projection()` auf `layoutPending === false`
+   wartet. Sie dauert 5 s, der Prerender schießt nach 200 ms. `step()` gibt
+   dem Handover Vorrang vor allem anderen, also blieb die Fahrt in Kraft, egal
+   wie gründlich das Gebiet vergessen war.
+
+`clearDream()` tut deshalb beides. Es ist öffentlich und kein Sonderfall in
+`setMode`, weil „ich will die Gesamtansicht" eine Absicht des Aufrufers ist und
+keine Eigenschaft eines Modus. **Die Wand ruft es nie** — nur Werkzeuge, die
+eine definierte statt einer erzählenden Ansicht brauchen. Alle drei
+`CAMERA_VIEWS` rufen es zuerst, auch die dritte, die nur `focus()` benutzt:
+ein laufender Handover überschriebe auch die.
+
+Gegenprobe, dass der Fehlschlag wirklich meiner war und nicht schon vorher
+bestand: derselbe Test gegen `c6347bd` (der Stand vor dieser Arbeit) läuft
+grün durch.
+
 ## Verifikation am gerenderten Bild
 
 Alle Zahlen aus `page.evaluate` gegen den laufenden Server auf `:8801`,
