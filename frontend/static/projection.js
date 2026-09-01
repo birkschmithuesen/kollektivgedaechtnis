@@ -1061,12 +1061,12 @@ function settleLabels(cy) {
  */
 async function migrate(
   cy,
-  { fit, duration, onGlideStart = () => {}, atPlacementSize, atPlacementSizeAsync },
+  { fit, duration, onUmbauStart = () => {}, onGlideStart = () => {}, atPlacementSize, atPlacementSizeAsync },
 ) {
   const nodes = cy.nodes().sort(byId);
   const from = nodes.map((node) => ({ ...node.position() }));
 
-  // 🔴 Die Wand erfährt HIER, dass die Knoten sich bewegen — nicht erst kurz
+  // 🔴 Die KAMERA erfährt hier, dass die Knoten sich bewegen — nicht erst kurz
   // vor dem Gleiten (Birk, 2026-08-31, Punkt 7).
   //
   // Gemessen 2026-09-01: Der Sprung lag NICHT im Gleiten, sondern davor. Das
@@ -1074,12 +1074,12 @@ async function migrate(
   // direkt ein; `settlePlacement` schiebt sie weiter, und danach setzt
   // `nodes.forEach(...position(from[index]))` alles in einem Schlag zurück.
   // In jedem dieser Frames misst die Kamera eine andere Wolke und zieht mit.
-  // `onGlideStart` kam für all das zu spät: Es lief erst NACH dem
-  // Zurücksetzen, also nach dem größten Sprung.
   //
-  // Der Name bleibt, die Bedeutung ist jetzt „der Umbau hat begonnen" statt
-  // „das Gleiten hat begonnen" — beides endet an derselben Stelle.
-  onGlideStart();
+  // Getrennt von `onGlideStart`, weil der Prerender eine ANDERE Frage stellt:
+  // Er filmt die sichtbare Überblendung und darf die Rechenphase nicht
+  // mitfilmen (sonst steht sein erster Frame still) — siehe den Kommentar bei
+  // `umbauend` in createGraphView().
+  onUmbauStart();
 
   // Label offsets are geometry too, and stale ones (sized for the old, denser
   // arrangement) would measurably mislead the separation pass.
@@ -1096,6 +1096,7 @@ async function migrate(
   const to = new Map(nodes.map((node) => [node.id(), { ...node.position() }]));
   nodes.forEach((node, index) => node.position(from[index]));
   await nextFrame();
+  onGlideStart();
   await runLayout(
     cy,
     { ...MIGRATION, animationDuration: duration, fit, positions: (node) => to.get(node.id()) },
@@ -1315,6 +1316,25 @@ export function createGraphView(
   // questions: "are the positions final yet" and "is a viewer watching motion
   // right now". The pre-render needs the second one to place its frames
   // inside the glide rather than inside the compute.
+  // Zwei verschiedene Fragen, deshalb zwei Merker (2026-09-01).
+  //
+  // `umbauend` heißt „die Knoten bewegen sich, aus welchem Grund auch immer" —
+  // das beginnt schon beim Rechnen (fcose schreibt Positionen, settlePlacement
+  // schiebt nach, dann setzt ein forEach alles zurück) und ist die Frage, die
+  // die KAMERA stellt: Sie darf in keinem dieser Frames die Wolke vermessen.
+  //
+  // `gliding` heißt eng „die sichtbare 2,5-Sekunden-Überblendung läuft" und
+  // ist die Frage, die der PRERENDER stellt: Er hängt seine Aufnahme daran und
+  // erwartet, dass ab diesem Moment jeder Frame ein anderes Bild ist.
+  //
+  // 🔴 Beides in EINEN Merker zu legen war ein Fehler und ist von
+  // `test_a_sequence_covers_the_whole_glide_and_settles` gefangen worden: Mit
+  // dem früheren Startpunkt filmte der Prerender die Rechenphase mit, in der
+  // sich nichts bewegt — 10 verschiedene Bilder statt 11, also ein Standbild
+  // am Anfang. Der Test hält fest „jeder Frame der Überblendung ist ein
+  // anderes Bild, sonst ist ein Schnitt drin"; diese Aussage bleibt richtig,
+  // nur mein Merker war der falsche.
+  let umbauend = false;
   let gliding = false;
   // One migration at a time. The operator can spin the density dial faster
   // than a 2.5s glide, and two overlapping layouts over one cy instance would
@@ -1459,6 +1479,9 @@ export function createGraphView(
     migration = migrate(cy, {
       fit: camera.mode === 'fit',
       duration: migrationDuration,
+      onUmbauStart: () => {
+        umbauend = true;
+      },
       onGlideStart: () => {
         gliding = true;
       },
@@ -1468,6 +1491,7 @@ export function createGraphView(
       .catch((error) => console.warn('layout migration failed', error))
       .then(() => {
         migration = null;
+        umbauend = false;
         gliding = false;
         settle();
         persist();
@@ -1537,7 +1561,7 @@ export function createGraphView(
     // damit die Fahrt nach dem Umzug nicht sofort losfährt. Ausgesetzt wird
     // allein das Vermessen und Fahren — das Bild bleibt stehen, während sich
     // der Graph sortiert, und nimmt die Fahrt danach weich wieder auf.
-    if (gliding && !camera.handoverActive) {
+    if (umbauend && !camera.handoverActive) {
       last = now;
       applyPortraitSize();
       requestAnimationFrame(tick);
