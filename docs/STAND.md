@@ -91,6 +91,27 @@ Zwei Sessions haben parallel gearbeitet; alles liegt zusammengeführt auf
 
 ---
 
+## 2b. Ist-Zustand der Station — gemessen 2026-09-01, 13:40
+
+Nicht angenommen, sondern mit `Get-NetTCPConnection` und `curl` über das
+Tailnet nachgesehen. `netstat | findstr` reicht hier NICHT: Es zeigte Port
+8800 als leer an, obwohl der Kern lief und mit 200 antwortete.
+
+| | Zustand |
+|---|---|
+| Repo auf der Station | `9674cbc`, identisch mit `master`, Arbeitsbaum sauber |
+| **Kern (8800)** | **läuft**, `curl http://100.94.47.6:8800/api/state` → **HTTP 200** |
+| **Traum (8810)** | **läuft nicht** — Ursache unbekannt, siehe §3 |
+| Spiegel (8899) | läuft nicht |
+| `cv2` im venv | **4.14.0**, `CascadeClassifier` vorhanden, 4 Kaskaden |
+| Geplante Aufgaben | `KgCore`, `KgDream`, `KgStt`, `KgProxy` — alle „Bereit" |
+| `KgKernTest` | **läuft gerade** (Testkrücke der Foto-Session, siehe §5b) |
+
+Damit sind zwei der fünf Voraussetzungen aus dem Testauftrag erfüllt
+(Kern antwortet, `cv2` aktiv) — die anderen erst beim Durchlauf prüfbar.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
@@ -98,7 +119,7 @@ Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
 | Punkt | Warum offen |
 |---|---|
 | **Ein kompletter Durchlauf** — Foto → Interview → Verdichtung → Traum → Wand | Nie am Stück gefahren. Das ist der Zweck der nächsten Session. |
-| **Traum (Port 8810)** | Läuft laut Handoff der anderen Session nicht. Ursache unbekannt. |
+| **Traum (Port 8810)** | Läuft nicht. Die geplante Aufgabe `KgDream` steht auf „Bereit", ist also registriert und nur nicht gestartet — der erste Versuch wäre `schtasks /Run /TN KgDream`, dann Log lesen. Ursache bisher nicht untersucht. |
 | **Die Wand am Beamer** | Legende, QR-Größe und Portraitausschnitt sind an Messbildern beurteilt, nicht im Raum. Ob 132 px QR aus Besucherabstand reichen, weiß nur der Raum. |
 | **Gesichtserkennung an echten Booth-Fotos** | Gemessen an einem einzelnen Foto und an Testmustern. Halbprofil, Sonnenbrille, Gegenlicht: ungeprüft. |
 | **Flackern der Wand** | Cron-Job als Ursache **widerlegt** (gemessen). HDR ist der Hauptverdacht (Display-Ereignis 4121), nicht bewiesen. |
@@ -169,19 +190,20 @@ erledigt ist:
 
 | Was | Wo | Anmerkung |
 |---|---|---|
-| Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | `schtasks /delete /tn "KgKernTest" /f` — war eine Testkrücke, kein Dauerzustand. Nicht selbst entfernt: die Station lief gerade, und ein Eingriff in den Aufgabenplaner während des Betriebs ist Birks Entscheidung. |
-| Worktree `kg-app` | `$VOL/projekte/kg-app` | wird noch von der Foto-Session benutzt |
+| Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | **läuft gerade** (gemessen 13:40). `schtasks /delete /tn "KgKernTest" /f` — war eine Testkrücke, kein Dauerzustand. Nicht selbst entfernt: sie hält womöglich den Kern, der gerade auf 8800 antwortet. Wer sie löscht, muss den Kern danach über die START-Verknüpfung neu starten. |
+| Worktree `kg-app` | `$VOL/projekte/kg-app` | gehört der Foto-Session, steht auf `master` |
 | APK `out/kollektivgedaechtnis-foto-v6.apk` | vServer | bewusst nicht im Git (3,6 MB Binär), neu bauen nach `android/README.md` |
 
-**Erledigt am 2026-09-01:**
+**Erledigt am 2026-09-01, jeweils nachgeprüft:**
 
 - **Testempfang auf Port 8805 beendet** (`scripts/testempfang.py`, PID 857211
-  und Kinder). Port ist frei, nachgeprüft mit `ss -tlnp`.
+  und Kinder). Port frei, geprüft mit `ss -tlnp`.
 - **Doppelter `kg-start` unter `birk`** nach
   `C:\Users\birk\station-sicherung-2026-09-01\kg-start-birk-ungenutzt\`
-  verschoben (nicht gelöscht). Vorher geprüft: alle drei Dienst-Skripte darin
-  waren bit-identisch mit denen unter `SF-Tracking`, und die Startdatei nutzt
-  `%~dp0dienste` — also ihren eigenen Ordner, nie den unter `birk`.
+  verschoben (nicht gelöscht), auf Birks Freigabe. Vorher geprüft: alle drei
+  Dienst-Skripte darin waren bit-identisch mit denen unter `SF-Tracking`, und
+  die Startdatei nutzt `%~dp0dienste` — also ihren eigenen Ordner, nie den
+  unter `birk`. Die Desktop-Verknüpfung zeigt auf die `SF-Tracking`-Fassung.
 - **Acht erledigte Handoffs** nach `docs/archiv/`, alle Verweise mitgezogen.
 
 ---
