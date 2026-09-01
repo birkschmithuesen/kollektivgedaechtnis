@@ -88,6 +88,48 @@ heißt das: **dem Abzeichen nicht glauben.** Was wirklich gilt, steht in
 `curl -s http://127.0.0.1:5051/status` (`listening` / `paused`) und im
 `mic_on` aus `/levels`.
 
+### 🔴 Erreichbar von anderen Rechnern (Plenum-Schirm über Tailscale)
+
+**Zwei Dinge sind nötig, und das zweite sieht nicht nach sich selbst aus.**
+
+**1. Auf allen Schnittstellen lauschen.** `server_host = "0.0.0.0"` in
+`config.toml` (8800) und `config2.toml` (8810), `STT_HOST=0.0.0.0` in
+`~/projekte/fundusbot/.env` (5051). Es gibt **keinen** Umgebungsschalter dafür
+— uvicorn bindet direkt an diesen Wert (`kg/__main__.py:183`). Erledigt am
+2026-09-01. `tool1_url` und `KG_URL` bleiben bewusst auf Loopback: der Traum
+holt den Graphen von derselben Maschine, das soll nicht über Tailscale laufen.
+
+**2. Die macOS-Firewall freigeben** — sonst bleibt es trotzdem lokal:
+
+```bash
+./scripts/firewall-freigeben.sh
+```
+
+Die Anwendungs-Firewall filtert nach **Binary**, nicht nach Port, und sie
+filtert **Loopback nicht**. Das Fehlerbild führt deshalb in die Irre:
+`127.0.0.1` antwortet tadellos, jede andere Adresse nimmt die TCP-Verbindung
+an und legt ohne Antwort auf (`Empty reply from server`) — und im
+uvicorn-Zugriffslog steht **nichts**, weil die Anfrage den Dienst nie erreicht.
+Es sieht aus wie ein kaputter Server und ist eine Freigabe.
+
+Gegenprobe vom 2026-09-01, gleiche Maschine, gleiche `0.0.0.0`-Bindung,
+derselbe Moment:
+
+| Binary | 127.0.0.1 | Tailscale | LAN |
+|---|---|---|---|
+| `/usr/bin/python3` (in der Freigabe) | 200 | **200** | **200** |
+| Brew-Python (unsere Dienste) | 200 | **000** | **000** |
+
+🔴 **Nach `brew upgrade python` ist die Freigabe wieder weg** — sie zeigt auf
+einen Pfad mit Versionsnummer darin. Dann das Skript erneut laufen lassen; es
+fragt das Binary jedes Mal beim laufenden Dienst ab, statt es zu raten.
+
+**Preis:** die Bedienpulte haben keine Anmeldung. Wer im selben WLAN ist, kann
+`/operator` öffnen und Regler verstellen.
+
+Adressen für den zweiten Rechner (Tailscale-IP dieses Macs: `100.95.122.67`):
+`http://100.95.122.67:8800/plenum` und `…/operator-plenum`.
+
 ### 🔴 Zwei Dinge, die du wissen musst — nicht behoben, sondern Betrieb
 
 **A. Die Reglerwerte überleben ein Umschalten der Dichte NICHT.**
