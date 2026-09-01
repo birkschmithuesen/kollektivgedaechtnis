@@ -92,62 +92,54 @@ FEHLT=0
 
 if [ ! -f .env ]; then
   echo ""
-  echo "  🔴 .env FEHLT — ohne Schluessel startet der Kern nicht."
+  echo "  🔴 .env FEHLT. Vorlage: docs/env-vorlage-eu.txt"
   echo ""
-  echo "     PFLICHT (Analyse der Interviews, Kern):"
-  echo "        ANTHROPIC_API_KEY=..."
-  echo "        OPENROUTER_API_KEY=...      # auch fuer die Embeddings"
+  echo "     Von der laufenden Station abgelesen -- genau DREI Variablen:"
+  echo "        HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY=   (Pflicht: Analyse,"
+  echo "                                    Weckwort und Embeddings, EU/Schweiz)"
+  echo "        BFL_API_KEY=                (Pflicht fuer den Traum, EU/DE)"
+  echo "        KG_TELEGRAM_TOKEN=          (nur alter Foto-Weg, meist leer)"
   echo ""
-  echo "     FUER DEN TRAUM (Bildgenerierung, kg2) -- je nach image_api_mode"
-  echo "     in config.toml:"
-  echo "        openrouter  (Vorgabe)  -> es reicht OPENROUTER_API_KEY"
-  echo "        bfl                     -> BFL_API_KEY=...  (EU-Endpunkt,"
-  echo "                                   auf dem Mac der direkte Weg)"
-  echo "        bfl_proxy               -> KEIN Schluessel noetig, laeuft aber"
-  echo "                                   NUR auf dem vServer"
-  echo ""
-  echo "     OPTIONAL, nur wenn config.toml auf Infomaniak zeigt:"
-  echo "        HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY=..."
+  echo "     ANTHROPIC_API_KEY und OPENROUTER_API_KEY werden NICHT gebraucht."
+  echo "     Sie stehen zwar in config.example.toml, die Station setzt aber"
+  echo "     keinen von beiden -- die Installation laeuft ueber EU-Anbieter."
   echo ""
   echo "     Anlegen als $ZIEL/.env"
-  echo "     (Die Datei ist in .gitignore und kommt NICHT ueber git mit.)"
   FEHLT=1
 else
   echo "  .env: da"
-  # Nur pruefen, WELCHE Namen gesetzt sind -- niemals Werte ausgeben.
-  for k in ANTHROPIC_API_KEY OPENROUTER_API_KEY BFL_API_KEY \
-           HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY; do
+  for k in HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY BFL_API_KEY; do
     if grep -qE "^${k}=." .env 2>/dev/null; then
       echo "     $k: gesetzt"
     else
-      echo "     $k: fehlt"
+      echo "     🔴 $k: FEHLT"
+      FEHLT=1
     fi
   done
-  echo "     (Pflicht sind die ersten beiden. BFL nur bei image_api_mode=bfl,"
-  echo "      Infomaniak nur wenn config.toml darauf zeigt.)"
 fi
 
-# 🔴 Der Traum-Modus entscheidet, welcher Bildschluessel gebraucht wird.
-#
-# "bfl_proxy" ist eine reine vServer-Eigenheit und wird auf einem
-# Ausstellungsrechner NIE gebraucht (Birk, 2026-09-01: "den Proxy brauchts auf
-# dem Mac nicht -- genau wie auf dem Windows-Rechner ihn auch nicht gebraucht
-# hat"). Der Grund steht in kg2/config.py: auf dem vServer hat uid birk per
-# nftables keinen Egress zu bfl.ai, deshalb der lokale Broker. Ein Mac oder
-# Windows-Rechner hat diesen Filter nicht und spricht BFL direkt an.
-#
-# Wer die Konfiguration vom vServer uebernimmt, schleppt den Proxy-Modus mit
-# und bekommt einen Traum, der stumm nichts rendert -- der Broker existiert
-# hier ja nicht. Deshalb diese Warnung.
-if [ -f config.toml ] && grep -q 'image_api_mode.*bfl_proxy' config.toml 2>/dev/null; then
-  echo ""
-  echo "  🔴 config.toml steht auf image_api_mode = \"bfl_proxy\"."
-  echo "     Dieser Weg laeuft NUR auf dem vServer (lokaler Broker, uid"
-  echo "     bflproxy). Auf dem Mac stattdessen:"
-  echo "        image_api_mode = \"bfl\"        + BFL_API_KEY in .env"
-  echo "     oder image_api_mode = \"openrouter\"  (dann reicht der"
-  echo "     OPENROUTER_API_KEY)."
-  FEHLT=1
+# 🔴 Der Traum lief auf der Station ueber OPENROUTER, obwohl der BFL-Schluessel
+# danebenlag: in ihrer config.toml stand keine einzige image_-Zeile, also galt
+# die Vorgabe aus kg2/config.py (openrouter + google/gemini-3-pro-image). Das
+# ist ein US-Weg. Wer die EU-Kette will, braucht die vier Zeilen aus
+# docs/env-vorlage-eu.txt in der config.toml.
+if [ -f config.toml ]; then
+  if ! grep -qE '^\s*image_api_mode' config.toml 2>/dev/null; then
+    echo ""
+    echo "  🔴 config.toml setzt image_api_mode NICHT -> es gilt die Vorgabe"
+    echo "     'openrouter' (US-Weg ueber Google), und BFL bleibt ungenutzt."
+    echo "     Fuer die EU-Kette eintragen:"
+    echo "        image_api_mode    = \"bfl\""
+    echo "        image_url         = \"https://api.eu.bfl.ai/v1\""
+    echo "        image_model       = \"flux-pro-1.1\""
+    echo "        image_api_key_env = \"BFL_API_KEY\""
+    FEHLT=1
+  elif grep -q 'image_api_mode.*bfl_proxy' config.toml 2>/dev/null; then
+    echo ""
+    echo "  🔴 image_api_mode = bfl_proxy laeuft NUR auf dem vServer."
+    echo "     Auf diesem Rechner stattdessen \"bfl\" verwenden."
+    FEHLT=1
+  fi
 fi
 
 if [ ! -f config.toml ]; then
