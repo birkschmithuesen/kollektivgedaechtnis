@@ -29,10 +29,49 @@ Kopfhöhe. Der Rahmen bildet den **mittigen Rückfallweg** ab — findet die
 Station ein Gesicht, wird der Ausschnitt enger, der Kreis ist dann die
 sichere Untergrenze.
 
-**Nach dem Auslösen** erscheint unten links das fertige Portrait, wie es die
-Station zugeschnitten hat (antippen blendet es weg). Das ist das **echte**
-Bild von der Station, keine Nachbildung — die Station nennt in ihrer Antwort
-den Dateinamen, die App holt es über `/media/portraits/<name>`.
+**Nach dem Auslösen** erscheint das fertige Portrait **formatfüllend** über
+dem Sucher, wie es die Station zugeschnitten hat (antippen blendet es weg).
+Das ist das **echte** Bild von der Station, keine Nachbildung — die Station
+nennt in ihrer Antwort den Dateinamen, die App holt es über
+`/media/portraits/<name>`.
+
+> Bis einschließlich **v6** hing die Vorschau als 140dp-Kachel in der Ecke.
+> Vollbild gilt ab **v7** (Layout-Änderung vom 2026-09-01, Commit `7fd4425`).
+> Wer eine Kachel sieht, hat ein altes APK installiert — nicht im Code suchen,
+> sondern die Version prüfen (siehe unten).
+
+## 🔴 Welche Version liegt auf dem Telefon?
+
+Der häufigste Fehlschluss bei dieser App: Der Quellcode ist längst richtig,
+das **APK auf dem Gerät** ist alt. Am 2026-09-01 lief so eine Meldung auf
+(„zeigt das Foto nur klein"), obwohl die Änderung seit Stunden auf `master`
+lag — nur eben nicht auf dem Handy.
+
+Am Gerät: *Einstellungen → Apps → Kollektivgedächtnis Foto*. Die
+`versionName` steht bei allen Builds auf `1.0` und **hilft nicht weiter** —
+sie unterscheidet die Stände nicht. Verlässlich ist nur das Datum unter
+„App-Details" gegen die Bauzeit des APK.
+
+Aus einem vorliegenden APK lässt sich der Stand ohne Android-Werkzeuge
+ablesen — das Layout steckt als Binär-XML drin:
+
+```bash
+uv run python scripts/apk-layout-lesen.py out/kollektivgedaechtnis-foto-v8.apk
+```
+
+`layout_width: 140dip` beim `ImageView` heißt Kachel (v6 und älter),
+`0dip` heißt Vollbild (ab v7).
+
+**Drüberinstallieren geht.** Alle Builds tragen dasselbe Debug-Zertifikat
+(SHA-256 `b1f145d4…`, nachgemessen 2026-09-01) — Android nimmt das Update an,
+ohne dass die alte App deinstalliert werden muss. Wäre es ein anderer
+Schlüssel, bräche die Installation mit „App nicht installiert" ab.
+
+**Wo das APK liegt:** in der RoboCloud unter
+`Hermes-Agent/RoboCloud/NewBauhaus-2026-Interviews/`. Das ist der einzige
+Ort, an den das Telefon herankommt — `out/` liegt bewusst nicht im Git
+(Binaries), war deshalb aber auch für niemanden erreichbar. **Wer ein neues
+APK baut, lädt es dorthin hoch, sonst ist es gebaut und nicht ausgeliefert.**
 
 Über den **Spiegel-Weg gibt es keine Vorschau**: dort entsteht das Portrait
 erst beim Abholen. Kein Fehler.
