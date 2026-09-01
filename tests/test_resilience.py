@@ -141,11 +141,20 @@ async def test_a_dead_stt_server_is_visible_but_not_fatal(tmp_path):
     )
 
     core.on_stt_state(False)
+    # Das Interview wird ueber den Schalter eroeffnet -- seit 2026-09-01 der
+    # einzige Weg hinein (`SessionTracker.photo` eroeffnet keins mehr). Die
+    # Zusage dieses Tests bleibt unveraendert: Auch OHNE Spracherkennung
+    # nimmt die Station einen Besuch an und das Portraet landet. Genau
+    # darum geht es hier -- ein toter STT-Server darf die Station nicht
+    # stilllegen, und der Schalter haengt nicht an ihm.
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
     await core.drain()
 
     assert store.get_setting("stt_connected", "1") == "0"
-    assert store.open_person() is not None
+    person = store.open_person()
+    assert person is not None
+    assert person.portrait_path == "a.png", "das Portraet kam nicht an"
     store.close()
 
 
