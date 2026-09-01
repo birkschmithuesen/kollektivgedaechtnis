@@ -84,6 +84,38 @@ class SessionTracker:
         after a handed-in portrait. Otherwise the next visitor would silently
         overwrite the previous one's portrait instead of getting their own
         node.
+
+        OFFEN (Birk, 2026-09-01) — der Alternativ-Cache ist noch nicht gebaut:
+
+            „Wenn während eines laufenden Interviews ein zweites Foto gemacht
+            wird, soll das in einen alternativ Foto cache für das laufende
+            Interview."
+
+        Das ändert genau den `new_photo`-Zweig unten: ein zweites Foto ist
+        dann kein neuer Besuch mehr, sondern eine weitere Aufnahme derselben
+        Person, aus der später ausgewählt werden kann. Die Stelle ist hier
+        markiert, das Verhalten aber bewusst UNVERÄNDERT gelassen — solange
+        es keinen Cache gibt, in den das zweite Bild fällt, wäre das Foto
+        sonst schlicht verloren, und das ist schlechter als der heutige
+        Stand.
+
+        Was vor dem Bauen entschieden sein muss, weil es sich hinterher nicht
+        mehr billig ändern lässt:
+
+        * **Wie fängt dann der nächste Besuch an?** Fällt jedes Foto in den
+          Cache, gibt es keinen Weg mehr, per Foto ein neues Interview zu
+          eröffnen. Der Schalter kann das (`mic_switch`), der Timeout auch —
+          aber das ist eine Entscheidung über den Ablauf an der Station, keine
+          Implementierungsfrage.
+        * **Wo liegen die Bilder, und wie lange?** `person.photo_path` hält
+          genau einen Pfad. Ein Cache braucht eine eigene Tabelle (oder eine
+          Liste), plus eine Regel, wann die verworfenen Aufnahmen gelöscht
+          werden — bei einer Arbeit über Datenschutz ist ein wachsender Haufen
+          nicht ausgewählter Porträts kein Nebenaspekt.
+        * **Wer wählt aus?** Operator-Ansicht, automatisch, oder der Gast
+          selbst?
+
+        Ausführlich in `docs/HANDOFF-alternativ-foto-cache.md`.
         """
         if self._open_since is not None and self._without_portrait:
             self._without_portrait = False
