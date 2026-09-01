@@ -359,7 +359,9 @@ class Store:
     # -- edges / quotes ----------------------------------------------------
 
     @_locked
-    def add_edge(self, person_id: str, term_id: str, created_at: float) -> Edge:
+    def add_edge(
+        self, person_id: str, term_id: str, created_at: float, evidence: str | None = None
+    ) -> Edge:
         row = self.conn.execute(
             "SELECT * FROM edge WHERE person_id=? AND term_id=?", (person_id, term_id)
         ).fetchone()
@@ -367,8 +369,9 @@ class Store:
             return _edge(row)
         edge_id = self._next_id("edge")
         self.conn.execute(
-            "INSERT INTO edge(id, person_id, term_id, created_at) VALUES (?,?,?,?)",
-            (edge_id, person_id, term_id, created_at),
+            "INSERT INTO edge(id, person_id, term_id, created_at, evidence)"
+            " VALUES (?,?,?,?,?)",
+            (edge_id, person_id, term_id, created_at, evidence or None),
         )
         self._commit()
         row = self.conn.execute("SELECT * FROM edge WHERE id=?", (edge_id,)).fetchone()
@@ -503,4 +506,7 @@ def _edge(row: sqlite3.Row) -> Edge:
         person_id=row["person_id"],
         term_id=row["term_id"],
         created_at=row["created_at"],
+        # `keys()` statt eines festen Zugriffs: ein Abfrageergebnis, das noch
+        # aus der Zeit vor der Nachruestung stammt, hat die Spalte nicht.
+        evidence=row["evidence"] if "evidence" in row.keys() else None,
     )

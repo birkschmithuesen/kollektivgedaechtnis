@@ -60,6 +60,24 @@ def process_interview(
         result = extract(llm, text, cfg.terms_per_interview)
         transcript = text[: result.interview_end_index].strip() or text.strip()
         labels = [t.label.strip() for t in result.terms if t.label.strip()]
+        # 🔴 Die Belegstelle je Begriff aufheben (Birk, 2026-09-02). Das Modell
+        # liefert sie laengst -- `ExtractedTerm.evidence`, im Prompt verlangt
+        # als „die kurze Textstelle, auf die sich der Begriff stuetzt" -- und
+        # bis heute wurde sie gelesen und weggeworfen. Ohne sie bekommt der
+        # Traum nur das Etikett: Aus „Ich hoffe, dass alle
+        # Rohstoffabhaengigkeiten von der KI geplant werden" wurde der Begriff
+        # „Rohstoffabhaengigkeiten", und das Bild malte Faesser auf einem
+        # Containerterminal -- die Sache war weg, das Wort geblieben.
+        #
+        # Nach LABEL geschluesselt und nicht nach Reihenfolge: Die Zuordnung
+        # unten laeuft ueber `labels`, und ein Begriff kann durch die
+        # Zusammenfuehrung auf eine andere Kennung zeigen als den Text, unter
+        # dem er genannt wurde.
+        belege = {
+            t.label.strip(): (t.evidence or "").strip()
+            for t in result.terms
+            if t.label.strip()
+        }
 
         # 4. Merge: persisted decisions first, one LLM call for the rest.
         known, unknown = split_known(store, labels)
@@ -67,20 +85,45 @@ def process_interview(
             candidates = build_candidates(
                 unknown, [t.label for t in store.list_terms()], embedder, cfg.merge_neighbours
             )
-            decision = decide_merges(llm, unknown, candidates, cfg.merge_style)
+            # 🔴 Die Belegstellen BEIDER Seiten mitgeben (2026-09-02). Ohne
+            # sie entscheidet der Richter am Etikett und legt „Lehmhaus" zu
+            # „Tiny House Wohnen" — gemessen an den echten Interviews dieses
+            # Tages. Fuer die bestehenden Knoten wird je eine Stelle geholt;
+            # die erste genuegt, sie soll den Knoten kenntlich machen, nicht
+            # ihn ausmessen.
+            bestehende_belege: dict[str, str] = {}
+            labels_je_term = {term.id: term.label for term in store.list_terms()}
+            for kante in store.list_edges():
+                marke = labels_je_term.get(kante.term_id)
+                if marke and kante.evidence and marke not in bestehende_belege:
+                    bestehende_belege[marke] = kante.evidence
+            decision = decide_merges(
+                llm, unknown, candidates, cfg.merge_style,
+                belege={label: belege.get(label, "") for label in unknown},
+                belege_bestehend=bestehende_belege,
+            )
             resolved = dict(zip(unknown, apply_merges(store, person_id, unknown, decision, stopped_at)))
         else:
             resolved = {}
         term_ids: list[str] = []
+        beleg_je_term: dict[str, str] = {}
         for label in labels:
             term_id = known.get(label) or resolved.get(label)
             if term_id and term_id not in term_ids:
                 term_ids.append(term_id)
+                # Der erste gewinnt: Nennt jemand zwei Woerter, die auf
+                # denselben Begriff zusammengefuehrt werden, ist die erste
+                # Stelle die, an der er ihn eingefuehrt hat.
+                if belege.get(label):
+                    beleg_je_term[term_id] = belege[label]
 
         # 5. Persist.
         store.set_person_transcript(person_id, transcript)
         for term_id in term_ids:
-            store.add_edge(person_id, term_id, created_at=stopped_at)
+            store.add_edge(
+                person_id, term_id, created_at=stopped_at,
+                evidence=beleg_je_term.get(term_id),
+            )
         # result.quotes has at most one entry — extract() caps it — so this
         # writes at most one quote per person.
         for quote in result.quotes:

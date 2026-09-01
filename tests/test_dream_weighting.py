@@ -9,6 +9,7 @@ from kg2.weighting import (
     build_material,
     render_material,
     select_marginal,
+    select_required,
     select_recent,
 )
 
@@ -735,3 +736,86 @@ def test_zitate_bleiben_auf_wunsch_ganz_draussen():
         [("p1", "Ein Satz")],
     )
     assert "Ein Satz" not in render_material(build_material(g), include_quotes=False)
+
+
+# --- Die Belegstellen im Material (Birk, 2026-09-02) ------------------------
+#
+# „Ich hab das Gefühl, dass wenn nur diese Einzelbegriffe eingespeist werden,
+# der dahinterliegende Sinn überhaupt nicht mitgenommen wird."
+#
+# Belegt an Traum d1: Aus „Ich hoffe, dass alle Rohstoffabhängigkeiten von der
+# KI geplant werden" wurde der Begriff „Rohstoffabhängigkeiten" — und das Bild
+# malte Fässer auf einem Containerterminal. Die Sache war weg, das Wort
+# geblieben. Die Belegstelle hätte genau das verhindert.
+#
+# NUR ZU DEN PFLICHTBEGRIFFEN, und das ist der Punkt: Bei 60 Menschen mal fünf
+# Begriffen wären es 300 Textstellen — dieselbe Aufblähung, wegen der die
+# Zitate ursprünglich GANZ abgeschaltet waren (76 % des Materialblocks).
+
+
+def graph_mit_belegen(nodes, edges_mit_beleg, **kw):
+    g = graph(nodes, [(s, t) for s, t, _ in edges_mit_beleg], **kw)
+    for kante, (_, _, beleg) in zip(g["edges"], edges_mit_beleg):
+        if beleg:
+            kante["evidence"] = beleg
+    return g
+
+
+def test_die_belegstelle_eines_pflichtbegriffs_steht_im_material():
+    g = graph_mit_belegen(
+        [{**person("p1"), "name": "Frau Kirchner"}, term("t1", "Lehmhaus", 1)],
+        [("p1", "t1", "Ich würde gerne in einem Lehmhaus leben")],
+    )
+
+    text = render_material(build_material(g))
+
+    assert "Ich würde gerne in einem Lehmhaus leben" in text
+
+
+def test_bei_mehreren_menschen_steht_jede_stelle_mit_ihrem_namen():
+    """Birks zweite Anforderung: „bei Begriffen, die von mehreren Menschen
+    genannt wurden, der jeweilige Kontext pro Person mit dem Namen"."""
+    g = graph_mit_belegen(
+        [
+            {**person("p1"), "name": "Frau Kirchner"},
+            {**person("p2"), "name": "Herr Adam"},
+            term("t1", "Genossenschaftliches Wohnen", 2),
+        ],
+        [
+            ("p1", "t1", "Das Haus gehört allen zusammen"),
+            ("p2", "t1", "Wir haben eine Genossenschaft gegründet"),
+        ],
+    )
+
+    text = render_material(build_material(g))
+
+    assert "Frau Kirchner" in text and "Das Haus gehört allen zusammen" in text
+    assert "Herr Adam" in text and "Wir haben eine Genossenschaft gegründet" in text
+
+
+def test_ohne_belegstellen_entsteht_kein_leerer_block():
+    g = graph([person("p1"), term("t1", "Lehmhaus", 1)], [("p1", "t1")])
+
+    text = render_material(build_material(g))
+
+    assert "So war es gemeint" not in text
+
+
+def test_belegstellen_gibt_es_nur_zu_den_pflichtbegriffen():
+    """Sonst waeren es bei 60 Menschen 300 Textstellen — dieselbe Aufblaehung,
+    wegen der die Zitate einmal ganz abgeschaltet waren."""
+    nodes = [{**person(f"p{i}"), "name": f"Person {i}"} for i in range(1, 4)]
+    nodes.append(term("t1", "Lehmbau", 3))
+    nodes += [term(f"t{i}", f"Randbegriff {i}", 1, created_at=float(i)) for i in range(2, 12)]
+    kanten = [("p1", "t1", "geteilte Stelle"), ("p2", "t1", "zweite"), ("p3", "t1", "dritte")]
+    kanten += [(f"p{(i % 3) + 1}", f"t{i}", f"Randstelle {i}") for i in range(2, 12)]
+
+    material = build_material(graph_mit_belegen(nodes, kanten))
+    text = render_material(material)
+    pflicht = {w.label for w in select_required(material)}
+
+    for i in range(2, 12):
+        if f"Randbegriff {i}" not in pflicht:
+            assert f"Randstelle {i}" not in text, (
+                f"Randbegriff {i} ist keine Pflicht, seine Belegstelle steht trotzdem drin"
+            )

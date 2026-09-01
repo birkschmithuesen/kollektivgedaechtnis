@@ -38,6 +38,10 @@ class Edge:
     person_id: str
     term_id: str
     created_at: float
+    #: Die Textstelle aus dem Interview, auf die sich dieser Begriff bei
+    #: DIESER Person stuetzt. `None` bei Kanten von vor dem 2026-09-02 und
+    #: dort, wo das Modell keine geliefert hat.
+    evidence: str | None = None
 
 
 @dataclass(frozen=True)

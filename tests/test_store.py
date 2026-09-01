@@ -439,3 +439,56 @@ def test_state_survives_reopening(tmp_path):
     assert len(s2.list_edges()) == 1
     assert s2.get_positions() == {person.id: (5.0, 6.0)}
     s2.close()
+
+
+# --- Die Belegstelle an der Kante (Birk, 2026-09-02) ------------------------
+#
+# „Ich hab das Gefühl, dass wenn nur diese Einzelbegriffe eingespeist werden,
+# der dahinterliegende Sinn überhaupt nicht mitgenommen wird. Wie wär das,
+# wenn du pro Begriff eine kleine Erklärung machst, wie dieses Wort gemeint
+# ist — das aus dem Interview kommt."
+#
+# Die Extraktion liefert das laengst: `ExtractedTerm` hat neben `label` ein
+# Feld `evidence`, und der Prompt verlangt es ausdruecklich („die kurze
+# Textstelle, auf die sich der Begriff stuetzt"). Gespeichert wurde es bis
+# heute NIRGENDS.
+#
+# An die KANTE und nicht an den Begriff: Ein Begriff, den drei Menschen
+# genannt haben, hat drei Belegstellen — je eine pro Person. Genau das ist
+# Birks zweite Anforderung („bei Begriffen, die von mehreren genannt wurden,
+# der jeweilige Kontext pro Person mit dem Namen").
+
+
+def test_eine_kante_traegt_die_belegstelle_aus_dem_interview(store):
+    p = store.create_person(started_at=1.0)
+    t = store.get_or_create_term("Lehmhaus", created_at=1.0)
+
+    kante = store.add_edge(p.id, t.id, created_at=2.0,
+                           evidence="Ich würde gerne in einem Lehmhaus leben")
+
+    assert kante.evidence == "Ich würde gerne in einem Lehmhaus leben"
+    assert store.list_edges()[0].evidence == "Ich würde gerne in einem Lehmhaus leben"
+
+
+def test_derselbe_begriff_traegt_pro_person_eine_eigene_belegstelle(store):
+    a = store.create_person(started_at=1.0)
+    b = store.create_person(started_at=2.0)
+    t = store.get_or_create_term("Genossenschaftliches Wohnen", created_at=1.0)
+
+    store.add_edge(a.id, t.id, created_at=3.0, evidence="Das Haus gehört allen zusammen")
+    store.add_edge(b.id, t.id, created_at=4.0, evidence="Wir haben eine Genossenschaft gegründet")
+
+    belege = {e.person_id: e.evidence for e in store.list_edges()}
+    assert belege[a.id] == "Das Haus gehört allen zusammen"
+    assert belege[b.id] == "Wir haben eine Genossenschaft gegründet"
+
+
+def test_eine_kante_ohne_belegstelle_bleibt_zulaessig(store):
+    """Kanten aus der Zeit vor dieser Aenderung haben keine — und Kanten, bei
+    denen das Modell keine geliefert hat, ebenso. Beides ist kein Fehler."""
+    p = store.create_person(started_at=1.0)
+    t = store.get_or_create_term("Holzbau", created_at=1.0)
+
+    kante = store.add_edge(p.id, t.id, created_at=2.0)
+
+    assert kante.evidence is None or kante.evidence == ""

@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS edge (
     person_id  TEXT NOT NULL REFERENCES person(id),
     term_id    TEXT NOT NULL REFERENCES term(id),
     created_at REAL NOT NULL,
+    -- Siehe `_NACHGEREICHTE_SPALTEN`: bestehende Datenbanken bekommen sie
+    -- ueber `_nachruesten`, neue direkt hier.
+    evidence   TEXT,
     UNIQUE (person_id, term_id)
 );
 
@@ -84,7 +87,16 @@ CREATE TABLE IF NOT EXISTS setting (
 #: dann häng sie an". Mehr braucht eine Station, die nichts umbenennt und
 #: nichts löscht, und weniger würde die eine Datenbank vergessen, auf die es
 #: ankommt.
-_NACHGEREICHTE_SPALTEN = (("person", "name", "TEXT"),)
+_NACHGEREICHTE_SPALTEN = (
+    ("person", "name", "TEXT"),
+    # 🔴 Die Belegstelle aus dem Interview, an der KANTE und nicht am Begriff
+    # (Birk, 2026-09-02). Ein Begriff, den drei Menschen genannt haben, hat
+    # drei Belegstellen -- je eine pro Person. Die Extraktion liefert sie
+    # laengst (`ExtractedTerm.evidence`), sie wurde bis heute nur weggeworfen.
+    # Bestehende Kanten behalten NULL: von den vorher Befragten kennen wir die
+    # Stelle wirklich nicht, und ein leerer String waere eine Behauptung.
+    ("edge", "evidence", "TEXT"),
+)
 
 
 def _nachruesten(conn: sqlite3.Connection) -> None:

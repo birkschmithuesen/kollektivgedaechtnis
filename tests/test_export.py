@@ -127,3 +127,33 @@ def test_a_persons_second_quote_is_dropped_from_the_export(store):
 
     texts = [q["text"] for q in graph["quotes"] if q["person_id"] == p1.id]
     assert texts == ["Erstes Zitat."]
+
+
+# --- Die Belegstelle reist mit (Birk, 2026-09-02) ---------------------------
+#
+# `graph.json` ist der Vertrag zwischen Tool 1 und Tool 2 und zugleich das,
+# was der oeffentliche Spiegel bekommt. Woertliche Zitate stehen dort
+# laengst; die Belegstelle je Kante ist dieselbe Datenart, keine neue.
+
+
+def test_eine_kante_traegt_ihre_belegstelle_in_die_graphdatei(store):
+    p = store.create_person(started_at=1.0)
+    t = store.get_or_create_term("Lehmhaus", created_at=1.0)
+    store.add_edge(p.id, t.id, created_at=2.0, evidence="Ich würde gerne im Lehmhaus leben")
+
+    kante = build_graph(store)["edges"][0]
+
+    assert kante["evidence"] == "Ich würde gerne im Lehmhaus leben"
+
+
+def test_eine_kante_ohne_belegstelle_traegt_kein_leeres_feld(store):
+    """Kein `evidence: ""` in der Datei: ein leeres Feld sieht aus wie „wir
+    haben nachgesehen und nichts gefunden", und der Unterschied zu „es gab
+    diese Spalte damals noch nicht" geht dabei verloren."""
+    p = store.create_person(started_at=1.0)
+    t = store.get_or_create_term("Holzbau", created_at=1.0)
+    store.add_edge(p.id, t.id, created_at=2.0)
+
+    kante = build_graph(store)["edges"][0]
+
+    assert "evidence" not in kante

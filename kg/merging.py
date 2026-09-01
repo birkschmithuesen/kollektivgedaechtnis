@@ -20,6 +20,14 @@ Du pflegst die Begriffsknoten eines wachsenden Beziehungsgraphen über Bauen, \
 Stadt und Zukunft. Aus einem neuen Interview kommen NEUE Begriffe. Dazu \
 bekommst du je Begriff die ähnlichsten BESTEHENDEN Knoten.
 
+Wo vorhanden, steht neben jedem Begriff die STELLE, an der er im Gespräch \
+fiel. Entscheide an ihr, nicht am Etikett: Zwei Wörter sehen sich schnell \
+ähnlich, zwei Sätze aus zwei Gesprächen seltener. Die Probe: Würden die \
+beiden Menschen, die das gesagt haben, einander zustimmen, dass sie dasselbe \
+meinten? „Ich würde gerne in einem Lehmhaus leben" und „mehr so Tiny House \
+Wohnen" sind beide Wünsche ans Wohnen — der eine spricht vom BAUSTOFF, der \
+andere von der GRÖSSE. Das sind zwei Knoten.
+
 Entscheide:
 - Welche neuen Begriffe meinen dasselbe wie ein bestehender Knoten?
 - Welche neuen Begriffe meinen untereinander dasselbe?
@@ -120,24 +128,68 @@ def build_candidates(
 
 
 def build_merge_prompt(
-    new_labels: Sequence[str], candidates: dict[str, list[str]], merge_style: str
+    new_labels: Sequence[str],
+    candidates: dict[str, list[str]],
+    merge_style: str,
+    belege: dict[str, str] | None = None,
+    belege_bestehend: dict[str, str] | None = None,
 ) -> str:
+    """🔴 Seit 2026-09-02 mit den BELEGSTELLEN (Birk).
+
+    Bis dahin sah der Richter nur Etiketten: „Lehmhaus" gegen „Tiny House
+    Wohnen", ohne jeden Kontext. An den echten Interviews desselben Tages hat
+    er daraufhin „Lehmhaus" und „Earthship" in „Tiny House Wohnen" gelegt --
+    eine Bauweise und eine Groesse in einen Topf -- und ein andermal
+    „Naturverbundenes Wohnen" gleich mit.
+
+    Der Massstab im Prompt war dabei nicht zu lasch („Fasse nur zusammen, was
+    wirklich dasselbe meint"). Er half nur nicht, weil dem Richter das Material
+    fehlte, an dem er es haette entscheiden koennen. Zwei Woerter sehen sich
+    schnell aehnlich; zwei Saetze aus zwei Gespraechen tun das seltener.
+
+    Beide Seiten, nicht nur die neue: Sonst vergleicht er eine Textstelle mit
+    einem blossen Wort und entscheidet wieder am Etikett. Fehlt eine Stelle
+    (aeltere Kanten haben keine), bleibt die Zeile wie vorher -- die Angabe ist
+    eine Hilfe, keine Bedingung.
+    """
+    belege = belege or {}
+    belege_bestehend = belege_bestehend or {}
     lines = [f"Maßstab für das Zusammenfassen: {merge_style}", "", "NEUE BEGRIFFE:"]
     for label in new_labels:
+        stelle = (belege.get(label) or "").strip()
+        kopf = f"- „{label}“"
+        if stelle:
+            kopf += f' — gesagt wurde: „{stelle}“'
+        lines.append(kopf)
         neighbours = candidates.get(label) or []
-        suffix = ", ".join(f"„{n}“" for n in neighbours) if neighbours else "(keine)"
-        lines.append(f"- „{label}“ — ähnliche bestehende Knoten: {suffix}")
+        if not neighbours:
+            lines.append("  ähnliche bestehende Knoten: (keine)")
+            continue
+        lines.append("  ähnliche bestehende Knoten:")
+        for n in neighbours:
+            n_stelle = (belege_bestehend.get(n) or "").strip()
+            if n_stelle:
+                lines.append(f'    · „{n}“ — dort wurde gesagt: „{n_stelle}“')
+            else:
+                lines.append(f'    · „{n}“')
     return "\n".join(lines)
 
 
 def decide_merges(
-    llm, new_labels: Sequence[str], candidates: dict[str, list[str]], merge_style: str
+    llm,
+    new_labels: Sequence[str],
+    candidates: dict[str, list[str]],
+    merge_style: str,
+    belege: dict[str, str] | None = None,
+    belege_bestehend: dict[str, str] | None = None,
 ) -> MergeResult:
     if not new_labels:
         return MergeResult(groups=[])
     return llm.parse(
         system=MERGE_SYSTEM,
-        user=build_merge_prompt(new_labels, candidates, merge_style),
+        user=build_merge_prompt(
+            new_labels, candidates, merge_style, belege, belege_bestehend
+        ),
         output_model=MergeResult,
     )
 

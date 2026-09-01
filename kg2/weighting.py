@@ -92,6 +92,10 @@ class Material:
     #: eine reine Textliste bleiben muss: sim/dream_calibrate.py und die
     #: Pruefskripte zaehlen darauf.
     quote_person_ids: list[str] = field(default_factory=list)
+    #: Zu jedem Begriff die Textstellen, auf die er sich stuetzt -- je Person
+    #: eine, als (Name, Stelle). Der Name kann leer sein: nicht jede Person
+    #: stellt sich vor.
+    belege: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     #: Die zuletzt hinzugekommene Person, nach `created_at` — der Anker fuer
     #: den Bildausschnitt (`select_required`, Birk 2026-08-30). Hier bestimmt
     #: und nicht vom Aufrufer uebergeben, weil das genau einmal falsch geraten
@@ -198,6 +202,7 @@ def build_material(graph: dict | None) -> Material:
     # Zeit JEDER Person: die Zitatauswahl unten braucht eine Reihenfolge, und
     # Zitate selbst tragen keinen Zeitstempel (nur `person_id`).
     personen_zeit: dict[str, float] = {}
+    personen_name: dict[str, str] = {}
     for node in nodes:
         if not isinstance(node, dict) or node.get("type") != "person":
             continue
@@ -207,12 +212,18 @@ def build_material(graph: dict | None) -> Material:
         if not isinstance(zeit, (int, float)):
             continue
         personen_zeit[node["id"]] = float(zeit)
+        # Der Name, fuer die Belegstellen weiter unten: „bei Begriffen, die
+        # von mehreren Menschen genannt wurden, der jeweilige Kontext pro
+        # Person mit dem Namen" (Birk, 2026-09-02).
+        if isinstance(node.get("name"), str) and node["name"].strip():
+            personen_name[node["id"]] = node["name"].strip()
         if letzte_zeit is None or zeit > letzte_zeit:
             letzte_zeit, letzte_person = zeit, node["id"]
 
     counts: dict[str, int] = {}
     edge_count = 0
     sprecher: dict[str, set[str]] = {}
+    belege: dict[str, list[tuple[str, str]]] = {}
     for edge in _as_list(graph.get("edges", ())):
         if not isinstance(edge, dict):
             continue
@@ -229,6 +240,11 @@ def build_material(graph: dict | None) -> Material:
             # (`select_required`, 2026-08-30) braucht die Sprechermengen, um
             # Naehe zwischen zwei Begriffen zu bestimmen.
             sprecher.setdefault(target, set()).add(source)
+            # Die Belegstelle haengt an der KANTE, nicht am Begriff: derselbe
+            # Begriff hat pro Person eine eigene (kg/models.py::Edge).
+            beleg = edge.get("evidence")
+            if isinstance(beleg, str) and beleg.strip():
+                belege.setdefault(target, []).append((source, beleg.strip()))
             edge_count += 1
 
     weights = []
@@ -276,6 +292,11 @@ def build_material(graph: dict | None) -> Material:
         marginal=[w for w in weights if w.mentions == 1],
         quotes=quotes,
         quote_person_ids=quote_person_ids,
+        belege={
+            label: [(personen_name.get(pid, ""), text) for pid, text in eintraege]
+            for tid, eintraege in belege.items()
+            if (label := (terms.get(tid) or (None,))[0])
+        },
         last_person_id=letzte_person,
     )
 
@@ -593,6 +614,34 @@ def render_material(
             "fiel. Steht einer nicht in deiner Bildbeschreibung, fehlt dem "
             "Bild etwas, worüber heute wirklich gesprochen wurde:\n" + lines
         )
+
+    # 🔴 Die Belegstellen — nur zu den PFLICHTBEGRIFFEN (Birk, 2026-09-02).
+    #
+    # „Ich hab das Gefuehl, dass wenn nur diese Einzelbegriffe eingespeist
+    # werden, der dahinterliegende Sinn ueberhaupt nicht mitgenommen wird."
+    # Belegt an Traum d1: Aus „Ich hoffe, dass alle Rohstoffabhaengigkeiten von
+    # der KI geplant werden" wurde der Begriff „Rohstoffabhaengigkeiten", und
+    # das Bild malte Faesser auf einem Containerterminal. Die Sache war weg,
+    # das Wort geblieben.
+    #
+    # Warum nur die Pflichtbegriffe: Bei 60 Menschen mal fuenf Begriffen waeren
+    # es 300 Textstellen. Das ist dieselbe Aufblaehung, wegen der die Zitate
+    # einmal GANZ abgeschaltet waren (76 % des Blocks) -- und die Lehre daraus
+    # war nicht „weglassen", sondern „begrenzen".
+    if required and material.belege:
+        zeilen = []
+        for w in required:
+            for name, stelle in material.belege.get(w.label, []):
+                wer = f"{name}: " if name else ""
+                zeilen.append(f'  {w.label} — {wer}„{stelle}"')
+        if zeilen:
+            blocks.append(
+                "SO WAR ES GEMEINT. Zu jedem Pflichtbegriff die Stelle, an der "
+                "er im Gespräch fiel — das Etikett ist die Abkürzung, hier "
+                "steht die Sache. Hat ihn mehr als ein Mensch genannt, steht "
+                "jede Lesart einzeln da; sie müssen sich nicht decken:\n"
+                + "\n".join(zeilen)
+            )
 
     if material.shared:
         lines = "\n".join(f"  {w.mentions}× {w.label}" for w in material.shared)

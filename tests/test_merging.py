@@ -610,3 +610,53 @@ def test_a_label_repeated_across_two_groups_does_not_conflate_them(store):
     nur_b = store.find_term_by_alias("nur B")
     assert nur_b.id != gruppe_a.id
     assert nur_b.label == "nur B"  # standalone, not conflated into Gruppe A
+
+
+# --- Der Richter bekommt die Belegstellen (Birk, 2026-09-02) ----------------
+#
+# Bis heute sah `build_merge_prompt` NUR Etiketten: „Lehmhaus" gegen „Tiny
+# House Wohnen", ohne jeden Kontext. Gemessen an den echten Interviews vom
+# 2026-09-02 hat er daraufhin zusammengelegt:
+#   „Lehmhaus" + „Earthship"          -> „Tiny House Wohnen"
+#   „Wohnen im Lehmhaus" + „Earthship-Bauweise" + „Naturverbundenes Wohnen"
+#                                     -> „Lehm und Natur gebaut"
+# Eine Bauweise und eine Groesse sind aber nicht dasselbe. Der Massstab im
+# Prompt („Fasse nur zusammen, was wirklich dasselbe meint") war schon
+# vorsichtig formuliert — er half nur nicht, weil dem Richter das Material
+# fehlte, an dem er es haette entscheiden koennen.
+#
+# Seit dem 2026-09-02 traegt jede Kante die Textstelle, an der ein Begriff
+# fiel (kg/models.py::Edge.evidence). Genau die gehoert hierher.
+
+
+def test_der_merge_prompt_zeigt_die_belegstelle_des_neuen_begriffs():
+    prompt = build_merge_prompt(
+        ["Lehmhaus"],
+        {"Lehmhaus": ["Tiny House Wohnen"]},
+        "Fasse nur zusammen, was wirklich dasselbe meint.",
+        belege={"Lehmhaus": "Ich würde gerne in einem Lehmhaus leben"},
+    )
+
+    assert "Ich würde gerne in einem Lehmhaus leben" in prompt
+
+
+def test_der_merge_prompt_zeigt_auch_die_belegstelle_des_bestehenden_knotens():
+    """Sonst vergleicht der Richter eine Textstelle mit einem blossen Wort."""
+    prompt = build_merge_prompt(
+        ["Lehmhaus"],
+        {"Lehmhaus": ["Tiny House Wohnen"]},
+        "Fasse nur zusammen, was wirklich dasselbe meint.",
+        belege={"Lehmhaus": "Ich würde gerne in einem Lehmhaus leben"},
+        belege_bestehend={"Tiny House Wohnen": "mehr so Tiny House Wohnen ist"},
+    )
+
+    assert "mehr so Tiny House Wohnen ist" in prompt
+
+
+def test_ohne_belegstellen_bleibt_der_prompt_wie_vorher():
+    """Aeltere Kanten haben keine, und ein Aufrufer muss sie nicht liefern."""
+    prompt = build_merge_prompt(
+        ["Lehmhaus"], {"Lehmhaus": ["Tiny House Wohnen"]}, "Massstab."
+    )
+
+    assert "Lehmhaus" in prompt and "Tiny House Wohnen" in prompt

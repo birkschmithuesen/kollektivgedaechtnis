@@ -364,3 +364,97 @@ def test_an_empty_transcript_is_not_sent_to_the_llm(env):
     assert result.status == "done"
     assert result.term_ids == []
     assert llm.prompts == []
+
+
+# --- Die Belegstelle landet an der Kante (Birk, 2026-09-02) ----------------
+#
+# `extract()` liefert zu jedem Begriff eine `evidence` — „die kurze
+# Textstelle, auf die sich der Begriff stuetzt". Bis heute wurde sie gelesen
+# und weggeworfen. Ohne sie bekommt der Traum nur das Etikett: Aus „Ich hoffe,
+# dass alle Rohstoffabhaengigkeiten von der KI geplant werden" wurde der
+# Begriff „Rohstoffabhaengigkeiten", und das Bild malte Faesser auf einem
+# Containerterminal — die Sache war weg, das Wort geblieben.
+
+
+def test_die_belegstelle_des_modells_landet_an_der_kante(env):
+    cfg, store, log = env
+    fill_log(log, [
+        ("Ich würde gerne in einem Lehmhaus leben.", 105.0),
+        ("Und alle Rohstoffabhängigkeiten sollen von der KI geplant werden.", 115.0),
+    ])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([
+        ExtractionResult(
+            interview_end_index=10_000,
+            terms=[
+                {"label": "Lehmhaus",
+                 "evidence": "Ich würde gerne in einem Lehmhaus leben"},
+                {"label": "KI-Rohstoffplanung",
+                 "evidence": "alle Rohstoffabhängigkeiten sollen von der KI geplant werden"},
+            ],
+            quotes=[],
+            names=[],
+        ),
+        MergeResult(groups=[]),
+    ])
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 160.0)
+
+    labels = {t.id: t.label for t in store.list_terms()}
+    belege = {labels[e.term_id]: e.evidence for e in store.list_edges()}
+    assert belege["Lehmhaus"] == "Ich würde gerne in einem Lehmhaus leben"
+    assert "von der KI geplant" in belege["KI-Rohstoffplanung"]
+
+
+def test_ein_begriff_ohne_belegstelle_bekommt_keine_erfundene(env):
+    """Liefert das Modell keine Stelle, bleibt die Kante leer — statt dass
+    irgendein Satz aus dem Transkript als Beleg ausgegeben wird."""
+    cfg, store, log = env
+    fill_log(log, [("Wir brauchen mehr Holzbau.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([
+        ExtractionResult(
+            interview_end_index=10_000,
+            terms=[{"label": "Holzbau", "evidence": ""}],
+            quotes=[], names=[],
+        ),
+        MergeResult(groups=[]),
+    ])
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 160.0)
+
+    assert store.list_edges()[0].evidence is None
+
+
+def test_der_merge_richter_sieht_die_belegstelle_des_bestehenden_knotens(env):
+    """Sonst vergleicht er eine Textstelle mit einem blossen Wort.
+
+    Gemessen am 2026-09-02: Ohne die zweite Seite legte er „Lehmhaus" zu
+    „Tiny House Wohnen" — eine Bauweise zu einer Groesse.
+    """
+    cfg, store, log = env
+    # Eine frühere Person hat den bestehenden Knoten samt Belegstelle gesetzt.
+    frueher = store.create_person(started_at=1.0)
+    t_alt = store.get_or_create_term("Tiny House Wohnen", created_at=1.0)
+    store.add_edge(frueher.id, t_alt.id, created_at=2.0,
+                   evidence="mehr so Tiny House Wohnen ist")
+
+    fill_log(log, [("Ich würde gerne in einem Lehmhaus leben.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([
+        ExtractionResult(
+            interview_end_index=10_000,
+            terms=[{"label": "Lehmhaus",
+                    "evidence": "Ich würde gerne in einem Lehmhaus leben"}],
+            quotes=[], names=[],
+        ),
+        MergeResult(groups=[]),
+    ])
+
+    process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 160.0)
+
+    merge_prompt = llm.prompts[1]
+    assert "Ich würde gerne in einem Lehmhaus leben" in merge_prompt
+    assert "mehr so Tiny House Wohnen ist" in merge_prompt, (
+        "der Richter sieht den bestehenden Knoten nur als Wort, ohne seine Stelle"
+    )

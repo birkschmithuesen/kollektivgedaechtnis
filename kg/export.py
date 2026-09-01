@@ -49,9 +49,17 @@ def build_graph(store) -> dict:
             }
         )
 
-    edges = [
-        {"id": e.id, "source": e.person_id, "target": e.term_id} for e in store.list_edges()
-    ]
+    # 🔴 `evidence` nur, wenn es eine gibt (Birk, 2026-09-02): die Textstelle
+    # aus dem Interview, auf die sich dieser Begriff bei DIESER Person stuetzt.
+    # Ein leeres Feld waere schlechter als gar keins -- es saehe aus wie „wir
+    # haben nachgesehen und nichts gefunden", und der Unterschied zu „diese
+    # Spalte gab es damals noch nicht" ginge verloren.
+    edges = []
+    for e in store.list_edges():
+        kante = {"id": e.id, "source": e.person_id, "target": e.term_id}
+        if e.evidence:
+            kante["evidence"] = e.evidence
+        edges.append(kante)
 
     # Welche Begriffe der Traum gerade benutzt (Birk, 2026-08-30): „Der Graph
     # soll die Begriffe hervorheben, die gerade zur Bildgenerierung genutzt
