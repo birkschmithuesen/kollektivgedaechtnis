@@ -382,6 +382,25 @@ def test_die_seiten_haengen_an_nichts_aus_frontend(client):
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "pfad",
+    ["/", "/graph", "/traum", "/transparenz", "/static/seite.css", "/static/mirror.css"],
+)
+def test_seiten_und_stilblaetter_werden_nicht_stillschweigend_gecacht(client, pfad):
+    """Am 2026-09-01 war eine Textänderung ausgeliefert und der Browser zeigte
+    trotzdem die alte Seite: ohne `Cache-Control` cacht er heuristisch, und
+    zwar gern stundenlang. Während einer Konferenz, in der Texte kurzfristig
+    korrigiert werden, ist das ein Fehler und keine Sparmassnahme.
+
+    `no-cache` heisst nicht „nicht speichern", sondern „vor der Wiederverwendung
+    nachfragen" — der ETag bleibt, die Rückfrage endet im Normalfall in einem
+    304 ohne Rumpf."""
+    antwort = client.get(pfad)
+    assert antwort.status_code == 200
+    steuerung = antwort.headers.get("cache-control", "")
+    assert "no-cache" in steuerung, f"{pfad} darf nicht ohne Rückfrage gecacht werden"
+
+
 def test_die_wurzel_ist_die_startseite_und_zeigt_auf_beide_ansichten(client):
     """Ohne jede Aufnahme. Die Startseite ist der Wegweiser im Flur — sie muss
     dastehen, auch wenn die Station gar nicht verbunden ist."""
