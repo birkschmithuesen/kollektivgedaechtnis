@@ -1131,36 +1131,16 @@ export function createGraphView(
   // bei ~12 %, unabhaengig davon, was die Anzeige tut. Das Zeichnen ist es.
   //
   // Cytoscape zeichnet bei jeder Kamerabewegung jeden Knoten und jede Kante
-  // neu, mit voller Beschriftung. Die drei Schalter unten sind genau dafuer
-  // da; sie stehen in der Bibliothek alle auf `false` (im Bundle nachgesehen,
-  // nicht aus dem Gedaechtnis).
+  // neu, mit voller Beschriftung. Die drei Schalter unten waren genau dafuer
+  // gedacht; sie stehen in der Bibliothek alle auf `false` bzw. `undefined`
+  // (im Bundle nachgesehen, nicht aus dem Gedaechtnis).
   //
-  //   textureOnViewport    waehrend des Schwenks ein einmal gerendertes Bild
-  //                        verschieben statt neu zeichnen.
-  //   hideEdgesOnViewport  302 Kanten nicht mitzeichnen, solange es sich
-  //                        bewegt. Sie sind waehrend der Fahrt ohnehin kaum
-  //                        lesbar und sofort wieder da, wenn sie steht.
+  // Wie weit sie wirklich reichen, steht bei jedem einzelnen — und es ist in
+  // `tests/test_projection_zeichenleistung.py` an der laufenden Wand
+  // NACHGEMESSEN, nicht abgeleitet: waehrend einer Wischgeste fuellt sich
+  // `textureCache` und die Kanten verschwinden, waehrend der automatischen
+  // Fahrt bleibt der Cache leer und die Kanten bleiben stehen.
   //
-  // 🔴 WIE WEIT DIE BEIDEN REICHEN — gemessen am 2026-09-01, nicht angenommen
-  // (`tests/test_projection_zeichenleistung.py`, dort stehen die Zahlen):
-  //
-  // Der Renderer schaltet sie NICHT ein, weil `pan`/`zoom` sich aendern,
-  // sondern nur waehrend einer GESTE des Besuchers. Im Bundle:
-  //
-  //   I = pinching || hoverData.dragging || swipePanning || wheelZooming
-  //       || hoverData.draggingEles || cy.animated()
-  //
-  // Unsere automatische Fahrt schreibt `cy.pan()`/`cy.zoom()` frame-fuer-frame
-  // aus `camera.step()` und benutzt bewusst kein `cy.animate()` (camera.js,
-  // „a second writer on this viewport"). Damit ist im Modus `pan` KEINE dieser
-  // Flaggen gesetzt, `textureCache` bleibt leer, und die Kanten werden weiter
-  // gezeichnet — nachgemessen an der Wand, nicht abgeleitet.
-  //
-  // Die beiden Schalter helfen also der INTERAKTION am Touchscreen, das ist
-  // die eine Haelfte von Birks Klage. Die andere Haelfte, die gemessenen
-  // 61,4 % GPU im Dauerbetrieb `pan`, ruehren sie nicht an. Wer die senken
-  // will, braucht etwas anderes — und das ist eine Entscheidung fuers Bild
-  // (weniger Knoten, ruhigere Fahrt, andere Kantenform), nicht ein Schalter.
   //   textureOnViewport    🔴 WIRKT BEI DER AUTOMATISCHEN FAHRT NICHT. Im
   //                        Bibliothekscode nachgelesen (nicht vermutet): die
   //                        Textur greift nur bei
@@ -1296,7 +1276,28 @@ export function createGraphView(
 
   /** The disc's model width at this zoom, under the current regime. */
   function portraitWidth(zoom) {
-    const capped = Math.min(placementPersonSize, portraitSize / zoom);
+    // 🔴 Kein `Math.min` mehr gegen `placementPersonSize` (Birk, 2026-09-01
+    // vor Ort: „Der Portraitgrößen-Regler hat keinen Einfluss", bei Stellung
+    // 199 px — also NICHT am Anschlag).
+    //
+    // Gemessen war der Grund eine Deckelung, die den Regler oberhalb einer
+    // schmalen Schwelle wirkungslos machte:
+    //
+    //     portraitWidth = min(--person-size, portraitSize / zoom)
+    //     theme-f: --person-size = 56, Zoom an der Wand = 1,55
+    //     -> der Regler wirkte NUR unterhalb von 56 × 1,55 = 87 px
+    //
+    // Über 87 gewann immer die Theme-Größe, und zwar unabhängig davon, wie
+    // weit der Regler aufgedreht wurde: 199, 260, 400 und 700 ergaben alle
+    // dieselben 56 Modellpixel. Die Obergrenze anzuheben hätte daran nichts
+    // geändert — das war mein erster, falscher Reflex.
+    //
+    // Der Regler setzt die Portraitgröße jetzt in BEIDE Richtungen: unter der
+    // Theme-Größe verkleinert er (wie bisher), darüber vergrößert er. Er
+    // bleibt eine gerenderte Größe, wird also weiterhin durch den Zoom
+    // geteilt — „höchstens N Pixel auf der Wand" heißt bei jedem Zoomstand
+    // dasselbe.
+    const gewuenscht = portraitSize / zoom;
     // `camera` is assigned below this function and the very first call comes
     // from inside its constructor (a fit changes the zoom), so the fallback is
     // load-bearing, not defensive: until the camera exists the wall is in its
@@ -1304,9 +1305,9 @@ export function createGraphView(
     const blend = camera ? camera.portraitCapBlend : 1;
     if (blend >= 1) {
       freeWidth = null;
-      return capped;
+      return gewuenscht;
     }
-    if (freeWidth === null) freeWidth = appliedWidth > 0 ? appliedWidth : capped;
+    if (freeWidth === null) freeWidth = appliedWidth > 0 ? appliedWidth : gewuenscht;
     if (blend <= 0) return freeWidth;
     // Geometric, like camera.js's lerpZoom and for the same reason: this is a
     // magnification travelling by a factor of ten, and the eye reads factors.
@@ -1323,12 +1324,12 @@ export function createGraphView(
     appliedWidth = width;
     cy.batch(() => {
       const persons = cy.nodes('.person');
-      // At or above the theme's own size the ceiling is not binding, and the
-      // override is REMOVED rather than written back — so a later theme swap
-      // still takes effect through the normal cascade (same reason as
-      // resetLabelOffsets), and a crowded wall pays no style writes at all.
-      if (width >= placementPersonSize) persons.removeStyle('width height border-width');
-      else persons.style({ width, height: width, 'border-width': width * ringRatio });
+      // Ohne Deckelung gibt es keinen „nicht bindenden" Fall mehr: der Regler
+      // IST die Größe, also wird sie immer geschrieben (Birk, 2026-09-01).
+      // Vorher wurde der Stil oberhalb der Theme-Größe entfernt statt gesetzt
+      // — zusammen mit dem `Math.min` in portraitWidth() war das der Grund,
+      // warum der Regler nach oben hin nichts tat.
+      persons.style({ width, height: width, 'border-width': width * ringRatio });
     });
   }
 

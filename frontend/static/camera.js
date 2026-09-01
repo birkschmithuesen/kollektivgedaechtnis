@@ -188,7 +188,17 @@ function jetzt() {
 function clampRoamSpeed(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
-  return Math.min(1, Math.max(0.25, n));
+  // Untergrenze am 2026-09-01 von 0,25 auf 0,1 gesenkt. Birk stand beim
+  // Einrichten vor Ort auf 0,25 -- also GENAU auf dem Anschlag -- und meldete
+  // „der Tempo-Regler hat keinen Einfluss". Er hatte recht: langsamer ging
+  // nicht mehr, der Regler war am Ende seines Wegs. Auf seine Rueckmeldung
+  // („mach mal nach unten noch mehr headroom") dann bis 0,05 geoeffnet: eine
+  // Etappe dauert dort 104 s statt 5,2 s.
+  //
+  // Nach oben bleibt es bei 1: das ist das Tempo, bei dem die Bewegung an der
+  // Wand beurteilt wurde, und es soll keine Einstellung geben, die schneller
+  // laeuft als je jemand gesehen hat.
+  return Math.min(1, Math.max(0.05, n));
 }
 
 export class Camera {

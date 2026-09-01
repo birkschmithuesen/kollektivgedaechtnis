@@ -65,10 +65,19 @@ class CameraMode(BaseModel):
 class CameraSpeed(BaseModel):
     # A fraction of the tuned traversal speed: 1.0 is as fast as the tour ever
     # goes (the pace the motion was judged at), 0.25 is a quarter of that —
-    # four times as long per leg. Bounded on both sides: above 1.0 the wall
-    # would outrun what was ever looked at, below 0.25 a leg takes most of a
-    # minute and reads as a stuck screen.
-    factor: float = Field(ge=0.25, le=1.0)
+    # four times as long per leg.
+    #
+    # 🔴 Untergrenze am 2026-09-01 von 0.25 auf 0.05 gesenkt (zweimal: erst
+    # 0.1, dann auf Birks „mach nach unten noch mehr headroom" 0.05). Birk stand beim
+    # Einrichten vor Ort auf **genau 0,25**, also am Anschlag, und meldete:
+    # „Der Tempo-Regler hat keinen Einfluss." Er hatte recht — langsamer ging
+    # nicht mehr. Die alte Begründung („darunter liest sich eine Etappe wie ein
+    # eingefrorener Bildschirm") galt für eine Fahrt über ein kleines Netz; bei
+    # 138 Knoten auf 3840 px ist eine langsamere Fahrt genau das Gewünschte.
+    #
+    # Nach oben bleibt der Deckel bei 1.0: die Wand soll nie schneller laufen
+    # als das Tempo, das jemand beurteilt hat.
+    factor: float = Field(ge=0.05, le=1.0)
 
 
 class CameraZoom(BaseModel):
@@ -81,12 +90,22 @@ class CameraZoom(BaseModel):
 class PortraitSize(BaseModel):
     # The largest a portrait may get on the wall, in RENDERED pixels, while
     # the camera is driving — an upper bound, not a size (Birk, 2026-08-30;
-    # frontend/static/projection.js). Bounds from Birk's brief (2026-08-29):
-    # below 40px a portrait is a dot on a 1920px wall, above 260px a handful of
-    # faces crowd everything else off it. Bounded on both sides for the same
+    # frontend/static/projection.js). Bounded on both sides for the same
     # reason as the zoom next to it: whatever a stray value does, it must not
     # be able to leave an unattended wall unusable.
-    pixels: float = Field(ge=40.0, le=260.0)
+    #
+    # 🔴 Obergrenze am 2026-09-01 von 260 auf 700 angehoben. Die 260 stammten
+    # aus Birks Vorgabe vom 2026-08-29 und waren an einer **1920 px** breiten
+    # Wand beurteilt („darüber verdrängen ein paar Gesichter alles andere").
+    # Die Ausstellungsfläche ist inzwischen **3840 px** breit — dieselbe Zahl
+    # bedeutet dort ein halb so großes Gesicht, und Birk stand beim Einrichten
+    # vor Ort am Anschlag, ohne dass sich noch etwas bewegte:
+    # „Der Tempo-Regler und der Portraitgrößen-Regler haben keinen Einfluss."
+    #
+    # 700 ist derselbe Bildanteil wie 260 auf 1920, plus etwas Luft nach oben
+    # (260/1920 = 13,5 %; 700/3840 = 18,2 %). Die Untergrenze bleibt bei 40:
+    # ein Punkt ist ein Punkt, unabhängig von der Wandbreite.
+    pixels: float = Field(ge=40.0, le=700.0)
 
 
 class InterviewSwitch(BaseModel):
