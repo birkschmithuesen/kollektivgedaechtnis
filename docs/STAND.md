@@ -849,6 +849,61 @@ Ob das Ruckeln damit weg ist, entscheidet Birk am Bild — nicht diese Tabelle.
 
 ---
 
+## 2m. 🔴 Die schwankende GPU-Last: Windows drosselte, nicht die Karte
+
+Birk, 2026-09-01, der entscheidende Befund: *„Manchmal geht sie hoch auf 80 und
+dann läuft alles sauber und perfekt, und manchmal geht sie runter auf 50 und
+dann ruckelt alles. Wenn die immer auf 80 bleiben würde, würde es laufen. Aber
+irgendwas verhindert das."*
+
+**Diese Beobachtung ist andersherum, als man erwarten würde** — und genau das
+macht sie so wertvoll. Wäre die Karte überlastet, würde es bei HOHER Last
+ruckeln. Hier läuft es bei hoher Last sauber. Die Karte *kann*, sie *darf* nur
+nicht durchgehend.
+
+### Gemessen (`scripts/gpu-drossel-diagnose.py`, 45 s während der Fahrt)
+
+| | vorher | nachher |
+|---|---|---|
+| Takt | **810 – 1124 MHz** | **862 – 888 MHz** |
+| Schwankung | 314 MHz (**28 %**) | 26 MHz (**3 %**) |
+| Drosselgrund laut Treiber | *keiner* | *keiner* |
+| Temperatur | — (Karte meldet keine) | — |
+
+Kein Hitzeproblem, keine Leistungsgrenze der Karte: die Bitmaske der
+Drosselgründe stand durchgehend auf `0x0`. Der Grund lag im Betriebssystem:
+
+```
+Power Scheme: 381b4222-…  (Balanced)      <- trotz angeschlossenem Netzteil
+```
+
+„Balanced" senkt den Takt, sobald die Last kurz nachlässt — und das passiert
+bei **jeder Standzeit** zwischen zwei Fahrt-Etappen (4,2 s Rast auf 5,2 s
+Fahrt). Die Karte taktet in der Rast herunter und ist zu Beginn der nächsten
+Etappe noch unten. Das ist Birks „mal 80, mal 50", im Takt sichtbar.
+
+**`scripts/energieprofil-hoechstleistung.py --setzen`** legt das Profil
+„Höchstleistung" an (es fehlte auf dem Rechner) und aktiviert es. Wirkt sofort,
+überlebt den Neustart, gilt für den ganzen Rechner.
+
+### Was NICHT erreicht ist
+
+Der Takt steht jetzt **stabil bei ~888 MHz**, nicht am Maximum von 1124. Die
+Schwankung — das eigentliche Problem — ist weg, aber es bleibt Leistung liegen.
+
+Zwei Wege, beide ungeprüft:
+1. **NVIDIA-Systemsteuerung** → 3D-Einstellungen → Energieverwaltungsmodus auf
+   „Maximale Leistung bevorzugen". Deckelt unabhängig vom Windows-Profil und
+   ist von hier aus nicht setzbar (keine API, nur die Oberfläche).
+2. `nvidia-smi --lock-gpu-clocks` — **von dieser Karte abgelehnt**: *„Setting
+   locked GPU clocks is not supported for GPU 00000000:01:00.0."* Der Weg ist
+   damit zu.
+
+🔴 Ob das Ruckeln weg ist, entscheidet Birk am Bild. Die Messung zeigt nur,
+dass die Ursache der Schwankung beseitigt ist.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
