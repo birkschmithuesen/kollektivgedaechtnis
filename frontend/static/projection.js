@@ -1311,7 +1311,16 @@ export function createGraphView(
     if (blend <= 0) return freeWidth;
     // Geometric, like camera.js's lerpZoom and for the same reason: this is a
     // magnification travelling by a factor of ten, and the eye reads factors.
-    return freeWidth * Math.pow(capped / freeWidth, blend);
+    //
+    // 🔴 Hier stand bis 2026-09-01 `capped` — der Bezeichner, den der Commit
+    // „Beide Regler wirken wieder" (7e6307c) an den drei Stellen darueber in
+    // `gewuenscht` umbenannt hat und an dieser vierten uebersehen hat. Der
+    // Zweig wird NUR bei laufendem Handover betreten (sonst kehrt `blend` bei
+    // 0 oder 1 vorher um), und der ReferenceError flog von hier durch
+    // `cy.zoom()` bis in `tick()` hinauf — die Bildschleife der Wand starb
+    // dann 300 ms nach dem Beginn jeder Uebergabefahrt.
+    // Gemessen und abgesichert in tests/test_camera_wand_haelt_durch.py.
+    return freeWidth * Math.pow(gewuenscht / freeWidth, blend);
   }
 
   function applyPortraitSize(force = false) {

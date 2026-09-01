@@ -235,11 +235,24 @@ def test_changing_speed_mid_leg_does_not_jerk_the_camera(camera):
 
 
 def test_the_speed_is_clamped_rather_than_rejected(camera):
-    """A bad value must slow the wall down, never stop it rendering."""
+    """A bad value must slow the wall down, never stop it rendering.
+
+    Auf die ABSICHT geprueft und nicht mehr auf die Untergrenze selbst: der
+    Wert stand auf 0,25, wurde am 2026-09-01 auf Birks Rueckmeldung hin auf
+    0,05 geoeffnet („mach mal nach unten noch mehr headroom") — und dieser
+    Test blieb auf 0,25 stehen und war seitdem rot. Eine Zahl, die als
+    Einstellung gedacht ist, gehoert nicht als Konstante in einen Test
+    gespiegelt.
+    """
     camera.evaluate("window.cam.setRoamSpeed(9)")
-    assert camera.evaluate("window.cam.roamSpeed") == 1
+    assert camera.evaluate("window.cam.roamSpeed") == 1, "zu schnell wird nicht gedeckelt"
+
     camera.evaluate("window.cam.setRoamSpeed(0)")
-    assert camera.evaluate("window.cam.roamSpeed") == 0.25
+    langsam = camera.evaluate("window.cam.roamSpeed")
+    assert 0 < langsam < 1, f"0 muss zu einem langsamen, aber laufenden Tempo werden: {langsam}"
+
+    camera.evaluate("window.cam.setRoamSpeed(NaN)")
+    assert camera.evaluate("window.cam.roamSpeed") == 1, "NaN faellt auf volles Tempo zurueck"
 
 
 def test_the_default_zoom_factor_fits_the_whole_net(camera):
