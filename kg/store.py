@@ -215,6 +215,37 @@ class Store:
         return _person(row) if row else None
 
     @_locked
+    def latest_person(self) -> Person | None:
+        """Die zuletzt begonnene Person -- offen ODER schon geschlossen.
+
+        Birk, 2026-09-01: „kann ein interview foto auch ausgetauscht werden,
+        wenn das interview schon abgeschlossen ist und begriffe an der wand?
+        das waere gut. also immer nur das letzte interview kein anderes."
+
+        Der Fall aus dem Flur: Das Gespraech ist vorbei, die Person haengt
+        an der Wand, und erst dann faellt auf, dass das Bild nichts taugt --
+        oder es gab noch gar keins. Bis hierhin war das eine Sackgasse.
+
+        🔴 Ausdruecklich NUR die letzte, und das ist die eigentliche Zusage
+        dieser Abfrage. `ORDER BY started_at DESC LIMIT 1` kann keine
+        aeltere Person treffen: Wer sein Bild nachreicht, aendert das eigene
+        und niemals das eines fremden Gastes, der laengst gegangen ist. Eine
+        Auswahl per Person-Id waere die Alternative gewesen und genau der
+        Weg, auf dem sich jemand vergreift.
+
+        Unterscheidet sich von `open_person()` nur durch das fehlende
+        `stopped_at IS NULL`. Bewusst eine zweite Abfrage und kein Schalter
+        an der ersten: `open_person()` beantwortet „laeuft gerade ein
+        Interview?" und wird an vielen Stellen genau so gelesen -- sie
+        stillschweigend auch geschlossene liefern zu lassen, waere ein
+        Bedeutungswechsel an lauter Stellen, die davon nichts wissen.
+        """
+        row = self.conn.execute(
+            "SELECT * FROM person ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        return _person(row) if row else None
+
+    @_locked
     def list_persons(self) -> list[Person]:
         rows = self.conn.execute("SELECT * FROM person ORDER BY started_at").fetchall()
         return [_person(r) for r in rows]

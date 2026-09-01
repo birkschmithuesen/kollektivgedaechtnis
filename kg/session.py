@@ -83,9 +83,12 @@ class SessionTracker:
 
         Drei Faelle, und keiner davon eroeffnet:
 
-        * **Kein Interview offen** → nichts. Das Bild wird nicht zu einer
-          Person. Am Booth wird probiert und nachjustiert; jeder dieser
-          Ausloeser erzeugte vorher eine stumme Scheibe an der Wand.
+        * **Kein Interview offen** → hier nichts. Der Tracker kennt nur das
+          laufende Gespraech; was mit dem Bild passiert, entscheidet dann
+          `kg.core._nachtraegliches_portrait` an der Datenbank -- es geht an
+          die ZULETZT begonnene Person, auch wenn die schon geschlossen ist
+          (Birk, 2026-09-01). Nur wenn es ueberhaupt noch keine gibt, wird es
+          verworfen.
         * **Offen, noch ohne Portraet** → das Bild wird nachgereicht
           ("late_photo"). Der Fall, fuer den es den Schalter gibt: wer erst
           kein Foto wollte und es sich anders ueberlegt.
