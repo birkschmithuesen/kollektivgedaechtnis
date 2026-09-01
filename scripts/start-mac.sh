@@ -37,8 +37,26 @@ if [ -f .env ]; then
   # shellcheck disable=SC1091
   set -a; . ./.env; set +a
 fi
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY fehlt — in .env eintragen oder exportieren}"
-: "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY fehlt — in .env eintragen oder exportieren}"
+
+# 🔴 Geprüft wird, was die Station WIRKLICH liest — nicht, was in
+# `config.example.toml` oder in der alten `start.sh` steht. An der laufenden
+# Station abgelesen (2026-09-01, Prozessumgebung): gesetzt sind genau
+# HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY, BFL_API_KEY und KG_TELEGRAM_TOKEN.
+# ANTHROPIC_API_KEY und OPENROUTER_API_KEY sind NICHT gesetzt — die Kette läuft
+# über EU-Anbieter (Birk: „Die Installation soll doch gar nicht mehr über
+# US-Server laufen").
+#
+# Die erste Fassung dieses Skripts verlangte die beiden US-Schlüssel und
+# verweigerte deshalb den Start. Der Fehler kam daher, dass die Prüfung aus
+# `scripts/start.sh` übernommen statt am laufenden System belegt wurde.
+: "${HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY:?fehlt — trägt Analyse, Weckwort, Embeddings und Spracherkennung (Infomaniak). In .env eintragen, Vorlage: docs/env-vorlage-eu.txt}"
+
+# BFL nur warnen, nicht abbrechen: ohne ihn läuft die Station, nur der Traum
+# rendert keine Bilder. Das ist ein Betrieb mit weniger Bild, kein Ausfall.
+if [ -z "${BFL_API_KEY:-}" ]; then
+  echo "WARNUNG: BFL_API_KEY fehlt — der Traum wird keine Bilder erzeugen." >&2
+  echo "         Alles andere läuft. Nachtragen in .env." >&2
+fi
 
 HOST=${KG_HOST:-127.0.0.1}
 PORT=${KG_PORT:-8800}
@@ -107,6 +125,30 @@ while true; do
 done &
 
 echo "[5/5] Fenster"
+
+# --- Spracherkennung: Warnung, kein Start ----------------------------------
+# 🔴 Der STT-Dienst (Port 5051) liegt NICHT in diesem Repo und wird hier NICHT
+# gestartet — er braucht den `fundusbot`-Checkout. Auf dem Windows-Rechner tat
+# das `kg-start\dienste\dienst-stt.bat`. Ohne ihn nimmt die Station kein
+# einziges Interview auf, und zwar ohne Fehlermeldung: der Kern startet
+# normal und wartet nur vergeblich auf Transkripte.
+#
+# 🔴 `/status`, NICHT `/health` (korrigiert 2026-09-02): der STT-Server hat
+# gar keine `/health`-Route — nachgesehen in `fundusapps/stt_server/app.py`,
+# die Routen sind /status, /listen, /pause, /resume, /levels, /events,
+# /operator u.a. Die Abfrage lieferte also immer 404, und die Warnung erschien
+# auch dann, wenn der Dienst tadellos lief. Eine Warnung, die immer kommt,
+# liest am Ausstellungstag niemand mehr.
+if ! curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:5051/status" 2>/dev/null; then
+  echo "" >&2
+  echo "WARNUNG: Auf Port 5051 antwortet keine Spracherkennung." >&2
+  echo "         Ohne sie laeuft KEIN Interview. In einem EIGENEN Fenster:" >&2
+  echo "           ./scripts/start-stt-mac.sh" >&2
+  echo "         Beim allerersten Mal vorher: ./scripts/einrichten-stt-mac.sh" >&2
+  echo "" >&2
+else
+  echo "      Spracherkennung auf 5051: da"
+fi
 
 # --- Fensterplatzierung -----------------------------------------------------
 # 🔴 `--window-position` ist auf dem Mac unzuverlässig: macOS entscheidet
