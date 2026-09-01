@@ -47,6 +47,47 @@ Beleg daneben; was offen bleibt, steht darunter.
    Station geschrieben. Jetzt Basis aus dem Skriptort, Portprüfung per Socket.
    Gegenprobe gefahren: bei laufendem Kern verweigert es den Dienst.
 
+### 🔴 Der Mikrofonschalter: zwei Defekte, 2026-09-01 abends
+
+**C. „Aus" war unerreichbar — eine Zahl, kein hängender Dienst.**
+Der Gate kennt zwei Schwellen (`vad.py:196-203`): über `threshold` → an,
+unter `threshold × release_ratio` → aus, **dazwischen bleibt es, wie es ist**.
+Eingestellt war 0,0004 mit ratio 0,5, also eine Aus-Schwelle von **0,0002**.
+Gemessen am ZOOM AMS-24 mit ausgeschaltetem Mikrofon (74 Werte in 30 s):
+**0,00020 bis 0,00029**. Die Rauschgrenze lag also ÜBER der Aus-Schwelle —
+jeder Messwert fiel ins Hystereseband, `mic_on` klebte auf `true`, und das
+Mikrofon konnte nicht mehr ausgehen.
+
+Gesetzt ist jetzt `threshold = 0,0009`, `ratio = 0,5` → aus unter **0,00045**.
+Gegenprobe gefahren: `pending=False`, nach der Entprellung `mic_on=False`,
+`Interview signal sent: stop`, Kern steht auf `mic_on=False`.
+
+🔴 **Das ist eine Zwischenschwelle, keine eingemessene.** Sie stützt sich auf
+den gemessenen Ruhepegel und auf zwei beobachtete An-Ereignisse (0,00186 und
+0,00603). Was **fehlt**, ist der schwierige Zustand: *Mikrofon an, aber
+niemand spricht.* Liegt der unter 0,00045, fällt der Gate in jeder Sprechpause
+auf „aus" und beendet mitten im Interview. Das dauert 30 Sekunden:
+
+```bash
+./scripts/einmessen-mikrofon.sh
+```
+Misst beide Zustände, prüft die Trennschärfe und setzt die Werte selbst
+(der Dienst speichert sie nach `settings/stt_runtime.json`).
+
+**D. Die Anzeige „transcribing" wird nie zurückgesetzt.**
+`operator.html:601` setzt das Abzeichen bei einem Partial mit
+`status="transcribing"` und räumt es nur ab, wenn ein weiteres Ereignis kommt.
+Eine Pause sendet keines. Am 2026-09-01 hing Turn `01M1FC3VJG…` (Sprachende
+22:56:02, kein `final` nach 11,8 s — die zwei Turns davor brauchten 3,97 s und
+1,91 s), dann kam `POST /pause`. Die Seite zeigte danach dauerhaft
+„transcribing" für einen Turn, den es nicht mehr gab.
+
+**Nicht behoben, mit Absicht:** die Datei liegt im fremden Repo, und
+`config.toml` sagt dazu ausdrücklich *„Do not fork it."* Für den Betrieb
+heißt das: **dem Abzeichen nicht glauben.** Was wirklich gilt, steht in
+`curl -s http://127.0.0.1:5051/status` (`listening` / `paused`) und im
+`mic_on` aus `/levels`.
+
 ### 🔴 Zwei Dinge, die du wissen musst — nicht behoben, sondern Betrieb
 
 **A. Die Reglerwerte überleben ein Umschalten der Dichte NICHT.**
