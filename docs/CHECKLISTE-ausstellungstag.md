@@ -73,17 +73,45 @@ läuft die Station nicht oder liefert falsche Daten. Alles danach ist Feinschlif
 ### Zu Punkt 2 — der STT-Dienst
 
 Der Erkenner laeuft als eigener Prozess auf Port 5051 und liegt **nicht** in
-diesem Repo. Auf dem Windows-Rechner startete ihn `kg-start\dienste\dienst-stt.bat`;
-**fuer den Mac gibt es dafuer noch keine Entsprechung**, und `start-mac.sh`
-startet ihn NICHT mit. Der Befehl, an der Station abgelesen:
+diesem Repo. Auf dem Windows-Rechner startete ihn `kg-start\dienste\dienst-stt.bat`.
+**Fuer den Mac gibt es das jetzt** (2026-09-02) — `start-mac.sh` startet ihn
+weiterhin NICHT mit, er laeuft in einem eigenen Fenster:
 
-```
-python -m fundusapps.stt_server --language de infomaniak-whisper \
-       --channels regie --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY
+```bash
+./scripts/einrichten-stt-mac.sh    # einmalig: klont fundusbot, venv, .env, Probelauf
+./scripts/start-stt-mac.sh         # jedes Mal, VOR start-mac.sh
+./scripts/start-stt-mac.sh --geraete   # Mikrofonnamen auflisten
 ```
 
-Braucht den `fundusbot`-Checkout auf dem Mac. Laeuft ueber Infomaniak-Whisper,
-also denselben Schluessel wie Analyse, Weckwort und Embeddings.
+Pruefen, ob er laeuft: `curl -s http://127.0.0.1:5051/status`
+
+🔴 **Der an der Station abgelesene Windows-Befehl laeuft auf dem Mac NICHT
+unveraendert.** Drei Dinge stehen dem im Weg — alle am Quelltext belegt, nicht
+vermutet (2026-09-02):
+
+1. **`--channels regie` muss weg.** `regie` ist in `sr.py` nur ein Name fuer
+   Kanal 0 eines **Stereo**-Stroms (`_CHANNEL_IDX`), und jedes bekannte
+   Kanallabel erzwingt `num_channels = 2`. Am Windows-Rechner haengt eine
+   Fireface UFX III (Kanaele 13/14 ueber ASIO); das MacBook-Mikrofon ist mono,
+   der Stream scheitert. Ohne die Fahne laeuft ein Recognizer mit
+   `recognizer_id="0"` — fuer den Core folgenlos, er verzweigt allein auf
+   `type == "final"` (durchgefahren: Event kommt an, Mutationsprobe rot).
+2. **Der Dienst braucht eine eigene `.env`** in seinem Checkout. `args.py`
+   liest `STT_HOST`, `STT_PORT`, `SST_AUDIO_DEVICES` (Tippfehler im fremden
+   Code: `SST_`, nicht `STT_`) und `STT_AUDIO_DEVICES_SR` mit **hartem**
+   Schluesselzugriff — ohne die Datei stirbt er beim Import mit
+   `KeyError: 'STT_HOST'`. Das Einrichtskript legt sie an und traegt den
+   Infomaniak-Schluessel aus der Station ein.
+3. **Nicht `requirements/requirements.txt` installieren.** Die volle Liste zieht
+   torch/TTS/faster-whisper (mehrere GB). Der STT-Pfad braucht sieben Pakete;
+   `vosk` ist darunter, weil `backends/__init__.py` es **eager** importiert —
+   gepinnt auf **0.3.44**, weil die aktuelle 0.3.45 auf PyPI **kein
+   macOS-Wheel** hat. Zusaetzlich `brew install portaudio`, sonst scheitert
+   `sounddevice` beim Import.
+
+Der Branch ist **`eu-souveraen/infomaniak-whisper`**, nicht der in
+`docs/stt-contract.md` oben genannte `win_fundusfantasma-dev-clean` — dort
+fehlt `infomaniak_whisper_backend.py` ganz (mit `git ls-tree` nachgesehen).
 
 ---
 
