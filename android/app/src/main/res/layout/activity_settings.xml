@@ -65,25 +65,38 @@
             android:textSize="18sp" />
 
         <!--
-          KEIN `textPassword` (Birk, 2026-09-01): Passwortfelder sperren auf
-          vielen Android-Tastaturen das Einfuegen aus der Zwischenablage —
-          und genau so kommt das Token aufs Geraet. Die Maskierung schuetzte
-          hier ohnehin nichts: das Token steckt in derselben APK, in der auch
-          dieses Feld liegt.
-
-          `textUri` statt `text`: schaltet Autokorrektur und Grossschreibung
-          am Zeilenanfang ab. Ein autokorrigiertes Token ergibt 401 — und
-          zwar aussehend wie ein Serverfehler, nicht wie ein Tippfehler.
+          Feld + Knopf nebeneinander. Der Knopf ist der eigentliche Weg:
+          Birk am Geraet, 2026-09-01 — im Token-Feld erschien beim langen
+          Druecken kein „Einfuegen", im Adressfeld darueber schon. Woran das
+          auf DIESEM Geraet liegt, laesst sich aus der Ferne nicht klaeren
+          (Tastatur, Hersteller-Aufsatz, Android-Fassung).
+          Deshalb nicht weiter am Eingabetyp herumraten, sondern die
+          Zwischenablage selbst auslesen: `ClipboardManager` haengt weder an
+          der Tastatur noch am Kontextmenue und tut es auf jedem Geraet.
         -->
-        <EditText
-            android:id="@+id/foto_token"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textUri"
-            android:hint="@string/token_hint"
-            android:autofillHints=""
-            android:textSize="18sp"
-            android:layout_marginTop="12dp" />
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp">
+
+            <EditText
+                android:id="@+id/foto_token"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="textVisiblePassword"
+                android:hint="@string/token_hint"
+                android:autofillHints=""
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/token_einfuegen"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/einfuegen"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView

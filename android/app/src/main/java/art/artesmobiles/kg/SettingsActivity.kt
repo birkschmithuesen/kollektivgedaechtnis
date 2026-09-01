@@ -1,5 +1,7 @@
 package art.artesmobiles.kg
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -41,6 +43,31 @@ class SettingsActivity : AppCompatActivity() {
         }
         zeigePassendeFelder()
         wahl.setOnCheckedChangeListener { _, _ -> zeigePassendeFelder() }
+
+        // Einfuegen per Knopf, nicht per Kontextmenue: auf Birks Geraet bot
+        // das Token-Feld beim langen Druecken kein „Einfuegen" an, das
+        // Adressfeld darueber schon (2026-09-01). Woran das dort liegt, ist
+        // aus der Ferne nicht zu klaeren — also wird die Zwischenablage
+        // direkt gelesen. `ClipboardManager` haengt weder an der Tastatur
+        // noch am Kontextmenue.
+        findViewById<Button>(R.id.token_einfuegen).setOnClickListener {
+            val ablage = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = ablage.primaryClip
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(this)
+                ?.toString()
+                // Derselbe Leerraum-Schnitt wie beim Speichern: was hier
+                // sichtbar ankommt, soll schon das sein, was gespeichert wird.
+                ?.filterNot { z -> z.isWhitespace() }
+
+            if (text.isNullOrEmpty()) {
+                Toast.makeText(this, getString(R.string.ablage_leer), Toast.LENGTH_SHORT).show()
+            } else {
+                tokenFeld.setText(text)
+                tokenFeld.setSelection(text.length)
+            }
+        }
 
         findViewById<Button>(R.id.speichern).setOnClickListener {
             val spiegel = wahl.checkedRadioButtonId == R.id.weg_spiegel

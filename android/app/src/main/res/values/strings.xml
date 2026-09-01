@@ -19,6 +19,8 @@
     <string name="adresse_hint">100.75.24.33:8800</string>
     <string name="spiegel_hint">https://kollektivgedaechtnis.flashclash.de</string>
     <string name="token_hint">Foto-Token</string>
+    <string name="einfuegen">Einfügen</string>
+    <string name="ablage_leer">Zwischenablage ist leer</string>
     <string name="adresse_hilfe">Direkt zur Station ist der schnellere Weg und braucht kein Token — dafür muss das Handy im Tailnet sein. Über den Spiegel geht es von jedem Netz aus; die Station holt das Foto dort ab, das dauert ein paar Sekunden länger.</string>
     <string name="speichern">Speichern</string>
     <string name="gespeichert">Gespeichert: %1$s</string>
