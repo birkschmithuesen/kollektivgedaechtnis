@@ -201,26 +201,37 @@ Kommentar im Skript.
 
 ---
 
-## 2d. 🔴 Offener Widerspruch: ein Foto kam mit 4,4 MB an
+## 2d. ✅ Geklärt: auf dem Handy liegt die alte APK v1
 
-`1788261234_app754.jpg` (heute 13:13, über `POST /api/photo`, also **durch die
-App**) liegt mit **4.422.388 Bytes in 3024×4032** auf der Station — das ist
-unverkleinerte Kameraauflösung.
+`1788261234_app754.jpg` kam mit 4,4 MB in 3024×4032 an, obwohl der App-Code auf
+1024 px verkleinert. **Ursache belegt 2026-09-01, 15:15** — die APKs im
+DEX-String-Pool verglichen:
 
-Das widerspricht dem Code: `Bildbytes.verkleinere` skaliert auf 1024 px, und
-`MainActivity.schiesse()` hat nur diesen einen Pfad. Der Code ist gegengelesen
-und korrekt.
+| APK | gebaut | `verkleinere` / `MAX_KANTE` | Sucherrahmen + Vorschau |
+|---|---|---|---|
+| **v1** | 10:00 | **fehlt** | fehlt |
+| v2–v5 | 10:26–12:04 | vorhanden | fehlt |
+| **v6** | 12:31 | vorhanden | **vorhanden** |
 
-Wahrscheinlichste Erklärung, **unbestätigt**: auf dem Handy läuft noch
-`kollektivgedaechtnis-foto-v1.apk` (gebaut 10:00) — der Verkleinerungs-Commit
-`0320093` ist von **10:26**. v1 kann das schlicht nicht.
+Der Verkleinerungs-Commit `0320093` ist von 10:26 — **v1 kann es schlicht
+nicht.** Damit ist der Widerspruch aufgelöst: kein Codefehler, eine alte
+Installation.
 
-Das ist mehr als Kosmetik: die Verkleinerung ist genau der Schritt, der laut
-Messung oben **Treffer kostet**. Solange unklar ist, welche APK auf dem Gerät
-liegt, misst jeder Fototest womöglich eine andere Kette als die, die am
-Ausstellungstag läuft. **Vor dem nächsten Test klären** — die Statuszeile der App
-nennt die gesendete Größe („Wird gesendet … (180 kB)"); zeigt sie MB, ist es eine
-alte APK.
+🔴 **v6 ist die einzige vollständige APK** (`out/kollektivgedaechtnis-foto-v6.apk`,
+3,6 MB, nicht im Git). Signatur mit dem echten Werkzeug geprüft (apksigner auf
+herkules, die Toolchain liegt dort): **`Verifies`**, v2-Schema, ein Signierer —
+für Android 7+ ausreichend. Berechtigungen nur CAMERA, INTERNET,
+ACCESS_NETWORK_STATE, DUMP.
+
+**Vor dem nächsten Fototest v6 installieren**, sonst misst der Test eine andere
+Kette als die vom Ausstellungstag. Kontrolle ohne Nachdenken: `pruefe-neue-fotos.py`
+meldet jedes Foto mit langer Kante über 1024 px als „kam NICHT durch die aktuelle
+App".
+
+⚠️ **Prüfmethode, die NICHT funktioniert:** `unzip` gibt es auf dem vServer
+nicht, und `strings` auf der APK liefert nichts (DEX ist komprimiert). Beides
+sah nach „Marker fehlt" aus und war nur ein kaputtes Werkzeug. Richtig ist
+`zipfile` + Suche im entpackten DEX (so gemacht).
 
 ---
 
@@ -461,20 +472,40 @@ Entscheidungen daraus in §4.**
 
 **Offen und nur MIT Birk machbar** — das ist der Rest des Auftrags:
 
-1. **Foto mit mehreren Personen** einwerfen. Die Kernfrage („gewinnt das größte
-   Gesicht?") ist ohne solche Fotos nicht beantwortbar; im Bestand gibt es keins.
-2. **Halbprofil / Gegenlicht / Brille** — die vermuteten Ausfälle.
-3. Danach: `messreihe-gesichtserkennung.py <ordner>` über den erweiterten
-   Bestand, die Zahlen stehen dann direkt vergleichbar neben §2c.
+### 🔴 So läuft der Fototest mit dem Handy (alles vorbereitet)
+
+**Schritt 1 — v6 installieren.** Auf dem Handy liegt v1 (§2d), die verkleinert
+nicht und hat weder Sucherrahmen noch Vorschau. `out/kollektivgedaechtnis-foto-v6.apk`
+auf dem vServer, signiert und geprüft. **Einfach drüber installieren** — v1 und
+v6 tragen dasselbe Zertifikat (SHA-256 `b1f145d4…`, Android-Debug-Key,
+mit apksigner gegengeprüft), ein Update ist also möglich, ohne vorher zu
+deinstallieren. Die Daten der App bleiben damit auch erhalten.
+
+**Schritt 2 — App einstellen.** Weg „Direkt zur Station", Adresse
+`100.94.47.6:8800`. Der Spiegel-Weg ist für Handys ohne Tailnet und liefert
+**keine** Vorschau.
+
+**Schritt 3 — fotografieren.** Was fehlt, ist genau das:
+- **Mehrere Personen im Bild** — die Kernfrage („gewinnt das größte Gesicht?")
+  ist an den Bestandsfotos nicht beantwortbar, in keinem war mehr als ein Gesicht.
+- **Halbprofil, geneigter Kopf, Gegenlicht, Brille** — die vermuteten Ausfälle.
+- **Jemand weit hinten im Bild** — der Fall, für den die Untergrenze gebaut ist.
+
+Jedes Foto eröffnet ein Interview und schließt das vorige; der Personenzähler
+steigt also. Das ist erwartet.
+
+**Schritt 4 — auswerten, sofort und ohne Handarbeit:**
 
 ```cmd
 cd C:\Users\SF-Tracking\kg-start
-C:\Users\birk\kollektivgedaechtnis\.venv\Scripts\python.exe ^
-  messreihe-gesichtserkennung.py C:\Users\birk\kollektivgedaechtnis\data\photos
+C:\Users\birk\kollektivgedaechtnis\.venv\Scripts\python.exe pruefe-neue-fotos.py --seit-minuten 20
 ```
 
-Vorher `Bildbytes.MAX_KANTE` bzw. die APK-Frage aus §2d klären — sonst misst die
-Reihe die falsche Kette.
+`scripts/pruefe-neue-fotos.py` nennt je Foto: Anzahl Gesichter, welches gewann,
+ob die **Untergrenze** einsprang, die Schärfe des Portraits — und unterscheidet
+dabei ein **verwackeltes Foto** von einem schlechten Zuschnitt (sonst sucht man
+den Fehler an der falschen Stelle; genau das ist mir am 2026-09-01 passiert).
+Meldet es „lange Kante > 1024", läuft noch die alte APK.
 
 ### Der End-to-End-Durchlauf
 
