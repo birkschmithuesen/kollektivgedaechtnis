@@ -904,6 +904,48 @@ dass die Ursache der Schwankung beseitigt ist.
 
 ---
 
+## 2n. 🔴 Touch-Zoom geht nicht — die Wand lädt ohne `?touch=1`
+
+Birk, 2026-09-01 (zunächst am MacBook beobachtet, gilt aber genauso für die
+Station): *„Der Touchscreen ist auf dem falschen Bildschirm. Und die Zoomgeste
+geht nicht."*
+
+**Gemessen an der Startdatei** (`kollektivtraum.bat`, Schritt `[6/6]`):
+
+```
+http://127.0.0.1:8800/projection      <- OHNE ?touch=1
+POS_WAND=1920,0   POS_TRAUM=1920,0    <- IDENTISCH
+```
+
+Daraus folgen beide Symptome:
+
+1. **Kein Zoom.** Ohne `?touch=1` wird `attachTouchAutonomy` gar nicht erst
+   angehängt (`frontend/projection.html`, `const isTouch = params.get('touch')
+   === '1'`). Eine Berührung schaltet die Kamera also nie auf `manual` — und
+   `camera.js::_applyInteractivity` erlaubt Zoom und Pan ausschließlich in
+   diesem Modus (`userZoomingEnabled(mode === 'manual')`, Zeile 524). Im
+   Dauerbetrieb steht die Wand auf `pan`, die Pinch-Geste läuft ins Leere.
+   Auch die Bedienleiste („Übersicht") fehlt aus demselben Grund.
+2. **Falscher Bildschirm.** Beide Fenster bekommen dieselbe Startposition, also
+   entscheidet Windows, welches wo landet — mal richtig, mal nicht.
+
+Die Adressen mit den richtigen Parametern stehen sogar in derselben Datei, aber
+nur als **Text zum Nachlesen**, nicht in den Aufrufen:
+
+```
+Wand (Graph)   http://127.0.0.1:8800/projection?theme=f&touch=1
+```
+
+### 🔴 Nicht behoben — Absicht
+
+Der Fix gehört in `kollektivtraum.bat` (Touch-Fenster mit `?touch=1`, getrennte
+Fensterpositionen). Die Datei startet die laufende Ausstellung, und Birk richtet
+gerade live ein — eine Änderung daran wird **vor dem nächsten regulären Start**
+gemacht, nicht mitten im Betrieb. Zum Sofort-Prüfen genügt es, im Touch-Fenster
+die Adresse von Hand um `?touch=1` zu ergänzen.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
