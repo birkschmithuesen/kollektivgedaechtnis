@@ -463,7 +463,7 @@ Drei Folgeänderungen, die ohne den Umbau nicht nötig waren:
 
 ### v7 gebaut und geprüft
 
-`out/kollektivgedaechtnis-foto-v7.apk` (4,6 MB), gebaut auf herkules
+`out/kollektivgedaechtnis-foto-v7.apk` (4,6 MB) — **inzwischen durch v8 ersetzt (§2i)** — gebaut auf herkules
 (`~/kg-android`, die Toolchain liegt dort — auf dem vServer gibt es keine).
 
 **Belegt, nicht angenommen:** im Binär-Layout von v6 steckt der 140dp-Wert, in
@@ -474,6 +474,126 @@ in v6 nicht. Signatur `Verifies`, Zertifikat **identisch mit v1/v6**
 ⚠️ **Die Station braucht den Zoom-Fix noch:** Sie läuft auf `b5c2c8e` (harte
 Grenze). Der neue Faktor wirkt erst nach einem Neustart über die
 START-Verknüpfung. Ohne den bleibt es beim 79-%-Zoom, auch mit v7.
+
+---
+
+## 2h. Analyse-Prompt: zwei Sprecher — und ein größerer Befund (2026-09-01, 16:20)
+
+Birk: *„Im Interview sprechen die fragende Person und die antwortende Person in
+dasselbe Mikrofon. Es macht Sinn, das in den Analyse-Prompt zu schreiben — nur
+die Aussagen der antwortenden Person zählen, die Fragen sind aber für den
+Kontext wichtig. Und die Fragen sind nicht zwangsläufig exakt die drei
+gesetzten."*
+
+**Die Prämisse stimmt, gemessen:** `scripts/finde-interviews.py` über alle 44
+Sitzungen im Transkript — **überall genau EIN `recognizer_id`**. Die Station
+läuft mit `--channels regie`, beide Stimmen landen unmarkiert im selben Kanal.
+Die Trennung kann also nur der Prompt leisten, nicht die Technik.
+
+### Was im Prompt steht (`kg/extraction.py`)
+
+Neuer Block „ZWEI STIMMEN, EIN KANAL" mit drei Regeln: Begriffe und Zitat
+**nur** aus den Antworten; die Fragen als **Kontext** mitlesen (eine Antwort wie
+„Ja, unbedingt, aber nur wenn die Leute vor Ort mitreden" ist ohne die Frage
+sinnlos); und die Frage **nicht** zum Thema der Antwort machen. Dazu ein
+Abschnitt, dass die drei Leitfragen **der Plan sind, nicht das Protokoll** —
+frei formuliert, gekürzt, umsortiert, übersprungen. Und beim Namen: auch die
+fragende Person stellt sich vor, oft **zuerst** — der erste Name ist nicht
+automatisch der richtige.
+
+### 🔴 Gemessen: der Zusatz hilft kaum
+
+`scripts/ab-analyse-prompt.py`, 5 echte Interviews × 3 Läufe je Fassung
+(30 LLM-Aufrufe):
+
+| Fassung | Begriffe im Schnitt | mit Zitat | mit Name | **leer** |
+|---|---|---|---|---|
+| ohne Block | 1,6 | 6/15 | 6/15 | **9/15** |
+| mit Block | 2,3 | 6/15 | 5/15 | **8/15** |
+
+Mehr Begriffe, aber Zitat und Name unverändert — bei dieser Stichprobe ist das
+**kein belastbarer Gewinn**. Der Block bleibt trotzdem drin: Er beschreibt die
+Wirklichkeit korrekt, und der Schaden ist messbar null.
+
+### 🔴 Der eigentliche Fund: 2 von 5 Interviews liefern GAR NICHTS
+
+Und zwar **reproduzierbar, in beiden Fassungen**:
+
+| Sitzung | Zeichen | Ergebnis über 6 Läufe |
+|---|---|---|
+| 37 | 3258 | **6/6 voll** (6 Begriffe, Zitat, Name — stabil) |
+| 6 | 2973 | 6/6 voll, aber schwankende Qualität |
+| 5 | 3349 | 5/6 **leer** |
+| **19** | 2945 | **6/6 leer** |
+| **30** | 4689 | **6/6 leer** |
+
+Ein leeres Ergebnis heißt: die Person bekommt **keinen Begriff, kein Zitat,
+keinen Namen** — sie erscheint als leere Scheibe auf der Wand. Das ist der
+Unterschied zwischen „Prompt-Feinschliff" und „ein Drittel der Besucher fällt
+aus".
+
+**Der Grund liegt am Interview, nicht am Prompt** (der Ausfall ist in beiden
+Fassungen identisch). Sitzung 30 hat 825 Wörter, aber die häufigsten sind
+„ähm 34, ja 30, wir 30, mhm 16" — das ist ein **Arbeitsgespräch** (Aufbau,
+Technik), kein Interview. Solche Aufnahmen korrekt zu verwerfen ist richtig.
+**Ungeprüft ist, ob Sitzung 5 und 19 auch Arbeitsgespräche sind** — dafür
+müsste jemand hineinhören, und das ist eine Sichtprüfung an realen Aussagen,
+kein Agentenschritt.
+
+### Nebenbefund: `interview_end_index` ist instabil
+
+Derselbe Text, derselbe Prompt, drei Läufe — das gefundene Ende schwankt
+zwischen **0 % und 100 %** (Sitzung 30: 100, 0, 100, 52, 100, 49). Bei 0 % wird
+das ganze Interview verworfen. Nur Sitzung 37 ist stabil (56–100 %). Das ist ein
+eigener Fehler, unabhängig von den zwei Sprechern, und **nicht behoben**.
+
+🔴 **PII-Disziplin eingehalten:** Alle Skripte laufen auf der Station und geben
+nur Kennzahlen und die extrahierten Begriffe aus. Transkripttext, Zitate und
+Namen realer Personen sind **nie** in den Agenten-Kontext gelangt.
+
+---
+
+## 2i. Auflösung zurück auf 1600 px — die frühere Messung galt nur für ferne Personen
+
+Birk: *„Wieso das Foto nicht mit besserer Auflösung reinholen"* und, entscheidend:
+*„in der Installation wird es gar nicht so weit weg sein."*
+
+**Der zweite Satz kippt die Messung von 15:10 (§2e).** Dort kam heraus: mehr
+Auflösung = unschärfere Portraits. Das galt für Fotos mit **kleinen, fernen**
+Gesichtern — bei höherer Auflösung greift die Erkennung dort öfter, und ein
+enger Gesichtsausschnitt hat weniger Pixel als der weite mittige Schnitt.
+
+Bei **nahen** Personen dreht sich das um. Die Rechnung ist einfach und hängt an
+`GESICHTS_ZOOM = 2.0`:
+
+> Ausschnitt = Gesicht × 2. Für ein Portrait von 512 px ohne Hochrechnung muss
+> das Gesicht also **mindestens 256 px** groß sein.
+
+Gemessen an Birks Booth-Fotos, alle bei 1024 px geliefert:
+
+| Foto | Gesicht | Ausschnitt | Hochrechnung |
+|---|---|---|---|
+| app849 | 61 px | 122 px | 4,2× |
+| app893 | 71 px | 142 px | 3,6× |
+| app363 (3 Personen) | 201 px | 402 px | 1,27× |
+| app043 | 218 px | 436 px | 1,17× |
+
+**Alle vier unter 256 px** — jedes Portrait wurde hochgerechnet. Bei 1600 px
+sind dieselben Gesichter 1,56× größer (201 → 314 px), der Ausschnitt kommt über
+512, und das Portrait besteht aus **echten** Pixeln statt gerechneten.
+
+Dazu ein zweiter Befund: `1788261234_app754.jpg` (3024×4032, das einzige
+unverkleinerte Foto) — die Kaskade findet das Gesicht **nur im Original**, ab
+2048 px nicht mehr. Mehr Auflösung hilft dort auch der Erkennung.
+
+**`Bildbytes.MAX_KANTE` steht jetzt auf 1600** (war 1024). Preis: grob 2,4× die
+Datenmenge. Am Booth zählt Tempo — wird das Senden spürbar langsam, ist das die
+erste Stellschraube zurück.
+
+🔴 **Nicht gemessen, weil es die Fotos nicht hergibt:** ob die Erkennung bei
+1600 px genauso zuverlässig greift wie bei 1024. Alle vorhandenen App-Fotos
+**sind** bereits auf 1024 verkleinert — man kann sie nicht vergrößern, ohne
+Pixel zu erfinden. Das beantwortet erst der nächste Fototest mit v8.
 
 ---
 
@@ -552,8 +672,8 @@ Entscheidungen daraus in §4.**
 
 ### 🔴 So läuft der Fototest mit dem Handy (alles vorbereitet)
 
-**Schritt 1 — v7 installieren.** Auf dem Handy liegt v1 (§2d), die verkleinert
-nicht und hat weder Sucherrahmen noch Vorschau. **`out/kollektivgedaechtnis-foto-v7.apk`** (v6 ist überholt, §2g)
+**Schritt 1 — v8 installieren.** Auf dem Handy liegt v1 (§2d), die verkleinert
+nicht und hat weder Sucherrahmen noch Vorschau. **`out/kollektivgedaechtnis-foto-v8.apk`** (v6/v7 überholt, §2g/§2i)
 auf dem vServer, signiert und geprüft. **Einfach drüber installieren** — v1 und
 v6 tragen dasselbe Zertifikat (SHA-256 `b1f145d4…`, Android-Debug-Key,
 mit apksigner gegengeprüft), ein Update ist also möglich, ohne vorher zu

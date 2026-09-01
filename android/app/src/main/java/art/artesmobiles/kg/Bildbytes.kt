@@ -18,11 +18,28 @@ import java.nio.ByteBuffer
  * solches Bild brauchte am Handy so lange, dass die App wie eingefroren
  * wirkte — die Kette war in Ordnung, nur die Datenmenge war absurd.
  *
- * 1024 px lange Kante, nicht 512: die Station schneidet quadratisch und
- * sucht darin ein Gesicht (`kg/photos.py`). Wer hier schon auf die
- * Zielgröße geht, nimmt ihr den Spielraum für den Schnitt und liefert ein
- * weicheres Portrait. 1024 ist der doppelte Zielwert — genug Reserve für
- * jeden Ausschnitt, und trotzdem rund ein Zwanzigstel der Datenmenge.
+ * 1600 px lange Kante (bis 2026-09-01: 1024). Die Station schneidet
+ * quadratisch und sucht darin ein Gesicht (`kg/photos.py`); der Ausschnitt
+ * wird am GESICHT bemessen (`GESICHTS_ZOOM = 2.0`), nicht am Bildrand. Ein
+ * Gesicht muss deshalb mindestens 256 px haben, damit der Ausschnitt die
+ * Portraitgröße 512 erreicht und NICHT hochgerechnet werden muss.
+ *
+ * Gemessen an Birks Booth-Fotos vom 2026-09-01 (bei 1024 px geliefert):
+ * die erkannten Gesichter waren 61, 71, 201 und 218 px groß — **alle vier
+ * unter 256**, also wurde jedes Portrait hochgerechnet (Faktor 1,17 bis 4,2).
+ * Bei 1600 px sind dieselben Gesichter 1,56× größer (201 → 314 px), der
+ * Ausschnitt kommt über 512, und das Portrait besteht aus ECHTEN Pixeln.
+ *
+ * 🔴 Das ist kein Widerspruch zur Messung von 15:10, die ergab „mehr
+ * Auflösung = unschärfer". Die galt für Fotos mit KLEINEN, weit entfernten
+ * Gesichtern: dort greift die Erkennung bei höherer Auflösung öfter, und ein
+ * enger Gesichtsausschnitt hat weniger Pixel als der weite mittige Schnitt.
+ * Birk, 2026-09-01: „in der Installation wird es gar nicht so weit weg sein" —
+ * bei nahen Personen dreht sich der Effekt um.
+ *
+ * Der Preis ist Sendezeit: 1600 px sind grob 2,4× die Datenmenge von 1024.
+ * Am Booth zählt, dass der Auslöser schnell wieder frei ist — sollte das
+ * spürbar werden, ist dieser Wert die erste Stellschraube.
  *
  * Die zweite Falle ist die Drehung: JPEG aus der Kamera trägt die Lage im
  * EXIF, das Bitmap nach dem Dekodieren nicht mehr. Wer sie nicht selbst
@@ -31,8 +48,8 @@ import java.nio.ByteBuffer
  */
 object Bildbytes {
 
-    /** Lange Kante nach dem Verkleinern. Doppelte Portraitgröße der Station. */
-    const val MAX_KANTE = 1024
+    /** Lange Kante nach dem Verkleinern. Begründung im Klassenkommentar. */
+    const val MAX_KANTE = 1600
 
     /** Reicht für ein Portrait; darunter werden Hauttöne fleckig. */
     const val QUALITAET = 85

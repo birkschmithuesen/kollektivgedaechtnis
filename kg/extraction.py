@@ -70,6 +70,39 @@ sehr konkreten Begriffen.
 Den Personen wurden diese drei Leitfragen gestellt:
 {_QUESTION_BLOCK}
 
+ZWEI STIMMEN, EIN KANAL. Im Transkript sprechen zwei Menschen: eine fragende \
+Person und die befragte Person. Die Spracherkennung trennt sie NICHT — es gibt \
+keine Sprecherkennzeichnung, beide Stimmen stehen unmarkiert hintereinander. \
+Du musst die Rollen selbst aus dem Inhalt erschliessen.
+
+Woran du die fragende Person erkennst: sie stellt Fragen, hakt nach, fasst \
+zusammen, bedankt sich, leitet über („Und wenn Sie jetzt an …", „Darf ich \
+nachfragen", „Vielen Dank"). Sie erzaehlt nichts Eigenes.
+
+WAS DAS FUER DICH HEISST:
+
+* BEGRIFFE UND ZITAT KOMMEN AUSSCHLIESSLICH AUS DEN ANTWORTEN. Was die \
+fragende Person sagt, ist NIE Quelle für einen Begriff und NIE das Zitat — \
+auch dann nicht, wenn sie es besonders treffend formuliert. Sonst steht später \
+der Satz der Interviewerin unter dem Portrait der befragten Person.
+* DIE FRAGEN SIND TROTZDEM WICHTIG — als KONTEXT. Eine Antwort wie „Ja, \
+unbedingt, aber nur wenn die Leute vor Ort mitreden" ist ohne die Frage davor \
+nicht zu deuten. Lies die Fragen also mit, um die Antworten zu verstehen, aber \
+zitiere und verschlagworte nur die Antworten.
+* NIMM DIE FRAGE NICHT ALS THEMA DER ANTWORT. Wenn gefragt wird „Braucht es \
+einen radikalen Bruch?" und die Person antwortet „Nein, mir geht es eher um \
+die Handwerker, die keiner mehr findet", dann ist der Begriff \
+„Handwerkermangel" und nicht „Radikaler Bruch". Verschlagwortet wird, was die \
+Person SAGT, nicht, wonach sie gefragt wurde.
+
+DIE FRAGEN WEICHEN AB. Die drei Leitfragen oben sind der Plan, nicht das \
+Protokoll. Tatsächlich werden sie frei formuliert, gekürzt, in anderer \
+Reihenfolge gestellt, übersprungen oder spontan durch Nachfragen ergänzt; \
+manchmal kommen ganz andere Themen auf, weil die Person von sich aus etwas \
+erzählt. Nimm die Liste deshalb als Orientierung, welche Themen zu erwarten \
+sind — nicht als Raster, in das die Antworten passen müssten. Ein Gespräch, \
+das keiner der drei Fragen folgt, ist trotzdem ein gültiges Interview.
+
 Das Transkript kommt aus automatischer Spracherkennung: Füllwörter, \
 abgebrochene Sätze, Wiederholungen, Hörfehler. Es reicht absichtlich über das \
 Ende des Interviews hinaus — dort stehen Smalltalk, Verabschiedungen, Stimmen \
@@ -108,11 +141,15 @@ dem Transkript.
 vor. Gib diesen Namen an, genau einen, und zwar so, wie sie ihn selbst nennt — \
 ein Vorname allein ist völlig in Ordnung. Nur der SELBSTGENANNTE Name der \
 befragten Person: nicht die Namen Dritter, die im Gespräch vorkommen, nicht \
-der Name der fragenden Person. Rate nicht. Stellt sich niemand vor oder bist \
-du unsicher, wer da spricht, lass die Liste leer — kein Name ist richtig, ein \
-falscher Name steht später unter einem fremden Zitat. Der Name ist ein eigenes \
-Feld und wird dadurch NICHT zum Begriff: Punkt 2 verbietet Personennamen unter \
-den Begriffen weiterhin.
+der Name der fragenden Person. Achtung, häufiger Fall: auch die fragende \
+Person stellt sich vor („Ich bin Nina, ich frage hier ein paar Leute …"), \
+oft sogar ZUERST. Der erste Name im Transkript ist also nicht automatisch der \
+richtige — gesucht ist der Name dessen, der danach die Antworten gibt. \
+Rate nicht. Stellt sich niemand vor oder bist du unsicher, wer da spricht, \
+lass die Liste leer — kein Name ist richtig, ein falscher Name steht später \
+unter einem fremden Zitat. Der Name ist ein eigenes Feld und wird dadurch \
+NICHT zum Begriff: Punkt 2 verbietet Personennamen unter den Begriffen \
+weiterhin.
 
 Antworte ausschließlich im geforderten JSON-Schema.
 """
