@@ -72,7 +72,7 @@ def zeige(titel: str, ergebnis, transkript: str) -> None:
     for t in ergebnis.terms:
         print(f"   - {t.label}")
     if ergebnis.quotes:
-        print(f"Zitat: „{ergebnis.quotes[0].text}\"")
+        print(f'Zitat: "{ergebnis.quotes[0].text}"')
     else:
         print("Zitat: (keines)")
     print(f"Name:  {ergebnis.names[0].text if ergebnis.names else '(keiner)'}")

@@ -197,6 +197,48 @@ def _write_placeholder_photo(dest: Path) -> Path:
     return dest
 
 
+# Die 16 erzeugten Gesichter aus `sim/cut_portrait_sheet.py`. Sie liegen als
+# fertige 512er-Quadrate vor — genau das Format, das `make_portrait` sonst
+# selbst herstellt.
+GESICHTER_DIR = Path(__file__).resolve().parent / "data" / "portraits"
+
+
+def _gesichter() -> list[Path]:
+    if not GESICHTER_DIR.is_dir():
+        return []
+    return sorted(GESICHTER_DIR.glob("portrait-*.jpg"))
+
+
+def _write_face_photo(dest: Path, index: int) -> Path:
+    """Ein echtes Gesicht statt der leeren Fläche — für die Kalibrierung.
+
+    Birk, 2026-09-01 vor Ort: „Es werden überhaupt keine Gesichter angezeigt
+    bei den Demodaten." Beim Einrichten der Größen (Portrait, Begriffe,
+    Zitatkarte) muss die Wand aussehen wie im Betrieb; eine graue Scheibe sagt
+    nichts darüber, ob ein Portrait zu groß ist.
+
+    Der Platzhalter oben bleibt bestehen und bleibt die Vorgabe für die
+    Vorab-Rendering-Reihe, für die er 2026-08-14 bewusst eingeführt wurde —
+    dort ist die leere Fläche richtig, weil Farbe dort Bedeutung vortäuschen
+    würde. Diese Funktion ist der zweite Weg, nicht ihr Ersatz.
+
+    Die 16 Gesichter werden reihum vergeben, bei 60 Personen also knapp
+    viermal. Das ist für eine Größenbeurteilung genau richtig und ehrlicher
+    als 60 verschiedene: es fällt sofort auf, dass es Demodaten sind.
+    """
+    quellen = _gesichter()
+    if not quellen:
+        return _write_placeholder_photo(dest)
+    quelle = quellen[index % len(quellen)]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # Über PIL kopieren statt die Datei zu duplizieren: `make_portrait` erwartet
+    # ein JPEG, das es selbst öffnen und zuschneiden kann, und ein durchgereichtes
+    # Original könnte ein anderes Format tragen als der Name behauptet.
+    with Image.open(quelle) as im:
+        im.convert("RGB").save(dest, format="JPEG", quality=92)
+    return dest
+
+
 @dataclass(frozen=True)
 class PersonSpec:
     """One seeded interview, decided before anything is written.
@@ -245,7 +287,7 @@ def person_specs(persons: int = 50, seed: int = 20260814) -> list[PersonSpec]:
     return specs
 
 
-def write_person(store: Store, cfg: Config, spec: PersonSpec):
+def write_person(store: Store, cfg: Config, spec: PersonSpec, *, gesichter: bool = False):
     """Write one planned interview — photo, portrait, person row, edges.
 
     Takes no rng: every random decision was already made in `person_specs`,
@@ -253,7 +295,12 @@ def write_person(store: Store, cfg: Config, spec: PersonSpec):
     without replaying the seed.
     """
     src = cfg.photo_dir / f"person-{spec.index:03d}.jpg"
-    _write_placeholder_photo(src)
+    # `gesichter=True` fuer die Kalibrierung vor Ort (Birk, 2026-09-01), sonst
+    # die leere Flaeche, die fuer die Vorab-Rendering-Reihe richtig ist.
+    if gesichter:
+        _write_face_photo(src, spec.index)
+    else:
+        _write_placeholder_photo(src)
     dest = cfg.portrait_dir / f"person-{spec.index:03d}.png"
     make_portrait(src, dest, size=cfg.portrait_size)
 
@@ -274,7 +321,8 @@ def write_person(store: Store, cfg: Config, spec: PersonSpec):
     return person
 
 
-def seed_graph(data_dir: Path, persons: int = 50, seed: int = 20260814) -> Path:
+def seed_graph(data_dir: Path, persons: int = 50, seed: int = 20260814,
+               gesichter: bool = False) -> Path:
     """Populate a fresh Store at `Config(data_dir).db_path` and return that path.
 
     Deterministic for a given (persons, seed): a single `random.Random(seed)`
@@ -288,7 +336,7 @@ def seed_graph(data_dir: Path, persons: int = 50, seed: int = 20260814) -> Path:
     try:
         with store.transaction():
             for spec in person_specs(persons, seed):
-                write_person(store, cfg, spec)
+                write_person(store, cfg, spec, gesichter=gesichter)
             store.set_setting("max_terms", "999")  # "alle" -- seeded dbs open showing everything
     finally:
         store.close()
@@ -301,8 +349,11 @@ def main() -> None:
     parser.add_argument("--out", default="out/prerender-state")
     parser.add_argument("--persons", type=int, default=50)
     parser.add_argument("--seed", type=int, default=20260814)
+    parser.add_argument("--gesichter", action="store_true",
+                        help="echte Gesichter statt leerer Flaechen (Kalibrierung)")
     args = parser.parse_args()
-    db_path = seed_graph(Path(args.out), persons=args.persons, seed=args.seed)
+    db_path = seed_graph(Path(args.out), persons=args.persons, seed=args.seed,
+                         gesichter=args.gesichter)
     print(db_path)
 
 

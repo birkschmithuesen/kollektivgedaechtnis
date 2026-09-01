@@ -59,14 +59,29 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
    median luminance 0 inside the panel, identical to the background). A quote
    has to read as a card laid ON the wall, which needs contrast in the surface
    itself. */
+/* Zitatkarte — Maße über eine Stellschraube (Birk, 2026-09-01 vor Ort).
+
+   „Die Zitate sind auf dem realen Schirm viel zu groß, mach die Maße auf 40 %."
+   Die Werte hier waren am Entwicklungsbildschirm gesetzt; auf der echten
+   Projektionsfläche erschlägt die Karte das Bild.
+
+   `--quote-scale` skaliert die GANZE Karte konsistent — Schrift, Polster,
+   Abstand vom Rand, Höchstbreite. Ein einzelner Wert, damit Schrift und Kasten
+   nicht auseinanderlaufen: nur die Schrift zu verkleinern hinterlässt einen
+   riesigen Kasten mit Miniaturtext.
+
+   Zum Nachstellen vor Ort reicht diese eine Zeile. Die alten Werte entsprechen
+   `--quote-scale: 1`. */
+:root { --quote-scale: 0.4; }
+
 .quote-overlay {
   position: fixed;
   left: 50%;
-  bottom: 104px;
+  bottom: calc(104px * var(--quote-scale));
   transform: translateX(-50%) translateY(12px);
-  max-width: min(1100px, 78vw);
+  max-width: min(calc(1100px * var(--quote-scale)), 78vw);
   margin: 0;
-  padding: 32px 44px;
+  padding: calc(32px * var(--quote-scale)) calc(44px * var(--quote-scale));
   background: #f4f1ea;
   color: #14120f;
   border-radius: 3px;
@@ -86,7 +101,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
    der er sie erbt. Ohne Namen ist das Element `hidden` und nimmt keinen Platz. */
 .quote-name {
   margin: 0 0 0.5em;
-  font-size: 22px;
+  font-size: calc(22px * var(--quote-scale));
   line-height: 1.3;
   color: inherit;
   opacity: 0.62;
@@ -94,7 +109,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 }
 .quote-text {
   margin: 0;
-  font-size: 34px;
+  font-size: calc(34px * var(--quote-scale));
   line-height: 1.42;
   color: inherit;
   font-style: italic;

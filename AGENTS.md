@@ -58,6 +58,55 @@ Eigene Arbeit in einen eigenen Worktree
 Checkout. Vor dem Push `git fetch` und prüfen, ob die andere Session dieselben
 Dateien angefasst hat.
 
+## Demodaten für die Kalibrierung (Routine — wird öfter gebraucht)
+
+Zum Einrichten der Größen (Portrait, Begriffe, Zitatkarte) braucht die Wand
+Inhalt in mehreren Dichten. Auf echte Besucher zu warten geht nicht, und ein
+einzelnes Testfoto sagt nichts über den Fall „sechzig Personen".
+
+**Erzeugt wird mit `sim/seed_graph.py`** — echte Portraits, echte
+Begriffslängen aus dem Konferenzthema, **kein LLM, keine Kosten**:
+
+```bash
+uv run python -m sim.seed_graph --out /tmp/dichte-60 --persons 60 --gesichter
+```
+
+🔴 **`--gesichter` nicht vergessen.** Ohne die Fahne bekommt jede Person eine
+leere graue Fläche (`_write_placeholder_photo`) — das ist für die
+Vorab-Rendering-Reihe so gewollt (Entscheidung 2026-08-14: Farbe dort würde
+Bedeutung vortäuschen), für die Kalibrierung aber unbrauchbar. Birk am
+2026-09-01 vor Ort: *„Es werden überhaupt keine Gesichter angezeigt bei den
+Demodaten."* Die Fahne nimmt die 16 Gesichter aus `sim/data/portraits/`
+(erzeugt von `sim/cut_portrait_sheet.py`) und vergibt sie reihum.
+
+**Prüfen, ob wirklich Gesichter drin sind** — nicht dem Dateinamen glauben:
+die Graustufen-Streuung eines Portraits liegt bei ~75 und ist von Bild zu Bild
+verschieden; eine leere Fläche liegt bei 46,8 und ist bei **allen** Personen
+exakt gleich.
+
+**Auf die Station bringen:** als `.tgz` nach
+`C:\Users\birk\kollektivgedaechtnis\data-dichte\<n>\` entpacken (Windows kann
+`tar` nicht verlässlich → mit Python `tarfile` entpacken).
+
+**Umschalten** mit `scripts/dichte-umschalten.py` auf der Station:
+
+```
+python dichte-umschalten.py --stufe 1|10|40|60
+python dichte-umschalten.py --stufe echt     # zurück in den Ausstellungsbetrieb
+python dichte-umschalten.py --stufe status
+```
+
+🔴 **Station vorher beenden.** Das Skript prüft das selbst und verweigert den
+Dienst, solange Port 8800/8810 lauscht — mit gutem Grund: die laufende Station
+hält `embeddings.sqlite3` offen, und ein Umschalten mitten im Betrieb bricht
+ab, **nachdem** es schon halb passiert ist (erlebt 2026-09-01: Datenbank in
+beiden Ordnern, Bilder nur in einem).
+
+Die echte Ausstellungsdatenbank wird beim ersten Umschalten **kopiert** nach
+`data-echt/` und danach nie wieder angefasst. Umgeschaltet wird immer nur der
+*Inhalt* von `data/`, der Ordner selbst bleibt stehen — Windows verweigert das
+Löschen eines Ordners mit offener Datei.
+
 ## Wo was steht
 
 | Thema | Datei |
