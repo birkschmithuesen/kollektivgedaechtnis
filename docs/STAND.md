@@ -711,6 +711,41 @@ Ende-Index häufen; und ob der zweite Anlauf rettet.
 
 ---
 
+## 2j. 🔴 Die laufende Datenbank: 10 von 14 Personen sind leer (2026-09-01, 16:30)
+
+Birk fragte, ob es eine Testdatenbank neben der realen gibt. **Nein — es gibt
+genau eine**, `data/kg.db` auf der Station. Der synthetische Korpus
+(`sim/generate_interviews.py`) schreibt nur JSON nach `sim/data/` und landet
+**nie** in dieser Datenbank. Insofern: kein synthetischer Müll im Graphen.
+
+**Aber der Testbetrieb hat Spuren hinterlassen** (`scripts/pruefe-personen.py`,
+read-only):
+
+| | Personen | Befund |
+|---|---|---|
+| **mit Inhalt** | **4** (p3–p6) | je 3–5 Begriffe + Zitat, inhaltlich sauber |
+| **leer** | **10** (p1, p2, p7–p14) | kein Begriff, kein Zitat, kein Name |
+
+**Acht der zehn sind von heute** und stammen aus den Foto-Tests dieser Session
+— jedes eingeworfene Foto eröffnet eine Person (p7 = 13:13, p13 = 15:51, das
+sind exakt die Durchläufe aus §2f/§2g). **Jede erscheint an der Wand als leere
+Scheibe**: Portrait vorhanden, sonst nichts.
+
+Die 15 Begriffe im Graphen sind alle echt und brauchbar („Wohnen im Bauwagen",
+„Abwärme als Wohnraumheizung", „Dritte Orte", „Server-Racks im Quartier") —
+**kein Testmüll unter den Begriffen**, das Problem sind ausschließlich die
+leeren Personen.
+
+Zwei Fälle belegen zusätzlich den Fehler aus §2h **in der echten Datenbank**,
+nicht nur im Testlauf: **p13 hat 967 Zeichen Transkript und trotzdem nichts
+extrahiert**, p2 hat 526 Zeichen und steht auf `failed`.
+
+**Aufräumen = `hidden=1`, nicht löschen** — die Person bleibt in der Datenbank,
+verschwindet aber von der Wand. 🔴 **Nicht ausgeführt: Löschen und Ausblenden
+sind Birks Entscheidung.** Befehl steht in der Ausgabe des Skripts.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
