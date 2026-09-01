@@ -92,15 +92,62 @@ FEHLT=0
 
 if [ ! -f .env ]; then
   echo ""
-  echo "  🔴 .env FEHLT — ohne Schlüssel startet der Kern nicht."
-  echo "     Gebraucht werden:"
+  echo "  🔴 .env FEHLT — ohne Schluessel startet der Kern nicht."
+  echo ""
+  echo "     PFLICHT (Analyse der Interviews, Kern):"
   echo "        ANTHROPIC_API_KEY=..."
-  echo "        OPENROUTER_API_KEY=..."
+  echo "        OPENROUTER_API_KEY=...      # auch fuer die Embeddings"
+  echo ""
+  echo "     FUER DEN TRAUM (Bildgenerierung, kg2) -- je nach image_api_mode"
+  echo "     in config.toml:"
+  echo "        openrouter  (Vorgabe)  -> es reicht OPENROUTER_API_KEY"
+  echo "        bfl                     -> BFL_API_KEY=...  (EU-Endpunkt,"
+  echo "                                   auf dem Mac der direkte Weg)"
+  echo "        bfl_proxy               -> KEIN Schluessel noetig, laeuft aber"
+  echo "                                   NUR auf dem vServer"
+  echo ""
+  echo "     OPTIONAL, nur wenn config.toml auf Infomaniak zeigt:"
+  echo "        HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY=..."
+  echo ""
   echo "     Anlegen als $ZIEL/.env"
-  echo "     (Die Datei ist in .gitignore und kommt NICHT über git mit.)"
+  echo "     (Die Datei ist in .gitignore und kommt NICHT ueber git mit.)"
   FEHLT=1
 else
   echo "  .env: da"
+  # Nur pruefen, WELCHE Namen gesetzt sind -- niemals Werte ausgeben.
+  for k in ANTHROPIC_API_KEY OPENROUTER_API_KEY BFL_API_KEY \
+           HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY; do
+    if grep -qE "^${k}=." .env 2>/dev/null; then
+      echo "     $k: gesetzt"
+    else
+      echo "     $k: fehlt"
+    fi
+  done
+  echo "     (Pflicht sind die ersten beiden. BFL nur bei image_api_mode=bfl,"
+  echo "      Infomaniak nur wenn config.toml darauf zeigt.)"
+fi
+
+# 🔴 Der Traum-Modus entscheidet, welcher Bildschluessel gebraucht wird.
+#
+# "bfl_proxy" ist eine reine vServer-Eigenheit und wird auf einem
+# Ausstellungsrechner NIE gebraucht (Birk, 2026-09-01: "den Proxy brauchts auf
+# dem Mac nicht -- genau wie auf dem Windows-Rechner ihn auch nicht gebraucht
+# hat"). Der Grund steht in kg2/config.py: auf dem vServer hat uid birk per
+# nftables keinen Egress zu bfl.ai, deshalb der lokale Broker. Ein Mac oder
+# Windows-Rechner hat diesen Filter nicht und spricht BFL direkt an.
+#
+# Wer die Konfiguration vom vServer uebernimmt, schleppt den Proxy-Modus mit
+# und bekommt einen Traum, der stumm nichts rendert -- der Broker existiert
+# hier ja nicht. Deshalb diese Warnung.
+if [ -f config.toml ] && grep -q 'image_api_mode.*bfl_proxy' config.toml 2>/dev/null; then
+  echo ""
+  echo "  🔴 config.toml steht auf image_api_mode = \"bfl_proxy\"."
+  echo "     Dieser Weg laeuft NUR auf dem vServer (lokaler Broker, uid"
+  echo "     bflproxy). Auf dem Mac stattdessen:"
+  echo "        image_api_mode = \"bfl\"        + BFL_API_KEY in .env"
+  echo "     oder image_api_mode = \"openrouter\"  (dann reicht der"
+  echo "     OPENROUTER_API_KEY)."
+  FEHLT=1
 fi
 
 if [ ! -f config.toml ]; then
