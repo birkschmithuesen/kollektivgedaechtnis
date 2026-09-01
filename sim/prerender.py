@@ -406,6 +406,11 @@ def _open_projection(page, base_url: str, theme: str, migration_ms: int | None =
     # `window.kgLegende` ist `null`, wenn das Theme keine Farbcodierung trägt
     # (a/b/c) — deshalb der Wächter, sonst bräche die Aufnahme dort ab.
     page.evaluate("() => { if (window.kgLegende) window.kgLegende.entfernen(); }")
+    # Der QR-Code ebenso, und aus demselben Grund: Er steht fest im DOM (kein
+    # Modul, das man abschalten könnte), also wird das Element hier entfernt.
+    page.evaluate(
+        "() => { const q = document.querySelector('.qr-hinweis'); if (q) q.remove(); }"
+    )
     # The 50-person / ~75-term graph, its fcose layout, the placement passes
     # and a 2.5s glide take real wall-clock time — 60s is the budget, not a
     # guess to shrink.

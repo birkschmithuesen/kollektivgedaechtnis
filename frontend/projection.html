@@ -7,6 +7,17 @@
 <link rel="stylesheet" href="static/base.css">
 <link id="theme" rel="stylesheet" href="static/theme-e.css">
 <div id="cy"></div>
+<!-- Der QR-Code auf die oeffentliche Handyseite (Birk, 2026-09-01).
+     Statisch als Datei eingebunden, nicht zur Laufzeit gerechnet: die Adresse
+     aendert sich nicht, und eine unbeaufsichtigte Wand soll keinen Weg mehr
+     haben, auf dem sie scheitern kann. Neu erzeugen mit
+     `uv run --with segno python scripts/qr-erzeugen.py`.
+     Die Beschriftung steht daneben, weil ein nackter Code an einer Wand nicht
+     sagt, wohin er fuehrt — und genau das ist die Frage, die Besucher haben. -->
+<aside class="qr-hinweis" aria-hidden="true">
+  <img src="static/qr-handyseite.svg" alt="" class="qr-bild">
+  <span class="qr-text">Am eigenen Telefon<br>mitlesen</span>
+</aside>
 <!-- Order matters: these UMD bundles resolve each other off `window`, and the
      two extensions self-register against the `cytoscape` global. See
      static/vendor/README.md. -->
