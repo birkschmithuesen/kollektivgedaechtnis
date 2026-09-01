@@ -201,11 +201,20 @@ PLENUM_REGLER: tuple[dict, ...] = (
         "label": "QR-Größe",
         "typ": "float",
         "min": 120.0,
-        "max": 720.0,
-        "schritt": 10,
-        "default": 360.0,
+        # 1400 statt 720 (Birk, 2026-09-01): der Regler bestimmt jetzt den
+        # Vollbild-Code und nicht mehr den in der Ecke. Dort war 720 px die
+        # Grenze, ab der er den Graphen zugestellt haette -- ueber der leeren
+        # schwarzen Flaeche gibt es diese Ruecksicht nicht mehr. Ueber die
+        # Bildkante hinaus kann er trotzdem nicht wachsen: plenum.css deckelt
+        # mit min(..., 80vh, 80vw).
+        "max": 1400.0,
+        "schritt": 20,
+        # 860 auf 1080 Bildhoehe. Der Sprung von 360 ist der Punkt der
+        # Aenderung: eine Handykamera aus zwoelf Metern braucht Modulbreite,
+        # und die waechst linear mit der Kantenlaenge.
+        "default": 860.0,
         "einheit": "px",
-        "hinweis": "muss aus dem Saal von einer Handykamera erfasst werden",
+        "hinweis": "Vollbild-Einblendung; muss aus dem Saal scanbar sein",
     },
     {
         "key": "hinweis_intervall",

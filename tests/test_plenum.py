@@ -300,24 +300,86 @@ def test_im_saal_gibt_es_keine_legende(saal):
     assert saal.evaluate("() => window.kgLegende === null")
 
 
-def test_der_qr_code_ist_im_saal_deutlich_groesser_und_voll_deckend(saal):
-    """Birks Punkt 2: „QR-Code ist nicht scanbar, zu klein." 132 px waren für
-    4K aus 2–3 m gesetzt; im Saal muss ihn eine Handykamera aus vielen Metern
-    erfassen, auf einer Fläche mit halb so vielen Pixeln."""
+def test_im_saal_steht_kein_dauerhafter_code_in_der_ecke(saal):
+    """Birk, 2026-09-01: „Der QR-Code soll nicht dauerhaft da sein, der ist zu
+    klein in der Ecke." Er ist nicht nur klein gestellt, sondern aus — sonst
+    stünde neben dem Vollbild-Code ein zweiter, den niemand scannen kann."""
+    anzeige = saal.evaluate(
+        "() => getComputedStyle(document.querySelector('.qr-hinweis')).display"
+    )
+    assert anzeige == "none", f"der Eck-Code ist im Saal noch sichtbar ({anzeige})"
+
+
+def test_der_vollbild_code_ist_gross_und_voll_deckend(saal):
+    """Birks Punkt 2 in der neuen Fassung: der Code muss aus dem Saal von einer
+    Handykamera erfasst werden — jetzt über die ganze Fläche statt in der Ecke.
+
+    Gemessen wird der Anteil an der Bildhöhe, nicht eine nackte Pixelzahl: das
+    ist die Größe, die eine Kamera aus zwölf Metern sieht. In der Ecke waren es
+    18,8 % der Breite, im Foyer 3,4 %."""
     masse = saal.evaluate(
         """() => {
-             const s = getComputedStyle(document.querySelector('.qr-bild'));
-             const r = document.querySelector('.qr-bild').getBoundingClientRect();
-             return { breite: r.width, deckkraft: Number(s.opacity) };
+             window.kgPlenumHinweis.qrZeigen();
+             const el = document.querySelector('.qr-bild-voll');
+             const s = getComputedStyle(el);
+             const r = el.getBoundingClientRect();
+             const flaeche = getComputedStyle(document.querySelector('.plenum-qr-voll'));
+             return {
+               breite: r.width,
+               hoehe: r.height,
+               deckkraft: Number(s.opacity),
+               grund: flaeche.backgroundColor,
+             };
            }"""
     )
-    # Anteil der Bildbreite statt einer nackten Pixelzahl: das ist die Größe,
-    # die eine Kamera aus dem Saal sieht. Im Foyer sind es 3,4 %.
-    anteil = masse["breite"] / 1920
-    assert anteil > 0.15, f"der Code nimmt nur {anteil:.1%} der Bildbreite ein"
-    # Birks Messreihe (base.css): 100 %..46 % lesbar. Für die Erfassung aus
-    # dem Saal ist mehr Kontrast immer besser.
+    anteil = masse["hoehe"] / 1080
+    assert anteil > 0.6, f"der Code nimmt nur {anteil:.1%} der Bildhöhe ein"
+    # Quadratisch, sonst ist er kein lesbarer Code mehr.
+    assert abs(masse["breite"] - masse["hoehe"]) < 1, masse
     assert masse["deckkraft"] == 1.0, masse
+    # Schwarzer Grund: ein Code über dem bewegten Graphen ist für jeden Decoder
+    # ein Ratespiel.
+    assert masse["grund"] in ("rgb(0, 0, 0)", "rgba(0, 0, 0, 1)"), masse
+
+
+def test_der_vollbild_code_bleibt_auch_am_reglerende_im_bild(saal):
+    """Wer im Saal die QR-Größe auf Anschlag dreht, darf den Code nicht aus dem
+    Bild schieben. Der Deckel steht in plenum.css (min(..., 80vh, 80vw)) und
+    wird hier am größten erlaubten Wert gemessen, nicht behauptet."""
+    from kg.server import PLENUM_REGLER
+
+    hoechstwert = next(r for r in PLENUM_REGLER if r["key"] == "qr_size")["max"]
+    masse = saal.evaluate(
+        f"""() => {{
+             document.documentElement.style.setProperty('--qr-size', '{hoechstwert}px');
+             window.kgPlenumHinweis.qrZeigen();
+             const r = document.querySelector('.qr-bild-voll').getBoundingClientRect();
+             return {{ breite: r.width, hoehe: r.height, links: r.left, oben: r.top }};
+           }}"""
+    )
+    assert masse["hoehe"] <= 1080, masse
+    assert masse["breite"] <= 1920, masse
+    assert masse["links"] >= 0 and masse["oben"] >= 0, masse
+
+
+def test_die_adresse_unter_dem_code_stimmt_mit_dem_code_ueberein(saal):
+    """Der Text unter dem Code führt sonst woanders hin als der Code selbst —
+    ein Fehler, den im Saal niemand bemerkt, weil beide Wege plausibel aussehen.
+
+    Geprüft gegen `scripts/qr-erzeugen.py`, die einzige Stelle, an der die
+    Adresse für den Code steht."""
+    from pathlib import Path
+    import re
+
+    quelle = Path(__file__).resolve().parents[1] / "scripts" / "qr-erzeugen.py"
+    treffer = re.search(r'ADRESSE\s*=\s*"([^"]+)"', quelle.read_text(encoding="utf-8"))
+    assert treffer, "ADRESSE nicht in scripts/qr-erzeugen.py gefunden"
+    im_code = treffer.group(1).replace("https://", "").rstrip("/")
+
+    angezeigt = saal.evaluate(
+        "() => document.querySelector('.qr-voll-zeile').textContent.trim()"
+    )
+    assert angezeigt == im_code, f"Zeile {angezeigt!r} != Code {im_code!r}"
 
 
 def test_die_zitatkarte_hat_im_saal_keine_helle_kante(saal):
@@ -380,19 +442,68 @@ def test_der_erklaerungstext_kommt_und_geht_wieder(page, static_server):
     assert not all(verlauf), "die Einblendung verschwindet nie wieder"
 
 
-def test_der_erklaerungstext_verdeckt_den_qr_code_nicht(saal):
-    """Er fordert zum Scannen auf — er darf nicht verdecken, worauf er zeigt.
-    Geprüft bei aufgedrehtem QR-Regler, also im ungünstigsten Fall."""
-    ueberschneidung = saal.evaluate(
-        """() => {
-             document.documentElement.style.setProperty('--qr-size', '720px');
-             window.kgPlenumHinweis.zeigen();
-             const a = document.querySelector('.plenum-hinweis').getBoundingClientRect();
-             const b = document.querySelector('.qr-hinweis').getBoundingClientRect();
-             return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
+def test_text_und_code_kommen_nacheinander_und_nie_zugleich(page, static_server):
+    """Birk, 2026-09-01: „Das soll also nur dieser Hinweis einladen. Und dann
+    der QR-Code in Fullscreen als Overlay."
+
+    Der Kern der Änderung: ZWEI Takte, nicht zwei Elemente nebeneinander. Der
+    Code liegt auf schwarzem Grund über allem — stünden beide zugleich, wäre
+    die Einladung, die zum Scannen auffordert, von dem verdeckt, worauf sie
+    zeigt. Deshalb wird hier abgetastet, statt einmal hinzuschauen."""
+    page.goto(f"{static_server}/frontend/projection.html?theme=f&plenum=1")
+    page.wait_for_function("() => window.kgView !== undefined", timeout=30000)
+    verlauf = page.evaluate(
+        """async () => {
+             const { attachPlenumHinweis } = await import('./static/plenum-hinweis.js');
+             const h = attachPlenumHinweis({ intervallMs: 900, dauerMs: 300, ersterAuftrittMs: 50 });
+             const schlaf = (ms) => new Promise((r) => setTimeout(r, ms));
+             const gesehen = [];
+             for (let i = 0; i < 60; i += 1) {
+               gesehen.push([h.sichtbar, h.qrSichtbar]);
+               await schlaf(20);
+             }
+             h.entfernen();
+             return gesehen;
            }"""
     )
-    assert ueberschneidung is False, "Erklärungstext und QR-Code überschneiden sich"
+    text = [t for t, _ in verlauf]
+    qr = [q for _, q in verlauf]
+
+    assert any(text), "der Erklärungstext ist nie erschienen"
+    assert any(qr), "der Vollbild-Code ist nie erschienen"
+    assert not all(qr), "der Vollbild-Code verschwindet nie wieder"
+    # 🔴 Die eigentliche Zusage: nie beide zugleich.
+    assert not any(t and q for t, q in verlauf), "Text und Code standen gleichzeitig"
+    # Und in dieser Reihenfolge: der Text lädt ein, DANN kommt der Code.
+    assert text.index(True) < qr.index(True), "der Code kam vor der Einladung"
+
+
+def test_der_code_verkuerzt_sich_mit_wenn_die_dauer_das_intervall_sprengt(page, static_server):
+    """🔴 Der Weg, auf dem die Wand den Graphen für immer verlöre: Dauer hoch,
+    Intervall knapp — dann liefe der nächste Auftritt an, bevor der laufende
+    endet, und die Fläche zeigte nur noch Einblendungen.
+
+    Der Deckel sitzt in `auftritt()`. Gemessen an einer Einstellung, die im
+    Saal-Pult einstellbar ist (Dauer 120 s ist der erlaubte Höchstwert)."""
+    page.goto(f"{static_server}/frontend/projection.html?theme=f&plenum=1")
+    page.wait_for_function("() => window.kgView !== undefined", timeout=30000)
+    verlauf = page.evaluate(
+        """async () => {
+             const { attachPlenumHinweis } = await import('./static/plenum-hinweis.js');
+             // Dauer groesser als das Intervall -- die pathologische Einstellung.
+             const h = attachPlenumHinweis({ intervallMs: 400, dauerMs: 5000, ersterAuftrittMs: 20 });
+             const schlaf = (ms) => new Promise((r) => setTimeout(r, ms));
+             const gesehen = [];
+             for (let i = 0; i < 50; i += 1) {
+               gesehen.push(h.sichtbar || h.qrSichtbar);
+               await schlaf(20);
+             }
+             h.entfernen();
+             return gesehen;
+           }"""
+    )
+    assert any(verlauf), "es war nie etwas zu sehen"
+    assert not all(verlauf), "die Wand zeigt dauerhaft eine Einblendung — der Graph ist weg"
 
 
 # --- Das Bedienfeld ----------------------------------------------------------

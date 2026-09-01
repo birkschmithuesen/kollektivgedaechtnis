@@ -330,7 +330,13 @@ body:has(.touch-controls) .dream-legende { bottom: 104px; }
   position: fixed;
   right: 30px;
   bottom: 26px;
-  display: block;
+  /* Im Foyer steht der Code dauerhaft in der Ecke — dort steht jemand davor
+     und kann ihn aus zwei Metern erfassen. Die Saal-Auflage setzt die
+     Variable auf `none` (siehe plenum.css): aus zwoelf Metern ist eine Ecke
+     zu klein, dort kommt der Code stattdessen gross im zweiten Takt des
+     Erklaerungstextes. Eine Variable statt einer Regel in plenum.css, damit
+     der berechnete Wert im Foyer nachweislich derselbe bleibt. */
+  display: var(--plenum-qr-eck-anzeige, block);
   pointer-events: none; /* nimmt der Wand nie eine Beruehrung weg */
   user-select: none;
   z-index: 8;
