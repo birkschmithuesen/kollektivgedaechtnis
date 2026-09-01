@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kollektivgedächtnis</string>
+    <string name="ausloeser">Foto aufnehmen</string>
+    <string name="start">Kamera wird gestartet …</string>
+    <string name="bereit">Bereit — Station: %1$s</string>
+    <string name="sende">Wird gesendet …</string>
+    <string name="gesendet">Gesendet — Interview läuft</string>
+    <string name="aufnahme_fehler">Aufnahme fehlgeschlagen: %1$s</string>
+    <string name="kamera_fehler">Kamera nicht verfügbar: %1$s</string>
+    <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>
+
+    <string name="settings_title">Einstellungen</string>
+    <string name="adresse_label">Adresse der Station</string>
+    <string name="adresse_hint">100.75.24.33:8800</string>
+    <string name="adresse_hilfe">Tailnet-Adresse oder Name des Ausstellungsrechners. Ohne Portangabe wird 8800 verwendet. Der Pfad wird automatisch angehängt.</string>
+    <string name="speichern">Speichern</string>
+    <string name="gespeichert">Gespeichert: %1$s</string>
+    <string name="adresse_ungueltig">Adresse unbrauchbar — bitte prüfen.</string>
+</resources>

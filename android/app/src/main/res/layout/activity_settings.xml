@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/hintergrund">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/adresse_label"
+        android:textSize="16sp"
+        android:paddingBottom="8dp" />
+
+    <EditText
+        android:id="@+id/adresse"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="textUri"
+        android:hint="@string/adresse_hint"
+        android:autofillHints=""
+        android:textSize="18sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/adresse_hilfe"
+        android:textSize="13sp"
+        android:paddingTop="12dp"
+        android:paddingBottom="24dp" />
+
+    <Button
+        android:id="@+id/speichern"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/speichern" />
+
+</LinearLayout>

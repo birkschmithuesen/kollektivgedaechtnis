@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dieselbe Palette wie die Wand: dunkler Grund, Gold als Akzent
+         (frontend/static/theme-f.css, RING_RGB in kg/photos.py). Die App ist
+         im Raum sichtbar und soll zur Station gehören, nicht wie ein
+         Fremdkörper wirken. -->
+    <color name="hintergrund">#0B0B0D</color>
+    <color name="gut">#D8B15A</color>
+    <color name="fehler">#E2705F</color>
+</resources>

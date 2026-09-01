@@ -176,7 +176,7 @@ async def main_async(args) -> None:
     core = Core(cfg, store, bus, transcript_log, llm, embedder, wake_llm=wake_llm)
     write_graph_json(store, cfg.graph_json_path)  # state is reconstructed from SQLite
 
-    app = create_app(store, cfg, bus)
+    app = create_app(store, cfg, bus, core=core)
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.server_host, port=cfg.server_port, log_level="info")
     )

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KG" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorAccent">@color/gut</item>
+        <item name="android:windowBackground">@color/hintergrund</item>
+    </style>
+</resources>

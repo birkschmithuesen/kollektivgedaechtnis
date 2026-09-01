@@ -5,15 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 import mimetypes
+import time
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from kg.export import build_graph, write_graph_json
+from kg.photos import make_portrait
 
 # Windows resolves MIME types from the registry, where HKCR\.js is routinely
 # "text/plain". Starlette's StaticFiles asks `mimetypes` and therefore serves
@@ -26,6 +28,13 @@ mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
+
+# Obergrenze fuer ein Foto aus der App (`/api/photo`). 12 MB fasst jedes Bild,
+# das die App erzeugt (2048px lange Kante, JPEG Q85, typisch deutlich unter
+# 1 MB) mit reichlich Luft, und schliesst zugleich aus, dass ein versehentlich
+# geschicktes Panorama den Speicher der Station belegt, waehrend die Wand
+# laeuft.
+MAX_PHOTO_BYTES = 12 * 1024 * 1024
 
 
 class MaxTerms(BaseModel):
@@ -124,7 +133,7 @@ def broadcast_state(store, bus) -> None:
     bus.publish({"type": "state", "state": current_state(store)})
 
 
-def create_app(store, cfg, bus) -> FastAPI:
+def create_app(store, cfg, bus, core=None) -> FastAPI:
     app = FastAPI(title="Kollektivgedächtnis")
     app.mount("/static", StaticFiles(directory=FRONTEND / "static"), name="static")
     app.mount("/media/portraits", StaticFiles(directory=cfg.portrait_dir), name="portraits")
@@ -217,6 +226,60 @@ def create_app(store, cfg, bus) -> FastAPI:
         store.set_setting("portrait_size", str(payload.pixels))
         broadcast_state(store, bus)
         return {"ok": True}
+
+    if core is not None:
+        # Nur mit Core registriert. Ein Prozess ohne Core (die reine
+        # Anzeige-Konfiguration, u.a. in den Tests) hat den Endpunkt dann gar
+        # nicht -- besser ein 404 als eine 200, die nichts tut.
+        @app.post("/api/photo")
+        async def api_photo(request: Request) -> dict:
+            """Ein Foto aus der Android-App eroeffnet ein Interview.
+
+            Derselbe Weg, den bisher nur Telegram ging (`TelegramSource.
+            _handle_photo` -> `Core.on_photo`), nur ohne den Umweg ueber ein
+            fremdes Netz: die App im Tailnet legt die Bytes direkt hier ab.
+            Telegram bleibt unveraendert daneben bestehen -- ein zweiter
+            Einwurf, kein Ersatz, damit ein Ausfall des einen Wegs die Station
+            nicht stillegt.
+
+            **Rohe Bytes im Rumpf, kein multipart.** Das spart die
+            Abhaengigkeit `python-multipart` und macht die Android-Seite zu
+            einem einzigen `outputStream.write(jpegBytes)` -- kein
+            Boundary-Bau, keine Bibliothek. Der Dateiname wird HIER vergeben,
+            nie vom Client uebernommen: ein Client-Name waere ein
+            Pfad-Injektions-Vektor, und gebraucht wird er fuer nichts.
+
+            Die Groessengrenze ist kein Schikane-Limit, sondern der Schutz
+            gegen ein Handy, das versehentlich ein 50-MB-Panorama schickt und
+            damit den Speicher der Station belegt, waehrend die Wand laeuft.
+            """
+            raw = await request.body()
+            if not raw:
+                raise HTTPException(status_code=400, detail="leerer Rumpf")
+            if len(raw) > MAX_PHOTO_BYTES:
+                raise HTTPException(
+                    status_code=413, detail=f"Bild groesser als {MAX_PHOTO_BYTES} Bytes"
+                )
+            # Aus den Magic Bytes, nicht aus dem Content-Type-Kopf: der Kopf ist
+            # eine Behauptung des Clients, die ersten Bytes sind das Bild. Ein
+            # HTML-Fehlerdokument darf hier nie als .jpg auf der Platte landen.
+            if not (raw[:3] == b"\xff\xd8\xff" or raw[:8] == b"\x89PNG\r\n\x1a\n"):
+                raise HTTPException(status_code=415, detail="kein JPEG/PNG")
+
+            at = time.time()
+            stem = f"{int(at)}_app{int(at * 1000) % 1000:03d}"
+            photo_path = cfg.photo_dir / f"{stem}.jpg"
+            portrait_path = cfg.portrait_dir / f"{stem}.png"
+            try:
+                await asyncio.to_thread(photo_path.write_bytes, raw)
+                await asyncio.to_thread(
+                    make_portrait, photo_path, portrait_path, cfg.portrait_size
+                )
+            except Exception as exc:  # ein kaputtes Bild darf die Station nie anhalten
+                raise HTTPException(status_code=422, detail=f"Bild unlesbar: {exc}") from exc
+
+            core.on_photo(photo_path, portrait_path, at)
+            return {"ok": True}
 
     @app.post("/api/positions")
     def api_positions(payload: Positions) -> dict:

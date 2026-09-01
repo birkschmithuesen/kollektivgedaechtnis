@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Die Station spricht im Tailnet Klartext-HTTP (kg/server.py, uvicorn ohne
+  TLS). Ab Android 9 ist Klartext standardmäßig verboten und muss hier
+  ausdrücklich erlaubt werden.
+
+  WARUM `base-config` UND NICHT EINE ENGE `domain-config`:
+  Die erste Fassung dieser Datei listete das Tailscale-Präfix `100.64.0.0`
+  unter `<domain>` — das ist FALSCH und wäre stillschweigend fehlgeschlagen.
+  Android matcht `<domain>` gegen einen einzelnen Hostnamen oder eine
+  einzelne IP; **CIDR-Bereiche gibt es dort nicht** (Android-Doku
+  „Network security configuration", geprüft 2026-09-01). Der Eintrag hätte
+  also exakt die Adresse 100.64.0.0 erlaubt und jede echte Tailnet-Adresse
+  weiter blockiert — ein Fehler, der erst am Ausstellungstag auffällt.
+
+  Eine enge Liste ist hier grundsätzlich nicht möglich: WELCHE Adresse die
+  Station hat, entscheidet der Betreiber zur Laufzeit in den Einstellungen,
+  nicht der Build.
+
+  Warum das trotzdem vertretbar ist:
+  - Die App hat GENAU EIN Verbindungsziel — die in den Einstellungen
+    hinterlegte Station. Sie lädt keine Werbung, keine Bibliotheken, keine
+    Fremdinhalte; es gibt keinen zweiten Weg, auf dem Klartext entstehen
+    könnte.
+  - Der Transport ist trotzdem verschlüsselt: die Verbindung läuft durch den
+    WireGuard-Tunnel von Tailscale. „Klartext" bezeichnet hier nur das
+    Fehlen von TLS INNERHALB eines bereits verschlüsselten Tunnels.
+  - Die App verlangt ein `http://`- oder `https://`-Ziel und akzeptiert
+    beides; steht die Station eines Tages hinter TLS, ändert sich hier
+    nichts.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
