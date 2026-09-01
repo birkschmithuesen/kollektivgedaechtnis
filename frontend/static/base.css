@@ -104,3 +104,52 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 }
 .quote-text::before { content: '\201E'; }
 .quote-text::after { content: '\201C'; }
+
+/* Legende der drei Auswahlfarben (Birk, 2026-09-01).
+
+   Bewusst KEIN Kasten: kein Hintergrund, kein Rahmen, keine Überschrift. Das
+   Konzept verlangt „bewusst reduziert, kein Dashboard" — was dort verboten
+   ist, ist ein Bedienfeld, nicht eine Deutung des Farbcodes. Also drei Punkte
+   mit je einem Wort, unten links, klein, unbeweglich.
+
+   Unten LINKS, weil unten Mitte das Zitat liegt (.quote-overlay) und unten
+   links die einzige Ecke ist, die keine andere Einblendung belegt. Auf der
+   Touchfläche liegt dort die Bedienleiste — deshalb hebt `.touch-controls`
+   die Legende weiter nach oben (Regel unten), statt sie zu überdecken.
+
+   Kleiner als jede andere Schrift auf der Wand und mit reduzierter Deckkraft:
+   Sie soll lesbar sein, wenn jemand sie sucht, und verschwinden, wenn nicht.
+   z-index unter dem Zitat: ein Zitat darf sie verdecken, nie umgekehrt. */
+.dream-legende {
+  position: fixed;
+  left: 28px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--fg, #fff);
+  opacity: 0.45;
+  pointer-events: none; /* nimmt der Wand nie eine Berührung weg */
+  user-select: none;
+  z-index: 8;
+}
+.dream-legende-eintrag {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+/* Ein Punkt, keine Fläche und kein Kästchen: Die Begriffe an der Wand tragen
+   die Farbe je nach Theme unterschiedlich (theme-f färbt Flächen, theme-e
+   Punkte). Ein neutraler Kreis behauptet keine der beiden Formen. */
+.dream-legende-punkt {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+}
+/* Auf der Touchfläche sitzt unten die Bedienleiste — die Legende rückt darüber,
+   statt darunter zu verschwinden. */
+body:has(.touch-controls) .dream-legende { bottom: 92px; }

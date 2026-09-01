@@ -20,6 +20,7 @@
   import { attachTouchAutonomy } from './static/touch-autonomy.js';
   import { createTouchControls } from './static/touch-controls.js';
   import { attachQuoteOverlay } from './static/quote-overlay.js';
+  import { attachLegende } from './static/legende.js';
 
   const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
@@ -105,6 +106,12 @@
     // page that drifts from this one.
     const quotes = attachQuoteOverlay(view);
     window.kgQuotes = quotes;
+
+    // Die Deutung des Farbcodes (Birk, 2026-09-01). Nach dem Theme-`load`,
+    // weil die drei Farben AUS dem geladenen Stylesheet gelesen werden — vorher
+    // stünden die Variablen noch nicht zur Verfügung und die Legende fiele
+    // still aus. Themes ohne Farbcodierung liefern `null`, dann gibt es keine.
+    window.kgLegende = attachLegende();
 
     // Surface A only (`?touch=1`). Surface C in the plenary room loads the same
     // page without the flag and stays a pure display: no controls to press, no

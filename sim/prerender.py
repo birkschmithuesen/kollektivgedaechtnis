@@ -397,6 +397,15 @@ def _open_projection(page, base_url: str, theme: str, migration_ms: int | None =
     # `window.kgReady` unten ohnehin folgt, nur eine Stufe früher.
     page.wait_for_function("() => window.kgView !== undefined", timeout=60000)
     page.evaluate("() => window.kgView.setDreamCamera(false)")
+    # Die Legende gehört auf die Wand, nicht in eine Messaufnahme (Birk,
+    # 2026-09-01). Aus demselben Grund wie `setDreamCamera(false)` eine Zeile
+    # höher: Diese Bilder sind definierte Aufnahmen des GRAPHEN, und alles
+    # Eingeblendete verfälscht sowohl den Bildeindruck als auch die
+    # Überlappungszählung, die unten über denselben Ausschnitt läuft.
+    #
+    # `window.kgLegende` ist `null`, wenn das Theme keine Farbcodierung trägt
+    # (a/b/c) — deshalb der Wächter, sonst bräche die Aufnahme dort ab.
+    page.evaluate("() => { if (window.kgLegende) window.kgLegende.entfernen(); }")
     # The 50-person / ~75-term graph, its fcose layout, the placement passes
     # and a 2.5s glide take real wall-clock time — 60s is the budget, not a
     # guess to shrink.
