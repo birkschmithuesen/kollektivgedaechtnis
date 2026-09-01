@@ -88,47 +88,37 @@ heißt das: **dem Abzeichen nicht glauben.** Was wirklich gilt, steht in
 `curl -s http://127.0.0.1:5051/status` (`listening` / `paused`) und im
 `mic_on` aus `/levels`.
 
-### 🔴 Erreichbar von anderen Rechnern (Plenum-Schirm über Tailscale)
-
-**Zwei Dinge sind nötig, und das zweite sieht nicht nach sich selbst aus.**
-
-**1. Auf allen Schnittstellen lauschen.** `server_host = "0.0.0.0"` in
-`config.toml` (8800) und `config2.toml` (8810), `STT_HOST=0.0.0.0` in
-`~/projekte/fundusbot/.env` (5051). Es gibt **keinen** Umgebungsschalter dafür
-— uvicorn bindet direkt an diesen Wert (`kg/__main__.py:183`). Erledigt am
-2026-09-01. `tool1_url` und `KG_URL` bleiben bewusst auf Loopback: der Traum
-holt den Graphen von derselben Maschine, das soll nicht über Tailscale laufen.
-
-**2. Die macOS-Firewall freigeben** — sonst bleibt es trotzdem lokal:
+### 🔴 Plenum-Schirm auf einem zweiten Rechner — nur über Tailscale
 
 ```bash
-./scripts/firewall-freigeben.sh
+./scripts/tailscale-freigeben.sh      # Station muss laufen
 ```
+Dann dort öffnen: `http://100.95.122.67:8800/plenum` und `…/operator-plenum`
+(oder `http://birk:8800/plenum` bei aktivem MagicDNS).
 
-Die Anwendungs-Firewall filtert nach **Binary**, nicht nach Port, und sie
-filtert **Loopback nicht**. Das Fehlerbild führt deshalb in die Irre:
-`127.0.0.1` antwortet tadellos, jede andere Adresse nimmt die TCP-Verbindung
-an und legt ohne Antwort auf (`Empty reply from server`) — und im
-uvicorn-Zugriffslog steht **nichts**, weil die Anfrage den Dienst nie erreicht.
-Es sieht aus wie ein kaputter Server und ist eine Freigabe.
+**Alle drei Dienste bleiben auf `127.0.0.1`.** `tailscale serve` nimmt die
+Anfrage im Tailnet an und reicht sie an Loopback weiter. Gemessen 2026-09-01:
+Tailnet HTTP 200 über IP *und* Namen, WLAN-Adresse auf allen drei Ports 000,
+lokal unverändert 200.
 
-Gegenprobe vom 2026-09-01, gleiche Maschine, gleiche `0.0.0.0`-Bindung,
-derselbe Moment:
+**Warum nicht `0.0.0.0` plus Firewall-Freigabe** (Birk: *„es soll unbedingt nur
+im tailscale erreichbar bleiben!"*): das öffnet die Bedienpulte auch im
+Ausstellungs-WLAN, und die haben keine Anmeldung.
 
-| Binary | 127.0.0.1 | Tailscale | LAN |
-|---|---|---|---|
-| `/usr/bin/python3` (in der Freigabe) | 200 | **200** | **200** |
-| Brew-Python (unsere Dienste) | 200 | **000** | **000** |
+🔴 **`--tcp`, nicht `--http`.** Mit `--http` bindet serve an den MagicDNS-Namen:
+`http://birk:8800` antwortet, `http://100.95.122.67:8800` gibt **404**. Ohne
+MagicDNS auf dem zweiten Rechner steht man dann vor einer Station, die laut
+Statusausgabe läuft und trotzdem nicht aufgeht.
 
-🔴 **Nach `brew upgrade python` ist die Freigabe wieder weg** — sie zeigt auf
-einen Pfad mit Versionsnummer darin. Dann das Skript erneut laufen lassen; es
-fragt das Binary jedes Mal beim laufenden Dienst ab, statt es zu raten.
-
-**Preis:** die Bedienpulte haben keine Anmeldung. Wer im selben WLAN ist, kann
-`/operator` öffnen und Regler verstellen.
-
-Adressen für den zweiten Rechner (Tailscale-IP dieses Macs: `100.95.122.67`):
-`http://100.95.122.67:8800/plenum` und `…/operator-plenum`.
+**Am Rande gefunden, für den Fall der Fälle:** die macOS-Anwendungsfirewall
+filtert nach **Binary**, nicht nach Port, und filtert Loopback nicht. Als
+`server_host` versuchsweise auf `0.0.0.0` stand, war es trotzdem nur lokal
+erreichbar — in der Freigabe steht nur `/usr/bin/python3`, unsere Dienste
+laufen unter dem Brew-Python. Das Fehlerbild führt in die Irre: TCP verbindet,
+die Antwort bleibt aus (`Empty reply from server`), und im uvicorn-Zugriffslog
+steht **nichts**. Gegenprobe, gleiche Maschine, gleicher Moment: `/usr/bin/python3`
+(freigegeben) → Tailscale und LAN je 200; Brew-Python → nur 127.0.0.1.
+Über `tailscale serve` spielt das keine Rolle, weil `tailscaled` freigegeben ist.
 
 ### 🔴 Zwei Dinge, die du wissen musst — nicht behoben, sondern Betrieb
 
