@@ -399,10 +399,18 @@ def test_the_portrait_slider_reflects_state_and_posts_on_release(ui):
 
 
 def test_the_portrait_slider_cannot_post_a_value_the_server_would_reject(ui):
-    """Range mirrors PortraitSize's own bound (ge=40.0, le=260.0)."""
+    """Range mirrors PortraitSize's own bound (ge=40.0, le=700.0).
+
+    🔴 Nachgezogen am 2026-09-01: Die Obergrenze ist an dem Tag von 260 auf 700
+    angehoben worden (Server UND Markup, siehe `PortraitSize` in kg/server.py —
+    die 260 waren an einer 1920 px breiten Wand beurteilt, die Foyerfläche ist
+    inzwischen 3840 px breit). Dieser Test ist dabei stehen geblieben und war
+    seither rot; er hat also genau die Drift beschrieben, gegen die er da ist,
+    nur zeigte er in die falsche Richtung. Die gelebte Zahl ist 700.
+    """
     assert ui.eval_on_selector("#portrait-size", "el => [el.min, el.max, el.type]") == [
         "40",
-        "260",
+        "700",
         "range",
     ]
 
@@ -421,9 +429,17 @@ def test_the_portrait_size_is_independent_of_the_zoom_control(ui):
 
 
 def test_the_speed_slider_only_goes_down_from_the_tuned_pace(ui):
-    """Right stop = the speed the motion was judged at; nothing runs faster."""
+    """Right stop = the speed the motion was judged at; nothing runs faster.
+
+    🔴 Nachgezogen am 2026-09-01, wie beim Regler darüber: Die Untergrenze ist
+    an dem Tag zweimal gesenkt worden (0.25 → 0.1 → 0.05, `CameraSpeed` in
+    kg/server.py), weil Birk vor Ort am Anschlag stand und meldete „der
+    Tempo-Regler hat keinen Einfluss". Der Test blieb auf 0.25 stehen und war
+    seither rot. Die Aussage, um die es ihm geht, bleibt unverändert: nach
+    OBEN ist bei 1.0 Schluss.
+    """
     assert ui.eval_on_selector("#camera-speed", "el => [el.min, el.max, el.type]") == [
-        "0.25",
+        "0.05",
         "1",
         "range",
     ]

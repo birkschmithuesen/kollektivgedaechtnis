@@ -57,6 +57,30 @@ def page(browser):
     page.close()
 
 
+@pytest.fixture()
+def fetch_mitschnitt(page):
+    """Zeichnet jede `fetch`-Adresse der Seite auf und gibt sie auf Abruf zurück.
+
+    Gebraucht für eine Frage, die man dem fertigen Bild nicht ansieht: SCHREIBT
+    diese Fläche etwas zurück? Die Saalfläche darf ihre Layout-Positionen nicht
+    speichern (sie rechnet mit anderen Maßen und teilt sich die
+    `position`-Tabelle mit dem Foyer), die Foyerfläche muss es weiter tun.
+
+    Der Ersatz wird als `init_script` gesetzt, läuft also VOR dem ersten Modul
+    der Seite — ein nachträglich gesetzter Haken würde genau die Aufrufe
+    verpassen, die beim Laden passieren.
+    """
+    page.add_init_script(
+        """window.__fetches = [];
+           const echt = window.fetch;
+           window.fetch = (url, opts) => {
+             window.__fetches.push(String(url));
+             return echt(url, opts);
+           };"""
+    )
+    return lambda: page.evaluate("() => window.__fetches")
+
+
 @pytest.fixture(scope="session")
 def real_graph():
     """The real `graph.json` of replay run 19c (spec §11).

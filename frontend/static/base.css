@@ -72,7 +72,30 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 
    Zum Nachstellen vor Ort reicht diese eine Zeile. Die alten Werte entsprechen
    `--quote-scale: 1`. */
-:root { --quote-scale: 0.4; }
+:root {
+  --quote-scale: 0.4;
+
+  /* Ab hier: Stellschrauben, die die Saal-Auflage (`static/plenum.css`,
+     nur bei `?plenum=1`) überschreibt. Die Vorgaben sind WÖRTLICH die Werte,
+     die vorher fest im Regelwerk standen — im Foyer ändert sich dadurch
+     nichts, und `tests/test_foyer_unveraendert.py` misst genau das im
+     Browser nach, statt es zu behaupten.
+
+     Warum überhaupt Variablen: Die Plenarfläche ist 1920×1080 und wird aus
+     Saalbreite gelesen, die Foyerfläche 3840×2160 aus Armlänge. Welche Zahl
+     dort richtig ist, entscheidet sich am Bild im Raum — also muss sie an
+     einer Zeile hängen und nicht in einer Regel verteilt sein. */
+
+  /* Kantenlänge des QR-Codes. 132px sind die gemessene Foyer-Größe (siehe
+     die lange Begründung bei `.qr-bild` unten). */
+  --qr-size: 132px;
+  /* Deckkraft des QR-Codes. 0.7 ist gemessen — für die Foyerfläche. */
+  --qr-opacity: 0.7;
+  /* Die haarfeine helle Kante der Zitatkarte (der zweite Teil ihres
+     Schattens). Herausgezogen, weil sie einer der drei Kandidaten für Birks
+     „der weiße Rand soll weg" ist; im Saal steht sie auf `transparent`. */
+  --quote-ring: rgba(255, 255, 255, 0.12);
+}
 
 .quote-overlay {
   position: fixed;
@@ -87,7 +110,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   border-radius: 3px;
   /* Lifts the card off the wall and hides the seam where the graph's own
      white strokes would otherwise touch the edge. */
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--quote-ring);
   opacity: 0;
   transition: opacity 600ms ease, transform 600ms ease;
   pointer-events: none; /* never steals a tap meant for the graph */
@@ -197,7 +220,13 @@ body:has(.touch-controls) .dream-legende { bottom: 92px; }
    keinem Dekodierer gelesen — Leser erwarten dunkle Module auf hellem Grund.
 
    Groesse: 132px bei 4K sind aus etwa 2-3 m erfassbar. Vor Ort am Beamer ist
-   das die Zahl, die man wahrscheinlich anpassen will. */
+   das die Zahl, die man wahrscheinlich anpassen will — deshalb haengen
+   Groesse und Deckkraft seit 2026-09-01 an `--qr-size` / `--qr-opacity`
+   (oben in :root). Die Saal-Auflage dreht beide auf: dort steht der Code
+   nicht „so unauffaellig wie moeglich" in der Ecke, sondern soll aus 15 m
+   von einer Handykamera erfasst werden. Birks Messreihe oben gilt weiter und
+   sagt fuer diesen Fall: mehr Deckkraft ist immer besser, 100% ist das
+   Optimum, das sie ausdruecklich als lesbar ausweist. */
 .qr-hinweis {
   position: fixed;
   right: 30px;
@@ -208,13 +237,13 @@ body:has(.touch-controls) .dream-legende { bottom: 92px; }
   z-index: 8;
 }
 .qr-bild {
-  width: 132px;
-  height: 132px;
+  width: var(--qr-size);
+  height: var(--qr-size);
   display: block;
   /* Die weisse Flaeche kommt aus dem SVG selbst (inkl. Ruhezone) — die
      Transparenz wirkt deshalb auf den Code ALS GANZES, hell wie dunkel im
      selben Verhaeltnis. Genau das hat die Messung oben geprueft. */
-  opacity: 0.7;
+  opacity: var(--qr-opacity);
 }
 /* Auf der Touchflaeche sitzt unten die Bedienleiste — der Code rueckt darueber,
    wie die Legende auf der anderen Seite. */
