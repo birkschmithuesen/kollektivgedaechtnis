@@ -24,25 +24,59 @@ Neue Erkenntnisse gehören **in `docs/STAND.md`**, nicht in ein neues Handoff.
 Am 2026-09-01 lagen elf Handoff-Dateien nebeneinander, acht davon erledigt;
 niemand konnte sagen, welche noch stimmte.
 
-## 🔴 Vor JEDEM Zugriff auf den Ausstellungsrechner
+## 🔴 Der Ausstellungsrechner ist seit 2026-09-01 das MacBook
+
+**Bis zum Vorabend lief die Station auf dem Windows-Tracking-Laptop
+(`SF-Tracking@100.94.47.6`). Sie läuft jetzt auf Birks MacBook.**
+
+Grund: Der Windows-Rechner ruckelte. Die Ursache ist inzwischen gefunden und
+behoben (`docs/STAND.md` §2m — Windows stand auf „Balanced" und drosselte die
+GPU um 28 %), der Wechsel blieb trotzdem. Wer zurückwechseln will, braucht
+Birks Entscheidung, nicht nur ein grünes Messergebnis.
+
+| | vorher (Windows) | jetzt (Mac) |
+|---|---|---|
+| Start | `kollektivtraum.bat` über `schtasks` | **`scripts/start-mac.sh`** |
+| Browser | Brave, per `--window-position` platziert | Brave aus `/Applications`, Fenster von Hand auf den Schirm |
+| Stoppen | `station-stop.ps1` | Strg-C im Startfenster |
+| Fernzugriff | SSH als `SF-Tracking` | **keiner** — Fernanmeldung ist aus |
+
+**Konsequenz für Agenten: Es gibt derzeit keinen Fernzugriff auf die Station.**
+Dateien kommen über `git push` dorthin, und der Mensch startet neu. Wer etwas
+prüfen will, schreibt ein Skript oder eine Diagnoseseite, die Birk aufrufen
+kann — `curl` über Tailscale trifft die Maschine nicht mehr. Eine Messung, die
+Fernzugriff voraussetzt, ist keine Messung mehr, sondern eine Bitte an Birk;
+formuliere sie entsprechend knapp und selbsterklärend.
+
+Die Windows-Regeln unten bleiben gültig, falls zurückgewechselt wird.
+
+## Vor jedem Zugriff auf einen Ausstellungsrechner
 
 **`docs/ARBEITSREGELN-ausstellungsrechner.md` lesen.** Vollständig, nicht
 überfliegen. Alle Regeln dort stammen aus Fehlern, die real passiert sind und
 Arbeit gekostet haben.
 
-Die vier, an denen am häufigsten etwas schiefging:
+Die vier, an denen am häufigsten etwas schiefging (Windows-Fassung):
 
 1. **Immer als `SF-Tracking` einloggen, nie als `birk`.** Beide Zugänge
    funktionieren — deshalb merkt man den Fehler erst, wenn der Mensch etwas
    nicht findet.
-2. **Die Startdatei nur im Repo ändern** (`mirror/kollektivtraum.bat`). Die
-   Station zieht sie sich bei jedem Start selbst nach; eine Änderung am
-   Rechner wird lautlos überschrieben.
+2. **Die Startdatei nur im Repo ändern** (`mirror/kollektivtraum.bat`, auf dem
+   Mac `scripts/start-mac.sh`). Die Station zieht sie sich bei jedem Start
+   selbst nach; eine Änderung am Rechner wird lautlos überschrieben.
 3. **Dienste nie direkt über SSH starten** — sie sterben mit der Sitzung und
    hinterlassen ein Log, das wie ein sauberer Start aussieht. Über
    `schtasks`, oder den Menschen START drücken lassen.
 4. **Erreichbarkeit messen, nicht annehmen.** „Log sagt gestartet" ist kein
    Beleg; erst ein `Get-NetTCPConnection` plus ein `curl` über Tailnet ist einer.
+
+🔴 **Eine Lehre aus dem Wechsel selbst:** Auf dem Windows-Rechner startete die
+Wand über ein Jahr lang mit `/projection` **ohne `?touch=1`** — dadurch hing
+sich die Touch-Steuerung nie ein, es gab keine Zoomgeste, keinen Zoomregler und
+keine Bedienleiste. Gefunden wurde das erst am Vorabend, und zwar nicht durch
+einen Test, sondern weil Birk am Gerät stand. **Wer eine Startdatei anfasst,
+prüft die URLs Zeichen für Zeichen gegen das, was die Seite erwartet**
+(`frontend/projection.html`, `params.get('touch')`).
 
 ## Parallele Sessions
 
