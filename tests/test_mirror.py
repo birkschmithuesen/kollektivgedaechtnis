@@ -393,8 +393,9 @@ def test_seiten_und_stilblaetter_werden_nicht_stillschweigend_gecacht(client, pf
     korrigiert werden, ist das ein Fehler und keine Sparmassnahme.
 
     `no-cache` heisst nicht „nicht speichern", sondern „vor der Wiederverwendung
-    nachfragen" — der ETag bleibt, die Rückfrage endet im Normalfall in einem
-    304 ohne Rumpf."""
+    nachfragen". Dass diese Rückfrage hier immer ein volles 200 statt eines 304
+    ergibt (Starlettes FileResponse wertet `If-None-Match` nicht aus), ist
+    gemessen und in Kauf genommen: 3,6 kB gegen eine veraltete Zusage."""
     antwort = client.get(pfad)
     assert antwort.status_code == 200
     steuerung = antwort.headers.get("cache-control", "")

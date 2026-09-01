@@ -465,10 +465,15 @@ def create_app(
     # Konferenz noch aendert (Birk, 2026-09-01: Textaenderung war deployt, der
     # Browser zeigte weiter die alte Seite). Ohne `Cache-Control` cacht ein
     # Browser heuristisch — bei einem `last-modified` von vor Stunden also
-    # gern stundenlang. Deshalb: jedes Mal beim Server rueckfragen. Der ETag
-    # bleibt, die Rueckfrage kostet also fast nichts (304 ohne Rumpf).
+    # gern stundenlang. Deshalb: jedes Mal beim Server rueckfragen.
     #
-    # Bewusst NICHT `no-store`: das wuerde auch die 304-Ersparnis wegwerfen.
+    # Gemessen am 2026-09-01: Starlettes FileResponse wertet `If-None-Match`
+    # und `If-Modified-Since` NICHT aus, die Rueckfrage endet also immer in
+    # einem vollen 200 und nicht in einem 304. Bei 3,6 kB pro Seite ist das
+    # der Preis, den wir hier bezahlen — bewusst, weil eine veraltete
+    # Datenschutzzusage teurer ist als ein paar Kilobyte.
+    #
+    # Bewusst NICHT `no-store`: das verboete auch das Zurueckblaettern.
     # Und bewusst auf ALLE Seiten, nicht nur die geaenderten: eine Regel, die
     # man beim naechsten Text erst wieder anfassen muss, wird vergessen.
     KEIN_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
