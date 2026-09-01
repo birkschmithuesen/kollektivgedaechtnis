@@ -41,9 +41,15 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 
 ## Vor dem Publikum abzuhaken
 
-- [ ] **Startskript läuft durch**, beide Fenster offen, Wand im Vollbild auf
+🔴 **Morgen früh ist keine Zeit mehr zum Testen** (Birk, Vorabend). Die Liste
+ist deshalb nach Dringlichkeit geordnet: **1 bis 3 sind Blocker** — ohne sie
+läuft die Station nicht oder liefert falsche Daten. Alles danach ist Feinschliff.
+
+- [ ] **1. Startskript läuft durch**, beide Fenster offen, Wand im Vollbild auf
       dem richtigen Schirm
-- [ ] **Echte Datenbank aktiv, nicht die Demodaten.**
+- [ ] **2. STT-Dienst laeuft** (Port 5051) — Punkt steht unten mit dem
+      Startbefehl. **Ohne ihn gibt es kein einziges Interview.**
+- [ ] **3. Echte Datenbank aktiv, nicht die Demodaten.**
       `python scripts/dichte-umschalten.py --stufe echt` (Station vorher
       beenden — das Skript prüft es selbst). Aktuell liegt **Stufe 60** auf.
 - [ ] **Zehn leere Personen ausblenden** (aus meinen Testfotos, sie erscheinen
@@ -52,17 +58,6 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 - [ ] **Erklärungstext für den Plenarsaal einsetzen** —
       `frontend/static/plenum-hinweis.js`, Zeile 32 und 40. Steht bewusst als
       Platzhalter da, Inhalt ist Birks Sache.
-- [ ] **🔴 STT-Dienst auf dem Mac starten — sonst kein Interview.** Der
-      Erkenner läuft als eigener Prozess auf Port 5051 und liegt **nicht** in
-      diesem Repo. Auf dem Windows-Rechner tat das
-      `kg-start\dienste\dienst-stt.bat`; **für den Mac gibt es dafür noch
-      keine Entsprechung.** Der Befehl, an der Station abgelesen:
-      ```
-      python -m fundusapps.stt_server --language de infomaniak-whisper \
-             --channels regie --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY
-      ```
-      Braucht den `fundusbot`-Checkout auf dem Mac. `scripts/start-mac.sh`
-      startet ihn **nicht** mit — das war eine falsche Annahme meinerseits.
 - [ ] **🔴 EU-Kette schließen: der Traum läuft noch über die USA.** In der
       `config.toml` steht keine `image_`-Zeile, also gilt die Vorgabe
       `openrouter` + `google/gemini-3-pro-image` — der `BFL_API_KEY` liegt
@@ -73,6 +68,23 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
       erscheint an der Wand
 - [ ] Größen am Bedienpult einstellen (Zoom, Portrait, Tempo, Begriffe) —
       **getrennt für Foyer und Saal**, die Werte werden gespeichert
+
+---
+
+### Zu Punkt 2 — der STT-Dienst
+
+Der Erkenner laeuft als eigener Prozess auf Port 5051 und liegt **nicht** in
+diesem Repo. Auf dem Windows-Rechner startete ihn `kg-start\dienste\dienst-stt.bat`;
+**fuer den Mac gibt es dafuer noch keine Entsprechung**, und `start-mac.sh`
+startet ihn NICHT mit. Der Befehl, an der Station abgelesen:
+
+```
+python -m fundusapps.stt_server --language de infomaniak-whisper \
+       --channels regie --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY
+```
+
+Braucht den `fundusbot`-Checkout auf dem Mac. Laeuft ueber Infomaniak-Whisper,
+also denselben Schluessel wie Analyse, Weckwort und Embeddings.
 
 ---
 
@@ -106,9 +118,15 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
   50 Tests grün, Mutationsprobe gefahren (Maßstab entfernt → Test rot).
 
 **Ungeprüft, weil kein Gerätezugriff:**
-- Ob die Zwei-Finger-Geste am iiyama unter macOS tatsächlich greift. `/touchtest`
-  zeigt es in fünf Sekunden — drei Zeilen leuchten auf, je nach Kanal.
-- Ob der Zoomregler sich am 65-Zoll-Schirm gut anfühlt (Griffgröße, Empfindlichkeit)
+- 🔴 **Der Zoomregler ist der Bedienweg — nicht die Zwei-Finger-Geste**
+  (Birk, 2026-09-01 abends): *„Wir prüfen die Zweifingergeste nicht mehr,
+  sondern haben jetzt den Zoomregler. Morgen früh ist keine Zeit mehr zum
+  Testen."* Der Regler sitzt am Rand der Touchfläche, wirkt rein lokal und
+  wird über „Übersicht" zurückgesetzt. Die Geste bleibt eingebaut und
+  funktioniert, falls sie greift — sie ist aber **nicht mehr der geplante
+  Weg** und wird nicht getestet. `/touchtest` bleibt für den Notfall.
+- Ob der Zoomregler sich am 65-Zoll-Schirm gut anfühlt (Griffgröße,
+  Empfindlichkeit) — **das ist der einzige Touch-Punkt, der morgen zählt**
 - Ob die Plenar-Ansicht aus 15 m lesbar ist. Alle Werte sind über CSS-Variablen
   einstellbar, aber **niemand hat sie an der Wand gesehen**.
 - Ob der QR-Code aus dem Saal scanbar ist (er ist dort größer, aber ungemessen)
@@ -129,8 +147,11 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 
 **Falls das Ruckeln zurückkommt:**
 Der Windows-Rechner ist inzwischen repariert (Energieprofil + Grafikkarte).
-Dort funktioniert die Zwei-Finger-Geste nachweislich nativ. Der Rückweg steht
-offen — es ist eine Entscheidung, kein technisches Hindernis.
+Der Rückweg steht offen — aber er ist **kein Schnellweg**: dort fehlt in
+`kollektivtraum.bat` das `?touch=1`, und beide Fenster starten auf derselben
+Bildschirmposition. Ohne diese zwei Korrekturen landet die Touchfläche wieder
+auf dem falschen Schirm und hat weder Regler noch Bedienleiste. **Am
+Ausstellungsmorgen ist das keine Option**, sondern eine Entscheidung für später.
 
 ---
 
