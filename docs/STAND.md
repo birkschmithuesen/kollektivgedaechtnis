@@ -342,7 +342,7 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
   eingebaut und belegt (§2e). Schärfe im kaputten Fall 9,6 → 1552,5; die übrigen
   6 Portraits unverändert.
 - **🔴 Die Station läuft noch auf dem alten Stand.** `git log` dort: `7ede951`,
-  der Fix ist `4b8c0c5`. Die Änderung wirkt erst nach einem Neustart über die
+  der Fix ist `add8274`. Die Änderung wirkt erst nach einem Neustart über die
   START-Verknüpfung (Schritt `[0/6]` zieht selbst von GitHub). **Nicht per SSH
   nachgezogen:** der Kern läuft gerade und antwortet auf 8800; ein Eingriff im
   Betrieb ist Birks Entscheidung.
@@ -448,6 +448,7 @@ erledigt ist:
 |---|---|---|
 | Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | **läuft gerade** (gemessen 13:40). `schtasks /delete /tn "KgKernTest" /f` — war eine Testkrücke, kein Dauerzustand. Nicht selbst entfernt: sie hält womöglich den Kern, der gerade auf 8800 antwortet. Wer sie löscht, muss den Kern danach über die START-Verknüpfung neu starten. |
 | Worktree `kg-app` | `$VOL/projekte/kg-app` | gehört der Foto-Session, steht auf `master` |
+| Ordner `kg-start\probe\` | Ausstellungsrechner | Kopie von `kg/photos.py` für die Vorher/Nachher-Messung der Untergrenze (§2e). Die Station selbst wurde dafür **nicht** angefasst. Kann weg: `rmdir /s /q C:\Users\SF-Tracking\kg-start\probe` — **Löschen ist Birks Entscheidung**, deshalb liegen gelassen. |
 | APK `out/kollektivgedaechtnis-foto-v6.apk` | vServer | bewusst nicht im Git (3,6 MB Binär), neu bauen nach `android/README.md` |
 
 **Erledigt am 2026-09-01, jeweils nachgeprüft:**
