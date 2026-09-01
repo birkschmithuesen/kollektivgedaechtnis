@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Touch-Diagnose</title>
+<!-- Wieviele Finger meldet dieser Schirm gleichzeitig? (Birk, 2026-09-01)
+     ================================================================
+
+     Die Frage, an der die ganze Zoom-Bedienung haengt: Der iiyama PL6568 im
+     Foyer meldet Kontakte als Pointer-Events mit `pointerType: 'touch'` — aber
+     ob er ZWEI davon gleichzeitig liefert, war nie geprueft. Cytoscape kann
+     ohne zwei Kontakte per Konstruktion nicht pinchen (die Zoom-Rechnung im
+     Touch-Zweig steht hinter `if (n && t.touches[1] && ...)`, siehe
+     static/vendor/cytoscape.min.js), also entscheidet genau diese Zahl, ob die
+     Zweifingergeste ueberhaupt je funktionieren KANN.
+
+     Diese Seite beantwortet das in fuenf Sekunden am Geraet, statt es zu
+     vermuten: auflegen, ablesen. Sie haengt an nichts — kein Modul, kein
+     Server, kein Graph. Eine Diagnoseseite, die selbst etwas laden muss, misst
+     im Zweifel ihren eigenen Ladefehler mit.
+
+     NACHTRAG 2026-09-01, 20:15 — die zweite, wichtigere Haelfte
+     ---------------------------------------------------------
+     Die Ausstellung laeuft jetzt auf dem MacBook mit Brave, und dort ist die
+     Zahl der Kontakte nur die HALBE Antwort. Ein Browser meldet eine Pinch-
+     Geste auf drei verschiedenen Kanaelen (Dan Cătălin Burzo, „Pinch me, I'm
+     zooming: gestures in the DOM", danburzo.ro/dom-gestures/):
+
+       Chrome/Brave/Firefox auf macOS  ->  wheel-Event mit ctrlKey: true
+       Safari                          ->  gesturestart/-change, fertiges scale
+       Mobile Browser                  ->  TouchEvent mit den Kontaktpunkten
+
+     Cytoscape sucht von sich aus nur auf dem DRITTEN (seine Pinch-Rechnung
+     steht hinter `t.touches[1]`). Ein Geraet kann also zwei saubere Kontakte
+     melden — die Zahl oben zeigt dann eine 2 — und die Geste bleibt trotzdem
+     wirkungslos, weil macOS sie als `wheel` + ctrlKey durchreicht. Genau das
+     wuerde erklaeren, warum sie unter Windows wirkte und hier nicht.
+
+     Deshalb zeigt die untere Haelfte, welcher Kanal tatsaechlich feuert. Das
+     ist die Angabe, aus der folgt, WELCHER Zoom-Pfad auf der Wand greifen
+     muss.
+
+     Aufruf an der Station:  http://127.0.0.1:8800/touchtest -->
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: #fff;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    /* 🔴 Ohne das misst die Seite den Browser statt den Schirm: Bei der
+       Voreinstellung verschluckt Chrome Mehrfinger-Gesten fuer Scrollen und
+       Seitenzoom und liefert sie NIE als Pointer-Events aus. Ein Geraet, das
+       zwei Kontakte kann, saehe hier dann trotzdem nur einen — und die Antwort
+       waere falsch in genau der Richtung, in der wir uns nicht irren duerfen. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #flaeche {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  /* Die eine Zahl, um die es geht — aus drei Metern lesbar, damit Birk sie
+     ablesen kann, waehrend beide Haende auf dem Schirm liegen. */
+  #gleichzeitig {
+    font-size: 26vh;
+    line-height: 0.9;
+    font-variant-numeric: tabular-nums;
+    font-weight: 200;
+  }
+  #gleichzeitig.aktiv { color: #7ee787; }
+  .beschriftung { font-size: 3vh; opacity: 0.55; letter-spacing: 0.04em; }
+  #maximum { font-size: 6vh; margin-top: 2vh; font-variant-numeric: tabular-nums; }
+  #urteil {
+    font-size: 3.4vh;
+    margin-top: 2vh;
+    padding: 0.6em 1.2em;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    max-width: 80vw;
+    text-align: center;
+  }
+  #urteil.ja { border-color: #7ee787; color: #7ee787; }
+  #urteil.nein { border-color: #ffa657; color: #ffa657; }
+  #arten { font-size: 2.6vh; opacity: 0.75; min-height: 3vh; font-family: ui-monospace, monospace; }
+  /* Die drei Kanaele. Untereinander und in fester Reihenfolge, damit die Zeile,
+     die aufleuchtet, IMMER an derselben Stelle steht — abgelesen wird das mit
+     zwei Fingern auf dem Glas und ohne zweiten Blick. */
+  #wege {
+    margin-top: 2.4vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5vh;
+    font-family: ui-monospace, monospace;
+    font-size: 2.4vh;
+  }
+  .weg { opacity: 0.35; }
+  .weg.an { opacity: 1; color: #7ee787; }
+  #wegurteil {
+    font-size: 3vh;
+    margin-top: 1.6vh;
+    max-width: 86vw;
+    text-align: center;
+    line-height: 1.4;
+  }
+  #geraet {
+    position: fixed;
+    left: 24px;
+    bottom: 20px;
+    font-size: 2vh;
+    opacity: 0.5;
+    line-height: 1.6;
+    font-family: ui-monospace, monospace;
+  }
+  /* Gleiche Groesse und Machart wie die Bedienleiste der Wand (base.css,
+     .touch-button): Wer diese Seite am Ausstellungsschirm bedient, bedient
+     dieselben Trefferzonen wie dort. */
+  #zuruecksetzen {
+    position: fixed;
+    right: 24px;
+    bottom: 20px;
+    min-height: 48px;
+    min-width: 132px;
+    padding: 0 20px;
+    font-size: 18px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+</style>
+
+<main id="flaeche">
+  <div class="beschriftung">gleichzeitige Kontakte</div>
+  <div id="gleichzeitig">0</div>
+  <div id="maximum">Maximum bisher: <b id="maximumwert">0</b></div>
+  <div id="arten"></div>
+  <div id="urteil" class="nein">Noch nichts gemessen — mit zwei Fingern auffassen.</div>
+
+  <div class="beschriftung" style="margin-top: 3vh">auf welchem Kanal kommt der Zoom an?</div>
+  <div id="wege">
+    <div class="weg" id="wegwheel">wheel + ctrlKey: 0</div>
+    <div class="weg" id="weggeste">gesturestart/-change: 0</div>
+    <div class="weg" id="wegtouch">TouchEvent: 0 Kontakte (max)</div>
+  </div>
+  <div id="wegurteil">Noch kein Zoom-Ereignis — mit zwei Fingern auseinanderziehen.</div>
+</main>
+<div id="geraet"></div>
+<button id="zuruecksetzen" type="button">Zurücksetzen</button>
+
+<script>
+  // Die aktiven Kontakte, nach `pointerId`. Eine Map und kein Zaehler: Ein
+  // hochgezaehltes `down` und heruntergezaehltes `up` laeuft irgendwann
+  // auseinander (ein `pointercancel` ohne `up`, ein Finger, der ueber den
+  // Rand rutscht), und dann zeigt eine Diagnoseseite falsche Zahlen — das
+  // Schlimmste, was eine Diagnoseseite tun kann.
+  const aktiv = new Map();
+  let maximum = 0;
+
+  const gleichzeitig = document.getElementById('gleichzeitig');
+  const maximumwert = document.getElementById('maximumwert');
+  const arten = document.getElementById('arten');
+  const urteil = document.getElementById('urteil');
+
+  function zeichnen() {
+    const n = aktiv.size;
+    gleichzeitig.textContent = String(n);
+    gleichzeitig.classList.toggle('aktiv', n > 0);
+    maximumwert.textContent = String(maximum);
+    // Welche Art Kontakt ankommt, ist die zweite Haelfte der Antwort: Ein
+    // Digitizer, der sich als `mouse` meldet, geht durch Cytoscapes
+    // Maus-Zweig und kaeme auch mit zwei Kontakten nie beim Pinch an.
+    arten.textContent = [...aktiv.values()]
+      .map((p) => `#${p.id} ${p.art}`)
+      .join('   ');
+    if (maximum >= 2) {
+      urteil.className = 'ja';
+      urteil.textContent = `Multitouch: ja (${maximum} Kontakte gemessen) — eine Zweifingergeste ist möglich.`;
+    } else if (maximum === 1) {
+      urteil.className = 'nein';
+      urteil.textContent =
+        'Nur EIN Kontakt — eine Zweifingergeste ist an diesem Gerät unmöglich. Der Zoom-Regler ist die Lösung, nicht die Notlösung.';
+    } else {
+      urteil.className = 'nein';
+      urteil.textContent = 'Noch nichts gemessen — mit zwei Fingern auffassen.';
+    }
+  }
+
+  function auf(event) {
+    aktiv.set(event.pointerId, { id: event.pointerId, art: event.pointerType });
+    // Das Maximum ist die eigentliche Messung: Zwei Finger landen nie exakt
+    // im selben Moment auf dem Glas, und wer beim Ablesen schon wieder einen
+    // abgehoben hat, saehe sonst wieder eine 1.
+    if (aktiv.size > maximum) maximum = aktiv.size;
+    zeichnen();
+  }
+
+  function ab(event) {
+    aktiv.delete(event.pointerId);
+    zeichnen();
+  }
+
+  // Auf `window` und nicht auf der Flaeche: Ein Finger, der neben das Element
+  // rutscht, muss trotzdem als beendet gelten.
+  window.addEventListener('pointerdown', auf);
+  window.addEventListener('pointerup', ab);
+  window.addEventListener('pointercancel', ab);
+
+  // --- Die drei Kanaele, auf denen ein Zoom ankommen kann --------------------
+
+  const wege = {
+    // `wheel` mit gedrueckter Strg-Taste. So und nur so meldet Chromium (also
+    // Brave) eine Pinch-Geste auf macOS — es ist derselbe Kanal, ueber den seit
+    // je die Strg-Rad-Geste der Maus laeuft, und das Betriebssystem setzt das
+    // Flag fuer eine Zwei-Finger-Geste einfach mit.
+    wheel: { n: 0, dx: 0, dy: 0 },
+    // Safaris eigener Weg, mit fertigem `scale`. Chromium kennt ihn nicht.
+    geste: { n: 0, skala: 1 },
+    // Der einzige der drei, den Cytoscape von sich aus bedient.
+    touch: { max: 0 },
+  };
+
+  const wegwheel = document.getElementById('wegwheel');
+  const weggeste = document.getElementById('weggeste');
+  const wegtouch = document.getElementById('wegtouch');
+  const wegurteil = document.getElementById('wegurteil');
+
+  /** Eine Zahl kurz halten, ohne sie zu verfaelschen: `deltaY` kommt bei einer
+   *  Trackpad-Pinch mit vielen Nachkommastellen und wuerde die Zeile sonst
+   *  ueber den Schirm schieben. Eine Stelle genuegt, um 0 von „nicht 0" zu
+   *  unterscheiden — und genau darum geht es hier. */
+  function kurz(zahl) {
+    return String(Math.round(zahl * 10) / 10);
+  }
+
+  function wegeZeichnen() {
+    wegwheel.textContent =
+      `wheel + ctrlKey: ${wege.wheel.n}` +
+      (wege.wheel.n ? `   deltaX ${kurz(wege.wheel.dx)}   deltaY ${kurz(wege.wheel.dy)}` : '');
+    wegwheel.className = wege.wheel.n > 0 ? 'weg an' : 'weg';
+
+    weggeste.textContent =
+      `gesturestart/-change: ${wege.geste.n}` +
+      (wege.geste.n ? `   scale ${Math.round(wege.geste.skala * 100) / 100}` : '');
+    weggeste.className = wege.geste.n > 0 ? 'weg an' : 'weg';
+
+    // Zwei und nicht einer: Ein einzelner Kontakt erreicht Cytoscapes
+    // Pinch-Rechnung (hinter `t.touches[1]`) per Konstruktion nie.
+    wegtouch.textContent = `TouchEvent: ${wege.touch.max} Kontakte (max)`;
+    wegtouch.className = wege.touch.max >= 2 ? 'weg an' : 'weg';
+
+    const angekommen = [];
+    if (wege.wheel.n > 0) angekommen.push('wheel + ctrlKey (der Chromium-Weg auf macOS)');
+    if (wege.geste.n > 0) angekommen.push('gesturechange (der Safari-Weg)');
+    if (wege.touch.max >= 2) angekommen.push('TouchEvent mit zwei Kontakten (Cytoscapes eigener Weg)');
+    wegurteil.textContent = angekommen.length
+      ? `Der Zoom kommt an als: ${angekommen.join(' UND ')}.`
+      : 'Noch kein Zoom-Ereignis — mit zwei Fingern auseinanderziehen.';
+  }
+
+  // 🔴 `passive: false` und `preventDefault`, sonst zoomt Brave die ganze SEITE
+  // statt zu messen: Die Schrift waere im selben Moment verzerrt, in dem die
+  // Zahl abgelesen werden soll. Dieselbe Vorkehrung braucht der Zoom auf der
+  // Wand (static/touch-zoom-geste.js) — hier steht sie zum ersten Mal.
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (!event.ctrlKey) return; // ein gewoehnliches Scrollrad ist kein Pinch
+      event.preventDefault();
+      wege.wheel.n += 1;
+      wege.wheel.dx = event.deltaX;
+      wege.wheel.dy = event.deltaY;
+      wegeZeichnen();
+    },
+    { passive: false },
+  );
+
+  // Safari liefert `scale` fix und fertig; `gesturestart` allein sagt schon,
+  // dass dieser Kanal ueberhaupt existiert, deshalb zaehlen beide.
+  for (const art of ['gesturestart', 'gesturechange']) {
+    window.addEventListener(
+      art,
+      (event) => {
+        event.preventDefault();
+        wege.geste.n += 1;
+        if (typeof event.scale === 'number') wege.geste.skala = event.scale;
+        wegeZeichnen();
+      },
+      { passive: false },
+    );
+  }
+
+  // `touches.length` und nicht die Pointer-Zahl oben: Es sind zwei getrennte
+  // Ereignisstroeme, und die Frage ist genau, ob der zweite auch ankommt.
+  // Chromium synthetisiert TouchEvents nicht aus Pointer-Events — bleibt diese
+  // Zeile dunkel, waehrend oben eine 2 steht, ist das der Befund.
+  for (const art of ['touchstart', 'touchmove']) {
+    window.addEventListener(
+      art,
+      (event) => {
+        const n = event.touches ? event.touches.length : 0;
+        if (n > wege.touch.max) wege.touch.max = n;
+        wegeZeichnen();
+      },
+      { passive: true },
+    );
+  }
+
+  document.getElementById('zuruecksetzen').addEventListener('click', () => {
+    aktiv.clear();
+    maximum = 0;
+    wege.wheel = { n: 0, dx: 0, dy: 0 };
+    wege.geste = { n: 0, skala: 1 };
+    wege.touch = { max: 0 };
+    wegeZeichnen();
+    zeichnen();
+  });
+
+  // Was das GERAET von sich behauptet, neben dem, was gemessen wurde. Beides
+  // anzeigen, weil beides luegen kann: `maxTouchPoints` ist die Angabe des
+  // Treibers (Chrome meldet dort auf manchen Aufbauten 256 oder 0, egal was
+  // das Panel kann), und `TouchEvent` entscheidet, welchen der beiden
+  // Eingabepfade Cytoscape ueberhaupt bindet — ist die Klasse da, hoert es auf
+  // `touchstart`, sonst baut es sich Touches aus Pointer-Events zusammen.
+  document.getElementById('geraet').innerHTML = [
+    `navigator.maxTouchPoints: ${navigator.maxTouchPoints}`,
+    `TouchEvent vorhanden: ${typeof window.TouchEvent !== 'undefined' ? 'ja' : 'nein'}`,
+    `PointerEvent vorhanden: ${typeof window.PointerEvent !== 'undefined' ? 'ja' : 'nein'}`,
+  ].join('<br>');
+
+  zeichnen();
+  wegeZeichnen();
+</script>
+</html>

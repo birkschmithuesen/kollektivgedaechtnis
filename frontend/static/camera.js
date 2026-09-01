@@ -38,6 +38,24 @@ const MODES = ['fit', 'manual', 'pan'];
 // klemmen gab.
 const RAND_LUFT = 0.08;
 
+/** Wie weit ein BESUCHER hineinzoomen darf: 8x enger als die Gesamtansicht.
+ *
+ * Weiter als der Regler des Operators (dort 1–4, gespiegelt an der
+ * Serverschranke), und das ist Absicht: Der Operator kalibriert damit die
+ * DAUERANSICHT der Wand, ein Besucher ersetzt damit eine Geste. In `manual`
+ * gilt auch die Porträt-Schranke nicht, „dort darf ein Besucher in ein Gesicht
+ * hineinzoomen, bis es formatfüllend ist" (operator.html). 8x sind auf 1920 px
+ * rund ein Achtel der Netzbreite — nah genug für ein Gesicht oder ein langes
+ * Begriffsschild.
+ *
+ * Steht hier und nicht in `touch-controls.js`, seit es zwei Bedienwege dorthin
+ * gibt (Regler und Zwei-Finger-Geste, 2026-09-01). Zwei Anschläge wären zwei
+ * Zahlen, die auseinanderlaufen können — und dann zöge die Geste in eine
+ * Vergrößerung, aus welcher der Griff des Reglers nicht mehr herausholt. Die
+ * Kamera ist die Stelle, die beide bedienen, also gehört die Schranke hierhin
+ * und wird hier auch durchgesetzt (`setVisitorZoom`), nicht nur angezeigt. */
+export const ZOOM_MAX = 8;
+
 const ROAM = {
   // The FASTEST the tour ever goes (speed factor 1.0). Everything slower is
   // derived by dividing by the factor, so this pair stays the reference the
@@ -382,6 +400,107 @@ export class Camera {
     // over again, and the next step() would drag the view back out of it.
     if (this._handover) this._handover.to = this._automaticView();
     else this._frame();
+  }
+
+  /** Der Zoom eines BESUCHERS — von der Zwei-Finger-Geste wie vom Regler.
+   *
+   * Birk, 2026-09-01 am Touchscreen: „ich habe halt nur einen Mausklick, ich
+   * kann nicht irgendwie reinzoomen … dann bräuchten wir halt einen Regler an
+   * der Seite."
+   *
+   * Der Nachtrag desselben Abends dreht die Rangfolge um: Die Ausstellung
+   * läuft jetzt auf dem MacBook mit Brave, die Geste ist ausstellungskritisch
+   * und der Regler der Rückfallweg. Beide landen hier — und das ist der Grund,
+   * warum diese Methode einen optionalen Mittelpunkt kennt statt zwei
+   * Methoden nebeneinander zu stehen: Der rechte Anschlag, die Bremse am
+   * Bildrand und die Bedeutung von „3x" müssen für beide dieselben sein, sonst
+   * holt der eine Weg nicht mehr aus dem heraus, was der andere angerichtet
+   * hat. `touch-zoom-geste.js` ruft mit Punkt, `touch-controls.js` ohne.
+   *
+   * 🔴 Und deshalb NICHT `setZoomFactor`, so naheliegend das aussieht: Der
+   * Regler wird im Modus `manual` bedient (die Berührung schaltet die Kamera
+   * über `attachTouchAutonomy` dorthin), und `setZoomFactor` steigt in genau
+   * diesem Modus absichtlich aus, um dem Besucher nicht in die Hand zu
+   * fahren. Der Regler hätte also eine Zahl gesetzt und auf dem Schirm nichts
+   * bewegt — gebaut, plausibel, wirkungslos. Ausserdem ist `_zoomFactor` die
+   * Kalibrierung des Operators, die über `/events` hereinkommt; ein Besucher
+   * schreibt nicht daran, er schreibt in den Viewport DIESER Seite, genau wie
+   * eine Geste es täte.
+   *
+   * `faktor` bedeutet dasselbe wie am Regler des Operators: 1 = das ganze Netz
+   * im Bild, 3 = dreimal enger. So heisst der linke Anschlag dasselbe wie
+   * „Übersicht", und beide Wege zurück landen an derselben Stelle.
+   *
+   * Geklemmt wird OHNE Luft (0 statt `RAND_LUFT`): Eine Fahrt darf am Rand
+   * etwas Schwarz stehen lassen, damit der Bildrand gewollt aussieht; eine
+   * Hand am Regler darf nirgends im Leeren landen. Nebenbei ist das der
+   * Rückweg für einen Besucher, der sich weggeschoben hat — der Regler holt
+   * den Ausschnitt auf das Netz zurück. */
+  setVisitorZoom(faktor, { renderedPosition = null } = {}) {
+    const alle = this.cy.elements();
+    if (typeof alle?.boundingBox !== 'function') return;
+    const basis = this._levelForBox(alle);
+    if (!(basis > 0)) return;
+    const n = Number(faktor);
+    // Wie `clampRoamSpeed`: ein unbrauchbarer Wert darf die Wand nie anhalten.
+    // Nach unten bei 1, weil weiter herausgezoomt nur noch Rand wäre; nach
+    // oben bei ZOOM_MAX, damit Regler und Geste denselben Anschlag meinen.
+    const eng = Number.isFinite(n) ? Math.min(ZOOM_MAX, Math.max(1, n)) : 1;
+    // Ohne Punkt um die Bildmitte — das ist der Regler, der gar keinen Ort
+    // hat. Mit Punkt um die Finger: Wer zwei Finger auf ein Portrait legt und
+    // sie spreizt, erwartet, dass DIESES Portrait größer wird und nicht, dass
+    // es aus dem Bild wandert (Nachtrag 2026-09-01).
+    if (renderedPosition) this._zoomeUmPunkt(basis * eng, renderedPosition);
+    else this._applyZoom(basis * eng);
+    // Erst zoomen, dann klemmen: Die Bremse rechnet gegen den Ausschnitt, der
+    // nach dem Zoom gilt, nicht gegen den davor.
+    this.cy.pan(this._klemmeAufWolke(this.cy.pan(), 0));
+  }
+
+  /** Wie weit der Besucher gerade hineingezoomt ist, in derselben Einheit, die
+   * `setVisitorZoom` entgegennimmt: 1 = das ganze Netz im Bild.
+   *
+   * GELESEN und nicht gemerkt. Ein zweiter Zustand neben dem Viewport liefe
+   * auseinander, sobald eine Übergabefahrt, ein neuer Graph oder „Übersicht"
+   * den Zoom anfasst — und dann zeigte der Griff des Reglers wieder etwas
+   * anderes an als das Bild, also genau den Fehler, gegen den `resetZoom`
+   * gebaut ist. Gebraucht von der Geste: Sie rechnet relativ („anderthalbmal
+   * so nah wie eben") und muss dafür wissen, wo sie steht. */
+  get visitorZoom() {
+    const alle = this.cy.elements();
+    if (typeof alle?.boundingBox !== 'function') return 1;
+    const basis = this._levelForBox(alle);
+    if (!(basis > 0)) return 1;
+    const jetzt = this.cy.zoom() / basis;
+    return Number.isFinite(jetzt) && jetzt > 0 ? jetzt : 1;
+  }
+
+  /** Zoomen, ohne den Modellpunkt unter `renderedPosition` zu verschieben.
+   *
+   * Von Hand gerechnet statt über `cy.zoom({level, renderedPosition})`, weil
+   * der Pan hier hinterher ohnehin durch die Bremse läuft: Ginge der Punkt
+   * durch Cytoscape und die Bremse schriebe danach einen anderen Pan, stünden
+   * zwei Rechnungen hintereinander, von denen nur die zweite zählt. So ist es
+   * eine — und sie ist an derselben Stelle nachlesbar wie ihre Umkehrung in
+   * `_klemmeAufWolke`. */
+  _zoomeUmPunkt(level, renderedPosition) {
+    const vorher = this.cy.zoom();
+    const pan = this.cy.pan();
+    if (!(vorher > 0)) {
+      this._applyZoom(level);
+      return;
+    }
+    // Der Modellpunkt, der gerade unter den Fingern liegt …
+    const modell = {
+      x: (renderedPosition.x - pan.x) / vorher,
+      y: (renderedPosition.y - pan.y) / vorher,
+    };
+    this.cy.zoom(level);
+    // … und der Pan, bei dem er nach dem Zoom wieder genau dort liegt.
+    this.cy.pan({
+      x: renderedPosition.x - modell.x * level,
+      y: renderedPosition.y - modell.y * level,
+    });
   }
 
   /** Point the camera at a subset — one cluster instead of the whole net.
@@ -888,15 +1007,30 @@ export class Camera {
       x: this.cy.width() / 2 - pos.x * zoom,
       y: this.cy.height() / 2 - pos.y * zoom,
     };
+    return this._klemmeAufWolke(mitte, RAND_LUFT);
+  }
 
+  /** Schiebt einen Ausschnitt zurück auf die Knotenwolke.
+   *
+   * Herausgelöst aus `_panForCentering`, weil der Zoom-Regler der Touchfläche
+   * dieselbe Bremse braucht (`setVisitorZoom`) — mit einer anderen Luft, aber
+   * derselben Rechnung. Zwei Kopien dieser Klemmung wären zwei Orte, an denen
+   * die Bildkante anders definiert ist, und die gemessenen Zahlen im Kommentar
+   * über `RAND_LUFT` gälten dann nur noch für eine davon.
+   *
+   * `luftAnteil` ist der Rand, den der Ausschnitt jenseits der Wolke behalten
+   * darf, als Anteil der Bildbreite bzw. -höhe. */
+  _klemmeAufWolke(pan, luftAnteil) {
+    const zoom = this.cy.zoom();
     const alle = this.cy.elements();
     // Ohne messbare Wolke gibt es nichts zu klemmen: Cytoscape liefert immer
     // eine Bounding-Box, ein schlanker Test-Stub nicht. Die Bremse ist eine
     // Verbesserung des Bildaufbaus, kein Muss — fehlt die Messung, bleibt es
-    // beim mittigen Ausschnitt, statt hier zu werfen und die Fahrt anzuhalten.
-    if (typeof alle?.boundingBox !== 'function') return mitte;
+    // beim übergebenen Ausschnitt, statt hier zu werfen und die Fahrt
+    // anzuhalten.
+    if (typeof alle?.boundingBox !== 'function') return pan;
     const bb = alle.boundingBox({ includeLabels: false });
-    if (!(bb.w > 0) || !(bb.h > 0)) return mitte;
+    if (!(bb.w > 0) || !(bb.h > 0)) return pan;
 
     // Der sichtbare Modellbereich bei diesem Pan, in Modellkoordinaten.
     const sichtbarB = this.cy.width() / zoom;
@@ -905,10 +1039,10 @@ export class Camera {
     // Passt die Wolke in eine Richtung ohnehin ganz ins Bild, wird dort
     // zentriert statt geklemmt: Sonst zöge die Bremse an einem Netz, das
     // kleiner als das Fenster ist, den Ausschnitt an eine Kante.
-    const luftX = sichtbarB * RAND_LUFT;
-    const luftY = sichtbarH * RAND_LUFT;
+    const luftX = sichtbarB * luftAnteil;
+    const luftY = sichtbarH * luftAnteil;
 
-    let x = mitte.x;
+    let x = pan.x;
     if (bb.w + 2 * luftX <= sichtbarB) {
       x = this.cy.width() / 2 - ((bb.x1 + bb.x2) / 2) * zoom;
     } else {
@@ -919,7 +1053,7 @@ export class Camera {
       x = Math.min(maxX, Math.max(minX, x));
     }
 
-    let y = mitte.y;
+    let y = pan.y;
     if (bb.h + 2 * luftY <= sichtbarH) {
       y = this.cy.height() / 2 - ((bb.y1 + bb.y2) / 2) * zoom;
     } else {

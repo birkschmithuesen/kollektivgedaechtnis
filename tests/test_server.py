@@ -176,4 +176,8 @@ def test_pages_and_static_assets_are_served(client):
     assert client.get("/projection").status_code == 200
     assert client.get("/operator").status_code == 200
     assert client.get("/testpattern").status_code == 200
+    # Die Touch-Diagnose muss an der Station selbst erreichbar sein: Sie wird
+    # AM Geraet gebraucht, und dort eine Datei hinzukopieren ist genau der
+    # Umweg, den eine Fuenf-Sekunden-Pruefung nicht ueberlebt.
+    assert client.get("/touchtest").status_code == 200
     assert client.get("/static/graph-model.js").status_code == 200
