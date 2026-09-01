@@ -221,6 +221,17 @@ h1 {
   touch-action: manipulation;
 }
 
+/* Der Kontaktblock am Ende der Transparenzseite: rote Kante, weil es die
+   einzige Stelle ist, an der ein Mensch statt eines Dienstes steht. */
+.kontakt {
+  margin-top: 34px;
+  padding: 18px 18px 18px 22px;
+  background: #16171b;
+  border-left: 8px solid var(--rot);
+}
+.kontakt h2 { margin-top: 0; }
+.kontakt a { color: var(--ink); }
+
 /* ---- Zurück und Fusszeile ------------------------------------------- */
 
 .seite .zurueck {
