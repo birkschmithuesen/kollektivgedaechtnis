@@ -50,7 +50,7 @@ def main() -> int:
     )
 
     print(f"Neue Fotos der letzten {args.seit_minuten:.0f} Minuten: {len(neue)}")
-    print(f"MINDEST_AUSSCHNITT = {photos.MINDEST_AUSSCHNITT}  "
+    print(f"MAX_HOCHRECHNUNG = {photos.MAX_HOCHRECHNUNG}  "
           f"GESICHTS_ZOOM = {photos.GESICHTS_ZOOM}")
     print("=" * 96)
     if not neue:
@@ -100,10 +100,11 @@ def main() -> int:
         else:
             gx, gy, gw, gh = (int(v) for v in gewaehlt)
             roh_seite = min(int(round(gw * photos.GESICHTS_ZOOM)), breite, hoehe)
-            seite = min(max(roh_seite, photos.MINDEST_AUSSCHNITT), breite, hoehe)
+            mindest = int(round(512 / photos.MAX_HOCHRECHNUNG))
+            seite = min(max(roh_seite, mindest), breite, hoehe)
             print(f"  -> Gesicht {gw}x{gh} gewaehlt, Ausschnitt {seite} px")
             if seite > roh_seite:
-                print(f"     UNTERGRENZE GRIFF: {roh_seite} -> {seite} px "
+                print(f"     AUFGEWEITET: {roh_seite} -> {seite} px "
                       f"(haette sonst {512 / roh_seite:.1f}x hochgerechnet)")
             if len(treffer) > 1:
                 print("     (mehrere Gesichter -- das groesste hat gewonnen; "

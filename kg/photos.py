@@ -46,27 +46,34 @@ GESICHTS_BIAS = 0.46
 # Porträt (45–60 %); vorher waren es 40 %.
 GESICHTS_ZOOM = 2.0
 
-# Der Ausschnitt wird NIE kleiner als das fertige Portrait (Birk, 2026-09-01:
-# „kleiner scharfer Kopf statt großer matschiger").
+# Wieviel Hochrechnung ist erlaubt, bevor der Ausschnitt aufgeweitet wird?
 #
-# Der Ausschnitt wird am Gesicht bemessen, das fertige Portrait ist aber immer
-# `portrait_size` (512) groß. Steht jemand weit weg, ist das Gesicht klein —
-# und ein kleiner Ausschnitt wird auf 512 HOCHgerechnet. Gemessen am 2026-09-01
-# über den Bestand: ein Gesicht von 61 px ergab 122 px Ausschnitt, also Faktor
-# 4,2 Hochrechnung, und eine Kantenschärfe von 9,6 gegenüber 677 beim mittigen
-# Schnitt — 1 %. Das ist der Matsch, den Birk auf der Projektion gesehen hat.
+# ERSTE FASSUNG (2026-09-01 mittags) war eine harte Untergrenze von 512 px:
+# nie hochrechnen. Das war zu grob und hat Birk denselben Tag noch am Material
+# gestoert -- an einem Foto mit drei Personen: „waren alle drei Gesichter drauf,
+# nicht auf das zentrale Gesicht gezoomed". Gemessen: Gesicht 201 px,
+# Wunschausschnitt 402 px, aufgeweitet auf 512 -> nur noch 79 % Zoom, obwohl
+# die Hochrechnung bloss 1,27x betragen haette. Die Regel behandelte 1,27x
+# genauso wie den echten Schadensfall 4,2x.
 #
-# Deshalb: ein Ausschnitt unter der Zielgröße wird aufgeweitet, statt
-# hochgerechnet zu werden. Der Kopf sitzt dann kleiner im Kreis (es kommt mehr
-# Umgebung dazu), bleibt aber scharf. Die Alternative wäre gewesen, kleine
-# Gesichter zu verwerfen und mittig zu schneiden — das hätte den Kopf aber auch
-# aus der Mitte verloren, sobald jemand seitlich steht.
+# Richtig ist eine Grenze fuer die HOCHRECHNUNG, nicht fuer die Ausschnittgroesse:
+# bis MAX_HOCHRECHNUNG wird gezoomt wie gewuenscht, erst darueber aufgeweitet.
 #
-# 🔴 NICHT über eine höhere App-Auflösung lösbar. Gemessen: mehr Auflösung
-# liefert UNSCHÄRFERE Portraits (−6 bis −11 %), weil die Erkennung dann öfter
-# greift und der engere Gesichtsausschnitt weniger echte Pixel hat als der
-# weite mittige Schnitt. Details in `docs/STAND.md` §2e.
-MINDEST_AUSSCHNITT = 512
+# 1.3 ist gemessen, nicht gesetzt (`scripts/kompromiss-zoom-schaerfe.py`,
+# 7 Fotos, Schaerfe am FERTIGEN Portrait):
+#
+#   Foto (Gesicht)   | Grenze 512 (alt)      | Faktor 1.3 (jetzt)
+#   -----------------|-----------------------|--------------------
+#   app363 (201 px)  | Zoom  79 %, Sch. 158  | Zoom 100 %, Sch.  52
+#   app893 ( 71 px)  | Zoom  28 %, Sch. 743  | Zoom  36 %, Sch.  93
+#   app849 ( 61 px)  | Zoom  24 %, Sch. 229  | Zoom  31 %, Sch. 107
+#   ohne jede Grenze: app849 faellt auf Schaerfe 3,1 -- der urspruengliche Matsch.
+#
+# 1.3 haelt jedes Portrait ueber der Matschschwelle (~50) und gibt Birk den
+# Zoom zurueck. Der einzige Ausreisser darunter (app043, 13) ist ein
+# VERWACKELTES Foto -- Quellschaerfe 129 gegen 430 bei einem scharfen Bild
+# derselben Serie. Das ist kein Zuschnittproblem und mit keinem Faktor heilbar.
+MAX_HOCHRECHNUNG = 1.3
 
 
 def soft_disc_mask(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image:
@@ -312,14 +319,16 @@ def _square_crop(image: Image.Image) -> Image.Image:
         # bisherigen Verhalten, statt einen Rand zu erfinden.
         side = min(int(round(gw * GESICHTS_ZOOM)), width, height)
 
-        # Untergrenze: lieber mehr Umgebung zeigen als hochrechnen. Steht die
-        # Person weit weg, ist `gw * GESICHTS_ZOOM` kleiner als das fertige
-        # Portrait, und `make_portrait` würde den Ausschnitt vergrößern —
-        # gemessen bis Faktor 4,2 und damit sichtbar matschig. `min(...)` hält
-        # die Aufweitung im Bild: ist das Bild selbst kleiner als
-        # MINDEST_AUSSCHNITT, bleibt es beim größtmöglichen Quadrat, denn Pixel
-        # erfinden kann auch diese Regel nicht.
-        side = min(max(side, MINDEST_AUSSCHNITT), width, height)
+        # Aufweiten nur, wenn sonst ZU STARK hochgerechnet wuerde. `_square_crop`
+        # kennt die spaetere Zielgroesse nicht (make_portrait entscheidet sie),
+        # deshalb wird hier gegen die uebliche Portraitgroesse gerechnet -- die
+        # Zahl steckt ohnehin schon in MAX_HOCHRECHNUNG.
+        #
+        # Wichtig: NICHT auf 512 aufweiten, sondern nur so weit, dass die
+        # Hochrechnung unter die Grenze faellt. Genau das war der Fehler der
+        # ersten Fassung -- sie nahm jedem knappen Fall den Zoom weg.
+        mindest = int(round(512 / MAX_HOCHRECHNUNG))
+        side = min(max(side, mindest), width, height)
 
         # Waagerecht auf die Gesichtsmitte.
         left = int(round(gx + gw / 2 - side / 2))

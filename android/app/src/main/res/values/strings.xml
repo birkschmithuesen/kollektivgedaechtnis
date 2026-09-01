@@ -7,6 +7,10 @@
     <string name="sende">Wird gesendet …</string>
     <string name="sende_groesse">Wird gesendet … (%1$d kB)</string>
     <string name="gesendet">Gesendet — Interview läuft</string>
+    <!-- Steht in der Statuszeile, waehrend die Vorschau formatfuellend liegt:
+         ohne den Hinweis ist am Geraet nicht ersichtlich, wie man sie
+         wegbekommt (vorher war sie eine Kachel in der Ecke, da war es egal). -->
+    <string name="vorschau_offen">Zuschnitt der Station — antippen zum Schließen</string>
     <string name="aufnahme_fehler">Aufnahme fehlgeschlagen: %1$s</string>
     <string name="kamera_fehler">Kamera nicht verfügbar: %1$s</string>
     <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>

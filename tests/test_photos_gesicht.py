@@ -57,9 +57,11 @@ def _erwarteter_ausschnitt(breite, hoehe, gesicht):
     """
     gx, gy, gw, gh = gesicht
     seite = min(int(round(gw * photos.GESICHTS_ZOOM)), breite, hoehe)
-    # Seit 2026-09-01 gilt eine Untergrenze: ein Ausschnitt unter der
-    # Portraitgroesse wuerde beim Skalieren HOCHgerechnet und damit matschig.
-    seite = min(max(seite, photos.MINDEST_AUSSCHNITT), breite, hoehe)
+    # Seit 2026-09-01 wird aufgeweitet, wenn sonst zu stark HOCHgerechnet
+    # wuerde -- aber nur so weit, dass die Hochrechnung unter die Grenze
+    # faellt (eine harte Untergrenze nahm knappen Faellen den Zoom weg).
+    mindest = int(round(512 / photos.MAX_HOCHRECHNUNG))
+    seite = min(max(seite, mindest), breite, hoehe)
     links = max(0, min(int(round(gx + gw / 2 - seite / 2)), breite - seite))
     oben = max(0, min(int(round(gy + gh / 2 - seite * photos.GESICHTS_BIAS)), hoehe - seite))
     return links, oben, seite
@@ -541,7 +543,7 @@ def test_bei_zwei_gesichtern_gewinnt_wirklich_das_groessere(tmp_path, monkeypatc
 # Schnitt. Birks Entscheidung: "kleiner scharfer Kopf statt grosser matschiger".
 
 
-def test_ein_kleines_gesicht_wird_nicht_mehr_hochgerechnet(tmp_path, monkeypatch):
+def test_ein_winziges_gesicht_wird_nicht_stark_hochgerechnet(tmp_path, monkeypatch):
     """Der Fall, der den Matsch verursacht hat — mit den GEMESSENEN Zahlen.
 
     `1788105156_5.jpg`: 720x1280, erkanntes Gesicht 61x61. Ohne Untergrenze
@@ -556,16 +558,17 @@ def test_ein_kleines_gesicht_wird_nicht_mehr_hochgerechnet(tmp_path, monkeypatch
 
     roh = int(round(61 * photos.GESICHTS_ZOOM))
     assert roh == 122, "Vorbedingung: ohne Untergrenze waeren es 122 px"
-    assert ausschnitt.size[0] >= photos.MINDEST_AUSSCHNITT, (
-        f"der Ausschnitt ist {ausschnitt.size[0]} px und wird auf "
-        f"{photos.MINDEST_AUSSCHNITT} HOCHgerechnet — genau der Matsch"
+    hochrechnung = 512 / ausschnitt.size[0]
+    assert hochrechnung <= photos.MAX_HOCHRECHNUNG + 0.01, (
+        f"der Ausschnitt ist {ausschnitt.size[0]} px und wird {hochrechnung:.1f}x "
+        f"HOCHgerechnet — erlaubt sind {photos.MAX_HOCHRECHNUNG}x"
     )
 
 
 def test_die_untergrenze_weitet_nie_ueber_das_bild_hinaus(tmp_path, monkeypatch):
     """Pixel erfinden kann die Regel nicht.
 
-    Ist das Bild selbst kleiner als MINDEST_AUSSCHNITT, muss es beim
+    Ist das Bild selbst kleiner als die Mindestgroesse, muss es beim
     groesstmoeglichen Quadrat bleiben — sonst entstuende ein Ausschnitt
     groesser als das Bild und damit ein schwarzer Balken im Kreis.
     """
@@ -594,7 +597,8 @@ def test_ein_grosses_gesicht_bleibt_unveraendert(tmp_path, monkeypatch):
     ausschnitt = photos._square_crop(bild)
 
     erwartet = min(int(round(470 * photos.GESICHTS_ZOOM)), breite, hoehe)
-    assert erwartet > photos.MINDEST_AUSSCHNITT, "Vorbedingung: grosses Gesicht"
+    assert erwartet > int(round(512 / photos.MAX_HOCHRECHNUNG)), (
+        "Vorbedingung: grosses Gesicht")
     assert ausschnitt.size == (erwartet, erwartet), (
         "die Untergrenze hat einen Ausschnitt veraendert, den sie nicht anfassen darf"
     )
@@ -641,6 +645,35 @@ def test_das_portrait_wird_nicht_mehr_hochskaliert(tmp_path, monkeypatch):
 
     # 512 ist die Vorgabe von make_portrait. Der Ausschnitt muss mindestens so
     # gross sein, sonst wird beim resize() hochgerechnet.
-    assert ausschnitt.size[0] >= 512, (
-        f"Ausschnitt {ausschnitt.size[0]} px < 512 — make_portrait rechnet hoch"
+    assert 512 / ausschnitt.size[0] <= photos.MAX_HOCHRECHNUNG + 0.01, (
+        f"Ausschnitt {ausschnitt.size[0]} px -> make_portrait rechnet zu stark hoch"
+    )
+
+
+def test_ein_knapp_zu_kleiner_ausschnitt_behaelt_seinen_zoom(tmp_path, monkeypatch):
+    """Birks Einwand am Material, 2026-09-01 (Foto mit drei Personen):
+    „waren alle drei Gesichter drauf, nicht auf das zentrale Gesicht gezoomed".
+
+    Die erste Fassung weitete JEDEN Ausschnitt unter 512 px auf -- auch den,
+    der nur 1,27x hochgerechnet worden waere. Ergebnis: 79 % Zoom statt 100 %,
+    und die Nachbarn kamen mit ins Bild.
+
+    Zahlen aus dem echten Foto `1788269177_app363.jpg`: Gesicht 201 px,
+    Wunschausschnitt 402 px. 512/402 = 1,27x -- das liegt unter der erlaubten
+    Grenze, der Ausschnitt muss also UNANGETASTET bleiben.
+    """
+    breite, hoehe = 768, 1024
+    gesicht = (360, 391, 201, 201)
+    bild = _testbild(breite, hoehe, kopf=(460, 491, 100))
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+    ausschnitt = photos._square_crop(bild)
+
+    wunsch = min(int(round(201 * photos.GESICHTS_ZOOM)), breite, hoehe)
+    assert wunsch == 402, "Vorbedingung: der Wunschausschnitt ist 402 px"
+    assert 512 / wunsch < photos.MAX_HOCHRECHNUNG, (
+        "Vorbedingung: 1,27x liegt unter der Grenze")
+    assert ausschnitt.size == (wunsch, wunsch), (
+        f"der Zoom wurde weggenommen: {ausschnitt.size[0]} statt {wunsch} px -- "
+        "genau Birks Einwand"
     )

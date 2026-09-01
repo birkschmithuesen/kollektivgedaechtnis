@@ -279,7 +279,14 @@ Bei 1024 px findet die Kaskade nichts, schneidet mittig, 576 px, scharf. Ab
 Erhöhung von `MAX_KANTE`, die ich in §4 als Weg (b) empfohlen hatte, **erzeugt
 diesen Fall, statt ihn zu beheben.** Empfehlung zurückgezogen.
 
-### Die eigentliche Stellschraube — ✅ EINGEBAUT 2026-09-01, 15:40
+### Die eigentliche Stellschraube — eingebaut, dann NACHGESCHÄRFT
+
+🔴 **Die hier beschriebene harte Untergrenze gilt so nicht mehr.** Sie war zu
+grob und nahm knappen Fällen den Zoom — Birk hat das am selben Tag am Material
+gesehen. Ersetzt durch `MAX_HOCHRECHNUNG = 1.3`, **siehe §2g**. Der Abschnitt
+bleibt stehen, weil die Messung dahinter weiter gilt.
+
+### Die erste Fassung (überholt)
 
 Es fehlte eine **Untergrenze**: Ein Ausschnitt unter `portrait_size` (512 px)
 darf nicht hochgerechnet werden. Birk hat sich für **(A)** entschieden
@@ -399,6 +406,77 @@ unverändert. Die Regel fasst nur den kaputten Fall an.
 
 ---
 
+## 2g. 🔴 Birks Fototest am Gerät — zwei Befunde, beide behoben (2026-09-01, 15:30)
+
+Birk hat mit v6 ein Foto **mit drei Personen** gemacht. Zwei Einwände, beide
+berechtigt, beide gemessen und gefixt.
+
+### Einwand 1: „nicht auf das zentrale Gesicht gezoomed"
+
+**Das war mein eigener Fix von mittags.** Die harte Untergrenze
+`MINDEST_AUSSCHNITT = 512` weitete *jeden* Ausschnitt unter 512 px auf — auch
+den, dem gar kein Matsch drohte. An Birks Foto (`1788269177_app363.jpg`):
+
+| | Ausschnitt | Zoom | Schärfe |
+|---|---|---|---|
+| alte harte Grenze | 512 px | **79 %** | 158 |
+| **neu, Faktor 1,3** | **402 px** | **100 %** | 52 |
+
+Der Ausschnitt hätte nur **1,27×** hochgerechnet werden müssen — die Regel
+behandelte das wie den echten Schadensfall von 4,2×.
+
+**Neue Regel:** `MAX_HOCHRECHNUNG = 1.3` in `kg/photos.py`. Nicht die
+Ausschnittgröße wird begrenzt, sondern die **Hochrechnung**. Bis 1,3× bleibt der
+Zoom unangetastet, erst darüber wird aufgeweitet — und nur so weit, dass die
+Grenze eingehalten ist.
+
+**1,3 ist gemessen** (`scripts/kompromiss-zoom-schaerfe.py`, 6 Kandidaten von
+1,0 bis „ohne Grenze"): Es ist der größte Faktor, bei dem **alle** Portraits über
+der Matschschwelle (~50) bleiben und Birks Foto den vollen Zoom behält.
+
+| Foto (Gesicht) | alt: Zoom/Schärfe | neu: Zoom/Schärfe |
+|---|---|---|
+| app363 (201 px) | 79 % / 158 | **100 % / 52** |
+| app893 (71 px) | 28 % / 743 | **36 % / 93** |
+| app849 (61 px) | 24 % / 229 | **31 % / 107** |
+
+Ohne jede Grenze fällt app849 auf Schärfe **3,1** — der ursprüngliche Matsch.
+Die Regel bleibt also nötig, sie war nur zu grob.
+
+**Tests:** neuer Test `test_ein_knapp_zu_kleiner_ausschnitt_behaelt_seinen_zoom`
+mit Birks echten Zahlen. **4 Mutationsproben, alle tot** — darunter „zurück zur
+alten harten Grenze 512", die genau seinen Einwand rot macht.
+
+### Einwand 2: „soll aber Vollbild angezeigt werden"
+
+Die Vorschau hing als **140dp-Kachel** in der Ecke. Auf einer Briefmarke ist
+nicht zu beurteilen, ob der Ausschnitt sitzt — und genau dafür ist sie da.
+Jetzt formatfüllend über dem Sucher, `fitCenter` auf Schwarz (derselbe
+Hintergrund wie die Projektionswand, also dasselbe Urteil).
+
+Drei Folgeänderungen, die ohne den Umbau nicht nötig waren:
+- **Auslösen blendet die alte Vorschau weg** — sonst schießt man blind, weil das
+  vorige Portrait den Sucher verdeckt. Als Eckkachel war das egal.
+- **Statuszeile sagt „antippen zum Schließen"** — formatfüllend sieht es sonst
+  aus, als hänge die App.
+- Beim Schließen zurück auf „Gesendet — Interview läuft".
+
+### v7 gebaut und geprüft
+
+`out/kollektivgedaechtnis-foto-v7.apk` (4,6 MB), gebaut auf herkules
+(`~/kg-android`, die Toolchain liegt dort — auf dem vServer gibt es keine).
+
+**Belegt, nicht angenommen:** im Binär-Layout von v6 steckt der 140dp-Wert, in
+v7 nicht mehr → formatfüllend. Der neue String `vorschau_offen` ist in v7,
+in v6 nicht. Signatur `Verifies`, Zertifikat **identisch mit v1/v6**
+(`b1f145d4…`) → **drüber installieren, kein Deinstallieren nötig**.
+
+⚠️ **Die Station braucht den Zoom-Fix noch:** Sie läuft auf `b5c2c8e` (harte
+Grenze). Der neue Faktor wirkt erst nach einem Neustart über die
+START-Verknüpfung. Ohne den bleibt es beim 79-%-Zoom, auch mit v7.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
@@ -474,8 +552,8 @@ Entscheidungen daraus in §4.**
 
 ### 🔴 So läuft der Fototest mit dem Handy (alles vorbereitet)
 
-**Schritt 1 — v6 installieren.** Auf dem Handy liegt v1 (§2d), die verkleinert
-nicht und hat weder Sucherrahmen noch Vorschau. `out/kollektivgedaechtnis-foto-v6.apk`
+**Schritt 1 — v7 installieren.** Auf dem Handy liegt v1 (§2d), die verkleinert
+nicht und hat weder Sucherrahmen noch Vorschau. **`out/kollektivgedaechtnis-foto-v7.apk`** (v6 ist überholt, §2g)
 auf dem vServer, signiert und geprüft. **Einfach drüber installieren** — v1 und
 v6 tragen dasselbe Zertifikat (SHA-256 `b1f145d4…`, Android-Debug-Key,
 mit apksigner gegengeprüft), ein Update ist also möglich, ohne vorher zu

@@ -36,19 +36,34 @@
         app:layout_constraintBottom_toBottomOf="@id/sucher" />
 
     <!--
-      Die Vorschau des fertigen Portraits. Klein und in der Ecke: sie soll
-      zeigen, wie es geworden ist, aber nicht den Sucher fuer das naechste
-      Foto verstellen. Antippen blendet sie weg.
+      Die Vorschau des fertigen Portraits, formatfuellend ueber dem Sucher.
+
+      Bis 2026-09-01 hing sie als 140dp-Kachel in der Ecke, damit sie den
+      Sucher fuer das naechste Foto nicht verstellt. Birk am Booth: „soll aber
+      Vollbild angezeigt werden" — am Geraet ist auf einer Briefmarke nicht zu
+      beurteilen, ob der Ausschnitt sitzt, und genau dafuer ist sie da.
+
+      `fitCenter` statt `centerCrop`: das Portrait ist quadratisch, der Schirm
+      nicht. Ein Crop wuerde ausgerechnet den Rand abschneiden, an dem man
+      sieht, ob der Zuschnitt zu eng sitzt. Der schwarze Hintergrund ist derselbe
+      wie auf der Projektionswand, das Urteil faellt also im richtigen Kontext.
+
+      Antippen blendet sie weg und gibt den Sucher frei.
     -->
     <ImageView
         android:id="@+id/vorschau"
-        android:layout_width="140dp"
-        android:layout_height="140dp"
-        android:layout_margin="12dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:visibility="gone"
+        android:background="@android:color/black"
+        android:scaleType="fitCenter"
+        android:clickable="true"
+        android:focusable="true"
         android:contentDescription="@string/vorschau_beschreibung"
-        app:layout_constraintBottom_toBottomOf="@id/sucher"
-        app:layout_constraintStart_toStartOf="@id/sucher" />
+        app:layout_constraintTop_toTopOf="@id/sucher"
+        app:layout_constraintStart_toStartOf="@id/sucher"
+        app:layout_constraintEnd_toEndOf="@id/sucher"
+        app:layout_constraintBottom_toBottomOf="@id/sucher" />
 
     <ImageButton
         android:id="@+id/einstellungen"

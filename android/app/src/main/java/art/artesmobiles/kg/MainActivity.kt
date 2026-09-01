@@ -67,7 +67,12 @@ class MainActivity : AppCompatActivity() {
         // Antippen blendet die Vorschau weg — sie verdeckt einen Teil des
         // Suchers, und wer das nächste Foto machen will, soll sie loswerden,
         // ohne ein Menü zu suchen.
-        vorschau.setOnClickListener { vorschau.visibility = View.GONE }
+        vorschau.setOnClickListener {
+            vorschau.visibility = View.GONE
+            // Zurueck auf die Meldung, die ohne Vorschau gilt -- sonst bleibt
+            // "antippen zum Schliessen" stehen, obwohl nichts mehr da ist.
+            zeige(getString(R.string.gesendet), fehler = false)
+        }
 
         ausloeser.setOnClickListener { schiesse() }
         findViewById<ImageButton>(R.id.einstellungen).setOnClickListener {
@@ -122,6 +127,12 @@ class MainActivity : AppCompatActivity() {
         if (sendetGerade) return
         sendetGerade = true
         ausloeser.isEnabled = false
+        // Die alte Vorschau MUSS weg, bevor das naechste Foto entsteht: seit
+        // sie formatfuellend liegt (2026-09-01), wuerde man sonst blind
+        // ausloesen -- der Sucher waere vom vorigen Portrait verdeckt. Als
+        // 140dp-Kachel in der Ecke war das egal, deshalb stand es vorher nicht
+        // hier.
+        vorschau.visibility = View.GONE
         zeige(getString(R.string.sende), fehler = false)
 
         capture.takePicture(
@@ -193,6 +204,10 @@ class MainActivity : AppCompatActivity() {
             val bild = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@launch
             vorschau.setImageBitmap(bild)
             vorschau.visibility = View.VISIBLE
+            // Der Hinweis gehoert an die Vorschau, nicht in den Layout-Text:
+            // formatfuellend verdeckt sie den Sucher, und ohne Ansage sieht das
+            // aus, als haenge die App (Birk, 2026-09-01, am Booth).
+            zeige(getString(R.string.vorschau_offen), fehler = false)
         }
     }
 
