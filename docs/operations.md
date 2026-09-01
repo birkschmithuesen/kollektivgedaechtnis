@@ -1028,7 +1028,7 @@ Kein Wert aus dieser Liste darf ungeprüft in den Ausstellungsbetrieb gehen.
    Bild, ohne irgendetwas zu tun — und es war nicht einmal eine der Fragen,
    die den Gästen gestellt werden. „Ja, ganz weg."
 
-   Damit ist auch Punkt D aus `docs/HANDOFF-2026-08-26.md` (bessere
+   Damit ist auch Punkt D aus `docs/archiv/HANDOFF-2026-08-26.md` (bessere
    Formulierung aus dem Programm der NEW bauhaus 2026) gegenstandslos. Die
    Kalibrierläufe dazu (`out/calibrate-questions.txt`, Befehl
    `sim.dream_calibrate questions`) sind Historie.

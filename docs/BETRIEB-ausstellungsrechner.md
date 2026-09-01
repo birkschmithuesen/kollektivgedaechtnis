@@ -305,5 +305,5 @@ wurde der Name gewählt.
 - `docs/operations.md` — das Betriebshandbuch (Regler, Ablauf, Notausgang)
 - `docs/stt-contract.md` — Schnittstelle zum STT-Server
 - `docs/dream-image-contract.md` — Schnittstelle Tool 1 → Tool 2
-- `docs/HANDOFF-2026-08-30.md` — Entwicklungsstand
+- `docs/archiv/HANDOFF-2026-08-30.md` — Entwicklungsstand
 - Skill `windows-remote-ops` — allgemeine Windows-Fernwartung
