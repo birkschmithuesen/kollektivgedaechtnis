@@ -43,6 +43,25 @@ def _testbild(breite: int, hoehe: int, kopf: tuple[int, int, int] | None = None)
     return img
 
 
+def _erwarteter_ausschnitt(breite, hoehe, gesicht):
+    """Wo der Ausschnitt liegt, wenn ein Gesicht erkannt wurde.
+
+    EIN Ort für diese Rechnung, statt sie in jedem Test zu wiederholen: Die
+    Größe hängt seit 2026-09-01 an `GESICHTS_ZOOM` (der Ausschnitt wird am
+    Gesicht bemessen, nicht an der Bildbreite), und eine über fünf Tests
+    verstreute Kopie dieser Formel wäre beim nächsten Umbau wieder falsch.
+
+    Bewusst nur die GEOMETRIE — was der Ausschnitt zeigen muss, prüft jeder
+    Test selbst am Bild. Sonst prüfte er wieder seine eigene Kopie der Logik
+    statt des Codes (der Fehler, der in dieser Datei schon einmal drin war).
+    """
+    gx, gy, gw, gh = gesicht
+    seite = min(int(round(gw * photos.GESICHTS_ZOOM)), breite, hoehe)
+    links = max(0, min(int(round(gx + gw / 2 - seite / 2)), breite - seite))
+    oben = max(0, min(int(round(gy + gh / 2 - seite * photos.GESICHTS_BIAS)), hoehe - seite))
+    return links, oben, seite
+
+
 def test_ohne_erkennung_bleibt_das_bild_bitgleich(tmp_path, monkeypatch):
     """Der Rueckfallweg ist der Normalfall: cv2 ist keine Abhaengigkeit des
     Projekts, auf der Station ist es nicht installiert. Aendert sich dort auch
@@ -79,9 +98,8 @@ def test_ein_seitlich_stehender_mensch_wird_nicht_mehr_angeschnitten(tmp_path, m
     with Image.open(quelle) as img:
         img = img.convert("RGB")
         ausschnitt = photos._square_crop(img)
-        # Wo landet der Kopf im Ausschnitt? Ueber die Bildgroesse rueckgerechnet.
-        seite = min(breite, hoehe)
-        links = max(0, min(int(round(kopf_x - seite / 2)), breite - seite))
+        gesicht = (kopf_x - r, kopf_y - r, 2 * r, 2 * r)
+        links, _oben, seite = _erwarteter_ausschnitt(breite, hoehe, gesicht)
         assert ausschnitt.size == (seite, seite)
         # Der Kopf muss VOLLSTAENDIG im Ausschnitt liegen.
         assert links <= kopf_x - r and kopf_x + r <= links + seite, (
@@ -90,26 +108,42 @@ def test_ein_seitlich_stehender_mensch_wird_nicht_mehr_angeschnitten(tmp_path, m
 
 
 def test_der_kopf_landet_im_oberen_drittel_nicht_in_der_mitte(tmp_path, monkeypatch):
-    """VERTICAL_BIAS = 0.35 ist die bestehende Bildaufteilung: Kopf oben,
-    Schultern unten. Ein auf die Gesichtsmitte zentrierter Schnitt saesse zu
-    tief — die Erkennung darf die Bildsprache nicht aendern, nur genauer
-    treffen."""
+    """GESICHTS_BIAS ist die Bildaufteilung: Kopf oben, Schultern unten. Ein auf
+    die Gesichtsmitte zentrierter Schnitt saesse zu tief — die Erkennung darf
+    die Bildsprache nicht aendern, nur genauer treffen.
+
+    Gemessen wird am ERZEUGTEN Ausschnitt, nicht an einer nachgebauten Formel:
+    Diese Datei hatte genau diesen Fehler schon einmal, und drei Mutanten
+    haben ihn ueberlebt.
+    """
     breite, hoehe = 1400, 2100
     kopf_x, kopf_y, r = 700, 900, 140
     quelle = tmp_path / "hoch.jpg"
     _testbild(breite, hoehe, kopf=(kopf_x, kopf_y, r)).save(quelle)
 
-    monkeypatch.setattr(
-        photos, "_gesicht_finden", lambda _img: (kopf_x - r, kopf_y - r, 2 * r, 2 * r)
-    )
-    with Image.open(quelle) as img:
-        img = img.convert("RGB")
-        seite = min(breite, hoehe)
-        oben = max(0, min(int(round(kopf_y - seite * photos.VERTICAL_BIAS)), hoehe - seite))
-        anteil = (kopf_y - oben) / seite
+    gesicht = (kopf_x - r, kopf_y - r, 2 * r, 2 * r)
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _img: gesicht)
 
-    assert 0.28 < anteil < 0.45, (
-        f"der Kopf sitzt bei {anteil:.2f} der Bildhoehe statt bei ~0.35"
+    with Image.open(quelle) as img:
+        ausschnitt = photos._square_crop(img.convert("RGB"))
+
+    _links, oben, seite = _erwarteter_ausschnitt(breite, hoehe, gesicht)
+    assert ausschnitt.size == (seite, seite)
+
+    # Wo sitzt der helle Kopf im erzeugten Bild? Am Bild gemessen, nicht gerechnet.
+    grau = ausschnitt.convert("L")
+    zeilen = [
+        y
+        for y in range(0, grau.height, 4)
+        for x in range(0, grau.width, 4)
+        if grau.getpixel((x, y)) > 120
+    ]
+    assert zeilen, "kein Kopf im Ausschnitt gefunden"
+    anteil = (sum(zeilen) / len(zeilen)) / seite
+
+    assert 0.30 < anteil < 0.62, (
+        f"der Kopf sitzt bei {anteil:.2f} der Bildhoehe — erwartet um "
+        f"{photos.GESICHTS_BIAS} herum"
     )
 
 
@@ -120,12 +154,13 @@ def test_ein_gesicht_am_bildrand_erzeugt_keinen_schwarzen_balken(tmp_path, monke
     quelle = tmp_path / "rand.jpg"
     _testbild(breite, hoehe, kopf=(60, 80, 55)).save(quelle)
 
-    monkeypatch.setattr(photos, "_gesicht_finden", lambda _img: (5, 25, 110, 110))
+    gesicht = (5, 25, 110, 110)
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _img: gesicht)
 
     with Image.open(quelle) as img:
         ausschnitt = photos._square_crop(img.convert("RGB"))
 
-    seite = min(breite, hoehe)
+    _links, _oben, seite = _erwarteter_ausschnitt(breite, hoehe, gesicht)
     assert ausschnitt.size == (seite, seite)
     # Kein Pixel darf ausserhalb des Originals gelegen haben: bei Pillow
     # entstuenden dort schwarze Flaechen. Geprueft am Histogramm des Randes.
@@ -159,9 +194,8 @@ def test_bei_zwei_gesichtern_gewinnt_das_groessere(tmp_path, monkeypatch):
 
     with Image.open(quelle) as img:
         ausschnitt = photos._square_crop(img.convert("RGB"))
-    seite = min(breite, hoehe)
+    links, _oben, seite = _erwarteter_ausschnitt(breite, hoehe, gross)
     mitte_gross = gross[0] + gross[2] / 2
-    links = max(0, min(int(round(mitte_gross - seite / 2)), breite - seite))
     assert ausschnitt.size == (seite, seite)
     assert links <= mitte_gross <= links + seite
 
@@ -276,7 +310,6 @@ def test_die_wirkung_ist_gemessen_und_festgehalten(tmp_path, monkeypatch):
 
     for name, breite, hoehe, kx, ky, r, rechteck in faelle:
         bild = _testbild(breite, hoehe, kopf=(kx, ky, r))
-        seite = min(breite, hoehe)
 
         # MIT Erkennung: der echte Zuschnitt, mit gestelltem Treffer.
         monkeypatch.setattr(photos, "_gesicht_finden", lambda _i, _r=rechteck: _r)
@@ -286,7 +319,16 @@ def test_die_wirkung_ist_gemessen_und_festgehalten(tmp_path, monkeypatch):
         monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: None)
         ohne = photos._square_crop(bild)
 
-        assert mit.size == ohne.size == (seite, seite)
+        # Die beiden Wege haben seit 2026-09-01 UNTERSCHIEDLICHE Groessen: mit
+        # Erkennung wird am Gesicht bemessen (GESICHTS_ZOOM), ohne bleibt es
+        # beim groesstmoeglichen Quadrat. Genau das ist der Punkt der
+        # Aenderung — vorher fuellte das Gesicht nur 20 % der Kreisflaeche.
+        _l, _o, seite_mit = _erwarteter_ausschnitt(breite, hoehe, rechteck)
+        assert mit.size == (seite_mit, seite_mit)
+        assert ohne.size == (min(breite, hoehe), min(breite, hoehe))
+        assert seite_mit <= min(breite, hoehe), (
+            f"{name}: der Ausschnitt darf nie groesser als das Bild werden"
+        )
 
         # „Ist der Kopf im Bild?" wird am BILD gemessen, nicht an der Formel:
         # der Kopf ist hell (240,200,170) auf dunklem Grund (20,20,20).
@@ -333,19 +375,114 @@ def test_die_wirkung_ist_gemessen_und_festgehalten(tmp_path, monkeypatch):
 
     hoehe_mit = kopfmitte_relativ(mit)
     assert hoehe_mit is not None, "kein Kopf im Ausschnitt gefunden"
-    # Der Kopf muss beim BIAS landen (oberes Drittel), nicht in der Mitte.
-    # Genau diese Zeile toetet den Mutanten „senkrecht zentriert\".
-    assert abs(hoehe_mit - photos.VERTICAL_BIAS) < 0.06, (
-        f"der Kopf sitzt bei {hoehe_mit:.2f} statt bei {photos.VERTICAL_BIAS} — "
-        "die senkrechte Ausrichtung folgt nicht mehr VERTICAL_BIAS"
+
+    # 🔴 Gegen eine FESTE Zahl geprüft, nicht gegen `photos.GESICHTS_BIAS`.
+    #
+    # Eine frühere Fassung verglich mit der Konstanten selbst — und war damit
+    # wertlos: Ein Mutant, der GESICHTS_BIAS auf den alten Wert 0.35
+    # zurückdrehte, verschob den Kopf UND den Vergleichswert gleichzeitig, der
+    # Test blieb grün. Ein Test, der seinen Sollwert aus dem Prüfling bezieht,
+    # prüft nur, dass der Code mit sich selbst übereinstimmt.
+    #
+    # 0.46 ist Birks Vorgabe vom 2026-09-01 („ein bisschen mehr Haare, ein
+    # bisschen weniger Hals, nicht viel"), an seinem eigenen Foto abgenommen.
+    # Wer den Wert ändern will, ändert ihn hier bewusst mit.
+    SOLL = 0.46
+    assert abs(hoehe_mit - SOLL) < 0.06, (
+        f"der Kopf sitzt bei {hoehe_mit:.2f} statt bei {SOLL} — die senkrechte "
+        f"Ausrichtung folgt nicht mehr Birks abgenommener Bildaufteilung "
+        f"(GESICHTS_BIAS steht auf {photos.GESICHTS_BIAS})"
     )
 
+    # Und er sitzt naeher am Ziel als der Rueckfallweg ohne Erkennung.
     hoehe_ohne = kopfmitte_relativ(ohne)
     assert hoehe_ohne is not None
-    assert abs(hoehe_mit - photos.VERTICAL_BIAS) < abs(hoehe_ohne - photos.VERTICAL_BIAS), (
-        f"mit Erkennung {hoehe_mit:.2f}, ohne {hoehe_ohne:.2f} — "
-        f"Ziel ist {photos.VERTICAL_BIAS}"
+    assert abs(hoehe_mit - SOLL) < abs(hoehe_ohne - SOLL), (
+        f"mit Erkennung {hoehe_mit:.2f}, ohne {hoehe_ohne:.2f} — Ziel ist {SOLL}"
     )
+
+
+def test_der_ausschnitt_wird_am_gesicht_bemessen_nicht_am_bildrand(tmp_path, monkeypatch):
+    """🔴 Birks eigentliche Korrektur, 2026-09-01: „der Kasten ist perfekt, aber
+    der Ausschnitt ist dann zu tief gewählt, also das was in den Kreis kommt."
+
+    Gemessen an seinem echten Foto war die Ursache NICHT die Position: Der
+    Ausschnitt nahm die volle Bildbreite, das Gesicht füllte damit nur 20 % der
+    Kreisfläche und 45 % lagen unter dem Kinn. Den Ausschnitt zu verschieben
+    ändert daran fast nichts — er war schlicht zu groß.
+
+    `GESICHTS_ZOOM = 2.0` heißt: der Ausschnitt ist doppelt so breit wie das
+    erkannte Gesicht, das Gesicht füllt also die Hälfte der Breite. Dieser
+    Test hält den Zusammenhang fest, damit er nicht unbemerkt auf „volle
+    Bildbreite" zurückfällt.
+    """
+    breite, hoehe = 1400, 1900
+    gw = 280
+    gesicht = (560, 700, gw, gw)
+    bild = _testbild(breite, hoehe, kopf=(700, 840, gw // 2))
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+
+    ausschnitt = photos._square_crop(bild)
+    seite = ausschnitt.size[0]
+
+    assert seite < min(breite, hoehe), (
+        "der Ausschnitt nimmt wieder die volle Bildbreite — genau der Zustand, "
+        "den Birk beanstandet hat"
+    )
+    anteil = gw / seite
+    assert 0.45 <= anteil <= 0.60, (
+        f"das Gesicht fuellt {anteil:.0%} der Ausschnittbreite; ein Portrait "
+        "liegt bei 45-60 %"
+    )
+    # Gegen die FESTE abgenommene Zahl, nicht gegen photos.GESICHTS_ZOOM:
+    # ein Test, der seinen Sollwert aus dem Prüfling bezieht, prüft nur, dass
+    # der Code mit sich selbst übereinstimmt (siehe Kommentar bei SOLL weiter
+    # unten — genau dieser Fehler hat hier einen Mutanten überleben lassen).
+    assert seite == int(round(gw * 2.0)), (
+        f"der Ausschnitt ist {seite}px bei {gw}px Gesicht — abgenommen war "
+        f"Faktor 2.0 (Birk, 2026-09-01), GESICHTS_ZOOM steht auf "
+        f"{photos.GESICHTS_ZOOM}"
+    )
+
+
+def test_der_ausschnitt_wird_nie_groesser_als_das_foto(monkeypatch):
+    """Steht jemand weit weg, ist das Gesicht klein — dann fordert
+    `gw * GESICHTS_ZOOM` weniger als das Bild hergibt und alles ist gut. Steht
+    jemand sehr nah, fordert es MEHR als das Bild hat. Dann muss die Begrenzung
+    greifen, statt einen Rand zu erfinden: ein Ausschnitt größer als das Foto
+    gäbe schwarze Balken im Kreis.
+    """
+    breite, hoehe = 900, 1200
+    # Ein sehr grosses Gesicht: 2.0 * 600 = 1200 > Bildbreite 900.
+    gesicht = (150, 300, 600, 600)
+    bild = _testbild(breite, hoehe, kopf=(450, 600, 300))
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+
+    ausschnitt = photos._square_crop(bild)
+    seite = ausschnitt.size[0]
+    assert seite == min(breite, hoehe), (
+        f"bei einem uebergrossen Gesicht muss der Ausschnitt auf "
+        f"{min(breite, hoehe)} begrenzt werden, war {seite}"
+    )
+    # Und kein schwarzer Balken an den Ecken.
+    for punkt in ((0, 0), (seite - 1, 0), (0, seite - 1), (seite - 1, seite - 1)):
+        assert ausschnitt.getpixel(punkt) != (0, 0, 0), "schwarzer Balken im Ausschnitt"
+
+
+def test_ohne_erkennung_bleibt_die_ausschnittgroesse_unveraendert(tmp_path, monkeypatch):
+    """Der Rückfallweg darf von der neuen Größenlogik NICHTS mitbekommen.
+
+    Auf dem Ausstellungsrechner ist `cv2` nicht installiert; dort schneidet die
+    Station weiter das größtmögliche Quadrat. Änderte sich das mit, hätte diese
+    Anpassung stillschweigend jedes Portrait ohne erkanntes Gesicht verschoben
+    — ohne dass jemand danach gefragt hat.
+    """
+    breite, hoehe = 1100, 1600
+    bild = _testbild(breite, hoehe, kopf=(550, 600, 150))
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: None)
+
+    ausschnitt = photos._square_crop(bild)
+    assert ausschnitt.size == (min(breite, hoehe), min(breite, hoehe))
 
 
 def test_bei_zwei_gesichtern_gewinnt_wirklich_das_groessere(tmp_path, monkeypatch):

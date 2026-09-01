@@ -16,7 +16,35 @@ from PIL import Image, ImageChops, ImageOps
 log = logging.getLogger(__name__)
 
 # Faces sit above the vertical centre in booth portraits.
+#
+# Zwei getrennte Werte, seit der Ausschnitt dem Gesicht folgt (Birk, 2026-09-01):
+#
+# GESICHTS_BIAS gilt, wenn ein Gesicht erkannt wurde. 0.46 heißt: über dem Kopf
+# bleibt etwa ein Fünftel der Bildhöhe frei, unter dem Kinn knapp ein Drittel.
+# Birks Vorgabe war „ein bisschen mehr Haare, ein bisschen weniger Hals, nicht
+# viel" — gemessen an seinem eigenen Foto liegt der Kopf damit bei 21 % Luft
+# oben statt 17 % (0.42) und ohne in Richtung „zu viel Decke" zu kippen (ab
+# etwa 0.58).
+#
+# VERTICAL_BIAS gilt weiter für den Rückfall ohne Erkennung. Der Wert bleibt
+# bei 0.35, weil dort die Bildmitte und nicht der Kopf der Bezugspunkt ist —
+# ihn mitzuziehen würde jedes Portrait ohne erkanntes Gesicht verschieben,
+# ohne dass jemand danach gefragt hat.
 VERTICAL_BIAS = 0.35
+GESICHTS_BIAS = 0.46
+
+# Wie groß ist der Ausschnitt, gemessen an der Breite des erkannten Gesichts?
+#
+# Das war der eigentliche Fund hinter Birks „der Ausschnitt ist zu tief": Die
+# Position war es gar nicht. Der Ausschnitt nahm die volle Bildbreite, und
+# damit füllte das Gesicht nur 20 % der Kreisfläche — 45 % der Fläche lag
+# unter dem Kinn. Den Ausschnitt zu verschieben ändert daran fast nichts, weil
+# er schlicht zu groß ist.
+#
+# 2.0 bedeutet: der Ausschnitt ist doppelt so breit wie das Gesicht, das
+# Gesicht füllt also 50 % der Breite. Das ist der übliche Bereich für ein
+# Porträt (45–60 %); vorher waren es 40 %.
+GESICHTS_ZOOM = 2.0
 
 
 def soft_disc_mask(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image:
@@ -242,28 +270,40 @@ def _square_crop(image: Image.Image) -> Image.Image:
     Der mittige Schnitt ist ausdrücklich KEIN Fehlerfall, sondern der
     Rückfallweg: kein Gesicht gefunden, `cv2` nicht installiert, Erkennung
     unsicher — dann gilt wieder, was vorher galt.
+
+    Seit 2026-09-01 unterscheiden sich die beiden Wege auch in der GRÖSSE des
+    Ausschnitts: mit erkanntem Gesicht wird er am Gesicht bemessen
+    (`GESICHTS_ZOOM`), ohne bleibt es beim größtmöglichen Quadrat. Deshalb
+    steht `side` in beiden Zweigen getrennt und nicht mehr davor.
     """
     width, height = image.size
-    side = min(width, height)
 
     gesicht = _gesicht_finden(image)
     if gesicht is not None:
         gx, gy, gw, gh = gesicht
+        # Der Ausschnitt wird AM GESICHT bemessen, nicht an der Bildbreite.
+        # Vorher nahm er immer `min(breite, hoehe)` — bei einem Handyfoto also
+        # die volle Breite. Gemessen an Birks Foto füllte das Gesicht damit nur
+        # 20 % der Kreisfläche und 45 % lagen unter dem Kinn; „zu tief" war in
+        # Wahrheit „zu weit weg". Der Ausschnitt kann nie größer werden als das
+        # Bild — steht jemand weit weg, greift `min(...)` und es bleibt beim
+        # bisherigen Verhalten, statt einen Rand zu erfinden.
+        side = min(int(round(gw * GESICHTS_ZOOM)), width, height)
+
         # Waagerecht auf die Gesichtsmitte.
         left = int(round(gx + gw / 2 - side / 2))
-        # Senkrecht NICHT auf die Gesichtsmitte, sondern so, dass das Gesicht
-        # dort landet, wo VERTICAL_BIAS es haben will (0.35 = oberes Drittel).
-        # Auf die Mitte zentriert säße der Kopf zu tief und die Schultern
-        # füllten den unteren Rand — dieselbe Bildaufteilung, die der bisherige
-        # mittige Schnitt über den Bias schon herstellt, nur jetzt am
-        # tatsächlichen Kopf statt an der Bildmitte.
-        top = int(round(gy + gh / 2 - side * VERTICAL_BIAS))
+        # Senkrecht so, dass der Kopf dort landet, wo GESICHTS_BIAS ihn haben
+        # will: über dem Kopf ein knappes Fünftel Luft, darunter Hals und
+        # Schultern. Auf die Gesichtsmitte zentriert säße der Kopf zu tief.
+        top = int(round(gy + gh / 2 - side * GESICHTS_BIAS))
         # In die Bildgrenzen schieben, statt zu beschneiden: ein Ausschnitt,
         # der über den Rand ragt, gäbe sonst einen schwarzen Balken im Kreis.
         # Verschieben verliert Zentrierung, ein Balken verliert das Bild.
         left = max(0, min(left, width - side))
         top = max(0, min(top, height - side))
         return image.crop((left, top, left + side, top + side))
+
+    side = min(width, height)
 
     left = (width - side) // 2
     if height > side:
