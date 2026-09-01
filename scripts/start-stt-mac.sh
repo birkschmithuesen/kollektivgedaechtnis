@@ -77,11 +77,38 @@ echo ""
 # Kein `exec ... | tee`: eine Pipeline laeuft in einer Subshell, `exec` ersetzt
 # dann nicht diese Shell, und der Exit-Code waere der von `tee` (immer 0) —
 # ein abgestuerzter Dienst saehe aus wie ein sauberes Ende.
+
+# --- Mikrofonschalter (Birk, 2026-09-01: „muss mit dem Mikrofongate starten")
+# Mit dem Schalter entscheidet der EINGANGSPEGEL, ob erkannt wird: unter der
+# Schwelle pausiert die Erkennung und es geht ein Interview-STOPP an den Kern,
+# darueber laeuft sie und es geht ein START. Das ist der Bedienweg am Mikrofon
+# selbst -- niemand muss ans Bedienpult.
+#
+# Der Empfaenger ist `KG_URL` aus der .env des Dienstes (dort auf
+# http://127.0.0.1:8800). Fehlt der Wert, schaltet das Gate weiterhin die
+# Erkennung und zeigt seinen Zustand an, nur meldet es niemandem etwas --
+# `args.py` sagt das beim Start selbst.
+#
+# Die drei Schwellen (`--mic-gate-threshold` 0,002, Hysterese 0,5, Entprellung
+# 1500 ms) werden BEWUSST nicht mitgegeben: sie werden vor Ort eingemessen und
+# in settings.py gespeichert, und ein getippter Wert schlaegt den gespeicherten.
+# Wer hier eine Zahl fest verdrahtet, kann sie an der Operator-Seite nicht mehr
+# aendern. Einmessen: Pegel auf http://127.0.0.1:5051/operator ablesen, waehrend
+# der Schalter AUS ist -- der richtige Wert liegt knapp darueber.
+#
+# Abschalten fuer eine Sitzung:  KG_MIC_GATE=0 ./scripts/start-stt-mac.sh
+GATE=(--mic-gate)
+if [ "${KG_MIC_GATE:-1}" = "0" ]; then
+  GATE=()
+  echo "HINWEIS: Mikrofonschalter AUS (KG_MIC_GATE=0) -- es wird durchgehend erkannt."
+fi
+
 set -o pipefail
 "$PY" -m fundusapps.stt_server \
     --language de \
     infomaniak-whisper \
     --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY \
+    "${GATE[@]}" \
     "$@" 2>&1 | tee -a "$LOG"
 CODE=${PIPESTATUS[0]}
 

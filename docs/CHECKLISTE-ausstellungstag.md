@@ -92,12 +92,31 @@ oder ausdrücklich als ungeprüft markiert** — nichts dazwischen.
 Nicht mehr auf dem Windows-Tracking-Laptop. **Damit gibt es keinen Fernzugriff
 mehr** — Dateien kommen über `git pull` dorthin, Birk startet neu.
 
-**Starten:**
+**Starten (seit 2026-09-01 der Weg):**
 ```bash
-cd <repo> && ./scripts/start-mac.sh
+cd <repo> && ./scripts/start-station.sh
 ```
-Öffnet Kern, Traum, Touchfläche (`?touch=1`) und Bedienpult. Beenden mit
-Strg-C in demselben Fenster.
+Startet **alle drei** Dienste — Spracherkennung (mit Mikrofonschalter), Kern
+und Traum — in EINEM Fenster und öffnet **keine** Browserfenster (Birk:
+„die Browser-Fenster will ich selbst öffnen"). Auf den Schirm kommt nur, was
+eine Handlung auslöst; alles andere liegt in `~/kg-logs/`.
+
+**Beenden:** Strg-C in demselben Fenster, oder `./scripts/stop-station.sh`.
+
+🔴 **`pkill -f "python -m kg …"` beendet den Kern NICHT.** macOS nennt das
+Binary `Python` mit großem P, und `pkill -f` unterscheidet Groß- und
+Kleinschreibung — das Muster trifft nur den `uv run`-Mantel. Am 2026-09-01
+lief dadurch ein zweiter Kern weiter und stritt sich um den Telegram-Bot
+(`telegram.error.Conflict`); zwei Kerne sassen dabei auch SIGTERM aus.
+`stop-station.sh` geht deshalb über den PORT statt über den Namen und **prüft
+danach nach**. Vor jedem `dichte-umschalten.py` nötig.
+
+**Die alten Skripte bleiben** und sind unverändert benutzbar:
+`start-mac.sh` (Kern + Traum + Fenster, ohne Spracherkennung) und
+`start-stt-mac.sh` (Spracherkennung allein). `start-station.sh` ruft genau
+diese beiden auf — es gibt keine zweite Fassung ihrer Logik.
+Neu an `start-mac.sh`: `KG_FENSTER=0` lässt die Fenster weg, und die
+Wandadresse trägt jetzt ausdrücklich `&theme=f`.
 
 **Beim ersten Start von Hand nötig:** Das Wandfenster auf den richtigen Schirm
 schieben und dort per grünem Knopf auf Vollbild. Danach merkt es sich das —

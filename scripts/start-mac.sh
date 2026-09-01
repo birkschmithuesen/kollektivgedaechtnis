@@ -69,7 +69,10 @@ if [ ! -x "$BRAVE" ]; then
   # Chrome als Rückfall — derselbe Motor, dieselben Schalter.
   BRAVE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 fi
-if [ ! -x "$BRAVE" ]; then
+# Nur ein Blocker, wenn wir wirklich Fenster öffnen sollen. Mit KG_FENSTER=0
+# laufen die Dienste ohne Browser — dann darf ein fehlender Brave den Start
+# nicht verhindern.
+if [ ! -x "$BRAVE" ] && [ "${KG_FENSTER:-1}" != "0" ]; then
   echo "FEHLER: Weder Brave noch Chrome unter /Applications gefunden." >&2
   echo "        Erwartet: $BRAVE" >&2
   exit 1
@@ -166,12 +169,28 @@ fi
 # hängt sich die Touch-Steuerung gar nicht erst ein — keine Zoomgeste, kein
 # Zoomregler, keine Bedienleiste. Genau das war auf dem Windows-Rechner der
 # Fehler (docs/STAND.md §2n).
+#
+# `theme=f` steht seit 2026-09-01 ausdrücklich in der Adresse (Birk: „der touch
+# soll mit layout f laufen"). Es ist zwar auch schon die Vorgabe in
+# `frontend/projection.html` — dort fällt jeder unbekannte oder fehlende Wert
+# auf 'f' zurück —, aber eine Vorgabe im Quelltext sieht man am Ausstellungstag
+# nicht, und eine Adresse sieht man. Wer prüfen will, welches Layout läuft,
+# liest die Adresszeile statt einer JS-Datei.
+WAND_URL="http://$HOST:$PORT/projection?touch=1&theme=f"
+
+# 🔴 Fenster abschaltbar (KG_FENSTER=0). Birk am 2026-09-01: „die browser
+# fenster will ich selbst öffnen." Der Sammelstarter nutzt genau das; die
+# Dienste laufen dann ohne einen einzigen Browser.
+if [ "${KG_FENSTER:-1}" = "0" ]; then
+  echo "      Fenster übersprungen (KG_FENSTER=0) — selbst öffnen:"
+  echo "        $WAND_URL"
+else
 while true; do
   "$BRAVE" --user-data-dir="$PROFIL_WAND" \
     --new-window --start-fullscreen --noerrdialogs \
     --disable-session-crashed-bubble --disable-infobars \
     --autoplay-policy=no-user-gesture-required \
-    "http://$HOST:$PORT/projection?touch=1"
+    "$WAND_URL"
   echo "      Wandfenster beendet, Neustart" >&2
   sleep 2
 done &
@@ -183,11 +202,11 @@ while true; do
     "http://$HOST:$PORT/operator"
   sleep 2
 done &
+fi
 
 cat <<'HINWEIS'
 
-      Offen:
-        Touchfläche   http://127.0.0.1:8800/projection?touch=1
+      Touchfläche   http://127.0.0.1:8800/projection?touch=1&theme=f
         Bedienpult    http://127.0.0.1:8800/operator
 
       Bei Bedarf von Hand:
