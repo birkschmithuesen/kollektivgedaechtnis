@@ -87,29 +87,66 @@ def main() -> int:
                                "quote": len(r.quotes), "name": len(r.names),
                                "ende": r.interview_end_index / max(1, len(t)),
                                "labels": [x.label for x in r.terms]}
+                    eintrag["fehler"] = None
                 except Exception as exc:
+                    # 🔴 Ein FEHLER ist kein leeres Ergebnis. Bis 2026-09-01
+                    # landete er hier als terms=0/ende=0.0 in derselben Spalte
+                    # wie eine echte leere Antwort, und `fehler` wurde nie
+                    # gedruckt. Dadurch erschien jeder gescheiterte Aufruf
+                    # gleichzeitig als „leer" UND als „ende=0 %" -- die
+                    # Korrelation zwischen beiden Befunden war zu einem
+                    # grossen Teil dieses Skript, nicht das Modell.
                     eintrag = {"sitzung": n, "terms": 0, "quote": 0, "name": 0,
-                               "ende": 0.0, "labels": [], "fehler": str(exc)[:60]}
+                               "ende": None, "labels": [], "fehler": str(exc)[:80]}
                 roh[name].append(eintrag)
-                print(f"  {name:<5} Lauf {lauf+1}: terms={eintrag['terms']} "
-                      f"quote={eintrag['quote']} name={eintrag['name']} "
-                      f"ende={eintrag['ende']*100:.0f}%  {eintrag['labels']}")
+                if eintrag["fehler"]:
+                    print(f"  {name:<5} Lauf {lauf+1}: FEHLER  {eintrag['fehler']}")
+                else:
+                    print(f"  {name:<5} Lauf {lauf+1}: terms={eintrag['terms']} "
+                          f"quote={eintrag['quote']} name={eintrag['name']} "
+                          f"ende={eintrag['ende']*100:.0f}%  {eintrag['labels']}")
 
     print("\n" + "=" * 84)
     print("ZUSAMMENFASSUNG (ueber alle Sitzungen und Laeufe)")
-    print(f"{'Fassung':<8}{'Begriffe':>10}{'mit Zitat':>12}{'mit Name':>11}{'leer':>7}")
+    print("Gezaehlt wird nur ueber GELUNGENE Aufrufe; Fehler stehen daneben.")
+    print(f"{'Fassung':<8}{'Begriffe':>10}{'mit Zitat':>12}{'mit Name':>11}"
+          f"{'leer':>8}{'Fehler':>9}")
     for name, eintraege in roh.items():
         n_ges = len(eintraege)
-        begriffe = statistics.mean(e["terms"] for e in eintraege)
-        mit_zitat = sum(1 for e in eintraege if e["quote"] > 0)
-        mit_name = sum(1 for e in eintraege if e["name"] > 0)
-        leer = sum(1 for e in eintraege if e["terms"] == 0)
-        print(f"{name:<8}{begriffe:>10.1f}{mit_zitat:>9}/{n_ges:<2}"
-              f"{mit_name:>8}/{n_ges:<2}{leer:>5}/{n_ges}")
+        ok = [e for e in eintraege if not e["fehler"]]
+        fehler = n_ges - len(ok)
+        begriffe = statistics.mean([e["terms"] for e in ok]) if ok else 0.0
+        mit_zitat = sum(1 for e in ok if e["quote"] > 0)
+        mit_name = sum(1 for e in ok if e["name"] > 0)
+        leer = sum(1 for e in ok if e["terms"] == 0)
+        print(f"{name:<8}{begriffe:>10.1f}{mit_zitat:>9}/{len(ok):<2}"
+              f"{mit_name:>8}/{len(ok):<2}{leer:>6}/{len(ok):<2}{fehler:>7}/{n_ges}")
+
+    # Die Frage, wegen der es diesen Block gibt: haengt ein leeres Ergebnis am
+    # gefundenen Ende? Ausgezaehlt wird sie hier, nicht geschaetzt.
+    alle_ok = [e for eintraege in roh.values() for e in eintraege if not e["fehler"]]
+    if alle_ok:
+        print()
+        print("ENDE-INDEX gegen leeres Ergebnis (nur gelungene Aufrufe):")
+        print(f"{'Ende':<14}{'Laeufe':>8}{'davon leer':>12}")
+        for etikett, gilt in (
+            ("< 10 %", lambda e: e["ende"] < 0.10),
+            ("10-90 %", lambda e: 0.10 <= e["ende"] <= 0.90),
+            ("> 90 %", lambda e: e["ende"] > 0.90),
+        ):
+            gruppe = [e for e in alle_ok if gilt(e)]
+            leer = sum(1 for e in gruppe if e["terms"] == 0)
+            print(f"{etikett:<14}{len(gruppe):>8}{leer:>12}")
+        print()
+        print("Sind die leeren Laeufe ueber alle drei Zeilen verteilt, liegt es")
+        print("NICHT am Ende-Index. Haeufen sie sich in der ersten, dann doch.")
 
     print()
     print("Ein leeres Ergebnis ist ein AUSFALL, keine Meinung: die Station")
     print("bekommt dann weder Begriff noch Zitat noch Namen fuer diese Person.")
+    print("Ein FEHLER ist ein zweiter, anderer Ausfall -- und er war bis zum")
+    print("2026-09-01 in dieser Auswertung nicht von einem leeren Ergebnis zu")
+    print("unterscheiden.")
     return 0
 
 

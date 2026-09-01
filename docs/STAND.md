@@ -532,6 +532,15 @@ keinen Namen** — sie erscheint als leere Scheibe auf der Wand. Das ist der
 Unterschied zwischen „Prompt-Feinschliff" und „ein Drittel der Besucher fällt
 aus".
 
+**➜ Als Aufgabe an Claude Code delegiert (2026-09-01, 16:40)**, Opus mit
+`--effort high` + ultrathink. Brief: `/tmp/brief-leere-interviews.md`. Auftrag:
+Ursache belegen (nicht raten), beheben, Test mit Mutationsprobe, committen ohne
+push. Rechte über `--settings` statt `--dangerously-skip-permissions` (das ist
+auf diesem Server hart geblockt) — `ssh`/`scp`/`git push` sind **verboten**,
+damit der Agent die PII-Transkripte auf der Station gar nicht erreichen kann.
+Ausdrücklich untersagt: die volle 25-Minuten-Suite. Nur
+`pytest -k "extraction or pipeline"` (Baseline **29 passed**, ~10 s).
+
 **Der Grund liegt am Interview, nicht am Prompt** (der Ausfall ist in beiden
 Fassungen identisch). Sitzung 30 hat 825 Wörter, aber die häufigsten sind
 „ähm 34, ja 30, wir 30, mhm 16" — das ist ein **Arbeitsgespräch** (Aufbau,
@@ -594,6 +603,111 @@ erste Stellschraube zurück.
 1600 px genauso zuverlässig greift wie bei 1024. Alle vorhandenen App-Fotos
 **sind** bereits auf 1024 verkleinert — man kann sie nicht vergrößern, ohne
 Pixel zu erfinden. Das beantwortet erst der nächste Fototest mit v8.
+
+---
+
+## 2j. Die leeren Interviews: die billige Erklärung trägt nicht (2026-09-01, abends)
+
+Bearbeitung des Briefs aus §2h. **Die naheliegende Hypothese ist widerlegt**,
+und zwar zweimal — an den bereits vorliegenden Zahlen und am Code selbst.
+
+### Widerlegung 1: `end_index = 0` verwirft im Code gar nichts
+
+`kg/pipeline.py` schneidet mit `text[:end].strip() or text.strip()` — bei
+`end = 0` fällt das auf den **vollen Text** zurück. Und `result.terms` wird vom
+Index überhaupt nie berührt. Ein Lauf mit `end = 0`, sechs Begriffen, Zitat und
+Namen durch die echte Pipeline gefahren:
+
+```
+status: done | Kanten: 2 | Zitate: 1 | Name: 'Mara' | Transkript: 213/213 Zeichen
+```
+
+Nichts geht verloren. Der Satz „bei `interview_end_index = 0` ist das ganze
+Interview verworfen" gilt **nur als Anweisung an das Modell**, nicht im
+Programm.
+
+### Widerlegung 2: leere Läufe gibt es auch ganz ohne Beschneidung
+
+Nachgerechnet an der Messung aus §2h: von 30 Läufen waren **17 leer**, aber nur
+**7 hatten `ende = 0 %`** — also höchstens **41 %**. Entscheidender ist die
+Gegenrichtung: mindestens **6 leere Läufe hatten `ende = 100 %`** (Sitzung 30
+allein 3), dort wurde also **überhaupt nichts abgeschnitten** und es kam
+trotzdem nichts. Der Ende-Index kann für diese Läufe nicht die Ursache sein.
+
+### 🔴 Und: ein Teil der Messung war das Messwerkzeug
+
+`scripts/ab-analyse-prompt.py` verbuchte einen **fehlgeschlagenen** LLM-Aufruf
+als `terms=0, quote=0, name=0, ende=0.0` — und den Fehlertext hat es zwar
+gespeichert, aber **nie gedruckt**. Jeder Fehler erschien dadurch gleichzeitig
+als „leer" **und** als „ende = 0 %". Die Korrelation zwischen den beiden
+Befunden aus §2h ist zu einem guten Teil dieses Skript gewesen. Passend dazu:
+Sitzung 37 hat als einzige **keine** leeren Läufe — und als einzige **keine**
+Null im Ende-Index. Das Skript zählt jetzt Fehler getrennt und druckt sie.
+
+**Folge:** die „Instabilität zwischen 0 % und 100 %" ist enger als berichtet.
+Ohne die vermutlichen Fehlläufe bleibt Sitzung 30 bei 49–100 %.
+
+### Was gebaut wurde (`kg/extraction.py`, `kg/pipeline.py`)
+
+Drei getrennte Sicherungen für drei getrennte Fehlerbilder:
+
+1. **Plausibilitätsprüfung des Ende-Index.** Lässt der gemeldete Index von
+   einem substanziellen Transkript weniger übrig als `MIN_INTERVIEW_CHARS`
+   (400 Zeichen — zwei Zitatlängen, hergeleitet aus dem 200-Zeichen-Deckel von
+   Aufgabe 3), wird er **verworfen statt befolgt**. Plausible Werte bleiben
+   unangetastet: Sitzung 37 schnitt bei 56–100 %, solche Urteile überstimmt die
+   Prüfung ausdrücklich nicht. Das schützt vor dem realen Schaden — 2 % von
+   2945 Zeichen sind 59 Zeichen gespeichertes Transkript.
+2. **Zweiter Anlauf ohne Ende-Suche.** Nur wenn das Ergebnis **komplett** leer
+   ist (kein Begriff, kein Zitat, kein Name) **und** der Text substanziell ist.
+   `EXTRACTION_SYSTEM_WITHOUT_END` entsteht aus derselben Vorlage wie
+   `EXTRACTION_SYSTEM` und unterscheidet sich in **genau einer** Stelle:
+   Aufgabe 1. Alle inhaltlichen Regeln bleiben — auch „Lieber weniger Begriffe
+   als schwache Begriffe" und „Rate nicht". Ein Arbeitsgespräch darf also
+   weiterhin nichts liefern (§2h, Sitzung 30). Der Rückfall bettelt nicht, er
+   nimmt eine Variable heraus. Scheitert er selbst, bleibt es beim ersten
+   Ergebnis — nie ein `failed`, wo vorher ein gültiges (leeres) Ergebnis stand.
+3. **Nichts geht mehr lautlos durch.** `kg/pipeline.py` protokolliert jede
+   Person, die ohne Begriff, Zitat und Namen endet, mit Kennzahlen (keine
+   Texte). Der Status bleibt `done` — die Analyse **ist** gelaufen, und ein
+   `failed` würde eine Person, die schlicht nichts Verwertbares gesagt hat, als
+   Systemfehler ausweisen.
+
+Der normale Prompt ist dabei **zeichengleich mit dem gemessenen** geblieben
+(gegen `HEAD` verglichen, identisch) — die Umstellung auf eine gemeinsame
+Vorlage hat den Text nicht angefasst.
+
+**Der Rückfall ist zugleich die Messung.** Rettet er die leeren Fälle im
+Betrieb, ist die Ein-Aufruf-Kopplung belegt und steht im Log der Ausstellung.
+Rettet er sie nicht, war es der Text.
+
+Tests: `pytest -k "extraction or pipeline"` **40 passed** (Baseline 29, 11 neu),
+jede der drei Sicherungen einzeln mit Mutationsprobe rot bekommen (2/2/1 Tests).
+
+### 🔴 Was NICHT gelöst ist
+
+* **Warum das Modell bei substanziellem Text nichts liefert**, ist weiter
+  offen. Der Verdacht steht: `interview_end_index` ist das **erste** Feld des
+  Schemas (nachgesehen: `properties` und `required` beide in dieser
+  Reihenfolge), das Modell muss den Zeichen-Index also nennen, **bevor** es
+  irgendetwas Inhaltliches geschrieben hat — und alles Weitere entsteht unter
+  dieser eigenen, ungeprüften Festlegung. Belegt ist das **nicht**; dafür
+  braucht es einen Lauf gegen echte Sitzungen.
+* **Die 7 vermuteten Fehlläufe sind nicht aufgeklärt.** Es sind ~23 % harte
+  Ausfälle, und niemand weiß bisher woran — der erste Verdacht ist
+  `max_tokens` (16000) bei `llm_effort = "high"`. Das druckt das reparierte
+  Skript jetzt aus, ein Lauf genügt.
+* **Ob Sitzung 5 und 19 Arbeitsgespräche sind**, ist weiter ungeprüft
+  (Sichtprüfung an realen Aussagen, §2h).
+* **Feldreihenfolge im Schema nicht getauscht.** Das wäre die naheliegende
+  Konsequenz aus dem Verdacht oben und ein Einzeiler — aber sie ändert
+  **jeden** Aufruf statt nur der scheiternden, ungemessen, am Vorabend. Erst
+  messen, dann tauschen.
+
+**➜ Zu fahren auf der Station:** `scripts/pruefe-leere-extraktion.py`
+(nur Kennzahlen, kein Transkripttext, keine Begriffe). Beantwortet in einem
+Lauf: wie viele Fehler statt leerer Ergebnisse; ob leere Läufe sich beim
+Ende-Index häufen; und ob der zweite Anlauf rettet.
 
 ---
 

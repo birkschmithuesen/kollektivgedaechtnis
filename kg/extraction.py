@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel
+
+log = logging.getLogger(__name__)
 
 # The three guiding questions actually asked at the station. Single source of
 # truth: the simulation corpus generator (sim/generate_interviews.py) imports
@@ -62,7 +66,29 @@ _QUESTION_BLOCK = "\n".join(
     f"{number}. {question}" for number, question in enumerate(GUIDING_QUESTIONS, start=1)
 )
 
-EXTRACTION_SYSTEM = f"""\
+#: Aufgabe 1 im Normalfall: das Ende suchen und danach beschneiden.
+_TASK_FIND_END = """\
+1. ENDE FINDEN. Bestimme `interview_end_index`: den Zeichen-Index im Transkript, \
+an dem das Interview inhaltlich endet. Alles danach ignorierst du vollständig. \
+Läuft das Interview bis zum Schluss, gib die Länge des Transkripts an.\
+"""
+
+#: Aufgabe 1 im zweiten Anlauf: gar nicht erst suchen. Der Rest des Prompts ist
+#: Zeichen für Zeichen derselbe — der Rückfall nimmt genau EINE Variable heraus
+#: (die Ende-Beschneidung) und lässt jede inhaltliche Regel stehen. Insbesondere
+#: bleiben „Lieber weniger Begriffe als schwache Begriffe" und „Rate nicht" in
+#: Kraft: ein Arbeitsgespräch ohne Interview darf auch hier nichts liefern.
+_TASK_NO_END = """\
+1. KEIN ENDE SUCHEN. Setze `interview_end_index` auf die Zeichenlänge des \
+Transkripts, die oben genannt ist. Ein erster Durchgang über genau diesen Text \
+hat nichts geliefert; deshalb entfällt jede Beschneidung und du wertest das \
+GANZE Transkript aus. Smalltalk und Verabschiedung am Schluss sind weiterhin \
+keine Quelle für Begriffe oder das Zitat — aber du verwirfst deswegen nichts.\
+"""
+
+
+def _build_system(task_one: str) -> str:
+    return f"""\
 Du verdichtest das Transkript eines gesprochenen Interviews auf einer \
 Architektur- und Baukultur-Konferenz (Festival NEW bauhaus 2026) zu wenigen, \
 sehr konkreten Begriffen.
@@ -110,9 +136,7 @@ der nächsten Person oder Raumgeräusch.
 
 Deine vier Aufgaben:
 
-1. ENDE FINDEN. Bestimme `interview_end_index`: den Zeichen-Index im Transkript, \
-an dem das Interview inhaltlich endet. Alles danach ignorierst du vollständig. \
-Läuft das Interview bis zum Schluss, gib die Länge des Transkripts an.
+{task_one}
 
 2. BEGRIFFE. Nur aus dem Text VOR `interview_end_index`. Optimiere auf \
 KONKRETHEIT, nicht auf Häufigkeit.
@@ -153,6 +177,26 @@ weiterhin.
 
 Antworte ausschließlich im geforderten JSON-Schema.
 """
+
+
+EXTRACTION_SYSTEM = _build_system(_TASK_FIND_END)
+
+#: Der Prompt des zweiten Anlaufs (siehe `extract`). Entsteht aus derselben
+#: Vorlage, damit die beiden Fassungen nicht auseinanderdriften können.
+EXTRACTION_SYSTEM_WITHOUT_END = _build_system(_TASK_NO_END)
+
+#: Untergrenze in Zeichen, ab der ein Transkript überhaupt ein Interview sein
+#: kann. Hergeleitet, nicht geschätzt: Aufgabe 3 deckelt das Zitat bei 200
+#: Zeichen, und ein Interview, aus dem ein Zitat UND mehrere belegte Begriffe
+#: kommen sollen, braucht ein Vielfaches davon. 400 Zeichen sind zwei solche
+#: Zitate — darunter liegt kein Gespräch, sondern Raumgeräusch. Zum Vergleich:
+#: die fünf am 2026-09-01 gemessenen echten Sitzungen haben 2945 bis 4689
+#: Zeichen, also das Sieben- bis Zwölffache.
+#:
+#: Die Schwelle hat zwei Aufgaben in `extract()`: sie entscheidet, welcher
+#: `interview_end_index` noch als Kürzung durchgeht, und welcher Text einen
+#: zweiten Anlauf wert ist.
+MIN_INTERVIEW_CHARS = 400
 
 
 class ExtractedTerm(BaseModel):
@@ -197,18 +241,103 @@ def build_extraction_prompt(transcript: str, max_terms: int) -> str:
     )
 
 
+def _is_empty(result: ExtractionResult) -> bool:
+    """Nichts gefunden: kein Begriff, kein Zitat, kein Name.
+
+    Bewusst das UND: eine Antwort mit Zitat, aber ohne Begriff ist mager, aber
+    sie ist ein Ergebnis. Nur die vollständig leere Antwort ist der Ausfall, der
+    am 2026-09-01 gemessen wurde, und nur sie wird wiederholt.
+    """
+    return not result.terms and not result.quotes and not result.names
+
+
+def _resolve_end_index(reported: int, transcript: str) -> int:
+    """Der gemeldete Index, in den Text geklemmt — und auf Plausibilität geprüft.
+
+    Die Ende-Suche schneidet einen SCHWANZ ab (Verabschiedung, Smalltalk, die
+    nächste Stimme). Ein Wert, der von einem substanziellen Transkript weniger
+    übrig lässt als `MIN_INTERVIEW_CHARS`, behauptet, fast die ganze Aufnahme
+    sei Beiwerk gewesen — das ist keine knappe Kürzung, sondern ein Fehlgriff,
+    und er wird verworfen statt befolgt. Gemessen wurde genau das: 2 % von 2945
+    Zeichen (Sitzung 19), also 59 Zeichen Interview.
+
+    Plausible Werte bleiben unangetastet. Die einzige stabile Sitzung der
+    Messung schnitt bei 56 bis 100 %; solche Urteile überstimmt diese Funktion
+    ausdrücklich nicht.
+    """
+    end = max(0, min(int(reported), len(transcript)))
+    if len(transcript) >= MIN_INTERVIEW_CHARS and end < MIN_INTERVIEW_CHARS:
+        log.warning(
+            "extraction: end index %s of %s chars leaves no interview — using the full text",
+            end,
+            len(transcript),
+        )
+        return len(transcript)
+    return end
+
+
 def extract(llm, transcript: str, max_terms: int) -> ExtractionResult:
+    """Ein Aufruf; bei komplett leerem Ergebnis ein zweiter ohne Ende-Suche.
+
+    Warum überhaupt ein zweiter: Ende-Suche und Extraktion stecken in EINEM
+    Aufruf, und `interview_end_index` ist das erste Feld des Schemas — das
+    Modell muss den Zeichen-Index also nennen, bevor es irgendetwas Inhaltliches
+    geschrieben hat, und alles Weitere entsteht unter dieser eigenen, ungeprüften
+    Festlegung. Aufgabe 2 sagt dazu „Begriffe nur aus dem Text VOR
+    `interview_end_index`". Der zweite Anlauf nimmt genau diese Kopplung heraus
+    und sonst nichts.
+
+    Er ist zugleich die Messung: Rettet er die leeren Fälle, ist die Kopplung
+    belegt und steht als Warnung im Log der Ausstellung. Rettet er sie nicht,
+    lag es nicht an ihr — dann ist es ein Text ohne Interview, und auch das
+    steht im Log, statt als leere Scheibe an der Wand zu enden.
+    """
     result = llm.parse(
         system=EXTRACTION_SYSTEM,
         user=build_extraction_prompt(transcript, max_terms),
         output_model=ExtractionResult,
     )
-    end = max(0, min(int(result.interview_end_index), len(transcript)))
+
+    if _is_empty(result) and len(transcript) >= MIN_INTERVIEW_CHARS:
+        log.warning(
+            "extraction: nothing found in %s chars (end index %s) — asking again "
+            "without the end trimming",
+            len(transcript),
+            result.interview_end_index,
+        )
+        try:
+            second = llm.parse(
+                system=EXTRACTION_SYSTEM_WITHOUT_END,
+                user=build_extraction_prompt(transcript, max_terms),
+                output_model=ExtractionResult,
+            )
+        except Exception as exc:
+            # Der Rückfall darf nie schlimmer sein als kein Rückfall: das erste
+            # Ergebnis ist gültig, nur leer. Eine Exception hier machte daraus
+            # ein „failed" in der Pipeline und kostete Transkript und Portrait.
+            log.error("extraction: the second attempt failed as well: %s", exc)
+        else:
+            if _is_empty(second):
+                log.error(
+                    "extraction: still nothing after the second attempt — %s chars "
+                    "produced no term, no quote and no name",
+                    len(transcript),
+                )
+            else:
+                log.warning(
+                    "extraction: the second attempt rescued the interview "
+                    "(%s terms, %s quotes, %s names)",
+                    len(second.terms),
+                    len(second.quotes),
+                    len(second.names),
+                )
+            result = second
+
     # The cap is enforced here too: graph density must not depend on the model's mood.
     # Same discipline for quotes: exactly one per person, never the prompt's word alone.
     # And for the name, which a person has exactly one of here.
     return ExtractionResult(
-        interview_end_index=end,
+        interview_end_index=_resolve_end_index(result.interview_end_index, transcript),
         terms=list(result.terms)[:max_terms],
         quotes=list(result.quotes)[:1],
         names=list(result.names)[:1],

@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 
@@ -306,6 +307,49 @@ def test_an_llm_failure_marks_the_interview_failed_and_keeps_the_person(env):
     assert store.list_edges() == []
     # The wall still shows the portrait, and graph.json is still written.
     assert cfg.graph_json_path.exists()
+
+
+def test_a_person_who_got_nothing_out_of_the_analysis_is_logged_as_an_outage(env, caplog):
+    """Kein Begriff, kein Zitat, kein Name — das ist eine leere Scheibe an der Wand.
+
+    Bis heute lief dieser Fall als `status="done"` durch, ohne eine einzige
+    Zeile im Log: der sichtbarste Fehler der Station war der einzige, den
+    hinterher niemand nachzählen konnte (gemessen 2026-09-01: 17 von 30
+    Läufen leer). Der Status bleibt `done` — die Analyse ist gelaufen —, aber
+    das Ereignis wird protokolliert.
+    """
+    cfg, store, log = env
+    fill_log(log, [("Ähm. Ja. Also. Mhm.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM([ExtractionResult(interview_end_index=9999, terms=[], quotes=[], names=[])])
+
+    with caplog.at_level(logging.WARNING, logger="kg.pipeline"):
+        result = process_interview(
+            store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0
+        )
+
+    assert result.status == "done"
+    meldungen = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert any(person.id in m for m in meldungen), meldungen
+
+
+def test_a_person_with_only_a_name_and_no_terms_is_not_reported_as_an_outage(env, caplog):
+    """Ein Name allein ist wenig, aber es ist nicht nichts — kein Fehlalarm."""
+    cfg, store, log = env
+    fill_log(log, [("Ich bin Mara.", 105.0)])
+    person = store.create_person(started_at=100.0)
+    llm = ScriptedLLM(
+        [
+            ExtractionResult(
+                interview_end_index=9999, terms=[], quotes=[], names=[{"text": "Mara"}]
+            )
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="kg.pipeline"):
+        process_interview(store, cfg, llm, HashEmbedder(dim=64), log, person.id, 100.0, 150.0)
+
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING] == []
 
 
 def test_an_empty_transcript_is_not_sent_to_the_llm(env):

@@ -93,6 +93,23 @@ def process_interview(
         for name in result.names:
             if name.text.strip():
                 store.set_person_name(person_id, name.text.strip())
+
+        # Kein Begriff, kein Zitat, kein Name: die Person erscheint als leere
+        # Scheibe an der Wand. Der Status bleibt „done" — die Analyse IST
+        # gelaufen, und ein „failed" würde eine Person, die schlicht nichts
+        # Verwertbares gesagt hat, als Systemfehler ausweisen. Aber es darf
+        # nicht mehr lautlos passieren: bis heute war der sichtbarste Fehler
+        # der Station der einzige, den hinterher niemand nachzählen konnte
+        # (gemessen 2026-09-01: 17 von 30 Läufen leer, docs/STAND.md 2h).
+        # Nur Kennzahlen ins Log, kein Transkripttext — die Zeile landet in
+        # einer Datei, die nicht unter der PII-Disziplin der Transkripte steht.
+        if not term_ids and not result.quotes and not result.names:
+            log.warning(
+                "interview %s produced nothing: no term, no quote, no name from %s chars",
+                person_id,
+                len(transcript),
+            )
+
         store.set_person_status(person_id, "done")
         status = "done"
     except Exception as exc:  # a bad LLM turn must never stop the station
