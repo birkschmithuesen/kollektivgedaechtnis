@@ -1312,14 +1312,19 @@ export function createGraphView(
     // Geometric, like camera.js's lerpZoom and for the same reason: this is a
     // magnification travelling by a factor of ten, and the eye reads factors.
     //
-    // 🔴 Hier stand `capped` — eine Variable, die es in dieser Funktion nicht
-    // gibt (sie heißt seit dem Umbau vom 2026-09-01 `gewuenscht`; `capped`
-    // existiert nur in `frameToAspect`, gut 400 Zeilen weiter oben). Diese
-    // Zeile warf also einen ReferenceError, sobald der Übergabe-Blend lief,
-    // und riss `applyPortraitSize()` mit. Gefunden am 2026-09-01 abends, weil
+    // 🔴 Hier stand bis 2026-09-01 `capped` — der Bezeichner, den der Commit
+    // „Beide Regler wirken wieder" (7e6307c) an den drei Stellen darüber in
+    // `gewuenscht` umbenannt und an dieser vierten übersehen hat. Der Zweig
+    // wird NUR bei laufendem Handover betreten (sonst kehrt `blend` bei 0
+    // oder 1 vorher um), weshalb es keine Testabdeckung gab, die es sofort
+    // gezeigt hätte.
+    //
+    // Der ReferenceError flog von hier durch `cy.zoom()` bis in `tick()`
+    // hinauf — die Bildschleife der Wand starb dann 300 ms nach dem Beginn
+    // JEDER Übergabefahrt. Also kein Ruckeln, sondern Stillstand.
+    // Gemessen und abgesichert in `tests/test_camera_wand_haelt_durch.py`;
     // fünf Tests in `test_projection.py` und zwei in
-    // `test_projection_schwarzplan.py` seither rot standen — nicht durch die
-    // Plenar-Arbeit verursacht, aber auf ihrem Weg gefunden.
+    // `test_projection_schwarzplan.py` standen seither rot.
     return freeWidth * Math.pow(gewuenscht / freeWidth, blend);
   }
 
