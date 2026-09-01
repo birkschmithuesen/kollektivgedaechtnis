@@ -144,14 +144,72 @@ def test_der_code_haengt_sichtbar_an_der_wand(wand):
              if (!bild) return null;
              const r = bild.getBoundingClientRect();
              const s = getComputedStyle(document.querySelector('.qr-hinweis'));
+             const sb = getComputedStyle(bild);
              return {breite: r.width, hoehe: r.height, pointer: s.pointerEvents,
+                     deckkraft: parseFloat(sb.opacity),
+                     hintergrund: s.backgroundColor,
                      geladen: bild.complete && bild.naturalWidth > 0};
            }"""
     )
     assert masse is not None, "der QR-Code ist nicht in der Wandseite eingebunden"
     assert masse["geladen"], "die SVG-Datei wird nicht geladen (falscher Pfad?)"
     assert masse["breite"] >= 100, f"der Code ist nur {masse['breite']}px breit"
-    assert masse["pointer"] == "none", "die Karte faengt Beruehrungen ab"
+    assert masse["pointer"] == "none", "der Code faengt Beruehrungen ab"
+
+
+def test_der_code_haengt_ohne_kasten_und_ohne_text(wand):
+    """Birk, 2026-09-01: „Der qr code ohne Text so unauffaellig wie moeglich.
+    Ecke ist OK. Hintergrund mit transparenz."
+
+    Geprueft wird beides: keine Beschriftung, und die Flaeche darum traegt
+    keinen eigenen Hintergrund mehr (die alte Fassung hatte eine helle Karte
+    mit Schatten und dem Text „Am eigenen Telefon mitlesen")."""
+    befund = wand.evaluate(
+        """() => {
+             const kasten = document.querySelector('.qr-hinweis');
+             const s = getComputedStyle(kasten);
+             return {text: kasten.textContent.trim(),
+                     hintergrund: s.backgroundColor,
+                     schatten: s.boxShadow,
+                     kindElemente: kasten.children.length};
+           }"""
+    )
+    assert befund["text"] == "", f"der Code traegt noch Text: {befund['text']!r}"
+    assert befund["kindElemente"] == 1, "neben dem Bild haengt noch etwas daran"
+    # rgba(0,0,0,0) = transparent; alles andere waere wieder ein Kasten.
+    assert "rgba(0, 0, 0, 0)" in befund["hintergrund"] or befund["hintergrund"] == "transparent", (
+        f"die Flaeche hat wieder einen Hintergrund: {befund['hintergrund']}"
+    )
+    assert befund["schatten"] in ("none", ""), f"der Schatten ist zurueck: {befund['schatten']}"
+
+
+def test_die_deckkraft_bleibt_ueber_der_gemessenen_lesegrenze(wand):
+    """🔴 Die Zahl, die diesen Code lesbar haelt.
+
+    Ein QR-Code lebt vom Kontrast zwischen hellen und dunklen Modulen. Wird er
+    durchsichtig, sinkt der helle Anteil gegen die fast schwarze Wand ab
+    (gemessene Wandhelligkeit 6.7 von 255). Am 2026-09-01 auf dem echten
+    Wandbild mit OpenCVs Dekodierer durchgemessen:
+
+        100 % .. 46 %      lesbar
+        44 % und darunter  NICHT mehr lesbar
+
+    Gesetzt sind 70 %: Birks „so unauffaellig wie moeglich" mit Abstand zur
+    Grenze. Der Abstand ist noetig, weil eine Handykamera schlechter sieht als
+    ein Dekodierer auf einem perfekten Rendering — Schraeglage, Bewegung,
+    Beamer-Gamma, Streulicht.
+
+    Dieser Test ist die Bremse gegen ein spaeteres „mach ihn noch dezenter":
+    Unter 50 % darf niemand gehen, ohne neu zu messen.
+    """
+    deckkraft = wand.evaluate(
+        "() => parseFloat(getComputedStyle(document.querySelector('.qr-bild')).opacity)"
+    )
+    assert deckkraft >= 0.5, (
+        f"Deckkraft {deckkraft:.0%} liegt zu nah an der gemessenen Lesegrenze von 46 % — "
+        "vor einer weiteren Absenkung neu messen (siehe Docstring)"
+    )
+    assert deckkraft <= 1.0
 
 
 def test_der_code_verdeckt_weder_zitat_noch_legende(wand):

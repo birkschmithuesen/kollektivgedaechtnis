@@ -156,31 +156,38 @@ body:has(.touch-controls) .dream-legende { bottom: 92px; }
 
 /* QR-Code auf die oeffentliche Handyseite (Birk, 2026-09-01).
 
-   Unten RECHTS: unten Mitte liegt das Zitat, unten links die Legende. Die
-   Ecken sind auf der Wand die einzigen Flaechen, die der Graph selten
-   erreicht, und der Code muss dauerhaft sichtbar bleiben — er nuetzt nur
-   etwas, wenn jemand ihn sieht, waehrend er ohnehin auf die Wand schaut.
+   „Ohne Text, so unauffaellig wie moeglich. Ecke ist OK. Hintergrund mit
+   Transparenz." — deshalb: kein Kasten, keine Beschriftung, kein Schatten,
+   nur der Code selbst in der Ecke.
 
-   Der Code braucht WEISS unter sich: Ein QR-Code auf schwarzem Grund wird von
-   vielen Lesern nicht gefunden, weil sie ein dunkles Muster auf hellem Grund
-   erwarten. Deshalb ist das Feld hier hell — anders als die Legende, die
-   bewusst kastenlos bleibt. Das ist kein Stilbruch, sondern eine
-   Lesbarkeitsbedingung: er soll funktionieren, nicht sich einfuegen.
+   🔴 Die Deckkraft ist GEMESSEN, nicht geschaetzt. Ein QR-Code lebt vom
+   Kontrast zwischen hellen und dunklen Modulen; wird der helle Anteil
+   durchsichtig, sinkt er gegen die fast schwarze Wand (gemessene Helligkeit
+   6.7) ab, und irgendwann sind hell und dunkel nicht mehr zu trennen. Auf
+   dem echten Wandbild mit OpenCVs Dekodierer durchgemessen:
 
-   Groesse: 132px bei 4K sind aus etwa 2-3 m gut erfassbar. Vor Ort am Beamer
-   ist das die einzige Zahl, die man wahrscheinlich anpassen will (Birk
-   entscheidet am Bild). */
+     100% .. 46%  lesbar
+     44% und darunter  NICHT mehr lesbar
+
+   Gewaehlt sind 70%: deutlich zurueckgenommen, aber mit Abstand zur Grenze.
+   Der Abstand ist noetig, weil eine Handykamera schlechter sieht als ein
+   Dekodierer auf einem perfekten Rendering — Schraeglage, Bewegung,
+   Beamer-Gamma, Streulicht im Raum. Bei 70% blieb der Code auch mit
+   simulierter Kameraunschaerfe und bis auf 80px verkleinert lesbar.
+
+   Wer ihn noch unauffaelliger will: bis ~55% ist Luft, darunter wird es
+   unzuverlaessig. NICHT unter 50% gehen, ohne neu zu messen.
+
+   Nicht invertiert (heller Code auf dunkler Wand): ebenfalls gemessen, von
+   keinem Dekodierer gelesen — Leser erwarten dunkle Module auf hellem Grund.
+
+   Groesse: 132px bei 4K sind aus etwa 2-3 m erfassbar. Vor Ort am Beamer ist
+   das die Zahl, die man wahrscheinlich anpassen will. */
 .qr-hinweis {
   position: fixed;
-  right: 28px;
-  bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  background: #f4f1ea;
-  border-radius: 3px;
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.7);
+  right: 30px;
+  bottom: 26px;
+  display: block;
   pointer-events: none; /* nimmt der Wand nie eine Beruehrung weg */
   user-select: none;
   z-index: 8;
@@ -189,16 +196,11 @@ body:has(.touch-controls) .dream-legende { bottom: 92px; }
   width: 132px;
   height: 132px;
   display: block;
-  /* Der Code ist bereits weiss hinterlegt (Ruhezone im SVG); der Rahmen
-     drumherum ist die Karte, nicht das Bild. */
+  /* Die weisse Flaeche kommt aus dem SVG selbst (inkl. Ruhezone) — die
+     Transparenz wirkt deshalb auf den Code ALS GANZES, hell wie dunkel im
+     selben Verhaeltnis. Genau das hat die Messung oben geprueft. */
+  opacity: 0.7;
 }
-.qr-text {
-  font-size: 17px;
-  line-height: 1.35;
-  color: #14120f;
-  opacity: 0.78;
-  letter-spacing: 0.01em;
-}
-/* Auf der Touchflaeche sitzt unten die Bedienleiste — die Karte rueckt darueber,
+/* Auf der Touchflaeche sitzt unten die Bedienleiste — der Code rueckt darueber,
    wie die Legende auf der anderen Seite. */
-body:has(.touch-controls) .qr-hinweis { bottom: 92px; }
+body:has(.touch-controls) .qr-hinweis { bottom: 94px; }
