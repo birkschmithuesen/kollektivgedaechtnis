@@ -70,10 +70,29 @@
      das PNG-Alpha unter 255 faellt, und bricht an der Knotenkante HART auf
      Schwarz ab. Genau diese Kante hat er gesehen.
 
-     Auf Schwarz gesetzt gibt es keinen Sprung mehr: Die Flaeche hat dieselbe
-     Farbe wie der Grund, also verschwindet ihre Kante. Sichtbar bleibt nur
-     der Alpha-Verlauf des Bildes selbst, und der laeuft stufenlos aus. */
-  --person-fill: #000000;
+     Auf Schwarz gesetzt gab es keinen Sprung mehr — solange nichts hinter der
+     Scheibe lag. Genau diese Einschränkung wurde am 2026-09-01 zum Problem,
+     siehe unten. */
+  /* 🔴 `transparent` seit 2026-09-01 (Birk an der Wand: „Das Portrait blendet
+     ja aus, und dahinter erscheint der Graph — der blendet aber nicht ein.
+     Der Ring drumherum ist irgendwie hart schwarz, das sieht scheiße aus.").
+
+     Vorher stand hier `#000000`, mit der Begründung „Farbe wie der Grund, also
+     verschwindet ihre Kante". Die Begründung stimmt nur für einen LEEREN
+     Hintergrund: Wo hinter der Scheibe nichts liegt, ist Schwarz auf Schwarz
+     unsichtbar. Wo aber Kanten, Begriffe oder ein zweites Portrait
+     durchscheinen müssten, ist dieselbe Fläche eine deckende schwarze
+     Kreisscheibe — und der weiche Alpha-Verlauf des PNG blendet dann nicht auf
+     den Graphen aus, sondern auf ein schwarzes Loch. Genau diesen Rand sieht
+     Birk.
+
+     `transparent` löst das an der Wurzel: Es gibt keine Füllung mehr, auf die
+     das Bild ausblenden könnte. Sichtbar ist nur noch der Alpha-Verlauf des
+     Portraits selbst (`soft_disc_mask` in `kg/photos.py`), und darunter liegt,
+     was auch sonst dort liegt. Auf leerem Grund ist das Ergebnis identisch mit
+     vorher — Schwarz und Nichts sehen auf Schwarz gleich aus. Der Unterschied
+     zeigt sich nur dort, wo etwas dahinter ist, und dort ist er der Punkt. */
+  --person-fill: transparent;
 
   /* Die Scheibe eines Menschen OHNE Portrait (Birk, 2026-09-01: „Es kann ja
      sein, dass irgendwer nicht will, dass ein Foto von ihm oder ihr gemacht
