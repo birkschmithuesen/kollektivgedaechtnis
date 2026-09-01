@@ -56,7 +56,12 @@ object Uploader {
     fun sende(
         ziel: URL,
         jpeg: ByteArray,
-        timeoutMs: Int = 10_000,
+        // 30 s statt 10: gemessen am 2026-09-01 dauerte ein grosses Foto ueber
+        // eine Handyverbindung laenger als der alte Wert. Seit Bildbytes
+        // verkleinert, sind es typisch unter 200 kB -- aber ein knapper
+        // Timeout wuerde genau dann zuschlagen, wenn das Netz im Flur schwach
+        // ist, also im ungeeignetsten Moment.
+        timeoutMs: Int = 30_000,
         oeffne: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
     ): Ergebnis {
         var verbindung: HttpURLConnection? = null

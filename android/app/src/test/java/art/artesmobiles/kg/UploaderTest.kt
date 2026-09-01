@@ -73,6 +73,12 @@ class UploaderTest {
     }
 
     // --- Bildbytes: der stille Datenfehler ---------------------------------
+    //
+    // Nur `ausBuffer` wird hier geprueft. `verkleinere` braucht Androids
+    // Bitmap/BitmapFactory und liefert auf der blanken JVM nur Attrappenwerte
+    // -- ein Test dagegen wuerde die Attrappe pruefen, nicht das Verkleinern.
+    // Diese Luecke ist bewusst und benannt: belegt ist sie am Geraet (Groesse
+    // in der Statuszeile) und an der Station (Byteszahl im Log).
 
     @Test
     fun `nur die belegten bytes werden gelesen, nicht der ganze puffer`() {

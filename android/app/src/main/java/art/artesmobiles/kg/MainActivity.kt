@@ -123,6 +123,12 @@ class MainActivity : AppCompatActivity() {
                     // Puffer nach wenigen Fotos jede weitere Aufnahme — die
                     // App wirkt dann „hängt beim dritten Bild".
                     val bytes = bild.use { Bildbytes.ausProxy(it) }
+                    // Die Größe steht in der Statuszeile, und das ist kein
+                    // Schmuck: am 2026-09-01 hielt ein 4,4-MB-Foto die App
+                    // sichtbar an, und ohne Zahl war „langsam" von „hängt"
+                    // nicht zu unterscheiden. Jetzt ist ablesbar, dass etwas
+                    // unterwegs ist und wieviel.
+                    zeige(getString(R.string.sende_groesse, bytes.size / 1024), fehler = false)
                     sendeHoch(bytes)
                 }
 
