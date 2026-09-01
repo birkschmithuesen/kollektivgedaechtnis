@@ -22,7 +22,7 @@
 >
 > **Verbindlich sind stattdessen:** `docs/superpowers/specs/2026-08-25-kollektivtraum-design.md`
 > (nachgezogen), `docs/operations.md` (kalibrierte Werte) und
-> `docs/HANDOFF-2026-08-29.md` (aktueller Stand). Dieses Dokument nur noch
+> `docs/archiv/HANDOFF-2026-08-29.md` (aktueller Stand). Dieses Dokument nur noch
 > lesen, um zu verstehen, **warum** etwas ursprünglich so gebaut wurde.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

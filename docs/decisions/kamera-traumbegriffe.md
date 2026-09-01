@@ -1,6 +1,6 @@
 # Decision — Kamera an die Traumbegriffe koppeln (Birk, 2026-08-31)
 
-Bindend. Schließt Abschnitt 1 des `docs/HANDOFF-kamera-traumbegriffe.md` ab —
+Bindend. Schließt Abschnitt 1 des `docs/archiv/HANDOFF-kamera-traumbegriffe.md` ab —
 dort standen vier Fragen als „nicht entschieden und gehören Birk". Hier stehen
 die Antworten und die Messungen, gegen die sie entschieden wurden.
 

@@ -13,6 +13,17 @@ Portrait-Vorschau und Messwerkzeug sind gebaut und einsatzbereit —
 Vollständiger Auftrag: `docs/HANDOFF-foto-app-uebergabe.md`
 Ablauf und Werkzeug: `docs/HANDOFF-fototest-zuschnitt.md`
 
+## 🔴 Zuerst: `docs/STAND.md`
+
+**Das ist das EINE Dokument, mit dem eine Session anfängt.** Was läuft, was
+ungeprüft ist, welche Entscheidungen Birk selbst trifft, und was als Nächstes
+zu tun wäre. Alles Ältere liegt unter `docs/archiv/` und ist erledigt —
+dort steht nichts, was noch gilt.
+
+Neue Erkenntnisse gehören **in `docs/STAND.md`**, nicht in ein neues Handoff.
+Am 2026-09-01 lagen elf Handoff-Dateien nebeneinander, acht davon erledigt;
+niemand konnte sagen, welche noch stimmte.
+
 ## 🔴 Vor JEDEM Zugriff auf den Ausstellungsrechner
 
 **`docs/ARBEITSREGELN-ausstellungsrechner.md` lesen.** Vollständig, nicht
@@ -51,6 +62,7 @@ Dateien angefasst hat.
 
 | Thema | Datei |
 |---|---|
+| **Stand + was als Nächstes** | `docs/STAND.md` |
 | **Regeln Ausstellungsrechner** | `docs/ARBEITSREGELN-ausstellungsrechner.md` |
 | Betrieb, Dienste, Fehlerbilder | `docs/BETRIEB-ausstellungsrechner.md` |
 | Runbook Ausstellungstag | `docs/operations.md` |
@@ -58,7 +70,9 @@ Dateien angefasst hat.
 | Foto-App (Android) | `android/README.md` |
 | **Übergabe / offene Punkte** | `docs/HANDOFF-foto-app-uebergabe.md` |
 | **Fototest + Zuschnitt-Rückmeldung** | `docs/HANDOFF-fototest-zuschnitt.md` |
+| Alternativ-Foto-Cache (offen) | `docs/HANDOFF-alternativ-foto-cache.md` |
 | Öffentlicher Spiegel + Abholer | `mirror/README.md` |
+| Erledigtes (nur zum Nachschlagen) | `docs/archiv/` |
 
 ## Tests
 
