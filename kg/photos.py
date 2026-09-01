@@ -1,11 +1,19 @@
-"""Portrait normalisation: arbitrary phone resolution in, uniform circle out (spec 10.2)."""
+"""Portrait normalisation: arbitrary phone resolution in, uniform circle out (spec 10.2).
+
+Der Ausschnitt folgt dem Gesicht, wenn eines gefunden wird, und schneidet sonst
+mittig wie zuvor (Birk, 2026-09-01: „Was ist mit dem face tracking um den
+Ausschnitt vom portrait richtig zu wählen?").
+"""
 
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageOps
+
+log = logging.getLogger(__name__)
 
 # Faces sit above the vertical centre in booth portraits.
 VERTICAL_BIAS = 0.35
@@ -117,6 +125,87 @@ def ring_glow(size: int, inner: float = 0.45, gamma: float = 1.6) -> Image.Image
     return glow
 
 
+def _gesicht_finden(image: Image.Image) -> tuple[int, int, int, int] | None:
+    """Das Gesicht im Bild, als (x, y, breite, hoehe) — oder None.
+
+    OpenCVs Haar-Kaskade, und zwar OPTIONAL: `cv2` ist keine Abhängigkeit
+    dieses Projekts. Fehlt es, gibt diese Funktion None zurück und der
+    Ausschnitt bleibt exakt der mittige von vorher. Das ist bewusst so
+    herum gebaut:
+
+    - Die Station läuft auf einem Windows-Rechner ohne GPU und soll
+      offlinefähig bleiben. `opencv-python-headless` sind ~50 MB plus numpy,
+      und dieses Paket am Ausstellungstag nachzuinstallieren ist ein Eingriff
+      in eine laufende Anlage — nicht die Sorte Änderung, die man zwischen
+      zwei Interviews macht.
+    - Der Handoff verlangt ausdrücklich, die Erkenner NICHT ohne Messung an
+      echten Booth-Fotos gegeneinander zu entscheiden (Haar-Kaskade gegen
+      `face_recognition`/dlib). Solche Fotos lagen hier nicht vor — sie
+      liegen auf dem Ausstellungsrechner, der beim Bau nicht erreichbar war.
+
+    Deshalb ist der Weg gebaut und abgeschaltbar, aber die Wahl des Erkenners
+    ist NICHT getroffen: Ist `cv2` installiert, wird die Kaskade benutzt;
+    ist sie es nicht, ändert sich am heutigen Verhalten nichts. Wer den
+    Vergleich nachholt, tauscht genau diese Funktion.
+
+    Bei mehreren Gesichtern gewinnt das GRÖSSTE. Am Booth steht die befragte
+    Person vorn und der Interviewer weiter hinten, also ist das größte
+    Gesicht das gemeinte. Das ist eine ästhetische Setzung, die der Handoff
+    als solche markiert — sie steht hier an einer Stelle, an der man sie
+    ändern kann, statt verteilt in der Zuschnittlogik.
+    """
+    try:
+        import cv2  # noqa: PLC0415 — optional, siehe Docstring
+        import numpy as np  # noqa: PLC0415
+    except ImportError:
+        return None
+
+    try:
+        # OpenCV 5 hat `CascadeClassifier` UND die mitgelieferten
+        # Kaskadendateien entfernt (gemessen 2026-09-01 an 5.0.0:
+        # `cv2.CascadeClassifier` existiert nicht mehr, `cv2/data/` enthält
+        # nur noch `__init__.py`). Die erste Fassung dieser Funktion rief
+        # genau das auf — auf einer 5er-Installation wäre sie stillschweigend
+        # in den except-Zweig gelaufen und hätte IMMER mittig geschnitten,
+        # ohne dass jemand einen Fehler gesehen hätte. Genau die Sorte
+        # Änderung, die „gebaut, plausibel, wirkungslos" aussieht.
+        #
+        # Deshalb wird geprüft, was die installierte Fassung wirklich kann,
+        # statt es anzunehmen.
+        if not hasattr(cv2, "CascadeClassifier"):
+            log.warning(
+                "OpenCV %s kennt keine Haar-Kaskade mehr (ab 5.0 entfernt) — "
+                "mittiger Schnitt. Für die Gesichtserkennung "
+                "'opencv-python-headless<5' installieren.",
+                getattr(cv2, "__version__", "?"),
+            )
+            return None
+
+        kaskade_datei = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        if not Path(kaskade_datei).exists():
+            log.warning("Kaskadendatei fehlt (%s) — mittiger Schnitt", kaskade_datei)
+            return None
+
+        grau = np.array(image.convert("L"))
+        kaskade = cv2.CascadeClassifier(kaskade_datei)
+        if kaskade.empty():
+            return None
+        # minSize relativ zur Bildbreite: ein Booth-Foto vom Handy ist mal
+        # 1280 und mal 4032 Pixel breit, ein fester Pixelwert wäre auf dem
+        # einen blind und auf dem anderen voller Fehltreffer.
+        mindest = max(30, int(min(image.size) * 0.08))
+        treffer = kaskade.detectMultiScale(
+            grau, scaleFactor=1.1, minNeighbors=5, minSize=(mindest, mindest)
+        )
+        if len(treffer) == 0:
+            return None
+        x, y, w, h = max(treffer, key=lambda t: int(t[2]) * int(t[3]))
+        return int(x), int(y), int(w), int(h)
+    except Exception as exc:  # eine Erkennung darf die Station nie anhalten
+        log.warning("Gesichtserkennung fehlgeschlagen, mittiger Schnitt (%s)", exc)
+        return None
+
+
 def make_portrait(src: Path, dest: Path, size: int = 512) -> Path:
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -144,8 +233,38 @@ def make_portrait(src: Path, dest: Path, size: int = 512) -> Path:
 
 
 def _square_crop(image: Image.Image) -> Image.Image:
+    """Der quadratische Ausschnitt — am Gesicht, sonst mittig.
+
+    Bis 2026-09-01 schnitt diese Funktion immer mittig und wusste nichts
+    davon, wo im Bild ein Mensch steht. Wer sich seitlich hinstellte, wurde
+    angeschnitten (Birks Punkt 1 im Handoff).
+
+    Der mittige Schnitt ist ausdrücklich KEIN Fehlerfall, sondern der
+    Rückfallweg: kein Gesicht gefunden, `cv2` nicht installiert, Erkennung
+    unsicher — dann gilt wieder, was vorher galt.
+    """
     width, height = image.size
     side = min(width, height)
+
+    gesicht = _gesicht_finden(image)
+    if gesicht is not None:
+        gx, gy, gw, gh = gesicht
+        # Waagerecht auf die Gesichtsmitte.
+        left = int(round(gx + gw / 2 - side / 2))
+        # Senkrecht NICHT auf die Gesichtsmitte, sondern so, dass das Gesicht
+        # dort landet, wo VERTICAL_BIAS es haben will (0.35 = oberes Drittel).
+        # Auf die Mitte zentriert säße der Kopf zu tief und die Schultern
+        # füllten den unteren Rand — dieselbe Bildaufteilung, die der bisherige
+        # mittige Schnitt über den Bias schon herstellt, nur jetzt am
+        # tatsächlichen Kopf statt an der Bildmitte.
+        top = int(round(gy + gh / 2 - side * VERTICAL_BIAS))
+        # In die Bildgrenzen schieben, statt zu beschneiden: ein Ausschnitt,
+        # der über den Rand ragt, gäbe sonst einen schwarzen Balken im Kreis.
+        # Verschieben verliert Zentrierung, ein Balken verliert das Bild.
+        left = max(0, min(left, width - side))
+        top = max(0, min(top, height - side))
+        return image.crop((left, top, left + side, top + side))
+
     left = (width - side) // 2
     if height > side:
         top = int((height - side) * VERTICAL_BIAS)
