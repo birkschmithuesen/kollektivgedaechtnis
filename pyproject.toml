@@ -11,6 +11,19 @@ dependencies = [
     "python-telegram-bot>=21.6",
     "pillow>=11.0",
     "pydantic>=2.9",
+    # 🔴 Gesichtserkennung fuer den Portraitzuschnitt (kg/photos.py).
+    # Bis 2026-09-01 war das ABSICHTLICH keine Abhaengigkeit: ~50 MB, und die
+    # Wahl des Erkenners war noch nicht getroffen. Folge am Geraet: `cv2` war
+    # schlicht nicht da, `_gesicht_finden` stieg beim ImportError aus -- ohne
+    # Logzeile -- und jedes Foto wurde mittig geschnitten statt aufs Gesicht.
+    # Birk: „das foto aus der app wird nicht wie gewuenscht per opencv gezoomed
+    # und zentriert." Ein Weg, der nur laeuft, wenn jemand vorher von Hand
+    # etwas nachinstalliert, laeuft am Ausstellungstag nicht.
+    #
+    # `<5` ist Pflicht, nicht Vorsicht: OpenCV 5.0 hat `CascadeClassifier` UND
+    # die mitgelieferten Kaskadendateien entfernt. kg/photos.py faengt das ab
+    # und warnt -- aber es faellt dann wieder auf den mittigen Schnitt zurueck.
+    "opencv-python-headless>=4.10,<5",
 ]
 
 [dependency-groups]

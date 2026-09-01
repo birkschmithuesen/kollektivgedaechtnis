@@ -120,6 +120,35 @@ steht **nichts**. Gegenprobe, gleiche Maschine, gleicher Moment: `/usr/bin/pytho
 (freigegeben) → Tailscale und LAN je 200; Brew-Python → nur 127.0.0.1.
 Über `tailscale serve` spielt das keine Rolle, weil `tailscaled` freigegeben ist.
 
+### 🔴 Der Portraitzuschnitt schnitt immer mittig — `cv2` fehlte
+
+Birk: *„das foto aus der app wird nicht wie gewünscht per opencv gezoomed und
+zentriert."* Gemessen: **`cv2` war auf dieser Maschine gar nicht installiert**
+und stand auch in keiner Abhängigkeit. `kg/photos.py::_gesicht_finden` steigt
+beim `ImportError` aus — und zwar **ohne Logzeile** —, also griff bei jedem
+Foto der mittige Rückfallweg. Der Weg war gebaut, nur nie erreichbar.
+
+`opencv-python-headless>=4.10,<5` steht jetzt in `pyproject.toml`.
+🔴 **Das `<5` ist Pflicht, nicht Vorsicht:** OpenCV 5.0 hat `CascadeClassifier`
+und die Kaskadendateien entfernt. `kg/photos.py` fängt das ab und warnt — fällt
+dann aber wieder auf den mittigen Schnitt zurück.
+
+Gemessen nach der Installation an einem nachgebauten Booth-Foto (3024×4032,
+Person seitlich):
+
+| | Ausschnitt | Gesicht waagerecht |
+|---|---|---|
+| vorher (mittig) | 3024 px | wo es zufällig lag |
+| jetzt (am Gesicht) | 1076 px = **2,81× enger** | **50 %**, also zentriert |
+
+An 8 echten Portraits: 8 von 8 Gesichter erkannt. 35 Foto-Tests grün
+(`test_photos.py`, `test_photos_gesicht.py`, `test_server_photo.py`).
+Der Zuschnitt hängt an beiden Uploadwegen — `kg/server.py:567` (App) und
+`kg/telegram_bot.py:80`.
+
+⚠️ **Nach dem Nachinstallieren muss die Station neu gestartet werden** — ein
+laufender Python-Prozess sieht ein frisch installiertes Modul nicht. Erledigt.
+
 ### 🔴 Zwei Dinge, die du wissen musst — nicht behoben, sondern Betrieb
 
 **A. Die Reglerwerte überleben ein Umschalten der Dichte NICHT.**
