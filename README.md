@@ -1,5 +1,11 @@
 # Kollektivgedächtnis
 
+> 🔴 **Arbeitest du als Agent an diesem Projekt?** Zuerst `AGENTS.md` lesen,
+> und vor jedem Zugriff auf den Ausstellungsrechner
+> [`docs/ARBEITSREGELN-ausstellungsrechner.md`](docs/ARBEITSREGELN-ausstellungsrechner.md).
+> Dort steht, warum `SF-Tracking` und nicht `birk`, warum die Startdatei nur
+> im Repo geändert wird und warum Dienste nicht über SSH gestartet werden.
+
 Zwei Werkzeuge für eine Ausstellungsstation auf dem Festival **NEW bauhaus**
 (Weimarhalle, 2.–3. September 2026).
 
