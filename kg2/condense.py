@@ -72,6 +72,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from kg2.weighting import (
+    QUOTE_PERSONS,
     RECENCY_SHARE,
     RECENT_TERMS,
     REQUIRED_TERMS,
@@ -460,6 +461,7 @@ def build_condense_prompt(
     material: Material,
     *,
     include_quotes: bool = False,
+    quote_persons: int = QUOTE_PERSONS,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
@@ -482,6 +484,7 @@ def build_condense_prompt(
     rendered = render_material(
         material,
         include_quotes=include_quotes,
+        quote_persons=quote_persons,
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
         recent_terms=recent_terms,
@@ -611,6 +614,7 @@ def condense(
     material: Material,
     *,
     include_quotes: bool = False,
+    quote_persons: int = QUOTE_PERSONS,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
@@ -628,6 +632,7 @@ def condense(
     user = build_condense_prompt(
         material,
         include_quotes=include_quotes,
+        quote_persons=quote_persons,
         single_mention_budget=single_mention_budget,
         shared_terms_saturation=shared_terms_saturation,
         recent_terms=recent_terms,

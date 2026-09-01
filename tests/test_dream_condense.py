@@ -428,10 +428,36 @@ def test_the_prompt_asks_for_mood_and_tension():
 
 
 def test_the_user_message_carries_the_weighted_material():
-    prompt = build_condense_prompt(material())
+    """🔴 Eigenes, reicheres Material seit 2026-09-01 -- und das gehoert zur
+    Aussage. `material()` hat genau zwei Begriffe, und bei so wenig Material
+    nimmt `select_required` BEIDE in die Pflichtliste. Seit dem Fix vom
+    2026-09-01 steht ein Pflichtbegriff nicht mehr zusaetzlich unter den
+    Randnotizen ("Detail und Beiwerk, nicht Thema") -- der Block waere hier
+    also leer, und der Test pruefte nur noch den alten Widerspruch.
+    """
+    nodes = [
+        {"id": f"p{i}", "type": "person", "portrait": None, "created_at": float(i),
+         "hidden": False, "x": None, "y": None}
+        for i in range(8)
+    ] + [
+        {"id": "t1", "type": "term", "label": "Weiterbauen im Bestand", "mentions": 8,
+         "created_at": 2.0, "hidden": False, "x": None, "y": None},
+    ] + [
+        {"id": f"t{i}", "type": "term", "label": f"Randbegriff {i}", "mentions": 1,
+         "created_at": float(i), "hidden": False, "x": None, "y": None}
+        for i in range(2, 10)
+    ]
+    edges = [{"id": f"e{i}", "source": f"p{i}", "target": "t1"} for i in range(8)]
+    edges += [{"id": f"ex{i}", "source": f"p{i % 8}", "target": f"t{i}"}
+              for i in range(2, 10)]
+    reich = build_material({
+        "version": 1, "generated_at": 1000.0, "min_mentions": 1,
+        "nodes": nodes, "edges": edges, "quotes": [],
+    })
+
+    prompt = build_condense_prompt(reich)
 
     assert "Weiterbauen im Bestand" in prompt
-    assert "Sickerfähige Beläge" in prompt
     assert "Randnotizen" in prompt
 
 

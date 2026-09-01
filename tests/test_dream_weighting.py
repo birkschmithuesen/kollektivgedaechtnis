@@ -194,21 +194,34 @@ def test_an_empty_graph_produces_empty_material():
 
 def test_render_labels_the_marginal_terms_as_detail_not_theme():
     """Spec §5.1: single mentions enter „explicitly labelled as such so the
-    model can place them as a detail rather than a theme"."""
-    material = build_material(
-        graph(
-            [person("p1"), person("p2"),
-             term("t1", "Holzbau", 2), term("t2", "Sickerfähige Beläge", 1)],
-            [("p1", "t1"), ("p2", "t1"), ("p1", "t2")],
-            [("p1", "Wir bauen zu viel Neues.")],
-        )
-    )
+    model can place them as a detail rather than a theme".
 
-    text = render_material(material)
+    🔴 Der Graph ist am 2026-09-01 GEWACHSEN, und das gehoert zur Aussage.
+    Vorher standen hier zwei Begriffe, „Holzbau" (2x) und „Sickerfaehige
+    Belaege" (1x) -- und `select_required` nahm bei so wenig Material BEIDE in
+    die Pflichtliste. Der Test bestand also nur, solange derselbe Begriff
+    gleichzeitig als Pflicht und als „Detail und Beiwerk, nicht Thema" im
+    Prompt stand. Genau dieser Widerspruch ist am ersten Ausstellungsabend an
+    Traum d1 aufgeschlagen (3 von 3 Pflichtbegriffen betroffen).
+
+    Die Absicht der Spec bleibt unveraendert pruefbar -- sie braucht nur einen
+    Graphen, in dem eine Einmal-Nennung wirklich KEINE Pflicht ist.
+    """
+    nodes = [person(f"p{i}") for i in range(1, 4)]
+    nodes.append(term("t1", "Holzbau", 3))
+    # Mehr Einmal-Nennungen als die Pflichtliste fasst, damit unten wirklich
+    # etwas uebrigbleibt.
+    nodes += [
+        term(f"t{i}", f"Sickerfähige Beläge {i}", 1, created_at=float(i))
+        for i in range(2, 9)
+    ]
+    edges = [("p1", "t1"), ("p2", "t1"), ("p3", "t1")]
+    edges += [(f"p{(i % 3) + 1}", f"t{i}") for i in range(2, 9)]
+
+    text = render_material(build_material(graph(nodes, edges)))
 
     assert "Holzbau" in text
-    assert "2×" in text
-    assert "Sickerfähige Beläge" in text
+    assert "3×" in text
     # The label is what makes the weighting legible to the model.
     assert "Detail" in text
     assert "Randnotiz" in text
@@ -631,3 +644,94 @@ def test_hiding_a_person_in_the_real_graph_removes_their_voice(real_graph):
 
     assert material.person_count == 59
     assert all(quote not in material.quotes for quote in quotes_of_p1)
+
+
+# --- Der Widerspruch Pflicht/Randnotiz (Birk, 2026-09-01) -------------------
+#
+# Am ersten Ausstellungsabend stand im selben Prompt ueber dieselben drei
+# Woerter „DIESE BEGRIFFE MUESSEN INS BILD" und „Das sind Detail und Beiwerk,
+# nicht Thema. Sie duerfen im Bild vorkommen, aber klein und am Rand."
+# Gemessen an d1: 3 von 3 Pflichtbegriffen waren betroffen, und der
+# bildstaerkste davon (Earthship) fehlte im Bild.
+#
+# Das trifft nicht einen Sonderfall, sondern den ganzen VORMITTAG: solange
+# kein Begriff von zwei Menschen genannt wurde, ist `shared` leer, jeder
+# Begriff ist eine Einmal-Nennung -- und landet damit zwangslaeufig in beiden
+# Listen.
+
+
+def test_ein_pflichtbegriff_steht_nicht_zugleich_unter_den_randnotizen():
+    g = graph(
+        [person("p1"), term("t1", "Lehmhaus", 1), term("t2", "Earthship", 1)],
+        [("p1", "t1"), ("p1", "t2")],
+    )
+    text = render_material(build_material(g))
+
+    pflicht = text.split("Randnotizen")[0]
+    rand = "Randnotizen" + text.split("Randnotizen")[1] if "Randnotizen" in text else ""
+
+    assert "Lehmhaus" in pflicht and "Earthship" in pflicht
+    # Der Kern: was oben Pflicht ist, darf unten nicht als Beiwerk stehen.
+    assert "Lehmhaus" not in rand
+    assert "Earthship" not in rand
+
+
+def test_eine_randnotiz_die_keine_pflicht_ist_bleibt_stehen():
+    """Die Gegenrichtung -- der Block darf nicht einfach verschwinden.
+
+    Ohne diesen Test waere „alle Randnotizen weglassen" eine bestandene
+    Loesung, und die Einmal-Nennungen, die NICHT Pflicht sind, waeren still
+    aus dem Traum verschwunden.
+    """
+    nodes = [person(f"p{i}") for i in range(1, 4)]
+    # Ein geteilter Begriff, damit die Pflichtliste nicht alles aufsaugt.
+    nodes.append(term("t1", "Lehmbau", 3))
+    nodes += [term(f"t{i}", f"Randbegriff {i}", 1, created_at=float(i)) for i in range(2, 8)]
+    edges = [("p1", "t1"), ("p2", "t1"), ("p3", "t1")]
+    edges += [(f"p{(i % 3) + 1}", f"t{i}") for i in range(2, 8)]
+
+    text = render_material(build_material(graph(nodes, edges)))
+    assert "Randnotizen" in text, "der Block darf nicht komplett wegfallen"
+
+
+# --- Zitate: nur die juengsten Personen (Birk, 2026-09-01) ------------------
+#
+# „zitat: nur von der letzten person mit rein nehmen. nicht alle zitate. oder
+# nur von den letzten drei personen." Bei 60 Personen waren alle Zitate 76 %
+# des Materialblocks; bei dreien ist genau das die Stimme, auf die das Bild
+# reagieren soll.
+
+
+def test_zitate_kommen_nur_von_den_juengsten_personen():
+    nodes = [
+        {**person("alt1"), "created_at": 10.0},
+        {**person("alt2"), "created_at": 20.0},
+        {**person("neu1"), "created_at": 30.0},
+        {**person("neu2"), "created_at": 40.0},
+        {**person("neu3"), "created_at": 50.0},
+        term("t1", "Lehmhaus", 5),
+    ]
+    edges = [(p, "t1") for p in ("alt1", "alt2", "neu1", "neu2", "neu3")]
+    quotes = [
+        ("alt1", "Satz der aeltesten Person"),
+        ("alt2", "Satz der zweitaeltesten"),
+        ("neu1", "Satz von neu1"),
+        ("neu2", "Satz von neu2"),
+        ("neu3", "Satz von neu3"),
+    ]
+    text = render_material(build_material(graph(nodes, edges, quotes)), include_quotes=True)
+
+    assert "Satz von neu1" in text
+    assert "Satz von neu2" in text
+    assert "Satz von neu3" in text
+    assert "Satz der aeltesten Person" not in text
+    assert "Satz der zweitaeltesten" not in text
+
+
+def test_zitate_bleiben_auf_wunsch_ganz_draussen():
+    g = graph(
+        [person("p1"), term("t1", "Lehmhaus", 1)],
+        [("p1", "t1")],
+        [("p1", "Ein Satz")],
+    )
+    assert "Ein Satz" not in render_material(build_material(g), include_quotes=False)

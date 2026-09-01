@@ -119,7 +119,16 @@ def run_dream(
         # (kg2.weighting.select_required). Sie kommt aus `material`, nicht aus
         # `absorbed`: Personen-Ids sind Strings, und `sorted(absorbed)[-1]`
         # liefert „p9" statt „p60" — build_material nimmt den Zeitstempel.
-        result = condense_fn(llm, material, last_person_id=material.last_person_id)
+        # Zitate: die woertlichen Saetze der zuletzt Befragten gehen mit in
+        # Stufe 1 (Birk, 2026-09-01). `condense_quote_persons=0` schaltet sie
+        # ab, ohne dass jemand Code anfassen muss.
+        result = condense_fn(
+            llm,
+            material,
+            last_person_id=material.last_person_id,
+            include_quotes=cfg.condense_include_quotes and cfg.condense_quote_persons > 0,
+            quote_persons=cfg.condense_quote_persons,
+        )
         store.set_stage1(
             dream.id,
             prompt=result.prompt,

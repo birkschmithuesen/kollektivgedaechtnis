@@ -57,7 +57,7 @@ voice weighting the dream they were pulled out of.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -87,6 +87,11 @@ class Material:
     #: Said by exactly one person. Detail, not theme.
     marginal: list[TermWeight]
     quotes: list[str]
+    #: Zu jedem Eintrag in `quotes` die Person, die ihn gesagt hat -- gleiche
+    #: Reihenfolge, juengste Person zuerst. Getrennt gefuehrt, weil `quotes`
+    #: eine reine Textliste bleiben muss: sim/dream_calibrate.py und die
+    #: Pruefskripte zaehlen darauf.
+    quote_person_ids: list[str] = field(default_factory=list)
     #: Die zuletzt hinzugekommene Person, nach `created_at` — der Anker fuer
     #: den Bildausschnitt (`select_required`, Birk 2026-08-30). Hier bestimmt
     #: und nicht vom Aufrufer uebergeben, weil das genau einmal falsch geraten
@@ -117,6 +122,23 @@ SHARED_TERMS_SATURATION = 25  # X
 #: docstring). Deliberately small: an accent, not a second theme list — too
 #: many and it competes with the weighting it is not meant to override.
 RECENT_TERMS = 5
+
+#: Von wie vielen der ZULETZT befragten Personen die Zitate in den Prompt
+#: gehen (Birk, 2026-09-01: „zitat: nur von der letzten person mit rein
+#: nehmen. nicht alle zitate. oder nur von den letzten drei personen").
+#:
+#: Warum ueberhaupt eine Grenze: Bei 60 Menschen machten alle Zitate 76 % des
+#: Materialblocks aus -- deshalb waren sie bis dahin GANZ abgeschaltet. Das
+#: warf mit dem Ballast auch das Einzige weg, was die Menschen woertlich
+#: gesagt haben. Am 2026-09-01 fehlte im ersten Traum genau das: „alles ein
+#: bisschen mehr mit der Natur verbunden" stand im Zitat, erreichte Stufe 1
+#: nie, und im Bild war keine Natur.
+#:
+#: Drei und nicht eins: bei einer einzigen Stimme haengt das Bild des Tages an
+#: der Person, die zufaellig zuletzt dran war. Drei ist die kleinste Zahl, die
+#: dagegen etwas mittelt, und bleibt bei 60 Personen ein Fuenfzigstel des
+#: Blocks statt drei Vierteln.
+QUOTE_PERSONS = 3
 
 
 def _empty_material() -> Material:
@@ -172,6 +194,10 @@ def build_material(graph: dict | None) -> Material:
 
     letzte_person = None
     letzte_zeit = None
+    # Seit 2026-09-01 wird nicht nur die JUENGSTE Person gemerkt, sondern die
+    # Zeit JEDER Person: die Zitatauswahl unten braucht eine Reihenfolge, und
+    # Zitate selbst tragen keinen Zeitstempel (nur `person_id`).
+    personen_zeit: dict[str, float] = {}
     for node in nodes:
         if not isinstance(node, dict) or node.get("type") != "person":
             continue
@@ -180,6 +206,7 @@ def build_material(graph: dict | None) -> Material:
         zeit = node.get("created_at")
         if not isinstance(zeit, (int, float)):
             continue
+        personen_zeit[node["id"]] = float(zeit)
         if letzte_zeit is None or zeit > letzte_zeit:
             letzte_zeit, letzte_person = zeit, node["id"]
 
@@ -216,8 +243,8 @@ def build_material(graph: dict | None) -> Material:
     # produce the same prompt, or the record in spec §5.3 explains nothing.
     weights.sort(key=lambda w: (-w.mentions, w.label))
 
-    quotes = [
-        quote["text"]
+    roh_zitate = [
+        quote
         for quote in _as_list(graph.get("quotes", ()))
         if isinstance(quote, dict)
         # Same hashability landmine as the edge loop above: `in persons` hashes
@@ -226,6 +253,15 @@ def build_material(graph: dict | None) -> Material:
         and quote.get("person_id") in persons
         and "text" in quote
     ]
+    # JUENGSTE PERSON ZUERST. `render_material` schneidet danach bei den
+    # letzten `quote_persons` Personen ab -- ohne diese Ordnung waere „die
+    # letzten drei" die Reihenfolge, in der Tool 1 die Zitate zufaellig
+    # ausliefert. `-personen_zeit[...]` sortiert absteigend, der zweite
+    # Schluessel haelt die Ausgabe bei gleicher Zeit stabil (zwei Laeufe ueber
+    # denselben Graphen muessen denselben Prompt ergeben, Spec §5.3).
+    roh_zitate.sort(key=lambda q: (-personen_zeit.get(q["person_id"], 0.0), q["person_id"]))
+    quotes = [q["text"] for q in roh_zitate]
+    quote_person_ids = [q["person_id"] for q in roh_zitate]
 
     generated_at = graph.get("generated_at")
     if not isinstance(generated_at, (int, float)):
@@ -239,6 +275,7 @@ def build_material(graph: dict | None) -> Material:
         shared=[w for w in weights if w.mentions >= 2],
         marginal=[w for w in weights if w.mentions == 1],
         quotes=quotes,
+        quote_person_ids=quote_person_ids,
         last_person_id=letzte_person,
     )
 
@@ -512,6 +549,7 @@ def render_material(
     material: Material,
     *,
     include_quotes: bool = False,
+    quote_persons: int = QUOTE_PERSONS,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
@@ -566,6 +604,24 @@ def render_material(
     marginal = select_marginal(
         material, budget=single_mention_budget, saturation=shared_terms_saturation
     )
+    # 🔴 Was oben Pflicht ist, steht hier nicht noch einmal als Beiwerk
+    # (Birk, 2026-09-01, am ersten Traum des Ausstellungstags).
+    #
+    # `select_required` zieht seine Begriffe aus `shared` UND `marginal`.
+    # Solange kein Begriff von zwei Menschen genannt wurde -- also den ganzen
+    # VORMITTAG -- ist `shared` leer und jeder Pflichtbegriff zwangslaeufig
+    # auch eine Einmal-Nennung. Der Prompt sagte dann ueber dieselben Woerter
+    # „MUESSEN INS BILD, als das was er meint" und zwei Absaetze spaeter
+    # „Detail und Beiwerk, nicht Thema ... klein und am Rand".
+    #
+    # Gemessen an Traum d1 (1 Interview, 3 Begriffe): 3 von 3 Pflichtbegriffen
+    # waren betroffen, und der bildstaerkste -- „Earthship" -- fehlte im Bild
+    # vollstaendig, obwohl er als Pflicht gefuehrt war.
+    #
+    # Der Block selbst bleibt: Einmal-Nennungen, die NICHT Pflicht sind, sind
+    # weiter genau das, was er sagt.
+    pflicht_labels = {w.label for w in required}
+    marginal = [w for w in marginal if w.label not in pflicht_labels]
     if marginal:
         lines = "\n".join(f"  {w.label}" for w in marginal)
         blocks.append(
@@ -584,9 +640,30 @@ def render_material(
         )
 
     if include_quotes and material.quotes:
-        # Single-quoted f-string: the German quotation marks are literal text,
-        # and a double-quoted one would end at the closing „ ".
-        lines = "\n".join(f'  „{quote}"' for quote in material.quotes)
-        blocks.append("Stimmen aus den Interviews, wörtlich:\n" + lines)
+        # Nur die juengsten `quote_persons` Personen (siehe QUOTE_PERSONS).
+        # Gezaehlt werden PERSONEN, nicht Zitate: haette jemand zwei Zitate,
+        # waere „die letzten drei Zitate" sonst nur eine Person.
+        gesehen: list[str] = []
+        ausgewaehlt: list[str] = []
+        for text, pid in zip(material.quotes, material.quote_person_ids):
+            if pid not in gesehen:
+                if len(gesehen) >= quote_persons:
+                    break
+                gesehen.append(pid)
+            ausgewaehlt.append(text)
+        # Ohne `quote_person_ids` (z. B. ein von Hand gebautes Material in
+        # einem Test) faellt die Auswahl auf die ersten N Zitate zurueck,
+        # statt still gar keins zu liefern.
+        if not material.quote_person_ids:
+            ausgewaehlt = material.quotes[:quote_persons]
+        if ausgewaehlt:
+            # Single-quoted f-string: the German quotation marks are literal
+            # text, and a double-quoted one would end at the closing „ ".
+            lines = "\n".join(f'  „{quote}"' for quote in ausgewaehlt)
+            blocks.append(
+                "Stimmen aus den zuletzt gefuehrten Interviews, woertlich. "
+                "Das ist das Einzige, was die Menschen selbst gesagt haben -- "
+                "die Begriffe oben sind bereits Verdichtungen davon:\n" + lines
+            )
 
     return "\n\n".join(blocks)

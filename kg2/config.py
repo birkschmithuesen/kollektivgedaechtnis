@@ -77,6 +77,25 @@ class DreamConfig:
     # heimtückisch — HTTP 200, finish_reason "stop", aber der Inhalt beginnt
     # mit "{{" statt "{" und json.loads wirft. Wer den Wert entfernt, bekommt
     # eine Station, die scheinbar läuft und keine Träume mehr erzeugt.
+    #: Gehen die woertlichen Zitate in Stufe 1 mit ein? (Birk, 2026-09-01)
+    #:
+    #: Bis dahin: NEIN, und zwar begruendet -- bei 60 Menschen machten alle
+    #: Zitate 76 % des Materialblocks aus, fuer etwas, das an der Wand nur
+    #: beim Antippen einer Person sichtbar wird. Das warf mit dem Ballast
+    #: aber auch das Einzige weg, was die Menschen SELBST gesagt haben: Die
+    #: Begriffe sind bereits Verdichtungen, das Zitat ist der Originalton.
+    #: Am ersten Ausstellungsabend fehlte genau deshalb „alles ein bisschen
+    #: mehr mit der Natur verbunden" im Traum -- es stand im Zitat, erreichte
+    #: Stufe 1 nie, und im Bild war keine Natur, sondern Schotter und Zaun.
+    #:
+    #: Der Ballast ist jetzt anders geloest: nicht alle Zitate, sondern die
+    #: der zuletzt befragten Personen (`condense_quote_persons`).
+    condense_include_quotes: bool = True
+    #: Von wie vielen der ZULETZT befragten Personen die Zitate mitgehen.
+    #: 1 = nur die Person, die gerade gesprochen hat (dann haengt das Bild an
+    #: einer einzigen Stimme); 3 = die kleinste Zahl, die dagegen mittelt.
+    #: 0 schaltet die Zitate ebenfalls ab.
+    condense_quote_persons: int = 3
     condense_api_mode: str = "anthropic"
     condense_url: str = ""
     condense_api_key_env: str = ""
@@ -187,6 +206,8 @@ _FIELD_NAMES = {
     "condense_model",
     "condense_effort",
     "condense_max_tokens",
+    "condense_include_quotes",
+    "condense_quote_persons",
     "condense_api_mode",
     "condense_url",
     "condense_api_key_env",
