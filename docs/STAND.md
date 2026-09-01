@@ -306,6 +306,88 @@ mehr schadet — sie macht die Erkennung nicht treffsicherer.
 
 ---
 
+## 2f. Neustart + Rückweg-Test — gefahren 2026-09-01, 15:00–15:20
+
+Birk (nur am Handy): *„Starte alles neu und lass den Test machen, ob der Foto
+Ausschnitt zurück auf die Handy App kommt."* Ohne Gerät nachgefahren — der
+Rückweg ist per HTTP prüfbar, weil die App nichts anderes tut.
+
+### Der Neustart
+
+Gestoppt mit `scripts/station-stop.ps1` (die Muster von
+`kollektivtraum-stop.bat`, aber ohne `pause`, sonst hängt es über SSH). Vorher
+`schtasks /end /tn KgKernTest` — die Testkrücke hielt den alten Kern und hätte
+Port 8800 blockiert. Danach **alle Ports frei**, gemessen.
+
+Gestartet über eine geplante Aufgabe `KgVollstart` mit `/it` (interaktiv), die
+`kollektivtraum.bat` in **Session 6** ausführt — dort, wo `SF-Tracking`
+angemeldet ist. Ein direkter SSH-Start wäre mit der Sitzung gestorben
+(Arbeitsregel 4).
+
+**Ergebnis, gemessen statt geglaubt** (`schtasks /run` meldet Erfolg auch ohne
+Start, Pitfall 3):
+
+| | vorher | nachher |
+|---|---|---|
+| Kern 8800 | läuft | **HTTP 200** |
+| **Traum 8810** | **läuft nicht** | **HTTP 200** ✅ |
+| STT 5051 | läuft | läuft |
+| Repo-Stand | `7ede951` | **`b5c2c8e`** (Schritt `[0/6]` hat selbst gezogen) |
+
+🔴 **Der Traum läuft damit erstmals** — der Punkt aus §3 hat sich mit dem
+regulären Start von selbst erledigt. Die kaputte Aufgabe `KgDream` (zeigt auf
+`C:\Users\birk\kg_dream.bat`) wurde dafür **nicht** gebraucht und **nicht**
+angefasst; der reguläre Weg startet den Traum als `[3/6]`.
+
+### Der Rückweg zur App — funktioniert
+
+`scripts/pruefe-app-rueckweg.py` fährt exakt die Kette der App: rohe JPEG-Bytes
+in den Rumpf (kein multipart), Antwort lesen, Portrait über `/media/portraits/`
+abholen. Eingeworfen wurde das Matsch-Foto `1788105156_5.jpg`:
+
+```
+1. POST /api/photo   -> HTTP 200
+   {"ok":true,"portrait":"1788267931_app849.png"}
+2. Portraitname      -> 1788267931_app849.png
+3. GET /media/portraits/1788267931_app849.png
+   -> HTTP 200, 245 kB, image/png
+```
+
+Alle drei Glieder sind belegt — auch das dritte, an dem die Vorschau hängt. Ein
+`ok: true` allein hätte nichts bewiesen: die Vorschau blieb schon einmal stumm,
+weil eine Gegenstelle `ok` sagte, aber kein `portrait`-Feld lieferte.
+
+### Der Fix wirkt im laufenden Betrieb
+
+Das Portrait, das der **laufende Server** für dieses Foto geschrieben hat, hat
+Schärfe **229,4**. Derselbe Wert kommt heraus, wenn man `make_portrait` mit
+Untergrenze fährt — ohne sie sind es **3,1**:
+
+| `1788105156_5.jpg`, fertiges Portrait | Schärfe |
+|---|---|
+| ohne Untergrenze (alter Zustand) | **3,1** |
+| mit Untergrenze (jetzt live) | **229,4** |
+
+**Gegenprobe** an einem guten Foto (`1788115087_6.jpg`): 7,1 gegen 7,1 —
+unverändert. Die Regel fasst nur den kaputten Fall an.
+
+🔴 **Zwei Fehlvergleiche unterwegs, damit sie niemand wiederholt:**
+1. Das neue Portrait (229,4) gegen das **alte auf der Platte** (738,3) zu
+   halten ist ungültig — das alte stammt aus einem anderen Zuschnitt (mittiger
+   Schnitt, weil die Erkennung damals nicht griff), nicht aus dem alten Code.
+2. Den **Zuschnitt** (1552,5) gegen das **fertige Portrait** (229,4) zu halten
+   ebenso: Maske und Goldring senken die Kantenschärfe systematisch. Vergleiche
+   nur Endprodukt gegen Endprodukt, durch denselben `make_portrait`.
+
+### Was das NICHT beweist
+
+- **Die App selbst wurde nicht getestet** — nur ihr Weg. Ob das Handy die
+  Vorschau anzeigt, hängt zusätzlich an der installierten APK (§2d).
+- Der Einwurf hat, wie vorgesehen, **ein Interview eröffnet**. Der
+  Personenzähler ist entsprechend um eins höher.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
@@ -313,10 +395,10 @@ Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
 | Punkt | Warum offen |
 |---|---|
 | **Ein kompletter Durchlauf** — Foto → Interview → Verdichtung → Traum → Wand | Nie am Stück gefahren. Das ist der Zweck der nächsten Session. |
-| **Traum (Port 8810)** | Läuft nicht. **Ursache eingegrenzt 2026-09-01, 14:25:** Die geplante Aufgabe `KgDream` startet `C:\Users\birk\kg_dream.bat` — eine **veraltete Datei außerhalb des Repos**, nicht den regulären Dienst `C:\Users\SF-Tracking\kg-start\dienste\dienst-traum.bat`. Letzter Lauf 2026-08-31 10:42, Ergebnis `-2147023829` (0xC000041D, „Fehler in einer Callback-Routine"). Das Traum-Log zeigt einen **erfolgreichen** Start um 12:59 (`Uvicorn running on 0.0.0.0:8810`) — er lief also und ist danach beendet worden, vermutlich mit dem Fenster. 🔴 **Nicht selbst gestartet:** der reguläre Weg ist Birks START-Verknüpfung, und `KgDream` zeigt auf die falsche Datei. Wer sie repariert, ändert eine geplante Aufgabe am Vorabend der Ausstellung — das ist Birks Entscheidung. |
+| **Traum (Port 8810)** | ✅ **Läuft seit 2026-09-01, 15:05** (HTTP 200), hochgekommen mit dem regulären Start als `[3/6]` — siehe §2f. Die geplante Aufgabe `KgDream` ist weiterhin kaputt (zeigt auf `C:\Users\birk\kg_dream.bat`, letzter Lauf `-2147023829`), wird aber für den regulären Weg **nicht gebraucht**. Aufräumen oder löschen ist Birks Entscheidung. |
 | **Die Wand am Beamer** | Legende, QR-Größe und Portraitausschnitt sind an Messbildern beurteilt, nicht im Raum. Ob 132 px QR aus Besucherabstand reichen, weiß nur der Raum. |
 | **Gesichtserkennung an echten Booth-Fotos** | **Teilweise erledigt, siehe §2c.** Gemessen an allen 7 Bestandsfotos (Trefferquote, Auflösung, Neigung, zweite Kaskade). **Offen bleibt genau das, wofür neue Fotos nötig sind:** mehrere Personen im Bild (kam im Bestand kein einziges Mal vor), Halbprofil, Sonnenbrille, Gegenlicht. |
-| **Der End-to-End-Durchlauf** | **Nicht gefahren.** Nicht aus Zeitmangel: Foto einwerfen heißt ein Interview eröffnen, und ein Interview braucht eine sprechende Person vor dem Mikrofon. Ein Agent kann diesen Durchlauf nicht allein fahren — er kann ihn nur vorbereiten. Traum (8810) läuft weiterhin nicht (siehe unten). |
+| **Der End-to-End-Durchlauf** | **Teilweise.** Foto → Portrait → zurück zur App ist gefahren und belegt (§2f), alle Dienste laufen (8800/8810/5051). **Nicht gefahren:** Interview → Verdichtung → Traum → Wand — das braucht eine sprechende Person vor dem Mikrofon und den Beamer im Raum, ein Agent kann es nicht allein. |
 | **Flackern der Wand** | Cron-Job als Ursache **widerlegt** (gemessen). HDR ist der Hauptverdacht (Display-Ereignis 4121), nicht bewiesen. |
 | **Doppelter Uploader** | Lief heute Morgen zweimal (PID 5348 + 11508). Nach dem Neustart nicht erneut geprüft. |
 | **STT-Textfenster, rechte Spalte** | Bleibt leer, weil nur ein Erkenner läuft (`--channels regie`). Liegt im fremden Repo `meredityman/fundusbot`. |
@@ -341,14 +423,9 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
   2026-09-01:** Birk hat (A) entschieden, `MINDEST_AUSSCHNITT = 512` ist
   eingebaut und belegt (§2e). Schärfe im kaputten Fall 9,6 → 1552,5; die übrigen
   6 Portraits unverändert.
-- **🔴 Die Station läuft noch auf dem alten Stand.** `git log` dort: `7ede951`,
-  der Fix ist `add8274`. Die Änderung wirkt erst nach einem Neustart über die
-  START-Verknüpfung (Schritt `[0/6]` zieht selbst von GitHub). **Nicht per SSH
-  nachgezogen:** der Kern läuft gerade und antwortet auf 8800; ein Eingriff im
-  Betrieb ist Birks Entscheidung.
-- **`minSize` von 8 % auf 4 %** (§2c) bringt mehr Treffer — und ist jetzt
-  **gefahrloser als vorher**, weil die Untergrenze den Matsch-Fall abfängt.
-  Trotzdem nicht umgesetzt: 7 Fotos sind keine Reihe.
+- ✅ **Die Station läuft auf dem Fix.** Nach dem Neustart steht sie auf `b5c2c8e`
+  (Schritt `[0/6]` hat selbst gezogen), und der Fix ist im laufenden Betrieb belegt:
+  Schärfe 3,1 → 229,4 am fertigen Portrait, gute Fotos unverändert (§2f).
 - **Welche APK liegt auf dem Handy?** Siehe §2d — bis das geklärt ist, misst
   jeder weitere Fototest womöglich eine andere Kette als die vom Ausstellungstag.
 - **Fotos mit mehreren Personen fehlen komplett.** Die Kernfrage („gewinnt das
@@ -446,7 +523,8 @@ erledigt ist:
 
 | Was | Wo | Anmerkung |
 |---|---|---|
-| Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | **läuft gerade** (gemessen 13:40). `schtasks /delete /tn "KgKernTest" /f` — war eine Testkrücke, kein Dauerzustand. Nicht selbst entfernt: sie hält womöglich den Kern, der gerade auf 8800 antwortet. Wer sie löscht, muss den Kern danach über die START-Verknüpfung neu starten. |
+| Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | **beendet 2026-09-01, 15:00** (`schtasks /end`) — sie hielt den alten Kern und blockierte Port 8800 vor dem Neustart. Die Aufgabe ist noch **registriert** (Status „Bereit"), läuft aber nicht. Entfernen mit `schtasks /delete /tn "KgKernTest" /f` — **Löschen ist Birks Entscheidung**. |
+| Geplante Aufgabe `KgVollstart` | Ausstellungsrechner | von mir angelegt, um `kollektivtraum.bat` in Birks Sitzung zu starten (§2f). Tut dasselbe wie die START-Verknüpfung. Kann weg: `schtasks /delete /tn "KgVollstart" /f`. |
 | Worktree `kg-app` | `$VOL/projekte/kg-app` | gehört der Foto-Session, steht auf `master` |
 | Ordner `kg-start\probe\` | Ausstellungsrechner | Kopie von `kg/photos.py` für die Vorher/Nachher-Messung der Untergrenze (§2e). Die Station selbst wurde dafür **nicht** angefasst. Kann weg: `rmdir /s /q C:\Users\SF-Tracking\kg-start\probe` — **Löschen ist Birks Entscheidung**, deshalb liegen gelassen. |
 | APK `out/kollektivgedaechtnis-foto-v6.apk` | vServer | bewusst nicht im Git (3,6 MB Binär), neu bauen nach `android/README.md` |
