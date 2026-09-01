@@ -1117,10 +1117,57 @@ export function createGraphView(
   // Das Stylesheet ist beim Aufruf bereits geladen (projection.html wartet auf
   // das `load`-Event, bevor createGraphView laeuft).
   const schwarzplan = cssVar('--schwarzplan', '') === 'an';
+  // --- Zeichenleistung bei bewegter Kamera (Birk, 2026-09-01 vor Ort) ------
+  //
+  // Der Touchscreen ruckelte beim Kameraschwenk und bei der Interaktion,
+  // sobald viele Begriffe im Bild sind. GEMESSEN an derselben Szene (Stufe 60,
+  // 138 Knoten, beide Bildschirme):
+  //
+  //                     GPU 3D    CPU brave
+  //   Stillstand (fit)   10,6 %      49,4 %
+  //   Kamerafahrt (pan)  61,4 %     144,4 %      -> 5,8x GPU, 2,9x CPU
+  //
+  // Die Dienste sind NICHT die Ursache: alle Python-Prozesse zusammen bleiben
+  // bei ~12 %, unabhaengig davon, was die Anzeige tut. Das Zeichnen ist es.
+  //
+  // Cytoscape zeichnet bei jeder Kamerabewegung jeden Knoten und jede Kante
+  // neu, mit voller Beschriftung. Die drei Schalter unten sind genau dafuer
+  // da; sie stehen in der Bibliothek alle auf `false` (im Bundle nachgesehen,
+  // nicht aus dem Gedaechtnis). Sie greifen NUR waehrend einer Bewegung:
+  //
+  //   textureOnViewport    waehrend des Schwenks ein einmal gerendertes Bild
+  //                        verschieben statt neu zeichnen. Der groesste Hebel,
+  //                        und er trifft genau den Dauerbetrieb `pan`.
+  //   hideEdgesOnViewport  302 Kanten nicht mitzeichnen, solange es sich
+  //                        bewegt. Sie sind waehrend der Fahrt ohnehin kaum
+  //                        lesbar und sofort wieder da, wenn sie steht.
+  //   pixelRatio 1         WIRKUNGSLOS auf diesem Rechner, bleibt nur als
+  //                        Absicherung drin: gemessen steht die
+  //                        Windows-Skalierung auf 100 % (`LogPixels` nicht
+  //                        gesetzt), `devicePixelRatio` ist also bereits 1.
+  //                        Die Begruendung „auf HiDPI wird die vierfache
+  //                        Pixelmenge gezeichnet" stimmt allgemein, trifft
+  //                        hier aber nicht zu — sie war geraten, nicht
+  //                        gemessen, und waere sonst als Erfolg durchgegangen.
+  //
+  // 🔴 Der 4K-Schirm ist die ANZEIGEFLAECHE, nicht ein Nebenschauplatz (Birk,
+  // 2026-09-01: „das ist schon der Screen, den alle sehen"). 3840x2160 sind
+  // also gesetzt und nicht verhandelbar — FullHD sieht sichtbar schlechter
+  // aus. Alles, was hier an Leistung geholt wird, muss deshalb aus dem
+  // Zeichnen kommen, nicht aus weniger Pixeln.
+  //
+  // 🔴 Abschaltbar per `?schnell=0`, damit am Ausstellungstag ohne neuen Build
+  // zurueckgeschaltet werden kann, falls die Textur sichtbar unscharf wirkt.
+  // Das Urteil faellt am Bild, nicht an der Zahl (Birk).
+  const params = new URLSearchParams(window.location.search);
+  const schnell = params.get('schnell') !== '0';
   const cy = cytoscape({
     container,
     style: schwarzplan ? styleSchwarzplan() : style(),
     wheelSensitivity: 0.2,
+    textureOnViewport: schnell,
+    hideEdgesOnViewport: schnell,
+    pixelRatio: schnell ? 1 : undefined,
   });
   // fcose only packs disconnected components when this extension is
   // initialised on the instance (it calls cy.layoutUtilities('get') and falls
