@@ -94,6 +94,34 @@ def test_png_wird_ebenso_angenommen(umgebung):
     assert len(umgebung.core.aufrufe) == 1
 
 
+def test_die_antwort_nennt_das_portrait_damit_die_app_es_zeigen_kann(umgebung):
+    """Die App zeigt nach dem Ausloesen, wie die Station zugeschnitten hat.
+
+    Dafuer braucht sie den Dateinamen -- und das Bild muss unter genau
+    diesem Namen abrufbar sein, sonst zeigt die Vorschau nichts und niemand
+    weiss warum.
+    """
+    antwort = umgebung.post("/api/photo", content=jpeg_bytes())
+
+    name = antwort.json()["portrait"]
+    assert name.endswith(".png")
+
+    _, portrait_path, _ = umgebung.core.aufrufe[0]
+    assert portrait_path.name == name
+    # Unter diesem Namen holt die App es ab (`/media/portraits` ist gemountet).
+    assert (umgebung.cfg.portrait_dir / name).exists()
+
+
+def test_das_portrait_ist_ueber_media_abrufbar(umgebung):
+    """Der Weg, den die Vorschau geht -- nicht nur der Name, sondern das Bild."""
+    name = umgebung.post("/api/photo", content=jpeg_bytes()).json()["portrait"]
+
+    geholt = umgebung.get(f"/media/portraits/{name}")
+
+    assert geholt.status_code == 200
+    assert geholt.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_ein_leerer_rumpf_wird_abgewiesen(umgebung):
     assert umgebung.post("/api/photo", content=b"").status_code == 400
     assert umgebung.core.aufrufe == []

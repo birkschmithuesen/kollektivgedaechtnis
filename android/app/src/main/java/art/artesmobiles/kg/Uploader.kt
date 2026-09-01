@@ -15,7 +15,13 @@ object Uploader {
 
     /** Was der Auslöser danach anzeigt. Kein Werfen: die Station steht im Flur. */
     sealed class Ergebnis {
-        object Erfolg : Ergebnis()
+        /**
+         * `portrait` ist der Dateiname des fertigen Portraits, wenn die
+         * Station einen genannt hat — nur der direkte Weg tut das. Über den
+         * Spiegel ist er `null`: dort wird das Foto erst später abgeholt, das
+         * Portrait entsteht also noch gar nicht.
+         */
+        data class Erfolg(val portrait: String? = null) : Ergebnis()
         data class Fehler(val text: String) : Ergebnis()
     }
 
@@ -93,7 +99,21 @@ object Uploader {
             verbindung.outputStream.use { it.write(jpeg) }
 
             when (val code = verbindung.responseCode) {
-                in 200..299 -> Ergebnis.Erfolg
+                in 200..299 -> {
+                    // Der Portraitname aus der Antwort, wenn einer dabei ist.
+                    // Von Hand aus dem JSON gelesen statt mit einer Bibliothek:
+                    // es ist EIN Feld, und org.json bringt Android ohnehin mit
+                    // — eine Abhängigkeit dafür wäre Unsinn. Schlägt es fehl,
+                    // ist der Upload trotzdem gelungen; die Vorschau ist eine
+                    // Dreingabe, kein Teil des Auftrags.
+                    val name = try {
+                        val text = verbindung.inputStream.bufferedReader().use { it.readText() }
+                        org.json.JSONObject(text).optString("portrait").ifBlank { null }
+                    } catch (e: Exception) {
+                        null
+                    }
+                    Ergebnis.Erfolg(name)
+                }
                 401 -> Ergebnis.Fehler("Foto-Token fehlt oder stimmt nicht")
                 413 -> Ergebnis.Fehler("Bild zu groß für die Station")
                 415 -> Ergebnis.Fehler("Station hat das Bild nicht als Foto erkannt")
@@ -116,5 +136,31 @@ object Uploader {
         } finally {
             verbindung?.disconnect()
         }
+    }
+
+    /**
+     * Holt ein fertiges Portrait zur Ansicht.
+     *
+     * Nur für die Vorschau nach dem Auslösen — der Rückgabewert ist absichtlich
+     * `ByteArray?` und keine Ausnahme: bleibt das Bild aus, fehlt eine
+     * Dreingabe, das Foto ist trotzdem angekommen. Ein Fehlschlag hier darf
+     * nie wie ein fehlgeschlagener Upload aussehen.
+     */
+    fun holePortrait(basis: String, name: String, timeoutMs: Int = 15_000): ByteArray? = try {
+        val verbindung = endpunkt(basis, "/media/portraits/$name")
+            .openConnection() as HttpURLConnection
+        verbindung.connectTimeout = timeoutMs
+        verbindung.readTimeout = timeoutMs
+        try {
+            if (verbindung.responseCode in 200..299) {
+                verbindung.inputStream.use { it.readBytes() }
+            } else {
+                null
+            }
+        } finally {
+            verbindung.disconnect()
+        }
+    } catch (e: Exception) {
+        null
     }
 }

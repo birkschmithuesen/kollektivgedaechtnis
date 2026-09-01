@@ -10,6 +10,7 @@
     <string name="aufnahme_fehler">Aufnahme fehlgeschlagen: %1$s</string>
     <string name="kamera_fehler">Kamera nicht verfügbar: %1$s</string>
     <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>
+    <string name="vorschau_beschreibung">So hat die Station das Foto zugeschnitten</string>
 
     <string name="settings_title">Einstellungen</string>
     <string name="weg_label">Wohin geht das Foto?</string>

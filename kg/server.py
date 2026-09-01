@@ -279,7 +279,13 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
                 raise HTTPException(status_code=422, detail=f"Bild unlesbar: {exc}") from exc
 
             core.on_photo(photo_path, portrait_path, at)
-            return {"ok": True}
+            # Der Name des Portraits, damit die App es sich ansehen kann
+            # (`GET /media/portraits/<name>`, schon gemountet). Absichtlich
+            # der Name und nicht das Bild selbst: die App soll es sich HOLEN,
+            # wenn sie es zeigen will, statt es jedem Einwurf aufzuzwingen —
+            # ein Portrait ist ~100 kB, und am Booth zählt, dass der Auslöser
+            # schnell wieder frei ist.
+            return {"ok": True, "portrait": portrait_path.name}
 
     @app.post("/api/positions")
     def api_positions(payload: Positions) -> dict:

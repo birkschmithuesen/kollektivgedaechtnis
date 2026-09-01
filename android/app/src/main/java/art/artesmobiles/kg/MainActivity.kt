@@ -3,10 +3,12 @@ package art.artesmobiles.kg
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -39,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var ausloeser: Button
     private lateinit var sucher: PreviewView
+    private lateinit var vorschau: ImageView
     private var aufnahme: ImageCapture? = null
 
     /** Verhindert, dass ein zweiter Druck ein zweites Interview eröffnet. */
@@ -59,6 +62,12 @@ class MainActivity : AppCompatActivity() {
         status = findViewById(R.id.status)
         ausloeser = findViewById(R.id.ausloeser)
         sucher = findViewById(R.id.sucher)
+        vorschau = findViewById(R.id.vorschau)
+
+        // Antippen blendet die Vorschau weg — sie verdeckt einen Teil des
+        // Suchers, und wer das nächste Foto machen will, soll sie loswerden,
+        // ohne ein Menü zu suchen.
+        vorschau.setOnClickListener { vorschau.visibility = View.GONE }
 
         ausloeser.setOnClickListener { schiesse() }
         findViewById<ImageButton>(R.id.einstellungen).setOnClickListener {
@@ -153,11 +162,37 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             when (ergebnis) {
-                is Uploader.Ergebnis.Erfolg ->
+                is Uploader.Ergebnis.Erfolg -> {
                     fertig(getString(R.string.gesendet), fehler = false)
+                    // Die Vorschau kommt NACH der Erfolgsmeldung und blockiert
+                    // den Auslöser nicht: sie ist eine Dreingabe. Über den
+                    // Spiegel gibt es sie nicht, dort entsteht das Portrait
+                    // erst beim Abholen — dann bleibt `portrait` null.
+                    ergebnis.portrait?.let { zeigeVorschau(adresse, it) }
+                }
                 is Uploader.Ergebnis.Fehler ->
                     fertig(ergebnis.text, fehler = true)
             }
+        }
+    }
+
+    /**
+     * Zeigt, wie die Station das Foto zugeschnitten hat.
+     *
+     * Absichtlich das ECHTE Portrait von der Station und keine Nachbildung
+     * hier: eine App-seitige Vorschau würde irgendwann von dem abweichen, was
+     * `kg/photos.py` tut, und dann prüft man am Booth eine Attrappe statt des
+     * Ergebnisses. Genau dafür gibt die Station den Dateinamen zurück.
+     */
+    private fun zeigeVorschau(adresse: String, name: String) {
+        lifecycleScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                Uploader.holePortrait(adresse, name)
+            } ?: return@launch  // kein Bild: still bleiben, das Foto ist trotzdem da
+
+            val bild = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@launch
+            vorschau.setImageBitmap(bild)
+            vorschau.visibility = View.VISIBLE
         }
     }
 

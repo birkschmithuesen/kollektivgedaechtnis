@@ -20,6 +20,36 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/status" />
 
+    <!--
+      Der Rahmen liegt ueber dem Sucher und deckt sich mit ihm: er zeigt den
+      Ausschnitt, den die Station nimmt. Nicht anklickbar
+      (`clickable=false`), damit er den Auslöser nicht abfängt.
+    -->
+    <art.artesmobiles.kg.SucherRahmen
+        android:id="@+id/rahmen"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clickable="false"
+        app:layout_constraintTop_toTopOf="@id/sucher"
+        app:layout_constraintStart_toStartOf="@id/sucher"
+        app:layout_constraintEnd_toEndOf="@id/sucher"
+        app:layout_constraintBottom_toBottomOf="@id/sucher" />
+
+    <!--
+      Die Vorschau des fertigen Portraits. Klein und in der Ecke: sie soll
+      zeigen, wie es geworden ist, aber nicht den Sucher fuer das naechste
+      Foto verstellen. Antippen blendet sie weg.
+    -->
+    <ImageView
+        android:id="@+id/vorschau"
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        android:layout_margin="12dp"
+        android:visibility="gone"
+        android:contentDescription="@string/vorschau_beschreibung"
+        app:layout_constraintBottom_toBottomOf="@id/sucher"
+        app:layout_constraintStart_toStartOf="@id/sucher" />
+
     <ImageButton
         android:id="@+id/einstellungen"
         android:layout_width="48dp"
