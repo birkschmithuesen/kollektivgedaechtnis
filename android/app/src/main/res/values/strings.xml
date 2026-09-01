@@ -3,7 +3,7 @@
     <string name="app_name">Kollektivgedächtnis</string>
     <string name="ausloeser">Foto aufnehmen</string>
     <string name="start">Kamera wird gestartet …</string>
-    <string name="bereit">Bereit — Station: %1$s</string>
+    <string name="bereit">Bereit — Ziel: %1$s</string>
     <string name="sende">Wird gesendet …</string>
     <string name="sende_groesse">Wird gesendet … (%1$d kB)</string>
     <string name="gesendet">Gesendet — Interview läuft</string>
@@ -12,10 +12,16 @@
     <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>
 
     <string name="settings_title">Einstellungen</string>
+    <string name="weg_label">Wohin geht das Foto?</string>
+    <string name="weg_station">Direkt zur Station (Handy im Tailnet)</string>
+    <string name="weg_spiegel">Über den Spiegel (Handy ohne Tailnet)</string>
     <string name="adresse_label">Adresse der Station</string>
     <string name="adresse_hint">100.75.24.33:8800</string>
-    <string name="adresse_hilfe">Tailnet-Adresse oder Name des Ausstellungsrechners. Ohne Portangabe wird 8800 verwendet. Der Pfad wird automatisch angehängt.</string>
+    <string name="spiegel_hint">https://kollektivgedaechtnis.flashclash.de</string>
+    <string name="token_hint">Foto-Token</string>
+    <string name="adresse_hilfe">Direkt zur Station ist der schnellere Weg und braucht kein Token — dafür muss das Handy im Tailnet sein. Über den Spiegel geht es von jedem Netz aus; die Station holt das Foto dort ab, das dauert ein paar Sekunden länger.</string>
     <string name="speichern">Speichern</string>
     <string name="gespeichert">Gespeichert: %1$s</string>
     <string name="adresse_ungueltig">Adresse unbrauchbar — bitte prüfen.</string>
+    <string name="token_fehlt">Der Spiegel-Weg braucht ein Foto-Token.</string>
 </resources>

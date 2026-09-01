@@ -1,6 +1,7 @@
 package art.artesmobiles.kg
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -57,6 +58,85 @@ class UploaderTest {
             "http://100.75.24.33:8800/api/photo",
             Uploader.endpunkt("http://100.75.24.33:8800/api").toString()
         )
+    }
+
+    // --- Die beiden Wege ---------------------------------------------------
+
+    @Test
+    fun `der spiegel bekommt seinen eigenen pfad`() {
+        assertEquals(
+            "https://kollektivgedaechtnis.flashclash.de/ingest/photo",
+            Uploader.endpunkt(
+                "https://kollektivgedaechtnis.flashclash.de", "/ingest/photo"
+            ).toString()
+        )
+    }
+
+    @Test
+    fun `https bekommt keinen stationsport angehaengt`() {
+        // Der Spiegel laeuft auf 443 hinter nginx. Ein angehaengtes :8800
+        // liefe ins Leere -- mit einer Zeitueberschreitung, die wie
+        // „Station aus" aussieht statt wie ein Konfigurationsfehler.
+        val url = Uploader.endpunkt("https://kg.example.org", "/ingest/photo")
+        assertTrue("Port faelschlich gesetzt: ${url.port}", url.port == -1)
+        assertEquals("https://kg.example.org/ingest/photo", url.toString())
+    }
+
+    @Test
+    fun `ein token wird als bearer mitgeschickt`() {
+        var gesehen: String? = "nicht gesetzt"
+        Uploader.sende(URL("https://x/ingest/photo"), byteArrayOf(1), token = "geheim") {
+            object : HttpURLConnection(it) {
+                override fun connect() {}
+                override fun disconnect() {}
+                override fun usingProxy() = false
+                override fun getOutputStream() = ByteArrayOutputStream()
+                override fun getResponseCode() = 200
+                override fun setRequestProperty(key: String, value: String) {
+                    if (key == "Authorization") gesehen = value
+                }
+            }
+        }
+        assertEquals("Bearer geheim", gesehen)
+    }
+
+    @Test
+    fun `ohne token wird kein authorization kopf gesetzt`() {
+        // Der Station im Tailnet darf nie ein Token geschickt werden -- sie
+        // kennt keines, und ein Kopf, den niemand prueft, verleitet dazu,
+        // spaeter einen dort zu erwarten.
+        var gesehen: String? = null
+        Uploader.sende(URL("http://x:8800/api/photo"), byteArrayOf(1), token = null) {
+            object : HttpURLConnection(it) {
+                override fun connect() {}
+                override fun disconnect() {}
+                override fun usingProxy() = false
+                override fun getOutputStream() = ByteArrayOutputStream()
+                override fun getResponseCode() = 200
+                override fun setRequestProperty(key: String, value: String) {
+                    if (key == "Authorization") gesehen = value
+                }
+            }
+        }
+        assertNull(gesehen)
+    }
+
+    @Test
+    fun `ein abgelehntes token wird beim namen genannt`() {
+        val ergebnis = Uploader.sende(URL("https://x/ingest/photo"), byteArrayOf(1)) {
+            attrappe(401)
+        }
+        val text = (ergebnis as Uploader.Ergebnis.Fehler).text
+        assertTrue(text.contains("Token"))
+    }
+
+    @Test
+    fun `ein voller eingang wird beim namen genannt`() {
+        val ergebnis = Uploader.sende(URL("https://x/ingest/photo"), byteArrayOf(1)) {
+            attrappe(429)
+        }
+        val text = (ergebnis as Uploader.Ergebnis.Fehler).text
+        assertTrue(text.contains("voll"))
     }
 
     @Test

@@ -26,6 +26,7 @@ import mimetypes
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -143,6 +144,87 @@ class Spiegel:
         return round(max(0.0, (jetzt or time.time()) - empfangen), 1)
 
 
+class Posteingang:
+    """Fotos, die auf ihre Abholung durch die Station warten.
+
+    Der Spiegel ist die einzige Stelle, die BEIDE erreichen: das Handy von
+    aussen (HTTPS, öffentlich) und die Station von innen (sie holt ab, wie sie
+    heute schon hochlädt). Die Station sitzt hinter Venue-NAT und ist von
+    aussen nicht erreichbar — deshalb liegt das Foto hier zwischen, statt
+    direkt zugestellt zu werden.
+
+    Bewusst ein Verzeichnis und keine Datenbank: es ist eine Warteschlange von
+    Dateien, und `os.replace` gibt die Atomarität, die es braucht. Ein halb
+    geschriebenes Foto darf die Station nie sehen.
+
+    Der Eingang ist FLÜCHTIG. Abgeholte Fotos werden gelöscht, alte verfallen
+    (`MAX_ALTER_S`). Das ist kein Sparen an Platz, sondern Absicht: der
+    Spiegel ist ein öffentlicher Server, und Portraits fremder Menschen sollen
+    dort nicht liegenbleiben. Der Ort, an dem sie dauerhaft leben, ist die
+    Station.
+    """
+
+    #: Ein Foto, das so lange niemand abgeholt hat, gehört zu einem Interview,
+    #: das längst vorbei ist. Es später einzuspielen hiesse, das falsche
+    #: Portrait an das falsche Gespräch zu hängen.
+    MAX_ALTER_S = 900.0
+
+    #: Damit ein Dauerdruck auf den Auslöser die Platte nicht vollschreibt.
+    MAX_WARTEND = 50
+
+    def __init__(self, verzeichnis: Path) -> None:
+        self.verzeichnis = Path(verzeichnis)
+        self.verzeichnis.mkdir(parents=True, exist_ok=True)
+
+    def _verfallen(self, jetzt: float) -> None:
+        for pfad in self.verzeichnis.glob("*.jpg"):
+            try:
+                if jetzt - pfad.stat().st_mtime > self.MAX_ALTER_S:
+                    pfad.unlink()
+            except FileNotFoundError:
+                continue  # ein Nebenläufer war schneller, das ist in Ordnung
+
+    def wartend(self) -> list[Path]:
+        """Älteste zuerst — die Reihenfolge am Booth ist die Reihenfolge."""
+        return sorted(self.verzeichnis.glob("*.jpg"), key=lambda p: p.name)
+
+    def lege_ab(self, roh: bytes, jetzt: float) -> str:
+        self._verfallen(jetzt)
+        if len(self.wartend()) >= self.MAX_WARTEND:
+            raise HTTPException(status_code=429, detail="Eingang voll")
+
+        # Millisekunden im Namen, damit zwei Fotos derselben Sekunde nicht
+        # kollidieren, und `uuid4` dahinter, weil zwei Handys unabhängig
+        # voneinander drücken können und dieselbe Millisekunde treffen dürfen.
+        name = f"{jetzt:.3f}_{uuid.uuid4().hex[:8]}.jpg"
+        ziel = self.verzeichnis / name
+        tmp = ziel.with_suffix(".jpg.tmp")
+        tmp.write_bytes(roh)
+        # Atomar: die Station darf nie ein halb geschriebenes Foto sehen.
+        os.replace(tmp, ziel)
+        return name
+
+    def hole(self, name: str) -> bytes:
+        pfad = self.verzeichnis / _pruefe_namen(name)
+        try:
+            return pfad.read_bytes()
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="nicht vorhanden") from None
+
+    def quittiere(self, name: str) -> bool:
+        """Löschen NACH erfolgreicher Abholung, nicht währenddessen.
+
+        Getrennt vom Lesen, damit ein Abbruch auf dem Weg zur Station das Foto
+        nicht verliert: erst wenn sie es sicher hat, quittiert sie.
+        """
+        pfad = self.verzeichnis / _pruefe_namen(name)
+        try:
+            pfad.unlink()
+            return True
+        except FileNotFoundError:
+            return False
+
+
 class _Verteiler:
     """Winziger Pub/Sub für den Ereignisstrom.
 
@@ -196,24 +278,44 @@ def _pruefe_art(kind: str) -> str:
     return kind
 
 
-def create_app(data_dir: Path | str | None = None, token: str | None = None) -> FastAPI:
+def create_app(
+    data_dir: Path | str | None = None,
+    token: str | None = None,
+    foto_token: str | None = None,
+) -> FastAPI:
     """Die App. `token=None` heisst: aus der Umgebung, und ohne Umgebung zu.
 
     Ohne konfiguriertes Token beantwortet jede Aufnahme 401 („fail closed").
     Der Dienst läuft dann trotzdem und zeigt weiter den Stand von der Platte —
     ein vergessenes `EnvironmentFile` darf die öffentliche Seite nicht mit in
     den Abgrund reissen, nur das Nachfüllen verhindern.
+
+    **`foto_token` ist bewusst ein ZWEITES, getrenntes Geheimnis** (Birk,
+    2026-09-01). Es steckt in jeder ausgelieferten APK und ist damit kein
+    Geheimnis mehr, sobald das Handy aus der Hand gegeben wird — ein APK ist
+    ein ZIP, das Token liest jeder heraus. Deshalb darf es ausschliesslich
+    Fotos EINWERFEN (`POST /ingest/photo`) und sonst nichts: nicht den Graphen
+    ersetzen, nicht den Traum überschreiben, keine Portraits an der Wand
+    austauschen. Wer es hat, kann Fotos in die Warteschlange legen — mehr
+    nicht, und das ist genau die Befugnis, die die App braucht.
+
+    Das Uploader-Token (`token`) bleibt davon unberührt und darf weiterhin
+    alles. Es verlässt die Station nie.
     """
     if data_dir is None:
         data_dir = os.environ.get("KG_MIRROR_DATA", "mirror-data")
     if token is None:
         token = os.environ.get("KG_MIRROR_TOKEN")
+    if foto_token is None:
+        foto_token = os.environ.get("KG_FOTO_TOKEN")
 
     spiegel = Spiegel(Path(data_dir))
+    posteingang = Posteingang(Path(data_dir) / "eingang")
     bus = _Verteiler()
 
     app = FastAPI(title="Kollektivgedächtnis — mobiler Spiegel", docs_url=None, redoc_url=None)
     app.state.spiegel = spiegel
+    app.state.posteingang = posteingang
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
 
     def pruefe_token(request: Request) -> None:
@@ -223,6 +325,24 @@ def create_app(data_dir: Path | str | None = None, token: str | None = None) -> 
         # viele Zeichen schon stimmen. Kein Token konfiguriert -> nie gleich.
         if not token or not hmac.compare_digest(vorgelegt, token):
             raise HTTPException(status_code=401, detail="kein gültiges Token")
+
+    def pruefe_foto_token(request: Request) -> None:
+        """Das schwächere Geheimnis, nur für den Foto-Einwurf.
+
+        Eigene Funktion und NICHT ein zweiter Vergleich in `pruefe_token`:
+        die beiden Befugnisse dürfen nie zusammenfallen. Wer hier durchkommt,
+        darf ausschliesslich einwerfen — dass das so bleibt, hält
+        `test_foto_token_darf_sonst_nichts` fest.
+
+        Das Uploader-Token wird hier ABSICHTLICH NICHT auch akzeptiert. Es
+        wäre bequem („das stärkere darf ja alles"), aber dann liesse sich am
+        Testaufbau nicht mehr unterscheiden, welches der beiden gerade wirkt,
+        und ein Fehler in der Abgrenzung fiele nicht auf.
+        """
+        kopf = request.headers.get("authorization", "")
+        vorgelegt = kopf[7:] if kopf.lower().startswith("bearer ") else ""
+        if not foto_token or not hmac.compare_digest(vorgelegt, foto_token):
+            raise HTTPException(status_code=401, detail="kein gültiges Foto-Token")
 
     async def json_body(request: Request) -> dict:
         roh = await request.body()
@@ -285,6 +405,51 @@ def create_app(data_dir: Path | str | None = None, token: str | None = None) -> 
     # abtippt, landet zuerst bei der Erklärung und entscheidet dann selbst.
     # Start- und Transparenzseite sind rein statisch — sie funktionieren auch,
     # wenn nie eine Aufnahme eingegangen ist, und hängen an keinem Zustand.
+
+    # ---- Foto-Einwurf von aussen (SCHWACHES Foto-Token) ---------------
+    #
+    # Der Weg für ein Handy OHNE Tailnet-Zugang (Birk, 2026-09-01): das
+    # Handy wirft hier ein, die Station holt unten ab. Bewusst getrennt von
+    # `/ingest/media/...` darüber — das schreibt Portraits, die SOFORT an der
+    # Wand erscheinen, und darf niemals mit einem Token aus einer APK
+    # erreichbar sein.
+
+    @app.post("/ingest/photo")
+    async def ingest_photo(request: Request) -> dict:
+        pruefe_foto_token(request)
+        roh = await request.body()
+        if not roh:
+            raise HTTPException(status_code=400, detail="leerer Rumpf")
+        if len(roh) > MAX_MEDIA_BYTES:
+            raise HTTPException(status_code=413, detail="Bild zu gross")
+        # Magic Bytes, nicht der Content-Type-Kopf: der Kopf ist eine
+        # Behauptung des Clients. Auf einem öffentlichen Server ist das keine
+        # Förmlichkeit — ohne diese Prüfung liesse sich hier Beliebiges
+        # ablegen und über die Abholroute wieder herausholen.
+        if not (roh[:3] == b"\xff\xd8\xff" or roh[:8] == b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(status_code=415, detail="kein JPEG/PNG")
+
+        name = posteingang.lege_ab(roh, time.time())
+        print(f"[mirror] Foto eingeworfen: {len(roh)} Bytes -> {name}", flush=True)
+        return {"ok": True, "name": name}
+
+    # ---- Abholung durch die Station (STARKES Uploader-Token) ----------
+
+    @app.get("/eingang")
+    def eingang_liste(request: Request) -> dict:
+        pruefe_token(request)
+        return {"wartend": [p.name for p in posteingang.wartend()]}
+
+    @app.get("/eingang/{name:path}")
+    def eingang_hole(name: str, request: Request) -> Response:
+        pruefe_token(request)
+        return Response(content=posteingang.hole(name), media_type="image/jpeg")
+
+    @app.delete("/eingang/{name:path}")
+    def eingang_quittiere(name: str, request: Request) -> dict:
+        pruefe_token(request)
+        return {"ok": posteingang.quittiere(name)}
+
     @app.get("/")
     def seite_start() -> FileResponse:
         return FileResponse(WEB / "start.html")

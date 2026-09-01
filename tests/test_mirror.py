@@ -139,15 +139,32 @@ def test_es_gibt_keinen_schreibweg_richtung_station(client):
     Aufnahme NICHTS geschrieben werden kann — kein `/api/pause`, kein
     `/api/discard`, nichts, was an der Station ankäme. Ein neuer Endpunkt, der
     das aufweicht, wird hier rot.
+
+    Erweitert 2026-09-01 um den Foto-Eingang: `DELETE /eingang/{name}` ist ein
+    echter Schreibweg, aber er quittiert nur eine ABHOLUNG durch die Station
+    und braucht dafür das starke Uploader-Token. Er kann nichts an die Station
+    schicken und nichts an der Wand ändern — er räumt weg, was die Station
+    bereits geholt hat. Der Einwurf selbst liegt unter `/ingest/photo` und
+    fällt damit ohnehin unter die Regel oben.
+
+    Die Liste ist bewusst EXPLIZIT und nicht `/eingang/`-als-Präfix: sonst
+    würde ein künftiges `POST /eingang/befehl` stillschweigend mitrutschen.
     """
+    ERLAUBTE_AUSNAHMEN = {("/eingang/{name:path}", ("DELETE",))}
+
     schreibend = [
-        (weg, sorted(methoden))
+        (weg, tuple(sorted(methoden)))
         for weg, methoden in (
             (route.path, route.methods) for route in client.app.routes if hasattr(route, "methods")
         )
         if set(methoden) - {"GET", "HEAD"}
     ]
-    assert all(weg.startswith("/ingest/") for weg, _ in schreibend), schreibend
+    unerlaubt = [
+        (weg, m)
+        for weg, m in schreibend
+        if not weg.startswith("/ingest/") and (weg, m) not in ERLAUBTE_AUSNAHMEN
+    ]
+    assert unerlaubt == [], unerlaubt
 
 
 # --------------------------------------------------------------------------

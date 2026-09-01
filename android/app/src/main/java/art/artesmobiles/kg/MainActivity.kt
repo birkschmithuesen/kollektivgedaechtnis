@@ -79,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         // Nach einer Änderung in den Einstellungen soll sofort sichtbar sein,
         // wohin die App jetzt schickt — die Adresse ist die einzige Sache,
         // die im Flur schiefgeht.
-        zeige(getString(R.string.bereit, einstellungen.stationsAdresse), fehler = false)
+        zeige(getString(R.string.bereit, einstellungen.aktuellesZiel().first), fehler = false)
     }
 
     private fun starteKamera() {
@@ -141,9 +141,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendeHoch(jpeg: ByteArray) {
         lifecycleScope.launch {
+            val (adresse, token) = einstellungen.aktuellesZiel()
+            val pfad = if (einstellungen.ziel == Einstellungen.Ziel.SPIEGEL)
+                "/ingest/photo" else "/api/photo"
+
             val ergebnis = withContext(Dispatchers.IO) {
                 try {
-                    Uploader.sende(Uploader.endpunkt(einstellungen.stationsAdresse), jpeg)
+                    Uploader.sende(Uploader.endpunkt(adresse, pfad), jpeg, token)
                 } catch (e: Exception) {
                     Uploader.Ergebnis.Fehler(getString(R.string.adresse_ungueltig))
                 }
