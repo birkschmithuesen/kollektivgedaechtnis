@@ -64,11 +64,22 @@
             android:autofillHints=""
             android:textSize="18sp" />
 
+        <!--
+          KEIN `textPassword` (Birk, 2026-09-01): Passwortfelder sperren auf
+          vielen Android-Tastaturen das Einfuegen aus der Zwischenablage —
+          und genau so kommt das Token aufs Geraet. Die Maskierung schuetzte
+          hier ohnehin nichts: das Token steckt in derselben APK, in der auch
+          dieses Feld liegt.
+
+          `textUri` statt `text`: schaltet Autokorrektur und Grossschreibung
+          am Zeilenanfang ab. Ein autokorrigiertes Token ergibt 401 — und
+          zwar aussehend wie ein Serverfehler, nicht wie ein Tippfehler.
+        -->
         <EditText
             android:id="@+id/foto_token"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
+            android:inputType="textUri"
             android:hint="@string/token_hint"
             android:autofillHints=""
             android:textSize="18sp"

@@ -48,10 +48,19 @@ class Einstellungen(context: Context) {
      * Leer als Standard, nicht vorbelegt: ein Token gehört nicht in ein
      * öffentliches Repository, auch kein schwaches. Es wird beim Einrichten
      * eingetragen — einmal pro Gerät.
+     *
+     * Beim Setzen wird ALLER Leerraum entfernt, nicht nur am Rand: ein aus
+     * einer Terminalausgabe kopiertes Token schleppt regelmäßig einen
+     * Zeilenumbruch oder ein Leerzeichen mit. Das Ergebnis wäre ein 401, das
+     * wie ein Serverfehler aussieht statt wie ein Kopierfehler — und niemand
+     * sieht einem Feld an, dass hinten ein „\n" steht. Ein echtes Token
+     * enthält nie Leerraum (`secrets.token_urlsafe`), es geht also nichts
+     * verloren.
      */
     var fotoToken: String
         get() = store.getString(TOKEN, "") ?: ""
-        set(wert) = store.edit().putString(TOKEN, wert.trim()).apply()
+        set(wert) = store.edit()
+            .putString(TOKEN, wert.filterNot { it.isWhitespace() }).apply()
 
     /** Was jetzt gilt — Adresse und Token passend zum gewählten Weg. */
     fun aktuellesZiel(): Pair<String, String?> = when (ziel) {

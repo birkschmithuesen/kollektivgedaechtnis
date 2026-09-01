@@ -139,6 +139,24 @@ class UploaderTest {
         assertTrue(text.contains("voll"))
     }
 
+    // --- Das Token, wie es wirklich aufs Geraet kommt ----------------------
+
+    @Test
+    fun `ein kopiertes token verliert seinen leerraum`() {
+        // Aus einer Terminalausgabe kopiert haengt regelmaessig ein
+        // Zeilenumbruch dran. Ohne Bereinigung ergibt das 401 -- und das
+        // sieht wie ein Serverfehler aus, nicht wie ein Kopierfehler.
+        // Niemand sieht einem Eingabefeld an, dass hinten ein \n steht.
+        val roh = " abc-def_123\n"
+        assertEquals("abc-def_123", roh.filterNot { it.isWhitespace() })
+    }
+
+    @Test
+    fun `leerraum mitten im token faellt ebenfalls weg`() {
+        // `trim()` allein wuerde das nicht fangen -- deshalb filterNot.
+        assertEquals("abcdef", "ab c\tdef".filterNot { it.isWhitespace() })
+    }
+
     @Test
     fun `leerzeichen ringsum stoeren nicht`() {
         assertEquals(
