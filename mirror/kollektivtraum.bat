@@ -297,18 +297,41 @@ if errorlevel 1 (
 
 rem Erst schauen, ob etwas Eigenes im Weg liegt. Ein Pull, der an einer
 rem geaenderten Datei scheitert, soll gar nicht erst versucht werden.
+rem
+rem 🔴 `--untracked-files=no` ist hier entscheidend, nicht Kosmetik --
+rem gemessen an der echten Station am 2026-09-01: Dort lagen 11
+rem unversionierte Dateien im Repo (Sicherungskopien wie
+rem `config.toml.bak-vor-eu-llm`, Messsonden, Testdateien aus einer
+rem Sitzung). Mit dem nackten `--porcelain` haette die Schutzpruefung
+rem deshalb JEDES MAL angeschlagen und nie gezogen -- der ganze Schritt
+rem waere eine wirkungslose Zeile im Startprotokoll gewesen.
+rem
+rem Unversionierte Dateien koennen einen `--ff-only`-Pull auch nicht in
+rem einen Konflikt fuehren: Kaeme eine Datei neu dazu, die dort schon
+rem liegt, meldet git das sauber und bricht ab. Wovor die Pruefung wirklich
+rem schuetzt, sind GEAENDERTE versionierte Dateien.
 set "SCHMUTZIG="
-for /f "delims=" %%S in ('git status --porcelain 2^>nul') do set "SCHMUTZIG=1"
+for /f "delims=" %%S in ('git status --porcelain --untracked-files^=no 2^>nul') do set "SCHMUTZIG=1"
 if defined SCHMUTZIG (
   echo         %WIE%: lokale Aenderungen - NICHT gezogen, alter Stand bleibt.
   popd
   endlocal & exit /b 0
 )
 
+rem 🔴 Gezogen wird von GITHUB, ausdruecklich benannt statt ueber den
+rem eingestellten `origin` -- gemessen an der Station am 2026-09-01:
+rem Dort zeigte `origin` auf eine lokale Datei `C:\Users\birk\kg.bundle`
+rem vom 29.08. Ein `git pull` ohne Ziel meldete brav "Already up to
+rem date", waehrend die Station in Wahrheit 28 Commits zurueckhing. Der
+rem Schritt haette also funktioniert AUSGESEHEN und nichts getan -- die
+rem schlechteste aller Varianten, weil niemand nachsieht.
+git remote get-url github >nul 2>&1
+if errorlevel 1 git remote add github https://github.com/birkschmithuesen/kollektivgedaechtnis.git >nul 2>&1
+
 rem Zeitlimit ueber PowerShell: ein totes Netz im Festivalhaus darf den
 rem Start nicht minutenlang aufhalten. 45 s sind ein Vielfaches dessen,
 rem was ein normaler Pull braucht.
-powershell -NoProfile -Command "$p = Start-Process git -ArgumentList 'pull','--ff-only','--quiet' -NoNewWindow -PassThru; if (-not $p.WaitForExit(45000)) { $p.Kill(); exit 2 }; exit $p.ExitCode" >nul 2>&1
+powershell -NoProfile -Command "$p = Start-Process git -ArgumentList 'pull','--ff-only','--quiet','github','master' -NoNewWindow -PassThru; if (-not $p.WaitForExit(45000)) { $p.Kill(); exit 2 }; exit $p.ExitCode" >nul 2>&1
 
 if errorlevel 2 (
   echo         %WIE%: Zeitlimit ^(Netz?^) - alter Stand bleibt, weiter.
