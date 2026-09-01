@@ -92,6 +92,28 @@ log = logging.getLogger(__name__)
 #: logged, never rejected (spec §8).
 SENTENCE_MAX_WORDS = 16
 
+#: Wie oft Stufe 1 hoechstens gefragt wird, wenn der Wandsatz seine FORM
+#: verfehlt (zu lang oder mit Komma).
+#:
+#: Gemessen am Abend des ersten Ausstellungstags, vier Laeufe auf dem echten
+#: Graphen: 4 von 4 Saetzen verletzten die Form -- 21, 47, 45 und 55 Woerter
+#: gegen ein Maximum von 16, einer davon auf Englisch, einer eine
+#: Verweigerung. Der echte Traum d1 hatte 26. Bis dahin wurde das nur
+#: protokolliert („Logged, never rejected").
+#:
+#: Diese Haltung bleibt richtig und aendert sich hier NICHT: ein abgelehnter
+#: Satz waere eine leere Aenderung an der Wand, und Spec §8 sagt, man solle
+#: Unvollkommenheit aussitzen statt anzuhalten. Zwischen ablehnen und
+#: hinnehmen liegt aber ein dritter Weg, den `kg.llm` bei kaputtem JSON
+#: laengst geht: noch einmal fragen. Bleibt es auch beim letzten Versuch
+#: falsch, wird der Traum trotzdem geliefert -- mit dem KUERZESTEN der
+#: Versuche, nicht dem letzten.
+#:
+#: Drei und nicht mehr: der Satz steht auf einem grossen Schirm und wird
+#: alle `min_interval_s` (240 s) erneuert; drei Aufrufe sind dagegen billig,
+#: eine offene Schleife waere es nicht.
+SENTENCE_FORM_ATTEMPTS = 3
+
 _BASE = """\
 Du bist das Gedächtnis einer Ausstellungsstation auf dem Festival NEW bauhaus \
 2026. Den ganzen Tag über haben Menschen dort Interviews über das Bauen, das \
@@ -228,6 +250,17 @@ FORM: genau ein Hauptsatz auf Deutsch, höchstens {max_words} Wörter, OHNE \
 Komma, ohne Nebensatz, ohne Gedankenstrich. Ein einziges Bild, kein zweites \
 daneben. Er steht als Bildunterschrift auf einem großen Schirm und muss im \
 Vorbeigehen in einem Blick erfassbar sein.
+
+🔴 DER SATZ TRÄGT NICHT DAS GANZE BILD. Er ist die VERDICHTUNG deiner \
+Bildbeschreibung, nicht ihre Zusammenfassung: EIN Vorgang daraus, der eine, \
+an dem man die anderen ahnt. Die Pflichtbegriffe, das Nahe und das Weite, \
+beide Seiten des Widerspruchs — das alles steht in der BILDBESCHREIBUNG und \
+muss nicht noch einmal in den Satz. Wer versucht, alles hineinzupacken, \
+bekommt zwangsläufig Kommas und Nebensätze und verfehlt die Form: In \
+{max_words} Wörtern ohne Komma haben drei Begriffe plus Vorder- und \
+Hintergrund keinen Platz. Nenne lieber weniger und zeige das genau.
+Eine Aufzählung ist dabei nicht die Rettung: „A und B steigen aus C auf" hält \
+zwar die Wortzahl ein, ist aber kein Bild, sondern eine Liste mit Verb.
 
 ÜBERSETZUNG: Liefere zusätzlich denselben Satz als wörtliche Übersetzung ins \
 Englische — keine inhaltliche Veränderung, keine Ausschmückung, dieselbe \
@@ -410,9 +443,29 @@ negativ, wenn diese Vorschläge Probleme voraussetzen.
 
 
 class DreamSentence(BaseModel):
+    """🔴 Die REIHENFOLGE der Felder ist Absicht, seit 2026-09-02.
+
+    Vorher stand `sentence` an erster Stelle. Ein Modell fuellt die Felder in
+    genau dieser Reihenfolge -- der Wandsatz entstand also, BEVOR es die
+    ausfuehrliche Bildbeschreibung gab, und trug deshalb die ganze Last: alle
+    Pflichtbegriffe, das Nahe und das Weite, beide Seiten des Widerspruchs.
+    In 16 Woertern ohne Komma passt das nicht.
+
+    Gemessen am 2026-09-02, vier Laeufe mit je bis zu drei Versuchen: 1 von
+    12 Saetzen hielt die Form ein, die anderen hatten 27 bis 55 Woerter. Der
+    Prompt selbst sagt es richtig -- „Der Wandsatz und diese Beschreibung sind
+    dasselbe Bild, einmal knapp und einmal ausfuehrlich" --, nur in der
+    falschen Reihenfolge: Man verdichtet ein Bild, das man schon hat.
+
+    Jetzt entsteht erst die Beschreibung mit allem darin, dann der Satz als
+    ihre Verdichtung. Die DB-Spalten heissen unveraendert, sie werden ueber
+    ihren Namen geschrieben -- diese Aenderung beruehrt nur, in welcher
+    Reihenfolge das Modell denkt.
+    """
+
+    image_description: str
     sentence: str
     sentence_en: str
-    image_description: str
     tension_source: str
     mood: int
     tension: int
@@ -639,7 +692,34 @@ def condense(
         last_person_id=last_person_id,
     )
 
-    result = llm.parse(system=system, user=user, output_model=DreamSentence)
+    def _form_stimmt(satz: str) -> bool:
+        """Ein Hauptsatz, hoechstens `SENTENCE_MAX_WORDS` Woerter, kein Komma."""
+        return len(satz.split()) <= SENTENCE_MAX_WORDS and "," not in satz
+
+    versuche: list[DreamSentence] = []
+    for n in range(1, SENTENCE_FORM_ATTEMPTS + 1):
+        kandidat = llm.parse(system=system, user=user, output_model=DreamSentence)
+        versuche.append(kandidat)
+        roh = _clean(kandidat.sentence)
+        if _form_stimmt(roh):
+            break
+        log.warning(
+            "stage 1 sentence form wrong (%s words, comma=%s) — asking again, "
+            "attempt %s of %s: %r",
+            len(roh.split()), "," in roh, n, SENTENCE_FORM_ATTEMPTS, roh,
+        )
+    # Der erste formrichtige gewinnt. Gibt es keinen, der KUERZESTE — nicht der
+    # letzte: sonst macht eine Wiederholung den Satz schlimmer, statt ihn zu
+    # retten (gemessen: 21, dann 47, dann 45 Woerter).
+    result = next(
+        (k for k in versuche if _form_stimmt(_clean(k.sentence))),
+        None,
+    )
+    if result is None:
+        result = min(
+            versuche,
+            key=lambda k: (len(_clean(k.sentence).split()), "," in _clean(k.sentence)),
+        )
     sentence = _clean(result.sentence)
     if not sentence:
         raise ValueError("stage 1 returned an empty sentence")

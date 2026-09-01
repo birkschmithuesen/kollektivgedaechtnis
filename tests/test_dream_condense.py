@@ -770,3 +770,94 @@ def test_clean_leaves_a_sentence_with_internal_quotations_alone():
     result = condense(FakeLLM(both_ends_quoted), material())
 
     assert result.sentence == both_ends_quoted
+
+
+# --- Der Wandsatz haelt seine Form nicht ein (Birk, 2026-09-02) -------------
+#
+# Gemessen am Abend des ersten Ausstellungstags, vier Laeufe auf dem echten
+# Graphen: 4 von 4 Saetzen verletzten die Form. 21, 47, 45 und 55 Woerter
+# gegen ein Maximum von 16; einer davon auf ENGLISCH, einer eine
+# Verweigerung („Eine einzige Satz-Antwort ist nicht moeglich; die
+# Instruktion verlangt fuenf Teile ..."). Der echte Traum d1 hatte 26.
+#
+# Bis dahin wurde das nur protokolliert: „Logged, never rejected" -- ein
+# abgelehnter Satz waere eine leere Aenderung an der Wand, und Spec §8 sagt,
+# man solle Unvollkommenheit aussitzen statt anzuhalten. Das bleibt richtig.
+# Zwischen ablehnen und hinnehmen liegt aber ein dritter Weg, den kg.llm bei
+# kaputtem JSON laengst geht: noch einmal fragen. Der Satz steht als
+# Bildunterschrift auf einem grossen Schirm und soll im Vorbeigehen in einem
+# Blick erfassbar sein; 55 Woerter sind das nicht.
+
+
+def _antwort(satz, beschreibung="A wall of clay."):
+    return {
+        "sentence": satz,
+        "sentence_en": "A man kneads clay.",
+        "image_description": beschreibung,
+        "tension_source": "hands against machines",
+        "mood": 3,
+        "tension": 3,
+    }
+
+
+class _LLMMitFolge:
+    """Liefert die vorgegebenen Antworten der Reihe nach."""
+
+    def __init__(self, *antworten):
+        self.antworten = list(antworten)
+        self.aufrufe = 0
+
+    def parse(self, system, user, output_model):
+        self.aufrufe += 1
+        d = self.antworten[min(self.aufrufe - 1, len(self.antworten) - 1)]
+        return output_model.model_validate(d)
+
+
+def test_ein_zu_langer_wandsatz_wird_noch_einmal_erfragt():
+    lang = " ".join(f"Wort{i}" for i in range(40))
+    kurz = "Ein Mann knetet Lehm an einer halbfertigen Wand aus Stampflehm"
+    llm = _LLMMitFolge(_antwort(lang), _antwort(kurz))
+
+    r = condense(llm, material())
+
+    assert r.sentence == kurz
+    assert llm.aufrufe == 2, "es muss genau einmal nachgefragt worden sein"
+
+
+def test_ein_satz_mit_komma_wird_noch_einmal_erfragt():
+    mit = "Ein Mann knetet Lehm, waehrend ein Kran ein Fass hebt"
+    ohne = "Ein Mann knetet Lehm an einer halbfertigen Wand"
+    llm = _LLMMitFolge(_antwort(mit), _antwort(ohne))
+
+    assert condense(llm, material()).sentence == ohne
+    assert llm.aufrufe == 2
+
+
+def test_ein_richtiger_satz_kostet_keinen_zweiten_aufruf():
+    kurz = "Ein Mann knetet Lehm an einer halbfertigen Wand"
+    llm = _LLMMitFolge(_antwort(kurz))
+
+    assert condense(llm, material()).sentence == kurz
+    assert llm.aufrufe == 1, "ohne Formfehler darf nicht nachgefragt werden"
+
+
+def test_bleibt_die_form_falsch_wird_der_traum_trotzdem_geliefert():
+    """Spec §8: aussitzen, nicht anhalten. Ein leerer Schirm ist schlimmer als
+    ein zu langer Satz — die Wiederholung ist eine Chance, keine Bedingung."""
+    lang = " ".join(f"Wort{i}" for i in range(40))
+    llm = _LLMMitFolge(_antwort(lang))
+
+    r = condense(llm, material())
+
+    assert r.sentence == lang, "der Traum muss trotzdem herauskommen"
+    assert llm.aufrufe <= 3, "aber nicht endlos versuchen"
+
+
+def test_der_beste_versuch_gewinnt_nicht_der_letzte():
+    """Wird auch der zweite Versuch nichts, zaehlt der KUERZERE — sonst macht
+    eine Wiederholung den Satz schlimmer, statt ihn zu retten."""
+    mittel = " ".join(f"Wort{i}" for i in range(20))
+    sehr_lang = " ".join(f"Wort{i}" for i in range(60))
+    llm = _LLMMitFolge(_antwort(mittel), _antwort(sehr_lang), _antwort(sehr_lang))
+
+    assert condense(llm, material()).sentence == mittel
