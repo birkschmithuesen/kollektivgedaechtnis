@@ -108,6 +108,189 @@ class PortraitSize(BaseModel):
     pixels: float = Field(ge=40.0, le=700.0)
 
 
+# ---------------------------------------------------------------------------
+# Die Regler der Plenarfläche (Birk, 2026-09-01 vor Ort)
+#
+# 🔴 EIGENE SCHLÜSSEL, DIESELBE TABELLE. Die Saalwerte liegen als
+# `plenum_<name>` in derselben `setting`-Tabelle wie die Foyerwerte und
+# überschreiben nie deren Schlüssel. Das ist die ganze Trennung, und sie ist
+# absichtlich so klein: eine zweite Tabelle (oder gar eine zweite Datenbank)
+# hätte einen zweiten Migrationsweg, einen zweiten Sicherungsweg und einen
+# zweiten Weg, beim Umschalten der Demodaten kaputtzugehen.
+#
+# 🔴 EINE TABELLE STATT SIEBEN MODELLE. Jeder Regler hier ist eine Zeile —
+# Schranke, Vorgabe, Beschriftung und Einheit an einer Stelle. Der Server
+# validiert dagegen (`_plenum_wert`), der Zustand liest daraus
+# (`plenum_state`), und das Bedienfeld BAUT SICH DARAUS
+# (`GET /api/plenum/regler`). Damit kann die Oberfläche keinen Wert anbieten,
+# den die API ablehnt — der Fehler, der bei den Foyer-Reglern zweimal passiert
+# ist (Bereich im HTML und Schranke im Server liefen auseinander, zuletzt am
+# 2026-09-01 bei `portrait_size`: 260 im Markup gegen 700 im Server).
+#
+# Die Vorgaben sind ein Startpunkt für den Saal, kein Ergebnis: 1920×1080 aus
+# Saalbreite gelesen. Beurteilt wird am Bild, deshalb sind es Regler.
+PLENUM_REGLER: tuple[dict, ...] = (
+    {
+        "key": "max_terms",
+        "label": "Begriffe auf der Wand",
+        "typ": "int",
+        # 🔴 Nicht 1..1000 wie im Foyer, und das ist kein Versehen: Der Foyer-
+        # Regler ist eine Auswahlliste mit acht Stufen bis „alle", dieser hier
+        # ist ein Schieber. Über 1000 Werte gezogen lägen 20 und 40 zwei Pixel
+        # auseinander — der brauchbare Bereich wäre unbedienbar. 200 ist
+        # zugleich die Aussage: Im Saal ist „alle" keine sinnvolle Stellung.
+        "min": 5,
+        "max": 200,
+        "schritt": 5,
+        "default": 20,
+        "einheit": "",
+        # Deutlich weniger als im Foyer (32): halbe Auflösung, vielfache
+        # Entfernung. „Weniger Elemente" ist Birks Punkt 1.
+        "hinweis": "weniger als im Foyer — aus dem Saal zählt Lesbarkeit, nicht Fülle",
+    },
+    {
+        "key": "camera_mode",
+        "label": "Kamera",
+        "typ": "auswahl",
+        "auswahl": ("fit", "manual", "pan"),
+        "beschriftungen": ("alles zeigen", "manuell", "automatisch schwenken"),
+        # Die Fahrt IST der Entwurf für den Saal (Birks Punkt 7); im Foyer
+        # bleibt die Vorgabe „alles zeigen".
+        "default": "pan",
+        "hinweis": "im Saal schaut man zu — die Fahrt ist die Vorgabe",
+    },
+    {
+        "key": "camera_zoom",
+        "label": "Zoom",
+        "typ": "float",
+        "min": 1.0,
+        "max": 4.0,
+        "schritt": 0.05,
+        "default": 1.8,
+        "einheit": "×",
+        "hinweis": "1,00× zeigt das ganze Netz — dann hat die Fahrt kein Ziel",
+    },
+    {
+        "key": "camera_speed",
+        "label": "Tempo",
+        "typ": "float",
+        "min": 0.05,
+        "max": 1.0,
+        "schritt": 0.05,
+        "default": 0.25,
+        "einheit": "",
+        "hinweis": "1,00 = volles Fahrtempo, 0,25 = ein Viertel davon",
+    },
+    {
+        "key": "portrait_size",
+        "label": "Porträtgröße",
+        "typ": "float",
+        "min": 40.0,
+        "max": 700.0,
+        "schritt": 5,
+        "default": 260.0,
+        "einheit": "px",
+        # 260 ist keine geratene Zahl: genau dieser Wert war Birks Vorgabe vom
+        # 2026-08-29 und ist an einer 1920 px breiten Wand beurteilt worden
+        # (13,5 % der Bildbreite). Die Foyerfläche ist inzwischen 3840 px breit
+        # und steht deshalb bei 700 — die Saalfläche ist wieder 1920.
+        "hinweis": "Obergrenze in gezeichneten Pixeln; 260 sind an 1920 px beurteilt",
+    },
+    {
+        "key": "qr_size",
+        "label": "QR-Größe",
+        "typ": "float",
+        "min": 120.0,
+        "max": 720.0,
+        "schritt": 10,
+        "default": 360.0,
+        "einheit": "px",
+        "hinweis": "muss aus dem Saal von einer Handykamera erfasst werden",
+    },
+    {
+        "key": "hinweis_intervall",
+        "label": "Erklärungstext alle",
+        "typ": "float",
+        "min": 20.0,
+        "max": 900.0,
+        "schritt": 10,
+        "default": 120.0,
+        "einheit": "s",
+        "hinweis": "von Erscheinen zu Erscheinen",
+    },
+    {
+        "key": "hinweis_dauer",
+        "label": "Erklärungstext steht",
+        "typ": "float",
+        "min": 5.0,
+        "max": 120.0,
+        "schritt": 5,
+        "default": 20.0,
+        "einheit": "s",
+        "hinweis": "lang genug zum Lesen UND zum Scannen",
+    },
+)
+
+_PLENUM_NACH_SCHLUESSEL = {regler["key"]: regler for regler in PLENUM_REGLER}
+
+
+def _plenum_wert(regler: dict, roh) -> str:
+    """Prüft einen Saalwert gegen seine Zeile und gibt ihn als Text zurück.
+
+    Wirft `ValueError` mit einem Satz, der im Bedienfeld lesbar ist — das ist
+    hier keine Kosmetik: Wer im Saal auf einen Fehler stößt, steht neben einem
+    Beamer und nicht vor einem Log.
+    """
+    if regler["typ"] == "auswahl":
+        if roh not in regler["auswahl"]:
+            raise ValueError(f"{roh!r} ist keine der Möglichkeiten {regler['auswahl']}")
+        return str(roh)
+    try:
+        zahl = float(roh)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{roh!r} ist keine Zahl") from exc
+    if not (regler["min"] <= zahl <= regler["max"]):
+        raise ValueError(f"{zahl} liegt außerhalb von {regler['min']}..{regler['max']}")
+    return str(int(zahl)) if regler["typ"] == "int" else str(zahl)
+
+
+def _plenum_lesen(regler: dict, roh: str):
+    """Ein gespeicherter Wert zurück in seinen Typ — mit der Vorgabe als Netz.
+
+    Ein unlesbarer Eintrag (von Hand editiert, aus einer älteren Fassung, halb
+    geschriebene Datei) darf die Saalwand nicht anhalten. Sie zeigt dann die
+    Vorgabe, und das ist an einer unbeaufsichtigten Fläche die richtige
+    Richtung zu scheitern.
+    """
+    if regler["typ"] == "auswahl":
+        return roh if roh in regler["auswahl"] else regler["default"]
+    try:
+        zahl = float(roh)
+    except (TypeError, ValueError):
+        return regler["default"]
+    if not (regler["min"] <= zahl <= regler["max"]):
+        return regler["default"]
+    return int(zahl) if regler["typ"] == "int" else zahl
+
+
+def plenum_state(store) -> dict:
+    """Die Saalwerte, wie sie die Plenarfläche liest."""
+    return {
+        regler["key"]: _plenum_lesen(
+            regler, store.get_setting(f"plenum_{regler['key']}", str(regler["default"]))
+        )
+        for regler in PLENUM_REGLER
+    }
+
+
+class PlenumSetting(BaseModel):
+    key: str = Field(max_length=40)
+    # Zahl ODER Text, weil ein Regler beides sein kann (`camera_mode` ist eine
+    # Auswahl). Geprüft wird nicht hier, sondern gegen die Zeile in
+    # PLENUM_REGLER — sonst stünde die Schranke ein zweites Mal im Code.
+    value: float | str
+
+
 class InterviewSwitch(BaseModel):
     # Der Schalter am Mikrofon, gemeldet vom STT-Server (fundusbot,
     # `--mic-gate`). `source` ist bewusst frei und nur zur Nachvollziehbarkeit
@@ -151,6 +334,14 @@ def current_state(store) -> dict:
         # Schalter-Meldung hat ein dauerhaft offenes Mikrofon, und "aus"
         # anzuzeigen waere dort schlicht falsch.
         "mic_on": store.get_setting("mic_on", "1") == "1",
+        # Die Saalfläche, getrennt gespeichert (Birk, 2026-09-01). REIN
+        # ADDITIV: alle Schlüssel darüber stehen unverändert, wo sie standen,
+        # und jeder bestehende Leser — Foyer-Wand, /operator, Spiegel — sieht
+        # seins wie bisher. Ein zweiter Zustandsweg neben /api/state und dem
+        # SSE-Push wäre der zweite Weg, der still ausfällt; hier reist beides
+        # in derselben Meldung, und wer welchen Satz liest, entscheidet die
+        # Fläche (`?plenum=1` in frontend/projection.html).
+        "plenum": plenum_state(store),
         "interview": None
         if person is None
         else {"person_id": person.id, "started_at": person.started_at},
@@ -178,9 +369,38 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
     def projection() -> FileResponse:
         return FileResponse(FRONTEND / "projection.html")
 
+    @app.get("/plenum")
+    def plenum() -> RedirectResponse:
+        """Die Adresse für den Ausspieler im Plenarsaal.
+
+        Eine UMLEITUNG auf dieselbe Wandseite mit gesetztem Schalter, keine
+        zweite Datei: Die Saalfläche ist dieselbe Anwendung mit einer anderen
+        Auflage (`static/plenum.css`) und anderen Reglern (`state.plenum`),
+        und ein zweites HTML daneben liefe von der ersten weg — genau das,
+        wovor die Kommentare in `projection.html` mehrfach warnen.
+
+        Trotzdem eine eigene, kurze Adresse: Sie steht im Kiosk-Start des
+        Saal-Laptops und wird dort von Hand getippt. `/plenum` ist zu merken,
+        `/projection?plenum=1` ist es nicht — und nach der Umleitung steht der
+        Schalter sichtbar in der Adresszeile, was beim Suchen hilft.
+        """
+        return RedirectResponse("/projection?plenum=1")
+
     @app.get("/operator")
     def operator() -> FileResponse:
         return FileResponse(FRONTEND / "operator.html")
+
+    @app.get("/operator-plenum")
+    def operator_plenum() -> FileResponse:
+        """Das eigene Bedienfeld für den Saal.
+
+        Getrennt vom bestehenden `/operator`, damit die Foyer-Einstellungen
+        unberührt bleiben (Birk, 2026-09-01) — und weil es eine andere Aufgabe
+        hat: keine Liste, kein Transkript, kein Ausblenden, nur die Regler der
+        Anzeige, groß genug für einen Finger auf einem Laptop-Touchpad neben
+        dem Beamer.
+        """
+        return FileResponse(FRONTEND / "operator-plenum.html")
 
     @app.get("/testpattern")
     def testpattern() -> FileResponse:
@@ -193,6 +413,38 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
     @app.get("/api/state")
     def api_state() -> dict:
         return current_state(store)
+
+    @app.get("/api/plenum/regler")
+    def api_plenum_regler() -> dict:
+        """Die Reglertabelle, aus der sich das Saal-Bedienfeld baut.
+
+        Damit steht jede Schranke genau einmal im Code. Die Alternative wäre,
+        Bereich und Schrittweite im HTML zu wiederholen — und genau dort sind
+        sie schon zweimal auseinandergelaufen (`portrait_size` stand am
+        2026-09-01 auf 260 im Markup, während der Server längst 700 erlaubte,
+        und Birk stand vor Ort am Anschlag).
+        """
+        return {"regler": [dict(regler) for regler in PLENUM_REGLER]}
+
+    @app.post("/api/plenum")
+    def api_plenum(payload: PlenumSetting) -> dict:
+        """Einen Saalwert setzen — reine Anzeige, wie die Kameraregler.
+
+        Ein Endpunkt für alle Regler, geprüft gegen PLENUM_REGLER. Was hier
+        ankommt, ändert nichts an Extraktion oder Zusammenführung (Spec §7)
+        und auch nichts an der Foyerfläche: geschrieben wird ausschließlich
+        unter `plenum_<name>`.
+        """
+        regler = _PLENUM_NACH_SCHLUESSEL.get(payload.key)
+        if regler is None:
+            raise HTTPException(status_code=400, detail=f"unbekannter Regler {payload.key!r}")
+        try:
+            wert = _plenum_wert(regler, payload.value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        store.set_setting(f"plenum_{payload.key}", wert)
+        broadcast_state(store, bus)
+        return {"ok": True}
 
     @app.post("/api/max_terms")
     def api_max_terms(payload: MaxTerms) -> dict:

@@ -1311,7 +1311,16 @@ export function createGraphView(
     if (blend <= 0) return freeWidth;
     // Geometric, like camera.js's lerpZoom and for the same reason: this is a
     // magnification travelling by a factor of ten, and the eye reads factors.
-    return freeWidth * Math.pow(capped / freeWidth, blend);
+    //
+    // 🔴 Hier stand `capped` — eine Variable, die es in dieser Funktion nicht
+    // gibt (sie heißt seit dem Umbau vom 2026-09-01 `gewuenscht`; `capped`
+    // existiert nur in `frameToAspect`, gut 400 Zeilen weiter oben). Diese
+    // Zeile warf also einen ReferenceError, sobald der Übergabe-Blend lief,
+    // und riss `applyPortraitSize()` mit. Gefunden am 2026-09-01 abends, weil
+    // fünf Tests in `test_projection.py` und zwei in
+    // `test_projection_schwarzplan.py` seither rot standen — nicht durch die
+    // Plenar-Arbeit verursacht, aber auf ihrem Weg gefunden.
+    return freeWidth * Math.pow(gewuenscht / freeWidth, blend);
   }
 
   function applyPortraitSize(force = false) {

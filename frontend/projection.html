@@ -32,9 +32,27 @@
   import { createTouchControls } from './static/touch-controls.js';
   import { attachQuoteOverlay } from './static/quote-overlay.js';
   import { attachLegende } from './static/legende.js';
+  import { attachPlenumHinweis } from './static/plenum-hinweis.js';
 
   const themeLink = document.getElementById('theme');
   const params = new URLSearchParams(location.search);
+
+  // Die Saalfläche (Birk, 2026-09-01: „Für den Ausspieler im Plenarsaal
+  // brauchen wir ein eigenes Design"). Erreichbar über `/plenum`, das genau
+  // hierher umleitet.
+  //
+  // Ein SCHALTER auf dieser Seite und keine zweite Seite: eine `plenum.html`
+  // müsste die Ladereihenfolge der Cytoscape-Bundles, den Theme-Ladevertrag
+  // unten, den SSE-Anschluss und die Zustandsanwendung wörtlich wiederholen —
+  // und liefe von dort an auseinander. Dieselbe Überlegung, aus der das
+  // Zitat-Overlay auf JEDER Fläche hängt (siehe unten), nur eine Ebene höher.
+  //
+  // Die Unterschiede sind vier, und alle vier stehen an genau einer Stelle:
+  //   1. `static/plenum.css` als Auflage über dem Theme (Maße, kein Farbcode)
+  //   2. keine Legende
+  //   3. keine Positionen zurückschreiben
+  //   4. der Erklärungstext, und die Regler kommen aus `state.plenum`
+  const istPlenum = params.get('plenum') === '1';
   // Validate against the themes that actually exist. This is an unattended
   // wall, not a form with a user to correct a typo: an unrecognised
   // `?theme=` value (typo, retired name, anything) must fall back to the
@@ -89,6 +107,43 @@
     themeLink.href = themeHref;
   });
 
+  // Die Saal-Auflage. Sie wird NUR im Plenum-Zweig überhaupt ins Dokument
+  // gehängt: kein `<link>` im Markup, kein `disabled`-Zustand, kein zweiter
+  // Aufruf ohne Wirkung. Was nicht geladen ist, kann die Foyer-Wand auch nicht
+  // verändern — das ist die bauliche Zusicherung hinter
+  // `tests/test_foyer_unveraendert.py`, keine Absichtserklärung.
+  //
+  // NACH dem Theme-Link eingehängt, damit sie im Kaskadenrang gewinnt: Beide
+  // schreiben `:root`, gleiche Spezifität, also entscheidet die Reihenfolge im
+  // Dokument — nicht die Ladereihenfolge im Netz.
+  //
+  // Auf ihr `load` wird genauso gewartet wie auf das Theme, und aus demselben
+  // Grund: `createGraphView()` liest die Variablen synchron über
+  // getComputedStyle. Käme sie eine Zehntelsekunde später, stünde im Saal das
+  // Foyer-Design — sichtbar, aber nicht als Fehler erkennbar.
+  const auflageGeladen = new Promise((resolve) => {
+    if (!istPlenum) {
+      resolve();
+      return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.id = 'plenum';
+    link.href = 'static/plenum.css';
+    link.addEventListener('load', resolve, { once: true });
+    // Wie beim Theme: eine fehlende Datei feuert `error` und niemals `load`.
+    // Ohne diesen Zweig bliebe die Saalwand für immer schwarz.
+    link.addEventListener(
+      'error',
+      () => {
+        console.warn('plenum stylesheet failed to load: static/plenum.css');
+        resolve();
+      },
+      { once: true },
+    );
+    themeLink.after(link);
+  });
+
   // How slow "slow" is, in ms. The migration is the transition a visitor
   // watches when their own node joins the wall (spec 10.3), and the right
   // speed is a projector-and-room judgement Birk makes on site — so it is a
@@ -98,15 +153,31 @@
   const requestedMigration = Number(params.get('migration'));
   const migrationDuration = requestedMigration > 0 ? requestedMigration : undefined;
 
-  themeLoaded.then(() => {
+  Promise.all([themeLoaded, auflageGeladen]).then(() => {
     const view = createGraphView(document.getElementById('cy'), {
       migrationDuration,
-      onPositions: (positions) =>
-        fetch('/api/positions', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ positions }),
-        }).catch((error) => console.warn('failed to persist positions', error)),
+      // 🔴 Die Saalfläche schreibt KEINE Positionen zurück.
+      //
+      // Das ist der eine Weg, auf dem die Plenar-Ansicht das Foyer trotz
+      // getrennter Einstellungen doch verändert hätte: Sie rechnet mit
+      // größerer Schrift und größerem Tafelpolster, fcose kommt für neue
+      // Knoten also auf ein anderes Ergebnis — und `/api/positions` schreibt
+      // in dieselbe `position`-Tabelle, aus der das Foyer beim nächsten
+      // Neuladen sein Netz holt. Das mühsam kalibrierte Bild von heute wäre
+      // still ein anderes geworden, ohne dass jemand die Ursache sähe.
+      //
+      // Die Fläche im Saal ist eine reine Anzeige. Gespeichert wird das
+      // Layout dort, wo es beurteilt wird.
+      ...(istPlenum
+        ? {}
+        : {
+            onPositions: (positions) =>
+              fetch('/api/positions', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ positions }),
+              }).catch((error) => console.warn('failed to persist positions', error)),
+          }),
     });
     window.kgView = view;
     window.kgReady = false;
@@ -122,7 +193,18 @@
     // weil die drei Farben AUS dem geladenen Stylesheet gelesen werden — vorher
     // stünden die Variablen noch nicht zur Verfügung und die Legende fiele
     // still aus. Themes ohne Farbcodierung liefern `null`, dann gibt es keine.
-    window.kgLegende = attachLegende();
+    //
+    // Im Saal gar nicht (Birk, 2026-09-01: „Legende weg"). Sie erklärt einen
+    // Farbcode, den die Saal-Auflage bewusst abschaltet — sie hätte dort drei
+    // gleichfarbige Punkte mit drei verschiedenen Wörtern gezeigt und damit
+    // etwas behauptet, was auf der Fläche nicht mehr stimmt.
+    window.kgLegende = istPlenum ? null : attachLegende();
+
+    // Der Erklärungstext, nur im Saal (Birk, 2026-09-01). Sein Takt kommt
+    // gleich aus dem Zustand; bis der erste Push da ist, laufen die Vorgaben
+    // aus dem Modul.
+    const hinweis = istPlenum ? attachPlenumHinweis() : null;
+    window.kgPlenumHinweis = hinweis;
 
     // Surface A only (`?touch=1`). Surface C in the plenary room loads the same
     // page without the flag and stays a pure display: no controls to press, no
@@ -154,31 +236,64 @@
         quotes.setGraph(payload.graph);
         window.kgReady = true;
       } else if (payload.type === 'state') {
+        // 🔴 WELCHE Regler diese Fläche liest — die eine Zeile, an der die
+        // Trennung der beiden Flächen hängt.
+        //
+        // Der Zustand trägt beide Sätze nebeneinander: die Foyer-Werte oben
+        // (unverändert, wo sie immer waren) und die Saalwerte unter `plenum`.
+        // Jede Fläche greift genau ihren Satz ab, gespeichert wird unter
+        // eigenen Schlüsseln (`plenum_*`, siehe kg/server.py).
+        //
+        // Der Rückfall auf die Foyer-Werte ist nicht Zierde: Ein älterer
+        // Server ohne `plenum`-Block darf im Saal kein leeres Bild ergeben.
+        // Dann läuft dort eben das Foyer-Verhalten — schlechter, aber
+        // sichtbar, und das ist an einer unbeaufsichtigten Wand die richtige
+        // Richtung zu scheitern.
+        const regler = (istPlenum && payload.state.plenum) || payload.state;
+
         // The operator's term cap applies to every surface, touchscreen
         // included — it just has no counterpart to reflect there any more.
-        view.setMaxTerms(payload.state.max_terms);
+        view.setMaxTerms(regler.max_terms);
         // Route the operator's mode through the autonomy guard on the touch
         // surface: applying it directly would snatch the view away from a
         // visitor mid-gesture. Everywhere else it applies immediately.
-        if (autonomy) autonomy.setOperatorMode(payload.state.camera_mode);
-        else view.camera.setMode(payload.state.camera_mode);
+        if (autonomy) autonomy.setOperatorMode(regler.camera_mode);
+        else view.camera.setMode(regler.camera_mode);
         // D4: the zoom level is an on-site setting, carried in the same state
         // push as the mode. Guard the value — setZoomFactor throws below 1,
         // and an exhibition wall must degrade rather than stop rendering.
-        const zoom = Number(payload.state.camera_zoom);
+        const zoom = Number(regler.camera_zoom);
         if (zoom >= 1) view.camera.setZoomFactor(zoom);
         // Guarded the same way: setRoamSpeed clamps rather than throws, but an
         // absent field (older server, replayed state) must leave the pace alone
         // instead of resetting it to full.
-        const speed = Number(payload.state.camera_speed);
+        const speed = Number(regler.camera_speed);
         if (speed > 0) view.camera.setRoamSpeed(speed);
         // How big a portrait may get on this wall in the driven modes, in
         // rendered pixels. A separate control from the zoom on purpose (the
         // zoom picks the SECTION, this bounds the faces in it), and guarded
         // the same way: an absent or unusable value must leave the wall at the
         // bound it is showing.
-        const portraitSize = Number(payload.state.portrait_size);
+        const portraitSize = Number(regler.portrait_size);
         if (portraitSize > 0) view.setPortraitSize(portraitSize);
+
+        // Die beiden Saal-Regler, die keine Entsprechung im Foyer haben. Die
+        // QR-Größe geht als CSS-Variable an dieselbe Stelle, an der auch die
+        // Auflage sie setzt (`--qr-size`) — es gibt keinen zweiten Weg, die
+        // Größe zu bestimmen, und damit auch keinen, auf dem die beiden
+        // auseinanderlaufen.
+        if (istPlenum) {
+          const qrGroesse = Number(regler.qr_size);
+          if (qrGroesse > 0) {
+            document.documentElement.style.setProperty('--qr-size', `${qrGroesse}px`);
+          }
+          if (hinweis) {
+            hinweis.setTakt({
+              intervallMs: Number(regler.hinweis_intervall) * 1000,
+              dauerMs: Number(regler.hinweis_dauer) * 1000,
+            });
+          }
+        }
       }
     };
   });

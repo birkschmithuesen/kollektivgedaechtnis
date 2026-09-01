@@ -1,0 +1,124 @@
+/* Bedienfeld Plenarsaal — große Regler (Birk, 2026-09-01: „Eigenes
+   Operator-Panel mit großen Slidern").
+
+   Erbt `operator.css` und ändert nur, was hier anders sein muss. Kein zweites
+   Grundlayout: Die beiden Bedienfelder sollen erkennbar dieselbe Anwendung
+   sein, sonst sucht man im Saal nach Knöpfen an Stellen, an denen sie im Foyer
+   stehen.
+
+   „Groß" heißt hier nicht dekorativ: Bedient wird das Feld auf einem Laptop
+   neben dem Beamer, im Halbdunkel, oft im Stehen und mit einem Finger auf dem
+   Touchpad. Ein 200-px-Regler über einen Bereich von 1,00 bis 4,00 macht aus
+   einem 0,05-Schritt eine Lotterie. */
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+}
+header {
+  display: block;
+  padding: 1rem 1.5rem;
+}
+/* Der Hinweis, welche Fläche hier bedient wird. Bewusst nicht klein und grau:
+   Ihn zu übersehen heißt, am falschen Bedienfeld zu drehen. */
+.wo {
+  margin: 0.5rem 0 0;
+  color: #c9c9d2;
+}
+.wo a {
+  color: inherit;
+}
+
+#regler {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 3rem;
+  max-width: 60rem;
+}
+.laedt {
+  color: #8b8b96;
+}
+
+.regler-zeile {
+  display: grid;
+  /* Beschriftung links, Regler in der Mitte, Wert rechts. Feste Spalten, damit
+     die Zahl beim Ziehen nicht wandert und die Zeilen untereinander eine
+     lesbare Kante bilden. */
+  grid-template-columns: 14rem 1fr 9rem;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid #2a2a33;
+}
+.regler-name {
+  font-size: 1.15rem;
+}
+/* Der Satz unter der Beschriftung: warum dieser Regler im Saal existiert und
+   was seine Enden bedeuten. Er steht hier und nicht in einer Anleitung, weil
+   im Saal niemand eine Anleitung aufschlägt. */
+.regler-hinweis {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: #8b8b96;
+}
+.regler-wert {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Die eigentliche Vergrößerung. `appearance: none` ist nötig, weil der
+   Browser sonst seinen eigenen, schmalen Regler zeichnet und Höhe und Daumen
+   ignoriert. */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 2.75rem;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 0.9rem;
+  border-radius: 0.45rem;
+  background: #2a2a33;
+}
+input[type='range']::-moz-range-track {
+  height: 0.9rem;
+  border-radius: 0.45rem;
+  background: #2a2a33;
+}
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-top: -0.75rem; /* mittig auf der Schiene */
+  border-radius: 50%;
+  background: #eee;
+  border: none;
+}
+input[type='range']::-moz-range-thumb {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: #eee;
+  border: none;
+}
+
+/* Die Auswahlliste in der Farbe der Seite. Ohne das zeichnet der Browser sie
+   in seinem hellen Grundstil — ein weißer Kasten im dunklen Feld, und genau
+   der blendet im Halbdunkel neben dem Beamer. */
+select {
+  font: inherit;
+  font-size: 1.15rem;
+  padding: 0.6rem 0.5rem;
+  width: 100%;
+  color: #eee;
+  background: #2a2a33;
+  border: 1px solid #3a3a45;
+  border-radius: 4px;
+}

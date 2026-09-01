@@ -943,6 +943,53 @@ Fensterpositionen). Die Datei startet die laufende Ausstellung, und Birk richtet
 gerade live ein — eine Änderung daran wird **vor dem nächsten regulären Start**
 gemacht, nicht mitten im Betrieb. Zum Sofort-Prüfen genügt es, im Touch-Fenster
 die Adresse von Hand um `?touch=1` zu ergänzen.
+## 2l. Plenarsaal: eigene Ansicht und eigenes Bedienfeld (2026-09-01, abends)
+
+Birk vor Ort: *„Für den Ausspieler im Plenarsaal brauchen wir ein eigenes
+Design, das kann doch nicht dasselbe wie draußen sein. Erstens ist es hier nur
+Full HD, die Leute sitzen weiter entfernt."* Bis dahin zeigten beide Flächen
+dieselbe Seite mit denselben Reglern.
+
+**Adressen:** `/plenum` (Wand im Saal) und `/operator-plenum` (Bedienfeld).
+Der Entwurf und seine Begründung: `docs/plenum-entwurf.md`.
+
+- **Eine Seite, nicht zwei.** `/plenum` leitet auf `/projection?plenum=1`;
+  `static/plenum.css` ist eine Auflage aus ~15 Variablen ÜBER dem Theme, kein
+  eigenes Theme. Eine Kopie von `theme-f.css` hätte 40 gemessene Werte
+  verdoppelt.
+- **Getrennt gespeichert.** Die Saalwerte liegen als `plenum_*` in derselben
+  `setting`-Tabelle und reisen im Zustand unter `state.plenum` mit — rein
+  additiv, `/api/state` und der SSE-Push für das Foyer sind unverändert.
+  Ein Endpunkt (`POST /api/plenum`) gegen eine Reglertabelle
+  (`PLENUM_REGLER` in `kg/server.py`), aus der sich auch das Bedienfeld baut.
+- **Vorgaben im Saal:** 20 Begriffe, Fahrt („pan"), Zoom 1,8, Tempo 0,25,
+  Porträtgrenze 260 px (die an 1920 px beurteilte Zahl vom 2026-08-29),
+  QR 360 px bei voller Deckkraft, Erklärungstext alle 120 s für 20 s.
+  Alles Regler — beurteilt wird im Raum.
+- **Keine Legende, keine Achsenfarben** im Saal (beide waren Birks Punkte).
+  Die Farbcodierung fällt weg, indem die drei `--dream-*-color` auf dasselbe
+  neutrale Licht stehen; die Hervorhebung als solche bleibt.
+- **Die Saalfläche speichert keine Positionen.** Sie rechnet mit größerer
+  Schrift und größerem Tafelpolster; schriebe sie ihr Layout in die
+  gemeinsame `position`-Tabelle, stünde das Foyer nach dem nächsten Neuladen
+  anders da. Das war der einzige Weg, auf dem die Trennung trotzdem
+  durchgeschlagen hätte.
+- **Belegt:** `tests/test_foyer_unveraendert.py` (9 Tests, Mutationsprobe
+  gefahren) und `tests/test_plenum.py` (37 Tests).
+
+### 🔴 Offen — das entscheidet Birk am Bild
+
+1. **Der Erklärungstext ist ein PLATZHALTER.** Er steht in
+   `frontend/static/plenum-hinweis.js`, Konstanten `ERKLAERUNGSTEXT`
+   (Zeile ~34) und `SCANZEILE` (Zeile ~43). Die Wand sagt im Saal selbst, dass
+   sie unfertig ist — das ist Absicht.
+2. **„Der weiße Rand" ist nicht eindeutig geklärt.** Gemessen wurden drei
+   Kandidaten; entfernt ist im Saal nur die haarfeine helle Kante der
+   Zitatkarte. Der wahrscheinlichste — die weiße Ruhezone des QR-Codes —
+   steht noch, weil sie den Code lesbar macht. Ausführlich in
+   `docs/plenum-entwurf.md`.
+3. **Kein Wert ist im Raum beurteilt.** Schriftgröße, QR-Größe, Zoom und Takt
+   sind aus den Flächenmaßen gerechnet, nicht gesehen.
 
 ---
 

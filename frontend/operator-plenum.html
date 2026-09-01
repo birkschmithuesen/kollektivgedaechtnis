@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Kollektivgedächtnis — Plenarsaal</title>
+<!-- Relativ, wie projection.html und operator.html: unter /operator-plenum
+     lösen diese Pfade auf /static/… auf. -->
+<link rel="stylesheet" href="static/operator.css">
+<link rel="stylesheet" href="static/operator-plenum.css">
+<header>
+  <h1>Plenarsaal</h1>
+  <!-- Der wichtigste Satz auf der Seite. Es gibt jetzt zwei Bedienfelder, sie
+       sehen ähnlich aus, und das eine hat heute mühsam kalibrierte Werte, die
+       niemand versehentlich anfassen darf. Wer hier landet, muss in einem
+       Blick wissen, WELCHE Fläche unter seiner Hand liegt. -->
+  <p class="wo">
+    Diese Regler gelten nur für den Ausspieler im Saal
+    (<a href="/plenum">/plenum</a>). Das Foyer bleibt unberührt — es hat sein
+    eigenes Bedienfeld unter <a href="/operator">/operator</a>.
+  </p>
+</header>
+<!-- Die Regler werden aus `GET /api/plenum/regler` gebaut, nicht hier
+     geschrieben. Damit steht jede Schranke genau einmal im Code (kg/server.py,
+     PLENUM_REGLER) und die Oberfläche kann keinen Wert anbieten, den der
+     Server ablehnt. Bis die Tabelle da ist, steht hier die Meldung unten. -->
+<main id="regler">
+  <p class="laedt">Regler werden geladen …</p>
+</main>
+<script type="module" src="static/operator-plenum.js"></script>
+</html>
