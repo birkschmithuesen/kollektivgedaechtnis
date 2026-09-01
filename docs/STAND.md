@@ -110,6 +110,118 @@ Tailnet nachgesehen. `netstat | findstr` reicht hier NICHT: Es zeigte Port
 Damit sind zwei der fünf Voraussetzungen aus dem Testauftrag erfüllt
 (Kern antwortet, `cv2` aktiv) — die anderen erst beim Durchlauf prüfbar.
 
+## 2c. Testreihe Gesichtserkennung — gefahren 2026-09-01, 14:00–14:30
+
+**Der Auftrag aus §5 ist zur Hälfte erledigt:** alles, was an den **7 vorhandenen
+Booth-Fotos** messbar war, ist gemessen. Was neue Fotos braucht (mehrere Personen
+im Bild, Halbprofil, Gegenlicht), steht weiter aus — dafür muss Birk fotografieren.
+
+Werkzeuge, alle im Repo unter `scripts/` und auf der Station in
+`C:\Users\SF-Tracking\kg-start\`:
+
+| Skript | Beantwortet |
+|---|---|
+| `messreihe-gesichtserkennung.py` | Trefferquote + Zuschnitt über einen ganzen Ordner |
+| `grenze-gesichtserkennung.py` | ab welchem Neigungswinkel die Kaskade durchfällt; ob eine zweite Kaskade hilft |
+| `aufloesungsreihe-gesichtserkennung.py` | kostet das Verkleinern Treffer? |
+| `gegentest-minsize.py` | hängt der Verlust an der `minSize`-Kopplung? |
+
+### 🔴 Der Hauptfund: die App verkleinert Treffer weg
+
+Die App schickt jedes Foto auf **1024 px** lange Kante (`Bildbytes.MAX_KANTE`).
+Gemessen über alle 7 Fotos, Trefferquote je Auflösung:
+
+| Auflösung | Fotos mit Gesicht |
+|---|---|
+| Original | **5 / 7** |
+| 1280 px | 4 / 7 |
+| **1024 px (das, was die App schickt)** | **3 / 7** |
+| 900 px | 4 / 7 |
+| 640 px | 4 / 7 |
+
+**Zwei von fünf erkannten Gesichtern gehen allein durchs Verkleinern verloren**
+(`1788105156_5.jpg`, `1788261234_app754.jpg`). Das ist kein Randfall — es trifft
+den Regelbetrieb, weil jedes App-Foto diesen Weg nimmt.
+
+**Es ist nicht „kleiner = schlechter".** Bei `app754` sprang die Trefferzahl über
+die Stufen 1, 0, 0, 0, 0, 1, 1, 1, 0 — nicht monoton. Die Erkennung hängt also
+nicht an der Auflösung als solcher, sondern daran, wo das Gesicht in die
+Skalenpyramide von `detectMultiScale` (`scaleFactor=1.1`) fällt.
+
+**Ursache eingegrenzt** (`gegentest-minsize.py`): `kg/photos.py` koppelt die
+Mindestgröße an die Bildgröße —
+`mindest = max(30, int(min(bild.size) * 0.08))`. Bei 3024×4032 verlangt das
+Gesichter ab 241 px, bei 768×1024 nur noch 61 px. Gemessen bei 1024 px:
+
+| `minSize`-Regel | Fotos mit Gesicht |
+|---|---|
+| jetzt (8 % kurze Kante) | 3 / 7 |
+| **4 % kurze Kante** | **4 / 7** |
+| fest 30 px | 4 / 7 |
+| fest 60 px | 3 / 7 |
+
+Keine Variante erzeugte Mehrfach-/Fehltreffer. Am **Original** liefern alle vier
+Varianten identisch 5/7 — die Regel wirkt sich also nur auf verkleinerte Bilder aus.
+
+🔴 **Nicht geändert.** 7 Fotos sind keine belastbare Reihe, und der Eingriff
+ginge einen Tag vor der Ausstellung in den Zuschnitt jedes Portraits. Die
+Entscheidung liegt bei Birk — siehe §4.
+
+### Die Verfahrensgrenze ist jetzt eine Zahl, keine Behauptung
+
+`grenze-gesichtserkennung.py` legt jedes Foto in 9 Neigungen (0–50°) vor:
+
+- Von den 5 Fotos mit Gesicht halten sie bis **0°, 25°, 30°, 40°** — sehr
+  streuend, kein verlässlicher Grenzwinkel.
+- **Die zweite Kaskade bringt fast nichts:** `frontalface_alt2` füllte
+  **1 von 34** Lücken (3 %), `profileface` **0 von 34** (0 %). Der naheliegende
+  Gratis-Fix („nimm zusätzlich die Profil-Kaskade") ist damit **gemessen
+  erledigt** — er trägt nicht. Wenn mehr Robustheit nötig ist, führt der Weg
+  über `face_recognition`/dlib, nicht über eine weitere Haar-Kaskade.
+
+### Eine Falle im eigenen Messwerkzeug (dokumentiert, damit sie nicht wiederkehrt)
+
+Die erste Fassung von `messreihe-gesichtserkennung.py` meldete „Kopfanteil im
+Portrait" und gab bei vier verschiedenen Fotos identisch **25,0 %** aus. Grund:
+Haar-Boxen sind quadratisch (`gw == gh`), also ist `(gw*gh)/seite²` exakt
+`1/GESICHTS_ZOOM²` — die Zahl misst die eigene Formel, nicht das Foto. Dasselbe
+gilt für Kopfhöhe (immer 50 %) und Sitz (immer 46 %), **außer** wo der Ausschnitt
+an den Bildrand klemmt. Nur diese Klemmfälle sind eine Aussage. Steht als
+Kommentar im Skript.
+
+### Was die Zahlen NICHT hergeben
+
+- **„Das größte Gesicht gewinnt" ist weiter ungeprüft.** In keinem der 7 Fotos
+  fand die Kaskade mehr als ein Gesicht (`mehrere Gesichter im Bild: 0`). Genau
+  Birks Kernfrage braucht also zwingend neue Fotos mit mehreren Personen.
+- **`GESICHTS_ZOOM` / `GESICHTS_BIAS` sind an Zahlen nicht beurteilbar** (siehe
+  Tautologie oben) — das geht nur am Bild, und die Entscheidung ist Birks.
+- 2 der 7 Fotos (`_2`, `_9`) liefern in **keiner** Auflösung und **keinem**
+  Winkel einen Treffer. Ob dort ein Gesicht drauf ist, weiß nur, wer sie ansieht.
+
+---
+
+## 2d. 🔴 Offener Widerspruch: ein Foto kam mit 4,4 MB an
+
+`1788261234_app754.jpg` (heute 13:13, über `POST /api/photo`, also **durch die
+App**) liegt mit **4.422.388 Bytes in 3024×4032** auf der Station — das ist
+unverkleinerte Kameraauflösung.
+
+Das widerspricht dem Code: `Bildbytes.verkleinere` skaliert auf 1024 px, und
+`MainActivity.schiesse()` hat nur diesen einen Pfad. Der Code ist gegengelesen
+und korrekt.
+
+Wahrscheinlichste Erklärung, **unbestätigt**: auf dem Handy läuft noch
+`kollektivgedaechtnis-foto-v1.apk` (gebaut 10:00) — der Verkleinerungs-Commit
+`0320093` ist von **10:26**. v1 kann das schlicht nicht.
+
+Das ist mehr als Kosmetik: die Verkleinerung ist genau der Schritt, der laut
+Messung oben **Treffer kostet**. Solange unklar ist, welche APK auf dem Gerät
+liegt, misst jeder Fototest womöglich eine andere Kette als die, die am
+Ausstellungstag läuft. **Vor dem nächsten Test klären** — die Statuszeile der App
+nennt die gesendete Größe („Wird gesendet … (180 kB)"); zeigt sie MB, ist es eine
+alte APK.
+
 ---
 
 ## 3. 🔴 Was NICHT geprüft ist
@@ -119,9 +231,10 @@ Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
 | Punkt | Warum offen |
 |---|---|
 | **Ein kompletter Durchlauf** — Foto → Interview → Verdichtung → Traum → Wand | Nie am Stück gefahren. Das ist der Zweck der nächsten Session. |
-| **Traum (Port 8810)** | Läuft nicht. Die geplante Aufgabe `KgDream` steht auf „Bereit", ist also registriert und nur nicht gestartet — der erste Versuch wäre `schtasks /Run /TN KgDream`, dann Log lesen. Ursache bisher nicht untersucht. |
+| **Traum (Port 8810)** | Läuft nicht. **Ursache eingegrenzt 2026-09-01, 14:25:** Die geplante Aufgabe `KgDream` startet `C:\Users\birk\kg_dream.bat` — eine **veraltete Datei außerhalb des Repos**, nicht den regulären Dienst `C:\Users\SF-Tracking\kg-start\dienste\dienst-traum.bat`. Letzter Lauf 2026-08-31 10:42, Ergebnis `-2147023829` (0xC000041D, „Fehler in einer Callback-Routine"). Das Traum-Log zeigt einen **erfolgreichen** Start um 12:59 (`Uvicorn running on 0.0.0.0:8810`) — er lief also und ist danach beendet worden, vermutlich mit dem Fenster. 🔴 **Nicht selbst gestartet:** der reguläre Weg ist Birks START-Verknüpfung, und `KgDream` zeigt auf die falsche Datei. Wer sie repariert, ändert eine geplante Aufgabe am Vorabend der Ausstellung — das ist Birks Entscheidung. |
 | **Die Wand am Beamer** | Legende, QR-Größe und Portraitausschnitt sind an Messbildern beurteilt, nicht im Raum. Ob 132 px QR aus Besucherabstand reichen, weiß nur der Raum. |
-| **Gesichtserkennung an echten Booth-Fotos** | Gemessen an einem einzelnen Foto und an Testmustern. Halbprofil, Sonnenbrille, Gegenlicht: ungeprüft. |
+| **Gesichtserkennung an echten Booth-Fotos** | **Teilweise erledigt, siehe §2c.** Gemessen an allen 7 Bestandsfotos (Trefferquote, Auflösung, Neigung, zweite Kaskade). **Offen bleibt genau das, wofür neue Fotos nötig sind:** mehrere Personen im Bild (kam im Bestand kein einziges Mal vor), Halbprofil, Sonnenbrille, Gegenlicht. |
+| **Der End-to-End-Durchlauf** | **Nicht gefahren.** Nicht aus Zeitmangel: Foto einwerfen heißt ein Interview eröffnen, und ein Interview braucht eine sprechende Person vor dem Mikrofon. Ein Agent kann diesen Durchlauf nicht allein fahren — er kann ihn nur vorbereiten. Traum (8810) läuft weiterhin nicht (siehe unten). |
 | **Flackern der Wand** | Cron-Job als Ursache **widerlegt** (gemessen). HDR ist der Hauptverdacht (Display-Ereignis 4121), nicht bewiesen. |
 | **Doppelter Uploader** | Lief heute Morgen zweimal (PID 5348 + 11508). Nach dem Neustart nicht erneut geprüft. |
 | **STT-Textfenster, rechte Spalte** | Bleibt leer, weil nur ein Erkenner läuft (`--channels regie`). Liegt im fremden Repo `meredityman/fundusbot`. |
@@ -131,6 +244,25 @@ Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
 ## 4. Entscheidungen, die BIRK trifft
 
 Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse:
+
+### 🔴 NEU 2026-09-01, aus der Testreihe (§2c) — das sind die dringenden
+
+- **Soll die App weiter auf 1024 px verkleinern?** Gemessen kostet genau dieser
+  Schritt **2 von 5** erkannten Gesichtern. Drei Wege, alle nicht umgesetzt:
+  (a) nichts tun — die Erkennung greift seltener, der mittige Schnitt fängt es
+  auf (kein Absturz, nur schlechtere Portraits); (b) `MAX_KANTE` auf 1280 oder
+  1600 heben — kostet Sendezeit am Booth, dort zählt Tempo; (c) `minSize` in
+  `kg/photos.py` von 8 % auf 4 % der kurzen Kante — brachte im Gegentest
+  4/7 statt 3/7 **ohne** Fehltreffer, ändert aber den Zuschnitt **jedes**
+  Portraits. **Empfehlung: (c) nicht am Vorabend.** Wenn überhaupt heute, dann
+  (b), weil es nur die App betrifft und die Station unangetastet lässt.
+- **Welche APK liegt auf dem Handy?** Siehe §2d — bis das geklärt ist, misst
+  jeder weitere Fototest womöglich eine andere Kette als die vom Ausstellungstag.
+- **Fotos mit mehreren Personen fehlen komplett.** Die Kernfrage („gewinnt das
+  größte Gesicht?") ist an den 7 Bestandsfotos **nicht beantwortbar** — in keinem
+  fand die Kaskade mehr als ein Gesicht. Dafür muss Birk fotografieren.
+
+### Bestehende Setzungen
 
 - **Bei mehreren Gesichtern gewinnt das größte.** Annahme (die befragte Person
   steht vorn), nicht gemessen.
@@ -149,17 +281,48 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
 
 ## 5. Wenn die nächste Session anfängt
 
-### 🔴 Der Auftrag: die Testreihe zur Gesichtserkennung fahren
+### Der Auftrag aus der Vorsession: zur Hälfte erledigt (§2c)
 
-Foto-App, Sucherrahmen, Portrait-Vorschau und Messwerkzeug sind **gebaut und
-einsatzbereit — gemessen ist nichts.** Birk hat die Durchführung ausdrücklich
-an die übernehmende Session übergeben. Das ist die eigentliche Aufgabe, keine
-Restnotiz.
+**Erledigt 2026-09-01:** alles, was an den 7 vorhandenen Booth-Fotos ohne Birk
+messbar war — Trefferquote, Auflösungsabhängigkeit, Neigungsgrenze, zweite
+Kaskade, `minSize`-Gegentest. Vier Messwerkzeuge liegen im Repo und auf der
+Station. **Der Hauptfund (Verkleinern kostet Treffer) steht in §2c, die
+Entscheidungen daraus in §4.**
 
-Vollständiger Auftrag: `docs/HANDOFF-foto-app-uebergabe.md`
-Ablauf + Messwerkzeug: `docs/HANDOFF-fototest-zuschnitt.md`
-(`scripts/pruefe-gesichtserkennung.py` nennt **alle** gefundenen Gesichter und
-den gewählten Ausschnitt — nicht nur das Ergebnis.)
+**Offen und nur MIT Birk machbar** — das ist der Rest des Auftrags:
+
+1. **Foto mit mehreren Personen** einwerfen. Die Kernfrage („gewinnt das größte
+   Gesicht?") ist ohne solche Fotos nicht beantwortbar; im Bestand gibt es keins.
+2. **Halbprofil / Gegenlicht / Brille** — die vermuteten Ausfälle.
+3. Danach: `messreihe-gesichtserkennung.py <ordner>` über den erweiterten
+   Bestand, die Zahlen stehen dann direkt vergleichbar neben §2c.
+
+```cmd
+cd C:\Users\SF-Tracking\kg-start
+C:\Users\birk\kollektivgedaechtnis\.venv\Scripts\python.exe ^
+  messreihe-gesichtserkennung.py C:\Users\birk\kollektivgedaechtnis\data\photos
+```
+
+Vorher `Bildbytes.MAX_KANTE` bzw. die APK-Frage aus §2d klären — sonst misst die
+Reihe die falsche Kette.
+
+### Der End-to-End-Durchlauf
+
+**Nicht gefahren, und zwar aus einem strukturellen Grund:** Jedes Foto eröffnet
+ein Interview, und ein Interview braucht eine sprechende Person vor dem Mikrofon.
+Foto → Interview → Verdichtung → Traum → Wand ist als Kette **nicht
+agentenfahrbar** — messbar ist nur, was der Agent vorbereitet hat:
+
+| Glied | Stand 2026-09-01, 14:30 |
+|---|---|
+| Kern (8800) | läuft, HTTP 200 über Tailnet |
+| STT (5051) | läuft |
+| `cv2` + Kaskade | aktiv, 4.14.0 |
+| Foto → Portrait | gemessen, siehe §2c |
+| **Traum (8810)** | **läuft nicht** — §3, `KgDream` zeigt auf die falsche Datei |
+| Interview / Wand | braucht Menschen und den Beamer |
+
+Vor dem Durchlauf muss der Traum hoch (Birks START-Verknüpfung, nicht per SSH).
 
 ### Der Weg dorthin
 
