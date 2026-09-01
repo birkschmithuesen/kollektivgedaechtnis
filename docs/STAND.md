@@ -993,6 +993,70 @@ Der Entwurf und seine Begründung: `docs/plenum-entwurf.md`.
 
 ---
 
+## 2o. 🔴 Zwei-Finger-Zoom auf dem Mac: macOS unterstützt es nicht
+
+Birk hat den Treiber von der iiyama-Seite geladen — die Geste geht trotzdem
+nicht. **Der Treiber kann das Problem nicht lösen, weil es nicht am Treiber
+liegt.**
+
+### Das Gerät
+
+**iiyama ProLite TE6568MIS-B1AG** — 65", Infrarot-Touch, **20 Touchpunkte**
+(Herstellerangabe). Controller: SiS, unter Windows als `HID-compliant touch
+screen` gemeldet (VID_1FF7, an der Station gemessen). Das Gerät ist also
+zweifelsfrei multitouchfähig, und unter Windows funktionierte die Geste auch.
+
+### Warum es unter macOS trotzdem nicht geht
+
+Mehrere unabhängige Quellen sagen dasselbe:
+
+> „macOS native HID driver does not support touch screens. Some touch devices
+> switch to single touch 'mouse' emulation when plugged into a non Windows
+> system, many don't and stay in Windows HID multi-touch mode **not supported
+> by Mac**." *(Ask Different, ASUS-Touchmonitor unter macOS 10.13)*
+
+> „I bought a iiyama ProLite but **its only single touch without driver support
+> in OSX**." *(Gearspace, Touchscreens für Mac)*
+
+> Zu einem iiyama ProLite am Mac mini: „When I click on screen, mouse is moved
+> to that place, **but no click**." *(Ask Different)*
+
+macOS hat schlicht **keinen Multitouch-Pfad für externe HID-Digitizer**. Apple
+liest den Digitizer als absolut zeigendes Gerät — ein Kontaktpunkt, als Maus.
+Der zweite Finger existiert für das Betriebssystem nicht, und was das
+Betriebssystem nicht kennt, kann kein Browser melden.
+
+**Der iiyama-Treiber ändert daran nichts.** Die Treiberanleitung des Herstellers
+für genau diese SiS-Controller sagt zum Normalfall: *„The touch function should
+operate without installing any drivers."* Der Treiber schaltet Grundfunktion und
+Kalibrierung frei, keinen Multitouch-Stack, den es im Betriebssystem nicht gibt.
+
+### Was daraus folgt
+
+1. **Die Zwei-Finger-Geste ist auf dem Mac nicht erreichbar.** Nicht durch
+   Code, nicht durch einen Treiber. Das ist keine Frage des Aufwands.
+2. **Der Zoom-Regler wird damit von der Notlösung zur einzigen Lösung** — und
+   ist bereits beauftragt.
+3. Der Weg über `wheel` + `ctrlKey` (Chromium meldet so Trackpad-Pinches) hilft
+   hier NICHT: Er setzt voraus, dass macOS die Geste überhaupt als Geste
+   erkennt. Bei einem externen Digitizer tut es das nicht. Er bleibt im
+   Auftrag, weil er am **Trackpad** funktioniert — für Birks eigenes Arbeiten
+   am Gerät ist das nützlich, für Besucher am Touchscreen nicht.
+
+🔴 **Ungeprüft:** ob eine Fremdsoftware (z. B. Kommerzielles wie „UPDD" von
+Touch-Base) den Multitouch-Stack nachrüstet. Es gibt solche Treiber, sie kosten
+Geld und müssten am Gerät getestet werden — **keine Option für morgen**.
+
+### Die andere Seite derselben Medaille
+
+Windows kann Multitouch, ruckelt aber — deshalb der Wechsel auf den Mac. Der
+Grund für das Ruckeln ist inzwischen gefunden und behoben (§2m: Windows lief auf
+„Balanced" und drosselte die GPU). **Wenn die Geste wichtiger ist als alles
+andere, ist der Windows-Rechner mit der Energieeinstellung von §2m die Antwort —
+nicht der Mac.** Das ist Birks Entscheidung, keine technische.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
