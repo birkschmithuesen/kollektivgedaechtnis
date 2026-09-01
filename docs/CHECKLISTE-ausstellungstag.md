@@ -52,6 +52,12 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 - [ ] **Erklärungstext für den Plenarsaal einsetzen** —
       `frontend/static/plenum-hinweis.js`, Zeile 32 und 40. Steht bewusst als
       Platzhalter da, Inhalt ist Birks Sache.
+- [ ] **🔴 EU-Kette schließen: der Traum läuft noch über die USA.** In der
+      `config.toml` steht keine `image_`-Zeile, also gilt die Vorgabe
+      `openrouter` + `google/gemini-3-pro-image` — der `BFL_API_KEY` liegt
+      ungenutzt daneben. Vier Zeilen fehlen, sie stehen in
+      `docs/env-vorlage-eu.txt`. Alles andere (Analyse, Weckwort, Embeddings)
+      läuft bereits über Infomaniak, die Spracherkennung sogar lokal.
 - [ ] **Ein echtes Interview durchspielen**: Foto → Portrait → Analyse →
       erscheint an der Wand
 - [ ] Größen am Bedienpult einstellen (Zoom, Portrait, Tempo, Begriffe) —
@@ -80,11 +86,13 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 
 ## 🔴 Offen — ehrlich, nicht beschönigt
 
-**In Arbeit, läuft noch:**
-- **Portraitgröße:** Mein Fix hat vier Tests gebrochen. Der Regler wirkt jetzt
-  nach oben (richtig), aber die Scheiben wachsen nicht mehr mit dem Zoom mit
-  (falsch). Ein delegierter Auftrag löst gerade beides gleichzeitig. **Bis
-  dahin ist das Zoomverhalten der Portraits nicht wie vorher.**
+**Erledigt seit dem ersten Entwurf dieser Liste:**
+- **Portraitgröße** — behoben (`67d0d71`). Der Regler ist jetzt **Deckel UND
+  Maßstab**: er wirkt an beiden Stellen derselben Formel. Gemessen auf der
+  Harness (20 Personen, natürliche Scheibe 47,9 px): 120 → 47,9 px, 199 →
+  79,5, 260 → 103,8, 700 → 279,6. Mit der alten reinen Deckelung: **sechsmal
+  47,9** — der Regler bewegte nichts, und das war Birks ganzer Befund.
+  50 Tests grün, Mutationsprobe gefahren (Maßstab entfernt → Test rot).
 
 **Ungeprüft, weil kein Gerätezugriff:**
 - Ob die Zwei-Finger-Geste am iiyama unter macOS tatsächlich greift. `/touchtest`
