@@ -20,24 +20,36 @@ alles Weitere passiert nur noch an `data/`.
 Umschalten scheitert sonst genau in dem Moment, in dem es schon halb passiert
 ist.
 
-Aufruf auf der Station:
-    C:\\Users\\birk\\kollektivgedaechtnis\\.venv\\Scripts\\python.exe ^
-        dichte-umschalten.py --stufe 40
+Aufruf auf dem Mac (Ausstellungsrechner seit 2026-09-01):
+    uv run python scripts/dichte-umschalten.py --stufe 40
     ... --stufe echt      (zurueck auf den Ausstellungsbetrieb)
     ... --stufe status    (was liegt gerade?)
 
-Danach die Station starten (START-Verknuepfung).
+Auf Windows unveraendert:
+    C:\\Users\\birk\\kollektivgedaechtnis\\.venv\\Scripts\\python.exe ^
+        dichte-umschalten.py --stufe 40
+
+Danach die Station starten (Mac: scripts/start-mac.sh).
 """
 
 import argparse
 import shutil
+import socket
 import sqlite3
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-BASIS = Path(r"C:\Users\birk\kollektivgedaechtnis")
+# 🔴 Aus dem SKRIPTORT abgeleitet, nicht fest verdrahtet (korrigiert
+# 2026-09-01, Umzug auf den Mac). Vorher stand hier
+# `Path(r"C:\Users\birk\kollektivgedaechtnis")`. Auf Windows war das richtig;
+# auf dem Mac ist `C:\Users\birk\...` kein absoluter Pfad, sondern ein ganz
+# gewoehnlicher RELATIVER Dateiname mit Backslashes darin. Das Skript
+# arbeitete damit auf einem Ordner, den es nie gab -- und meldete trotzdem
+# etwas Plausibles: "Stufe echt, keine Datenbank, 0 Fotos". Kein Absturz,
+# keine Warnung, nur eine Antwort, die stimmen koennte und nicht stimmte.
+# Genau dieselbe Falle wie in pruefe-leere-extraktion.py.
+BASIS = Path(__file__).resolve().parent.parent
 AKTIV = BASIS / "data"
 ECHT = BASIS / "data-echt"          # Sicherungskopie, wird NIE angetastet
 STUFEN = BASIS / "data-dichte"      # data-dichte/1, /10, /40, /60
@@ -84,16 +96,25 @@ def status() -> None:
 
 
 def dienste_laufen() -> bool:
-    """Laeuft noch etwas, das Dateien in data/ offen haelt?"""
-    try:
-        aus = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-NetTCPConnection -State Listen -EA SilentlyContinue | "
-             "Where-Object {$_.LocalPort -in 8800,8810} | Measure-Object).Count"],
-            capture_output=True, text=True, timeout=30)
-        return aus.stdout.strip() not in ("0", "")
-    except Exception:
-        return False   # im Zweifel weitermachen, der Kopiervorgang meldet sich selbst
+    """Laeuft noch etwas, das Dateien in data/ offen haelt?
+
+    🔴 Ohne PowerShell (korrigiert 2026-09-01). Vorher rief das hier
+    `Get-NetTCPConnection` -- auf dem Mac gibt es das nicht, `subprocess.run`
+    warf `FileNotFoundError`, und das `except` darunter antwortete `False`:
+    "es laeuft nichts". Die Wache haette also ausgerechnet auf der Maschine
+    nie ausgeloest, auf der sie jetzt gebraucht wird, und das Umschalten waere
+    mitten in eine laufende Station gelaufen -- der Halbzustand, gegen den
+    dieses Skript ueberhaupt geschrieben wurde.
+
+    Ein Verbindungsversuch auf den Port braucht nichts als die Standard-
+    bibliothek und misst dasselbe: lauscht dort jemand, ja oder nein.
+    """
+    for port in (8800, 8810):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            if s.connect_ex(("127.0.0.1", port)) == 0:
+                return True
+    return False
 
 
 def ersetze_inhalt(quelle: Path, ziel: Path) -> None:
@@ -135,8 +156,9 @@ def main() -> int:
         print(">>> Die Station laeuft (Port 8800/8810 lauscht).")
         print("Erst beenden -- sonst sind die Dateien gesperrt und das")
         print("Umschalten bricht mitten drin ab.")
-        print("\n  STOP-Verknuepfung auf dem Desktop, oder:")
-        print("  powershell -File C:\\Users\\SF-Tracking\\kg-start\\station-stop.ps1")
+        print("\n  Mac:     Strg-C im Fenster von scripts/start-mac.sh")
+        print("  Windows: STOP-Verknuepfung, oder")
+        print("           powershell -File C:\\Users\\SF-Tracking\\kg-start\\station-stop.ps1")
         return 1
 
     # Sicherung der echten Datenbank -- einmalig, per KOPIE.

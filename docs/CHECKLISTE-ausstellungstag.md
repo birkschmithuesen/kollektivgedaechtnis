@@ -1,5 +1,87 @@
 # Checkliste Ausstellungstag — Stand 2026-09-01, Abend
 
+---
+
+## ✅ Erster echter Start auf dem MacBook — gemessen, 2026-09-01 22:00–22:40
+
+Die Station ist auf diesem Gerät hochgefahren. Was **belegt** ist, mit dem
+Beleg daneben; was offen bleibt, steht darunter.
+
+| Geprüft | Beleg |
+|---|---|
+| Kern startet | HTTP 200 auf `/api/state` nach 10 s |
+| Alle Seiten | `/projection?touch=1`, `/operator`, `/operator-plenum`, `/touchtest`, `/graph.json` je HTTP 200; `/plenum` → 307 auf `/projection?plenum=1` |
+| `?touch=1` trifft | `frontend/projection.html:213` prüft `params.get('touch') === '1'` — genau der Wert, den `start-mac.sh` setzt |
+| Telegram-Bot | `getMe` HTTP 200 |
+| STT-Dienst | `/status` HTTP 200 nach 3 s, Backend `InfomaniakWhisperBackend` |
+| Mikrofon | `MacBook Pro Microphone` (Index 3, mono, 48 kHz), `/levels` zeigt Pegel 0,10–0,30 und `signal: true` — **keine Nullen**, die macOS-Freigabe steht also |
+| Transkription | Testsatz über die Lautsprecher ins Mikrofon → `final`-Ereignis im Kern, `data/transcript.jsonl` mit `"backend": "infomaniak-whisper"` |
+| Infomaniak Chat | HTTP 200, 0,59 s |
+| Infomaniak Embeddings | HTTP 200, Vektor kommt |
+| BFL/EU-Schlüssel | HTTP 422 auf `flux-2-pro-preview` (= an der Auth vorbei, Endpunkt existiert) |
+| Demodaten | Stufen 1/10/40/60 erzeugt, echte Gesichter belegt (Graustufen-Streuung 63,9–73,5 und pro Bild verschieden — nicht die 46,8 der leeren Flächen) |
+
+### Vier Fehler gefunden und behoben
+
+1. 🔴 **`config.toml` liess sich gar nicht einlesen.** Der Infomaniak-Block war
+   einkommentiert worden, die OpenRouter-Zeilen dahinter blieben stehen —
+   `embedding_model`/`embedding_url` doppelt vergeben, und `tomllib` bricht bei
+   doppelten Schlüsseln ab (`Cannot overwrite a value (at line 153)`). Die
+   Station konnte in diesem Zustand **nicht starten**, nicht erst beim ersten
+   Embedding. Die US-Zeilen stehen jetzt auskommentiert da.
+2. 🔴 **`config2.toml` fehlte ganz.** Angelegt, auf BFL/EU gesetzt (Sollwerte
+   der Liste unten) — **und Stufe 1 mit umgestellt**: die Vorlage steht auf
+   `claude-opus-5` im Anthropic-Modus, `ANTHROPIC_API_KEY` gibt es hier
+   bewusst nicht. Ohne Satz kein Bild; der Traum wäre komplett tot gewesen.
+   Läuft jetzt über Infomaniak wie der Kern, mit `condense_reasoning_effort = "none"`.
+3. 🔴 **Das Weckwort-Modell lief ins Leere.** `wake_word_llm_api_mode =
+   "anthropic"` ohne Schlüssel — der Weg, der am 2026-08-30 extra für
+   „Hiermit beende ich das Interview." gebaut wurde, war still tot (ein Fehler
+   dort beendet nichts, also fällt es niemandem auf). Jetzt Infomaniak,
+   Kimi-K2.6, gemessene 0,59 s gegen ein Budget von 6 s.
+4. 🔴 **`dichte-umschalten.py` war auf dem Mac nicht lauffähig** — feste
+   Windows-Pfade und eine PowerShell-Portprüfung. Beides **ohne Absturz**: aus
+   `C:\Users\birk\…` wird auf dem Mac ein relativer Ordnername, und die
+   Portwache fiel per `except` auf „es läuft nichts". Das Skript meldete
+   plausibel „Stufe echt, keine Datenbank" und hätte mitten in die laufende
+   Station geschrieben. Jetzt Basis aus dem Skriptort, Portprüfung per Socket.
+   Gegenprobe gefahren: bei laufendem Kern verweigert es den Dienst.
+
+### 🔴 Zwei Dinge, die du wissen musst — nicht behoben, sondern Betrieb
+
+**A. Die Reglerwerte überleben ein Umschalten der Dichte NICHT.**
+Sie liegen über `store.set_setting` in `data/kg.db`, und genau diese Datei
+ersetzt `dichte-umschalten.py`. Nachgesehen: die aktive DB steht auf
+`max_terms = 32`, die Demo-DB bringt `max_terms = 999` mit.
+→ **Erst umschalten, dann einstellen.** Wer auf Stufe 60 kalibriert und danach
+auf `echt` geht, fängt bei den Vorgabewerten wieder an.
+
+**B. Infomaniak war heute Abend rund fünf Minuten komplett aus.**
+Um 22:12 lieferte Chat HTTP 200 in 0,59 s, um 22:15 bis 22:20 kam auf **jedem**
+Pfad HTTP 503 mit der Seite *„Service momentanément indisponible"* — Chat,
+Embeddings und Transkription gleichzeitig. Um 22:20:38 war es zurück.
+An diesem einen Anbieter hängen **Analyse, Weckwort, Embeddings und
+Spracherkennung**. Fällt er morgen aus, steht die Station still, ohne dass ein
+Fehler in unserem Code liegt. Fehlerbild im STT-Log:
+`infomaniak transcription failed … Response ended prematurely`.
+Die erste Transkription nach der Rückkehr brauchte 17,3 s statt der am
+2026-08-31 gemessenen ~3 s (Rückstau).
+
+### Noch offen an diesem Gerät
+
+- **Es gibt hier keine Datenbank aus dem Ausstellungsbetrieb.** `data/` ist
+  leer (0 Personen), `data-echt/` existiert noch nicht. Die echten Interviews
+  vom Windows-Rechner sind **nicht** mit umgezogen. Falls sie gebraucht
+  werden, müssen sie von dort geholt werden — die Maschine ist offline.
+- Fenster auf den richtigen Schirm schieben und Vollbild (geht nur von Hand).
+- Ob am Interview ein externes Mikrofon hängen soll: `ZOOM AMS-24` ist am Mac
+  sichtbar (Index 0, stereo, 44100 Hz), eingetragen ist derzeit das eingebaute
+  Mikrofon. Umstellen in `~/projekte/fundusbot/.env`
+  (`SST_AUDIO_DEVICES`, `STT_AUDIO_DEVICES_SR`) — bei einem Stereo-Eingang
+  zusätzlich `--channels regie audience` an `start-stt-mac.sh` anhängen.
+
+---
+
 Kein Handoff, sondern die Liste zum Abhaken. Was hier steht, ist **geprüft
 oder ausdrücklich als ungeprüft markiert** — nichts dazwischen.
 

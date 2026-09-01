@@ -12,6 +12,15 @@ __pycache__/
 dream-data/
 out/
 sim/data/runs/
+# 🔴 `data-echt/` ist die KOPIE genau dieser echten Daten, die
+# `scripts/dichte-umschalten.py` beim ersten Umschalten anlegt. Ohne diese
+# Zeile lag sie ungeschuetzt neben einer ignorierten `/data/` — dasselbe
+# Material, nur unter anderem Namen (aufgefallen 2026-09-01 auf dem Mac).
+/data-echt/
+# Die Kalibrierstufen sind synthetisch, aber mit einem Befehl reproduzierbar
+# (sim/seed_graph.py, kein LLM, keine Kosten) und wiegen rund 44 MB an
+# Bildern. Erzeugen: siehe AGENTS.md, Abschnitt "Demodaten".
+/data-dichte/
 
 # Die tatsaechlich benutzten Konfigurationen, im Unterschied zu den
 # *.example.toml, die mitlaufen. Sie tragen zwar keine Schluessel (die kommen

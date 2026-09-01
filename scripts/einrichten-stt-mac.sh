@@ -122,8 +122,13 @@ STT_HOST=127.0.0.1
 STT_PORT=5051
 
 # ACHTUNG Tippfehler im fremden Code: SST_, nicht STT_.
-# Der Wert ist ein SUBSTRING des Geraetenamens (get_audio_device_index matcht
-# per `in`). Mit start-stt-mac.sh --geraete die verfuegbaren Namen auflisten.
+# Der Wert ist ein SUBSTRING des Geraetenamens: get_audio_device_index matcht
+# mit dem Python-Operator "in". KEINE Backticks in diesem Heredoc — sein
+# Begrenzer ist unquotiert (das braucht \$KEY), also fuehrt die Shell alles
+# zwischen Backticks als Kommando aus. Genau das passierte am 2026-09-01:
+# "syntax error near unexpected token 'in'", und die Kommentarzeile landete
+# verstuemmelt in der Datei. Die WERTE waren nicht betroffen.
+# Mit start-stt-mac.sh --geraete die verfuegbaren Namen auflisten.
 SST_AUDIO_DEVICES=MacBook
 # Mac-Eingaenge laufen praktisch immer auf 48000, nicht 44100 wie die
 # Fireface auf dem Windows-Rechner. Der Recognizer resampled selbst auf 16 k.
