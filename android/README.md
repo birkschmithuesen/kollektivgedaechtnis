@@ -21,8 +21,26 @@ Datensouveränität und verlinkt eine Transparenzseite. Ein Portraitfoto über
 einen US-Messenger zu schicken, um es an eine EU-souveräne Pipeline zu
 übergeben, wäre der Widerspruch im eigenen Aufbau.
 
-## Was am Ausstellungstag einzurichten ist
+## Sucherrahmen und Vorschau (für Testreihen)
 
+Die App zeigt **im Sucher** einen goldenen Kreis: so beschneidet die Station
+am Ende. Außen abgedunkelt ist, was wegfällt; der dünne Ring markiert die
+Kopfhöhe. Der Rahmen bildet den **mittigen Rückfallweg** ab — findet die
+Station ein Gesicht, wird der Ausschnitt enger, der Kreis ist dann die
+sichere Untergrenze.
+
+**Nach dem Auslösen** erscheint unten links das fertige Portrait, wie es die
+Station zugeschnitten hat (antippen blendet es weg). Das ist das **echte**
+Bild von der Station, keine Nachbildung — die Station nennt in ihrer Antwort
+den Dateinamen, die App holt es über `/media/portraits/<name>`.
+
+Über den **Spiegel-Weg gibt es keine Vorschau**: dort entsteht das Portrait
+erst beim Abholen. Kein Fehler.
+
+Details, Messwerkzeug und die offenen Fragen zur Gesichtserkennung:
+[`../docs/HANDOFF-fototest-zuschnitt.md`](../docs/HANDOFF-fototest-zuschnitt.md).
+
+## Was am Ausstellungstag einzurichten ist
 1. **Handy ins Tailnet.** Tailscale-App installieren, mit demselben Konto
    anmelden wie die Station. Ohne das findet die App nichts.
 2. **APK installieren.** Datei aufs Handy kopieren, antippen, „Installation

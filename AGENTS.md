@@ -46,6 +46,7 @@ Dateien angefasst hat.
 | Runbook Ausstellungstag | `docs/operations.md` |
 | Spec | `docs/superpowers/specs/2026-08-12-kollektivgedaechtnis-design.md` |
 | Foto-App (Android) | `android/README.md` |
+| **Fototest + Zuschnitt-Rückmeldung** | `docs/HANDOFF-fototest-zuschnitt.md` |
 | Öffentlicher Spiegel + Abholer | `mirror/README.md` |
 
 ## Tests
