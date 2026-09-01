@@ -20,32 +20,35 @@
  * und seine beiden Zahlen stehen als Regler im Bedienfeld.
  */
 
-/** 🔴 PLATZHALTER — hier kommt Birks Text hin.
+/** Der Erklärungstext. Von Birk freigegeben am 2026-09-01 (Vorschlag A, um
+ * den Datenschutzsatz erweitert: „Ich nehme den Vorschlag auf, auch das ein.").
  *
- * Der Inhalt ist ausdrücklich seine Sache und nicht meine (Auftrag: „Erfinde
- * keine Marketing-Prosa"). Bis er dasteht, sagt die Wand selbst, dass sie
- * unfertig ist: Ein hübsch klingender Fülltext würde im Saal für den
- * endgültigen gehalten und bliebe stehen.
+ * Der Wortlaut nimmt bewusst die Sprache der Handyseite auf
+ * (`mirror/web/start.html`, Absatz `.willkommen` und der Hinweis-Block
+ * darunter). Saal und Telefon sollen dieselbe Arbeit gleich erklären — wer
+ * hier liest und danach scannt, darf keine zweite, anders klingende Version
+ * vorfinden. Wird der eine Text geändert, gehört der andere mit angesehen.
  *
- * Zu ersetzen ist genau diese eine Zeichenkette. */
+ * Länge ist hier eine technische Grenze, keine Geschmacksfrage: die Karte
+ * steht 25 Sekunden (`hinweis_dauer` in `kg/server.py`) und wird aus
+ * Saalentfernung bei 42 px gelesen. Drei Sätze sind das Maß; ein vierter
+ * drängt die Karte in die Höhe des QR-Codes. */
 export const ERKLAERUNGSTEXT =
-  'PLATZHALTER — hier steht der Erklärungstext: was die Installation draußen ' +
-  'im Foyer ist. Zu ersetzen in frontend/static/plenum-hinweis.js, Konstante ' +
-  'ERKLAERUNGSTEXT.';
+  'Draußen im Foyer führen wir Interviews. Aus dem, was gesagt wird, wächst ' +
+  'dieses Netz — und daraus träumt die Maschine ein Bild. Es wird kein Ton ' +
+  'aufgezeichnet, und nichts davon verlässt Europa.';
 
-/** Die Zeile, die auf den QR-Code zeigt. Ebenfalls Platzhalter, aus demselben
- * Grund — und getrennt vom Text darüber, weil sie kleiner gesetzt ist
- * (`.plenum-hinweis-scan` in plenum.css) und eine andere Aufgabe hat. */
-export const SCANZEILE =
-  'PLATZHALTER — Aufforderung zum Scannen des Codes rechts unten. Konstante ' +
-  'SCANZEILE in derselben Datei.';
+/** Die Zeile, die auf den QR-Code zeigt — getrennt vom Text darüber, weil sie
+ * kleiner gesetzt ist (`.plenum-hinweis-scan` in plenum.css) und eine andere
+ * Aufgabe hat: nicht erklären, sondern auf den Code rechts unten zeigen. */
+export const SCANZEILE = 'Live auf Ihrem Telefon — Code rechts unten scannen.';
 
 /** Vorgaben des Takts, in Millisekunden. Überschrieben vom Bedienfeld
  * (`plenum_hinweis_intervall` / `plenum_hinweis_dauer`), sobald der erste
  * Zustand über SSE ankommt — diese beiden Zahlen gelten also nur in der
  * Zeitspanne davor und auf einer Seite ohne Server. */
 const INTERVALL_MS = 120000;
-const DAUER_MS = 20000;
+const DAUER_MS = 25000;
 
 /** Wie lange nach dem Laden die Einblendung zum ersten Mal kommt.
  *

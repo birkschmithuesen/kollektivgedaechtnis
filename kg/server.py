@@ -225,7 +225,11 @@ PLENUM_REGLER: tuple[dict, ...] = (
         "min": 5.0,
         "max": 120.0,
         "schritt": 5,
-        "default": 20.0,
+        # 25 s statt der urspruenglichen 20 (Birk, 2026-09-01): der freigegebene
+        # Text traegt jetzt drei Saetze statt zwei, und die Scanzeile will
+        # zusaetzlich gelesen UND befolgt werden -- ein Handy aus der Tasche zu
+        # holen dauert laenger als das Lesen.
+        "default": 25.0,
         "einheit": "s",
         "hinweis": "lang genug zum Lesen UND zum Scannen",
     },
