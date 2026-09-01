@@ -27,10 +27,19 @@ import httpx
 
 log = logging.getLogger("abholer")
 
-#: Wie oft beim Spiegel nachgefragt wird. 3 s ist derselbe Takt wie beim
-#: Uploader: schnell genug, dass ein Portrait im Gespraech erscheint, und
-#: langsam genug, dass es keine Last ist.
-INTERVALL_S = 3.0
+#: Wie oft beim Spiegel nachgefragt wird.
+#:
+#: 2 s, nicht die 3 des Uploaders (Birk, 2026-09-01: „das sollte ja schon
+#: relativ instantan gehen"). Der Takt bestimmt, wie lange zwischen dem Druck
+#: auf den Ausloeser und dem Portrait an der Wand vergeht — beim Uploader geht
+#: es dagegen nur um die Frische einer Anzeige.
+#:
+#: Gemessen am 2026-09-01: eine Abfrage von `/eingang` kostet 88 ms gegen den
+#: echten Spiegel. Bei 2 s Takt ist das rund 4 % der Zeit, der Rest ist Warten
+#: — die Last liegt also nicht am Takt, und noch schneller zu pollen brächte
+#: nichts, weil die Aufnahme und der Upload vom Handy laenger dauern als die
+#: Wartezeit hier.
+INTERVALL_S = 2.0
 
 #: Nach einem Fehlschlag warten, aber gedeckelt -- ein zurueckkehrender
 #: Spiegel soll binnen einer Minute wieder bedient werden.
@@ -122,6 +131,13 @@ def main() -> None:
     spiegel = os.environ.get("KG_MIRROR_URL")
     token = os.environ.get("KG_MIRROR_TOKEN")
     station = os.environ.get("KG_STATION_URL", "http://127.0.0.1:8800")
+    # Vor Ort aenderbar, ohne den Code anzufassen. Nach unten begrenzt, damit
+    # ein Tippfehler (0, 0.01) nicht in eine Dauerschleife gegen den
+    # oeffentlichen Spiegel laeuft.
+    try:
+        intervall = max(0.5, float(os.environ.get("KG_ABHOL_INTERVALL", INTERVALL_S)))
+    except ValueError:
+        intervall = INTERVALL_S
 
     if not spiegel or not token:
         print(
@@ -131,8 +147,8 @@ def main() -> None:
         )
         raise SystemExit(2)
 
-    log.info("Spiegel: %s -> Station: %s", spiegel, station)
-    Abholer(spiegel, token, station).laufe()
+    log.info("Spiegel: %s -> Station: %s (alle %.1fs)", spiegel, station, intervall)
+    Abholer(spiegel, token, station).laufe(intervall)
 
 
 if __name__ == "__main__":
