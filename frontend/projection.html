@@ -30,6 +30,7 @@
   import { createGraphView } from './static/projection.js';
   import { attachTouchAutonomy } from './static/touch-autonomy.js';
   import { createTouchControls } from './static/touch-controls.js';
+  import { attachZoomGeste } from './static/touch-zoom-geste.js';
   import { attachQuoteOverlay } from './static/quote-overlay.js';
   import { attachLegende } from './static/legende.js';
 
@@ -130,8 +131,17 @@
     const isTouch = params.get('touch') === '1';
     let autonomy = null;
     let controls = null;
+    let geste = null;
     if (isTouch) {
-      autonomy = attachTouchAutonomy(view);
+      autonomy = attachTouchAutonomy(view, {
+        // Nimmt die Wand sich nach 30 s Ruhe (oder auf „Übersicht") selbst
+        // zurück, muss der Griff des Zoom-Reglers mitgehen — sonst zeigt er
+        // den Ausschnitt des letzten Besuchers an, während die Wand längst
+        // wieder wandert. Über den Rückgabewert und nicht über einen zweiten
+        // Zugriff auf das DOM, damit es genau einen Ort gibt, der weiß, wo der
+        // linke Anschlag liegt (touch-controls.js).
+        onRelease: () => controls && controls.resetZoom(),
+      });
       // Nothing wired in here may post: whatever a visitor presses on surface A
       // must stay on surface A (see touch-controls.js and touch-autonomy.js).
       controls = createTouchControls(document.body, {
@@ -142,8 +152,30 @@
           view.camera.setZoomFactor(1);
           view.camera.setMode('fit');
         },
+        // Der Ersatz für die Zweifingergeste. Rein lokal: `setVisitorZoom`
+        // schreibt in den Viewport DIESER Seite, genau wie ein Pinch es täte,
+        // und nicht in `camera_zoom` — das ist die Kalibrierung des Operators
+        // und gilt auf allen Flächen.
+        onZoom: (faktor) => view.camera.setVisitorZoom(faktor),
       });
-      window.kgTouch = { autonomy, controls };
+      // Die Zwei-Finger-Geste (Nachtrag Birk, 2026-09-01: „wir müssen dort
+      // auch das Zoom hinbekommen … ich würde gerne das Zoom haben"). Sie ist
+      // seit dem Umzug auf das MacBook der Hauptweg, der Regler darüber der
+      // Rückfallweg — beide schreiben in denselben lokalen Viewport und keiner
+      // von beiden postet.
+      //
+      // Erst NACH `controls`, weil `onZoom` den Griff des Reglers nachführt.
+      geste = attachZoomGeste(view, {
+        // 🔴 Ohne das läuft die Geste ins Leere: `userZoomingEnabled` ist nur
+        // in `manual` wahr, und im Modus `pan` überschriebe `step()` den Zoom
+        // im nächsten Frame wieder. Dieselbe Tür wie eine Berührung des
+        // Graphen — samt der 30-s-Ruheuhr, die die Wand danach von selbst
+        // zurückholt.
+        onSteuern: () => autonomy.poke(),
+        // Damit der Griff nicht etwas anderes anzeigt als das Bild.
+        onZoom: (faktor) => controls && controls.showZoom(faktor),
+      });
+      window.kgTouch = { autonomy, controls, geste };
     }
 
     const events = new EventSource('/events');

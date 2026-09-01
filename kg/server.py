@@ -186,6 +186,13 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
     def testpattern() -> FileResponse:
         return FileResponse(FRONTEND / "testpattern.html")
 
+    # Wieviele Finger meldet der Touchschirm gleichzeitig? Eine eigene Adresse,
+    # damit die Frage am Geraet beantwortet werden kann, ohne eine Datei
+    # dorthin zu kopieren -- die Station serviert ohnehin schon alles andere.
+    @app.get("/touchtest")
+    def touchtest() -> FileResponse:
+        return FileResponse(FRONTEND / "touchtest.html")
+
     @app.get("/graph.json")
     def graph_json() -> JSONResponse:
         return JSONResponse(build_graph(store))

@@ -24,6 +24,13 @@ export function attachTouchAutonomy(
   {
     idleMs = IDLE_MS,
     target = document,
+    // Gerufen, wenn die Wand sich selbst zurücknimmt — nach Ruhezeit oder auf
+    // „Übersicht". Der Zoom-Regler stellt sich darauf zurück auf den linken
+    // Anschlag: Sonst stünde sein Griff nach dem Rückfall bei 4x, während die
+    // Wand die Übersicht zeigt, und die kleinste Bewegung der nächsten Hand
+    // risse das Bild um vier Stufen weiter. Ein Regler, der etwas anderes
+    // anzeigt als das, was zu sehen ist, ist schlimmer als keiner.
+    onRelease = () => {},
     // Injected for tests; production uses the real timers.
     now = () => Date.now(),
     setTimer = (fn, ms) => window.setTimeout(fn, ms),
@@ -45,6 +52,7 @@ export function attachTouchAutonomy(
     // operator switched the wall to 'fit' while a visitor was panning, the
     // idle timeout must land on 'fit'.
     view.camera.setMode(operatorMode);
+    onRelease();
   }
 
   function poke() {
@@ -67,13 +75,40 @@ export function attachTouchAutonomy(
   // the button would appear dead (found 2026-08-26 — the control worked, the
   // autonomy immediately overrode it). The controls do their own thing; only
   // contact with the GRAPH means someone is navigating.
+  //
+  // Seit dem Zoom-Regler (2026-09-01) gilt das nicht mehr für die ganze
+  // Leiste: Wer am Regler zieht, STEUERT die Ansicht — genau wie eine Geste am
+  // Graphen — und muss die Ruheuhr anstossen, sonst bliebe die Wand nach einem
+  // Besucher für immer auf seinem Ausschnitt stehen.
+  //
+  // Die Ausnahme bleibt die Vorgabe für die Leiste, und ein Bedienelement kann
+  // sich mit `data-autonomie="steuern"` ausdrücklich davon ausnehmen. Diese
+  // Richtung und nicht umgekehrt, weil die sichere Vorgabe die stille sein
+  // muss: Ein künftiger Knopf, den jemand ohne einen Gedanken an diese Datei
+  // in die Leiste hängt, überschreibt sich sonst wieder selbst — genau der
+  // Fehler vom 2026-08-26.
+  //
+  // Die Entscheidung steht damit AN dem Bedienelement, das sie betrifft
+  // (touch-controls.js), und die Regel an genau einer Stelle: hier. Ein
+  // Sonderfall auf `#touch-zoom` an einer dritten Stelle wäre die Variante,
+  // die beim nächsten Bedienelement noch einmal geschrieben werden müsste.
   const onPointer = (event) => {
-    if (event.target instanceof Element && event.target.closest('.touch-controls')) return;
+    if (event.target instanceof Element) {
+      const inLeiste = event.target.closest('.touch-controls');
+      const steuernd = event.target.closest('[data-autonomie="steuern"]');
+      if (inLeiste && !steuernd) return;
+    }
     poke();
   };
   target.addEventListener('pointerdown', onPointer, { passive: true });
   // Wheel/trackpad for testing on a desktop without a touchscreen.
   target.addEventListener('wheel', onPointer, { passive: true });
+  // Ein Regler liefert nach dem ersten `pointerdown` nur noch `input` — ohne
+  // das liefe die 30-s-Uhr während eines langsamen Zugs weiter und könnte
+  // mitten in der Bewegung ablaufen. Derselbe Filter, also gilt es nur für
+  // Elemente, die sich zum Steuern erklärt haben; `input` von irgendwo sonst
+  // auf der Wand gibt es nicht.
+  target.addEventListener('input', onPointer, { passive: true });
 
   return {
     /** The operator's push. Kept separate from the local override so a state
@@ -83,12 +118,27 @@ export function attachTouchAutonomy(
       operatorMode = mode;
       if (!touching) view.camera.setMode(mode);
     },
+    /** „Der Besucher steuert jetzt" von aussen anstossen.
+     *
+     * Für die Zwei-Finger-Geste (`touch-zoom-geste.js`), und zwar aus einem
+     * Grund, der nur mit der Reihenfolge zu tun hat: Der `wheel`-Horcher hier
+     * unten hängt am `document` in der Bubble-Phase, die Gestenerkennung
+     * dagegen in der Capture-Phase — sie ist also schon fertig, wenn hier
+     * gepokt würde. Eine Geste im Modus `pan` hätte dann für genau einen Frame
+     * gezoomt, bevor `step()` es überschreibt.
+     *
+     * Öffentlich und nicht als vierter Ereignistyp im Filter oben, weil eine
+     * Geste in Chromium gar kein eigenes Ereignis hat, an dem man sie erkennen
+     * könnte: Sie kommt als `wheel` mit `ctrlKey`, und ob das eine Geste oder
+     * ein Mausrad ist, weiss nur die Stelle, die es auswertet. */
+    poke,
     /** Force the way back — the "Übersicht" button on the touchscreen. */
     releaseNow() {
       if (timer !== null) clearTimer(timer);
       timer = null;
       touching = false;
       view.camera.setMode(operatorMode);
+      onRelease();
     },
     get manual() {
       return touching;
@@ -99,6 +149,7 @@ export function attachTouchAutonomy(
     detach() {
       target.removeEventListener('pointerdown', onPointer);
       target.removeEventListener('wheel', onPointer);
+      target.removeEventListener('input', onPointer);
       if (timer !== null) clearTimer(timer);
     },
   };

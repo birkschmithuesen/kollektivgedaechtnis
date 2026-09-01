@@ -946,6 +946,202 @@ die Adresse von Hand um `?touch=1` zu ergänzen.
 
 ---
 
+## 2o. Zoom-Regler auf der Touchfläche — und was zur Zweifingergeste bekannt ist
+
+Birk, 2026-09-01, direkt nach §2n: *„Das funktioniert jetzt, aber ich habe halt
+nur einen Mausklick, ich kann nicht irgendwie reinzoomen. Zweifingergeste — ist
+das wegen Mac, geht das einfach nicht? Dann bräuchten wir halt einen Regler an
+der Seite, einen Zoom-Regler."*
+
+### Was die Recherche ergeben hat
+
+**Am Code belegt:** Cytoscape kann ohne **zwei gleichzeitige Kontakte** nicht
+zoomen. Die Pinch-Rechnung in `frontend/static/vendor/cytoscape.min.js` steht
+hinter
+
+```js
+if (n && t.touches[1] && !e.touchData.didSelect && o.zoomingEnabled() && … )
+```
+
+und der Zustand wird beim Abheben wieder gelöscht
+(`t.touches.length < 2 && (… e.pinching = !1 …)`). Ein Digitizer, der nur einen
+Kontakt meldet, kann diesen Zweig **per Konstruktion** nie erreichen. Ein Regler
+ist dann nicht die Notlösung, sondern die einzige Lösung.
+
+Zweiter Fund am selben Ort: Cytoscape bindet zwei verschiedene Eingabepfade. Ist
+`TouchEvent` im Browser vorhanden, hört es auf `touchstart`/`touchmove`; ist sie
+es **nicht**, baut es sich aus Pointer-Events selbst Touch-Listen zusammen
+(`"undefined" == typeof TouchEvent`). Kontakte mit `pointerType: 'mouse'` wirft
+dieser Ersatzpfad ausdrücklich weg. Ein Panel, das sich als Maus meldet, käme
+also auch mit zwei Kontakten nie beim Pinch an.
+
+### 🔴 Ungeprüft, weil kein Gerätezugriff
+
+**Ob der iiyama PL6568 im Foyer zwei Kontakte liefert, ist weiterhin offen.**
+Das entscheidet der USB-HID-Digitizer, und der hängt an keiner Testumgebung.
+Die Frage lässt sich nur am Gerät beantworten — dafür gibt es jetzt eine Seite:
+
+```
+http://127.0.0.1:8800/touchtest
+```
+
+Auflegen, ablesen: große Zahl = gleichzeitige Kontakte, darunter das gemerkte
+Maximum (zwei Finger landen nie im selben Moment auf dem Glas) und ein Urteil im
+Klartext. Dazu `navigator.maxTouchPoints` und ob `TouchEvent` existiert — also
+genau die beiden Angaben, an denen Cytoscape seinen Pfad entscheidet.
+Die Seite hängt an nichts: kein Modul, kein Graph, kein SSE.
+
+Sie setzt `touch-action: none`. Ohne das verschluckt Chrome Mehrfinger-Gesten
+für Scrollen und Seitenzoom und stellt sie **nie** als Pointer-Events zu — ein
+Gerät, das zwei Kontakte kann, sähe dann trotzdem nur einen, und der Messfehler
+ginge in genau die Richtung, in der man sich nicht irren darf.
+
+### Der Regler
+
+Unten rechts in der bestehenden Bedienleiste, neben „Übersicht", nur mit
+`?touch=1`. Die Wandansicht im Plenarsaal bekommt ihn nicht.
+
+- **Er postet nichts.** `camera.setVisitorZoom()` schreibt in den Viewport
+  DIESER Seite, genau wie eine Zweifingergeste es täte — nicht in `camera_zoom`,
+  das über `/events` auf allen Flächen gilt.
+- **Nicht über `setZoomFactor`**, so naheliegend das aussieht: Der Regler wird
+  immer im Modus `manual` bedient, und `setZoomFactor` steigt dort absichtlich
+  aus, um dem Besucher nicht in die Hand zu fahren. Er hätte eine Zahl gesetzt
+  und auf dem Schirm nichts bewegt.
+- **Wer zieht, steuert.** Die Bedienleiste ist von der 30-s-Ruheuhr ausgenommen
+  (sonst überschriebe „Übersicht" sich selbst, Fehler vom 2026-08-26). Der
+  Regler nimmt sich mit `data-autonomie="steuern"` von dieser Ausnahme wieder
+  aus. Die Regel steht an einer Stelle (`touch-autonomy.js`), die Erklärung am
+  Bedienelement (`touch-controls.js`); die sichere Vorgabe bleibt „zählt
+  nicht", damit ein künftiger Knopf nicht in den alten Fehler zurückfällt.
+- **Der Weg ist geometrisch**, 1× bis 8×: gleicher Weg = gleiches Verhältnis,
+  dieselbe Begründung wie bei `lerpZoom` in `camera.js`. Linear läge die halbe
+  Strecke bei 4,5× statt 2,83×.
+- **Geklemmt ohne Luft:** Eine Hand am Regler landet nie im Schwarzen. Nebenbei
+  ist das der Rückweg für einen Besucher, der sich weggeschoben hat.
+- **„Übersicht" bleibt der ganze Rückweg** und stellt jetzt auch den Griff
+  zurück — ebenso der Rückfall nach 30 s Ruhe. Ein Regler, der 4× anzeigt,
+  während die Wand die Übersicht zeigt, wäre schlimmer als keiner.
+
+Tests: `tests/test_touch_zoomregler.py`, `tests/test_touchtest_seite.py`.
+
+> **Nachtrag 20:15 — der Schluss „ein Regler ist die einzige Lösung" trug
+> nur halb.** Er folgt aus Cytoscapes Touch-Zweig, und der ist nur einer von
+> drei Kanälen, auf denen ein Browser eine Pinch-Geste meldet. Siehe §2p; der
+> Regler bleibt, wird aber zum Rückfallweg.
+
+---
+
+## 2p. 🔴 Die Zwei-Finger-Geste — der Kanal und der Modus (2026-09-01, 20:15)
+
+Die Lage hat sich zwischen §2o und diesem Abschnitt **umgekehrt**. Birk:
+
+> *„Nein, nicht richtig. Windows ruckelt, deswegen sind wir jetzt auf das
+> MacBook gegangen. Jetzt läuft der Touchscreen auf meinem MacBook. Das heißt,
+> wir müssen dort auch das Zoom hinbekommen, die Zwei-Finger-Geste. Oder wir
+> brauchen den Regler, aber ich würde gerne das Zoom haben, das muss ja
+> irgendwie gehen."*
+
+Die Ausstellung läuft auf dem **MacBook mit Brave**. Damit ist die Geste
+ausstellungskritisch und der Regler aus §2o der Rückfallweg. Belegt und nicht
+neu untersucht: Das Panel ist ein echter Digitizer (`HID-compliant touch
+screen`, VID_1FF7, SiS), unter Windows funktionierte die Geste — es ist **kein
+Gerätemangel**.
+
+### Ursache 1: der Kanal
+
+Ein Browser meldet eine Pinch-Geste auf drei verschiedenen Wegen (Dan Cătălin
+Burzo, *„Pinch me, I'm zooming: gestures in the DOM"*, danburzo.ro/dom-gestures/):
+
+| Browser / Plattform | Ereignis |
+|---|---|
+| **Chrome / Firefox / Brave auf macOS** | `wheel` mit **`ctrlKey: true`**, `deltaY` = Skalierungsschritt |
+| Safari (nur dort) | `gesturestart` / `gesturechange` / `gestureend` mit fertigem `scale` |
+| Mobile Browser | `TouchEvent` mit den Kontaktpunkten |
+
+Cytoscape sucht von sich aus **nur auf dem dritten** (§2o: die Rechnung steht
+hinter `t.touches[1]`). Reicht macOS die Geste des externen Digitizers als
+`wheel` + `ctrlKey` durch — so wie es Trackpad-Gesten tut —, sieht Cytoscape
+nie zwei Finger, obwohl das Gerät sie sauber meldet. Das passt exakt zu
+„unter Windows geht sie, unter macOS nicht".
+
+### Ursache 2: der Modus — hier scheitert ein naiver Einbau lautlos
+
+Am Code belegt: Cytoscapes eigener Zoom-Zweig (der auch `wheel`+`ctrlKey` und
+`gesturechange` bedient — er bindet beide!) steht hinter
+
+```js
+n.panningEnabled() && n.userPanningEnabled() && n.zoomingEnabled() && n.userZoomingEnabled()
+```
+
+und **diese Schalter setzt `camera.js::_applyInteractivity` nur im Modus
+`manual`.** In `pan` und `fit` folgt daraus dreierlei:
+
+1. es wird nicht gezoomt,
+2. es wird **kein `preventDefault()`** gerufen — also zoomt Brave die ganze
+   **Seite**, und die Wand stünde für den Rest des Tages auf 150 %,
+3. und im Modus `pan` schreibt `camera.step()` in **jedem** Frame Zoom und Pan:
+   Ein Zoom ohne vorherigen Wechsel nach `manual` wäre einen Frame später weg —
+   auf der Wand sieht das aus, als täte die Geste nichts.
+
+Cytoscape bringt für zwei der drei Kanäle also alles mit **außer der
+Voraussetzung**. Das ist die eigentliche Diagnose.
+
+### Was gebaut ist
+
+`frontend/static/touch-zoom-geste.js`, nur mit `?touch=1`:
+
+- **`wheel` + `ctrlKey`** (Chromium/macOS) → eigener Zoom um den Cursor, mit
+  `preventDefault()` **und** `stopPropagation()` in der Capture-Phase am
+  `document`. Das Stoppen ist tragend: Cytoscapes Handler sitzt auf demselben
+  Ereignis und zoomte in `manual` ein zweites Mal — der Ausschlag käme im
+  Quadrat an. Empfindlichkeit exakt Cytoscapes eigene (`10^(-deltaY/250)`),
+  damit dieselbe Handbewegung überall dasselbe bedeutet.
+- **`gesturestart`/`-change`/`-end`** (Safari) → `scale` gegen den Stand bei
+  Gestenbeginn, sonst zoomten zwei gleiche `scale` zweimal.
+- **Zwei `TouchEvent`-Kontakte** → **bleibt bei Cytoscape**, weder verschluckt
+  noch gestoppt: Sein Pinch-Zweig ist der eingebaute, geprüfte Weg und macht
+  nebenbei das Zwei-Finger-Schieben. Hergestellt wird nur die Voraussetzung.
+
+**Die Kopplung an `manual`** löst `autonomy.poke()`, neu öffentlich in
+`touch-autonomy.js`. Nicht als vierter Ereignistyp im dortigen Filter, weil
+eine Geste in Chromium kein eigenes Ereignis hat, an dem sie erkennbar wäre —
+sie kommt als `wheel`, und ob das Geste oder Mausrad ist, weiß nur die Stelle,
+die `ctrlKey` auswertet. Die Reihenfolge ist der Grund für `capture: true`: der
+`wheel`-Horcher der Autonomie hängt in der Bubble-Phase und käme zu spät.
+
+Der Zoom greift **um den Gestenmittelpunkt** (`setVisitorZoom(f, {renderedPosition})`),
+nicht um die Bildmitte: Wer zwei Finger auf ein Portrait legt, erwartet, dass
+dieses Portrait größer wird. Geste und Regler teilen sich Anschlag (`ZOOM_MAX`,
+von `touch-controls.js` nach `camera.js` gewandert), Bremse am Bildrand und die
+Bedeutung von „3×" — sonst holte der eine Weg nicht mehr aus dem heraus, was
+der andere angerichtet hat. Der **Griff des Reglers folgt der Geste**
+(`showZoom`), damit er nicht etwas anderes anzeigt als das Bild.
+
+Nichts davon postet; `camera_zoom` bleibt unangetastet. Ohne `?touch=1` wird
+gar nichts angehängt — belegt.
+
+### Die Diagnoseseite beantwortet jetzt die richtige Frage
+
+`http://127.0.0.1:8800/touchtest` zeigt zusätzlich zur Kontaktzahl aus §2o,
+**auf welchem der drei Kanäle** der Zoom ankommt: `wheel + ctrlKey` mit
+`deltaX/deltaY`, `gesturestart/-change` mit `scale`, `TouchEvent` mit
+`touches.length` — jede Zeile leuchtet auf, wenn ihr Kanal feuert, darunter ein
+Urteil im Klartext. Genau die Ablesung, aus der folgt, welcher Pfad greift.
+
+Tests: `tests/test_touch_zoomgeste.py`, `tests/test_touchtest_seite.py`.
+
+### 🔴 Was nur am Gerät zu klären bleibt
+
+Welcher Kanal am iiyama unter macOS **tatsächlich** feuert. Alle drei sind
+gebaut, weil die Antwort erst vor Ort vorliegt — aber es bleibt möglich, dass
+macOS den externen Digitizer als reine Maus führt und **gar keine** Geste
+ausliefert. Dann greift keiner der drei Pfade, und der Regler aus §2o ist genau
+dafür da. Erste Handlung vor Ort: `/touchtest` öffnen, zwei Finger spreizen,
+ablesen.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
@@ -955,6 +1151,8 @@ Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
 | **Ein kompletter Durchlauf** — Foto → Interview → Verdichtung → Traum → Wand | Nie am Stück gefahren. Das ist der Zweck der nächsten Session. |
 | **Traum (Port 8810)** | ✅ **Läuft seit 2026-09-01, 15:05** (HTTP 200), hochgekommen mit dem regulären Start als `[3/6]` — siehe §2f. Die geplante Aufgabe `KgDream` ist weiterhin kaputt (zeigt auf `C:\Users\birk\kg_dream.bat`, letzter Lauf `-2147023829`), wird aber für den regulären Weg **nicht gebraucht**. Aufräumen oder löschen ist Birks Entscheidung. |
 | **Die Wand am Beamer** | Legende, QR-Größe und Portraitausschnitt sind an Messbildern beurteilt, nicht im Raum. Ob 132 px QR aus Besucherabstand reichen, weiß nur der Raum. |
+| **Multitouch am iiyama PL6568** | Entscheidet der USB-HID-Digitizer, hängt an keiner Testumgebung. Am Code ist nur belegt, dass Cytoscape **ohne** zwei Kontakte nicht pinchen kann (§2o) — nicht, ob das Panel sie liefert. Antwort in fünf Sekunden über `/touchtest`, am Gerät. Der Zoom-Regler trägt so oder so. |
+| **Der Zoom-Regler unter einem echten Finger** | Maße (64 px Trefferzone, 56 px Griff, 620 px Weg) sind aus dem 48-px-Mindestziel der bestehenden Leiste abgeleitet und im Browser gemessen, **nicht** auf dem 65-Zoll-IR-Panel erprobt. Ob der Griff unter der Fingerkuppe auf der Bahn bleibt, zeigt erst das Glas. |
 | **Gesichtserkennung an echten Booth-Fotos** | **Teilweise erledigt, siehe §2c.** Gemessen an allen 7 Bestandsfotos (Trefferquote, Auflösung, Neigung, zweite Kaskade). **Offen bleibt genau das, wofür neue Fotos nötig sind:** mehrere Personen im Bild (kam im Bestand kein einziges Mal vor), Halbprofil, Sonnenbrille, Gegenlicht. |
 | **Der End-to-End-Durchlauf** | **Teilweise.** Foto → Portrait → zurück zur App ist gefahren und belegt (§2f), alle Dienste laufen (8800/8810/5051). **Nicht gefahren:** Interview → Verdichtung → Traum → Wand — das braucht eine sprechende Person vor dem Mikrofon und den Beamer im Raum, ein Agent kann es nicht allein. |
 | **Flackern der Wand** | Cron-Job als Ursache **widerlegt** (gemessen). HDR ist der Hauptverdacht (Display-Ereignis 4121), nicht bewiesen. |
