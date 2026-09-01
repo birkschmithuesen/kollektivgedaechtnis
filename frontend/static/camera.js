@@ -470,21 +470,65 @@ export class Camera {
    * frei — der Rest des Netzes darf nicht stundenlang unsichtbar bleiben.
    * Knoten, die inzwischen aus dem Graphen verschwunden sind, fallen dabei
    * heraus (`.filter` auf der Collection, nicht auf den ids): eine Auswahl,
-   * die auf einen entfernten Knoten zeigt, strandete die Fahrt im Nichts. */
+   * die auf einen entfernten Knoten zeigt, strandete die Fahrt im Nichts.
+   *
+   * REINE AUSKUNFT: Diese Funktion räumt `this._dream` NICHT mehr weg. Sie tat
+   * es bis zum 2026-09-01, und genau darin lag der Sprung — sie wird aus
+   * `_travelLevel()` gerufen, also aus jedem einzelnen Frame, und dort war das
+   * Vergessen zugleich der Vollzug: in dem einen Frame, in dem die Haltezeit
+   * überlief, wechselte die Bezugsgröße von der Traumbox auf das ganze Netz
+   * und wurde ungebremst auf den Viewport geschrieben. Das Aufräumen gehört an
+   * eine Stelle, die daraus eine FAHRT machen kann — siehe
+   * `_traumAblaufPruefen()`. */
   _dreamNodes(now = jetzt()) {
     if (!this._dream) return null;
-    if (now >= this._dream.until) {
-      this._dream = null;
-      return null;
-    }
+    if (now >= this._dream.until) return null;
     const live = this.cy.collection(
       this._dream.ids.map((id) => this.cy.getElementById(id)).filter((n) => n.length > 0),
     );
-    if (live.empty()) {
-      this._dream = null;
-      return null;
-    }
+    if (live.empty()) return null;
     return live;
+  }
+
+  /** Der Ablauf des Traumgebiets ist eine Etappe, kein Schnitt.
+   *
+   * 🔴 Gemessen 2026-09-01 an der echten Wand (render-harness.html, echtes
+   * cytoscape, Replay-Graph 19c, 60 Personen / 32 Begriffe, Zoomregler 1,55),
+   * Bild für Bild über die ablaufende Haltezeit hinweg:
+   *
+   *                              Sprung in EINEM Frame   Median der Frames
+   *   pan, Zoom                  1,768 -> 0,974 = 44,9 %      0,013 %
+   *   fit, Zoom                  1,690 -> 0,949 = 43,8 %      0,000 %
+   *   fit, Bildmitte             242 Modellpixel               0 px
+   *
+   * Also rund das 3400-fache dessen, was ein Frame sonst bewegt — die Wand
+   * riss in einem Sechzigstel einer Sekunde vom Traumausschnitt auf die
+   * Gesamtansicht auf. Und weil ein Traum alle 4-5 Minuten entsteht
+   * (kg2 `min_interval_s: 240`) und `DREAM.holdMs` 4 Minuten hält, wiederholte
+   * sich das im selben Takt: „wesentlich seltener als alle zwölf Sekunden, und
+   * es passiert immer noch" (Birk, 2026-09-01).
+   *
+   * Kein neuer Mechanismus: `_startHandover()` ist bereits die weiche Fahrt
+   * über eine volle Etappe (5 s Cosinus), und `focusDream()` fährt den
+   * EINTRITT ins Traumgebiet schon so. Der Austritt ist derselbe Vorgang in
+   * die andere Richtung und wird jetzt auch so gefahren — „ein harter Sprung
+   * soll es nie geben, es sollte immer ein Fade sein" (Birk).
+   *
+   * Gerufen aus `step()`, also aus dem Bildtakt und für JEDEN Modus: in `fit`
+   * fiel der Sprung sonst erst beim nächsten Graph-Push an (dort riss ihn
+   * `_frame()`), und das wäre bis zu zwölf Sekunden nach dem Ablauf.
+   *
+   * Im manuellen Modus wird nur vergessen und nichts gefahren: dort hat der
+   * Besucher die Wand in der Hand. */
+  _traumAblaufPruefen(now = jetzt()) {
+    if (!this._dream) return;
+    if (this._dreamNodes(now)) return;
+    this._dream = null;
+    if (this._mode === 'manual') return;
+    // Wie in focusDream() und setZoomFactor(): eine laufende Fahrt wird
+    // umgelenkt statt überschrieben.
+    if (this._handover) this._handover.to = this._automaticView();
+    else this._startHandover();
   }
 
   /** Wie weit der Traumausschnitt gerade aufgezogen ist, 1 = eins zu eins.
@@ -543,6 +587,21 @@ export class Camera {
   }
 
   onGraphChanged() {
+    // ZUERST: Ist die Haltezeit inzwischen abgelaufen, wird sie auch von hier
+    // aus gefahren und nicht geschnitten.
+    //
+    // 🔴 Gemessen 2026-09-01: `projection.js` setzt `camera.step()` während
+    // des Layout-Umzugs aus (tick(), `umbauend`). Ein Umzug dauert 2,5 s, ein
+    // Graph-Push kommt alle ~12 s — rund ein Fünftel der Betriebszeit läuft
+    // also kein Frame. Läuft die Haltezeit ausgerechnet dann ab, ist dieser
+    // Aufruf der Erste, der es merkt, und `_frame()` unten riss den Zoom um
+    // 1,7223 -> 0,9492, also um 44,9 % in einem Schlag — derselbe Sprung wie
+    // im Bildtakt, nur über einen anderen Weg.
+    //
+    // Danach greift der `if (this._handover)`-Zweig unten und lenkt die eben
+    // gestartete Fahrt auf das neue Ziel um, statt sie zu überschreiben.
+    this._traumAblaufPruefen();
+
     // Das gecachte Fahrtniveau gilt für eine Knotenwolke, die es nicht mehr
     // gibt (Birk, 2026-08-31, Punkt 7: „springt immer mal wieder").
     //
@@ -711,6 +770,36 @@ export class Camera {
   _advanceHandover(dtMs) {
     const handover = this._handover;
     handover.elapsed += dtMs;
+    // Das Ziel nachführen, genau wie `step()` es mit `roam.to` tut und aus
+    // demselben Grund: ein Ziel, das sich während der Fahrt bewegt, wird sonst
+    // am Ende in einem Frame nachgeholt.
+    //
+    // 🔴 Gemessen 2026-09-01, echte Wand, Traum beginnt mitten in einer Fahrt.
+    // Das Ziel wurde beim Start gemessen und driftete über die fünf Sekunden:
+    //
+    //   Frame  Zoom     Fahrtniveau   Handover-Ziel   Scheibe (Modellpixel)
+    //     401  0,9958     1,69299        1,69299            121,42
+    //     550  1,2803     1,70071        1,69299            107,68
+    //     650  1,6118     1,71730        1,69299             78,57
+    //     712  1,6930     1,72151        1,69299             71,28   <- Landung
+    //     713  1,7218     1,72243          –                 69,70
+    //
+    // Die Ursache steht in der letzten Spalte: `projection.js` leitet die
+    // Größe der Portraitscheiben aus dem Zoom ab, `_levelForBox()` misst diese
+    // Scheiben mit — das Traumgebiet schrumpft also, WÄHREND die Fahrt
+    // hineinzoomt. Sie landete auf dem alten Wert und der nächste `step()`
+    // schrieb den neuen: 1,68 % Zoom in einem Frame, gegen einen Median von
+    // 0,014 %.
+    //
+    // NUR im Traum-Zweig, und das ist keine Willkür: dort rechnet
+    // `_automaticView()` bloß (`_levelForBox` + `_dreamCentre`) und kehrt
+    // zurück, ohne den Viewport anzufassen. Der Zweig ohne Traumgebiet müsste
+    // dafür `cy.fit()` in jedem Frame fahren — ein zweiter Schreiber auf dem
+    // Viewport, den diese Datei an drei Stellen bewusst vermeidet. Er braucht
+    // es auch nicht: er misst über `_fitWith()` bei der Platzierungsgröße der
+    // Scheiben, also unabhängig vom Zoom, und driftet deshalb gar nicht.
+    // Wächst dort der Graph, lenkt `onGraphChanged()` die Fahrt um.
+    if (this._dreamNodes()) handover.to = this._automaticView();
     const t = Math.min(1, handover.elapsed / ROAM.handoverMs);
     // The same cosine as a leg of the tour, so the handover and the travel it
     // hands over to feel like one movement.
@@ -722,11 +811,44 @@ export class Camera {
         ? { x: to.x, y: to.y }
         : { x: from.x + (to.x - from.x) * eased, y: from.y + (to.y - from.y) * eased },
     );
-    if (t >= 1) this._handover = null;
+    if (t < 1) return;
+    this._handover = null;
+    if (!this._roam) return;
+    // Die Fahrt nimmt dort wieder auf, wo die Übergabe GELANDET ist — als
+    // frische Standzeit, nicht als Fortsetzung der unterbrochenen Etappe.
+    //
+    // 🔴 Gemessen 2026-09-01, echte Wand, Traum beginnt mitten in einer Fahrt
+    // (der häufigere Fall: 5,2 s Fahrt gegen 4,2 s Rast). In dem Frame, in dem
+    // die Übergabe landete:
+    //
+    //   Bildmitte   158,7 Modellpixel in einem Frame   (Median 0,40 px)
+    //   Zoom        1,693 -> 1,806 = 6,7 %             (Median 0,013 %)
+    //
+    // Zwei Ursachen, beide dieselbe Art von Rest: `roam.from` und
+    // `roam.elapsed` überlebten die Übergabe, die Etappe rechnete also weiter
+    // auf ihrer alten Bahn und riss das Bild dorthin zurück. Und `roam.clock`
+    // lief weiter, während `_automaticView()` sein Ziel bei clock 0 misst —
+    // die Atembewegung sprang beim Landen um bis zu ihre volle Amplitude
+    // (`ROAM.breathAmplitude`, ±6 %).
+    //
+    // `clock` auf 0 macht genau die Zusicherung wahr, die in
+    // `_automaticView()` schon steht („at clock 0, where the breathing wave is
+    // exactly zero and the first step() will therefore continue from the same
+    // level") — bisher galt sie nur für die allererste Übergabe nach
+    // `setMode('pan')`. Die Atembewegung verliert dabei ihre Phase, nicht ihre
+    // Position: sie steht in beiden Fällen auf dem Fahrtniveau.
+    //
+    // `targetId` bleibt stehen, damit `_pickTarget()` nicht ausgerechnet den
+    // Knoten wieder zieht, von dem die Übergabe gerade weggefahren ist.
+    this._roam = { phase: 'dwell', elapsed: 0, targetId: this._roam.targetId, clock: 0 };
   }
 
   step(dtSeconds) {
     const dtMs = dtSeconds * 1000;
+    // VOR dem Handover-Zweig: Läuft die Haltezeit in diesem Frame ab, soll die
+    // Fahrt aufs ganze Netz noch in diesem Frame beginnen und nicht erst im
+    // nächsten — sonst stünde genau ein Frame lang das alte Niveau daneben.
+    this._traumAblaufPruefen();
     // The handover owns the viewport until it lands: letting the traversal
     // write pan and zoom in the same frame is exactly the two-writer problem
     // the handover avoids by not being a cy.animate().

@@ -36,8 +36,21 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 
 
-@pytest.fixture()
-def wand(page, static_server):
+@pytest.fixture(scope="module")
+def wand(browser, static_server):
+    """Die echte Wand mit dem echten Replay-Graphen.
+
+    Modulweit und nicht je Test: das fcose-Layout über 223 Knoten kostet 8 bis
+    16 Sekunden, und `-k camera` ist die Schleife, in der am Aufbautag
+    gearbeitet wird — neunmal dasselbe Layout zu rechnen hat die von 40 s auf
+    3:39 gebracht. Jeder Test hier setzt Modus, Zoomregler und Traumgebiet zu
+    Beginn seiner eigenen Messung selbst, hängt also nicht daran, was der
+    vorige hinterlassen hat.
+
+    Der Graph wird dabei NICHT verändert (keine Knoten verschoben, keine
+    Neuberechnung) — das ist die Bedingung, unter der das Teilen zulässig ist.
+    """
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
     page.goto(f"{static_server}/frontend/static/render-harness.html")
     page.wait_for_function("window.kgView !== undefined")
     graph = json.loads((REPO / "sim" / "data" / "graph-19c.json").read_text(encoding="utf-8"))
@@ -46,7 +59,8 @@ def wand(page, static_server):
         [graph, graph["max_terms"]],
     )
     page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
-    return page
+    yield page
+    page.close()
 
 
 def test_die_uebergabefahrt_kommt_an_statt_die_bildschleife_zu_toeten(wand):
