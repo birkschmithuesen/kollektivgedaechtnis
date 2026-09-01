@@ -105,7 +105,10 @@ object Uploader {
         } catch (e: java.net.SocketTimeoutException) {
             Ergebnis.Fehler("Keine Antwort — im Tailnet? (${ziel.host})")
         } catch (e: java.net.ConnectException) {
-            Ergebnis.Fehler("Keine Verbindung zu ${ziel.host} — läuft die Station?")
+            // Host UND Port: im Flur ist genau der Port die Sache, die falsch
+            // steht (Station auf 8800, Spiegel auf 443), und ohne ihn ist die
+            // Meldung nicht zu gebrauchen.
+            Ergebnis.Fehler("Keine Verbindung zu ${ziel.host}:${ziel.port} — läuft die Station?")
         } catch (e: java.net.UnknownHostException) {
             Ergebnis.Fehler("Adresse ${ziel.host} nicht auflösbar")
         } catch (e: Exception) {

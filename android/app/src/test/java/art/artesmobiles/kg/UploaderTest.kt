@@ -215,14 +215,16 @@ class UploaderTest {
 
     @Test
     fun `vierhundertvier nennt die alte fassung beim namen`() {
-        // Der wahrscheinlichste Fehler beim ersten Einsatz: die Station läuft,
+        // Der wahrscheinlichste Fehler beim ersten Einsatz: das Ziel läuft,
         // hat den Endpunkt aber noch nicht (siehe „git log auf dem
-        // Ausstellungsrechner" im Handoff).
+        // Ausstellungsrechner" im Handoff). Der Text nennt seit dem
+        // Spiegel-Weg keinen festen Pfad mehr — es gibt zwei —, muss aber
+        // weiterhin auf die veraltete Fassung zeigen.
         val ergebnis = Uploader.sende(URL("http://x:8800/api/photo"), byteArrayOf(1)) {
             attrappe(404)
         }
         val text = (ergebnis as Uploader.Ergebnis.Fehler).text
-        assertTrue(text.contains("/api/photo"))
+        assertTrue(text, text.contains("Fassung"))
     }
 
     @Test
