@@ -1133,28 +1133,85 @@ export function createGraphView(
   // Cytoscape zeichnet bei jeder Kamerabewegung jeden Knoten und jede Kante
   // neu, mit voller Beschriftung. Die drei Schalter unten sind genau dafuer
   // da; sie stehen in der Bibliothek alle auf `false` (im Bundle nachgesehen,
-  // nicht aus dem Gedaechtnis). Sie greifen NUR waehrend einer Bewegung:
+  // nicht aus dem Gedaechtnis).
   //
   //   textureOnViewport    waehrend des Schwenks ein einmal gerendertes Bild
-  //                        verschieben statt neu zeichnen. Der groesste Hebel,
-  //                        und er trifft genau den Dauerbetrieb `pan`.
+  //                        verschieben statt neu zeichnen.
   //   hideEdgesOnViewport  302 Kanten nicht mitzeichnen, solange es sich
   //                        bewegt. Sie sind waehrend der Fahrt ohnehin kaum
   //                        lesbar und sofort wieder da, wenn sie steht.
-  //   pixelRatio 1         WIRKUNGSLOS auf diesem Rechner, bleibt nur als
-  //                        Absicherung drin: gemessen steht die
-  //                        Windows-Skalierung auf 100 % (`LogPixels` nicht
-  //                        gesetzt), `devicePixelRatio` ist also bereits 1.
-  //                        Die Begruendung „auf HiDPI wird die vierfache
-  //                        Pixelmenge gezeichnet" stimmt allgemein, trifft
-  //                        hier aber nicht zu — sie war geraten, nicht
-  //                        gemessen, und waere sonst als Erfolg durchgegangen.
   //
-  // 🔴 Der 4K-Schirm ist die ANZEIGEFLAECHE, nicht ein Nebenschauplatz (Birk,
-  // 2026-09-01: „das ist schon der Screen, den alle sehen"). 3840x2160 sind
-  // also gesetzt und nicht verhandelbar — FullHD sieht sichtbar schlechter
-  // aus. Alles, was hier an Leistung geholt wird, muss deshalb aus dem
-  // Zeichnen kommen, nicht aus weniger Pixeln.
+  // 🔴 WIE WEIT DIE BEIDEN REICHEN — gemessen am 2026-09-01, nicht angenommen
+  // (`tests/test_projection_zeichenleistung.py`, dort stehen die Zahlen):
+  //
+  // Der Renderer schaltet sie NICHT ein, weil `pan`/`zoom` sich aendern,
+  // sondern nur waehrend einer GESTE des Besuchers. Im Bundle:
+  //
+  //   I = pinching || hoverData.dragging || swipePanning || wheelZooming
+  //       || hoverData.draggingEles || cy.animated()
+  //
+  // Unsere automatische Fahrt schreibt `cy.pan()`/`cy.zoom()` frame-fuer-frame
+  // aus `camera.step()` und benutzt bewusst kein `cy.animate()` (camera.js,
+  // „a second writer on this viewport"). Damit ist im Modus `pan` KEINE dieser
+  // Flaggen gesetzt, `textureCache` bleibt leer, und die Kanten werden weiter
+  // gezeichnet — nachgemessen an der Wand, nicht abgeleitet.
+  //
+  // Die beiden Schalter helfen also der INTERAKTION am Touchscreen, das ist
+  // die eine Haelfte von Birks Klage. Die andere Haelfte, die gemessenen
+  // 61,4 % GPU im Dauerbetrieb `pan`, ruehren sie nicht an. Wer die senken
+  // will, braucht etwas anderes — und das ist eine Entscheidung fuers Bild
+  // (weniger Knoten, ruhigere Fahrt, andere Kantenform), nicht ein Schalter.
+  //   textureOnViewport    🔴 WIRKT BEI DER AUTOMATISCHEN FAHRT NICHT. Im
+  //                        Bibliothekscode nachgelesen (nicht vermutet): die
+  //                        Textur greift nur bei
+  //                        `pinching || hoverData.dragging || swipePanning ||
+  //                        data.wheelZooming` — also ausschliesslich bei
+  //                        BENUTZERGESTEN. Die Fahrt setzt `cy.pan()` und
+  //                        `cy.zoom()` direkt und loest keine dieser Flaggen
+  //                        aus. Bleibt drin, weil sie beim Wischen und
+  //                        Pinchen auf dem Touchscreen sehr wohl greift —
+  //                        aber sie ist NICHT die Antwort auf das Ruckeln
+  //                        der Kamerafahrt.
+  //   hideEdgesOnViewport  Gleiche Einschraenkung, plus `cy.animated()`.
+  //                        Auch das trifft hier nicht zu: camera.js faehrt
+  //                        bewusst frame-fuer-frame OHNE `cy.animate()`
+  //                        (siehe den Kommentar dort). Ebenfalls nur fuer
+  //                        Gesten wirksam.
+  //   pixelRatio           🔴 ENTFERNT am 2026-09-01, wenige Minuten nach dem
+  //                        Einbau. Ich hatte ihn zweimal falsch beurteilt:
+  //                        erst als grossen Hebel („auf HiDPI die vierfache
+  //                        Pixelmenge"), dann nach einem Blick in die
+  //                        Registry als wirkungslos, weil die
+  //                        Windows-Skalierung auf 100 % steht.
+  //
+  //                        Beides falsch, und Birk hat es am BILD gesehen:
+  //                        „die ganzen Graphen sehen sehr schlecht
+  //                        aufgeloest aus, das sieht so aus wie Full HD, die
+  //                        festen Texte sehen gut aus."
+  //
+  //                        Das ist die Signatur von `pixelRatio: 1`: der
+  //                        HTML-Text daneben wird weiter in voller
+  //                        Aufloesung gesetzt, nur Cytoscapes Zeichenflaeche
+  //                        faellt auf ein Viertel der Pixel.
+  //                        `devicePixelRatio` ist eben NICHT die
+  //                        Desktop-Skalierung, und der Registry-Schluessel
+  //                        sagt darueber nichts aus.
+  //
+  // 🔴 EHRLICHE BILANZ dieses Blocks: von drei Schaltern wirkte bei der
+  // automatischen Fahrt genau EINER — und das war der, der das Bild kaputt
+  // gemacht hat. Die gemessenen 61,4 % GPU im Dauerbetrieb `pan` ruehren
+  // die beiden verbliebenen nicht an. Wer die senken will, braucht etwas
+  // anderes, und das ist eine Entscheidung fuers Bild (weniger Knoten,
+  // ruhigere Fahrt, andere Kantenform), kein Schalter.
+  //
+  // LEHRE: eine Bildwirkung ist am BILD zu pruefen, nicht an einem
+  // Registry-Wert; und ob ein Schalter im eigenen Anwendungsfall ueberhaupt
+  // greift, steht im Bibliothekscode — nachlesen kostet zehn Minuten, das
+  // Zurueckrudern am Vorabend der Ausstellung kostet mehr.
+  //
+  // 🔴 Der 4K-Schirm ist die ANZEIGEFLAECHE (Birk, 2026-09-01: „das ist schon
+  // der Screen, den alle sehen"). 3840x2160 sind gesetzt und nicht
+  // verhandelbar — FullHD sieht sichtbar schlechter aus.
   //
   // 🔴 Abschaltbar per `?schnell=0`, damit am Ausstellungstag ohne neuen Build
   // zurueckgeschaltet werden kann, falls die Textur sichtbar unscharf wirkt.
@@ -1167,7 +1224,6 @@ export function createGraphView(
     wheelSensitivity: 0.2,
     textureOnViewport: schnell,
     hideEdgesOnViewport: schnell,
-    pixelRatio: schnell ? 1 : undefined,
   });
   // fcose only packs disconnected components when this extension is
   // initialised on the instance (it calls cy.layoutUtilities('get') and falls
