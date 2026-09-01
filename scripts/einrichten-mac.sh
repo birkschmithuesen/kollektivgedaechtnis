@@ -118,26 +118,40 @@ else
   done
 fi
 
-# 🔴 Der Traum lief auf der Station ueber OPENROUTER, obwohl der BFL-Schluessel
-# danebenlag: in ihrer config.toml stand keine einzige image_-Zeile, also galt
-# die Vorgabe aus kg2/config.py (openrouter + google/gemini-3-pro-image). Das
-# ist ein US-Weg. Wer die EU-Kette will, braucht die vier Zeilen aus
-# docs/env-vorlage-eu.txt in der config.toml.
-if [ -f config.toml ]; then
-  if ! grep -qE '^\s*image_api_mode' config.toml 2>/dev/null; then
-    echo ""
-    echo "  🔴 config.toml setzt image_api_mode NICHT -> es gilt die Vorgabe"
-    echo "     'openrouter' (US-Weg ueber Google), und BFL bleibt ungenutzt."
-    echo "     Fuer die EU-Kette eintragen:"
-    echo "        image_api_mode    = \"bfl\""
-    echo "        image_url         = \"https://api.eu.bfl.ai/v1\""
-    echo "        image_model       = \"flux-pro-1.1\""
-    echo "        image_api_key_env = \"BFL_API_KEY\""
+# --- config2.toml: der Traum hat eine EIGENE Konfigurationsdatei ------------
+# 🔴 Das hatte ich zuerst falsch: Ich suchte die image_-Zeilen in config.toml
+# und meldete sie als fehlend. Sie stehen aber in config2.toml -- kg2 wird mit
+# `--config config2.toml` gestartet (so macht es die Windows-Startdatei), und
+# dort ist die EU-Kette bereits vollstaendig eingetragen:
+#     image_api_mode    = "bfl"
+#     image_model       = "flux-2-pro-preview"
+#     image_url         = "https://api.eu.bfl.ai/v1"
+#     image_api_key_env = "BFL_API_KEY"
+if [ ! -f config2.toml ]; then
+  if [ -f config2.example.toml ]; then
+    cp config2.example.toml config2.toml
+    echo "  config2.toml: aus der Vorlage angelegt"
+    echo "     🔴 Die Vorlage steht auf OPENROUTER (US-Weg ueber Google)."
+    echo "        Fuer die EU-Kette diese vier Zeilen setzen:"
+    echo "           image_api_mode    = \"bfl\""
+    echo "           image_model       = \"flux-2-pro-preview\""
+    echo "           image_url         = \"https://api.eu.bfl.ai/v1\""
+    echo "           image_api_key_env = \"BFL_API_KEY\""
     FEHLT=1
-  elif grep -q 'image_api_mode.*bfl_proxy' config.toml 2>/dev/null; then
-    echo ""
-    echo "  🔴 image_api_mode = bfl_proxy laeuft NUR auf dem vServer."
-    echo "     Auf diesem Rechner stattdessen \"bfl\" verwenden."
+  else
+    echo "  🔴 config2.toml fehlt und es gibt keine Vorlage."
+    FEHLT=1
+  fi
+else
+  if grep -qE '^\s*image_api_mode\s*=\s*"bfl"' config2.toml 2>/dev/null; then
+    echo "  config2.toml: da, Bildweg steht auf BFL (EU)"
+  elif grep -q 'bfl_proxy' config2.toml 2>/dev/null; then
+    echo "  🔴 config2.toml steht auf bfl_proxy -- das laeuft NUR auf dem"
+    echo "     vServer. Hier stattdessen \"bfl\" verwenden."
+    FEHLT=1
+  else
+    echo "  🔴 config2.toml: Bildweg NICHT auf bfl -> laeuft ueber OpenRouter"
+    echo "     (US-Weg ueber Google), BFL_API_KEY bleibt ungenutzt."
     FEHLT=1
   fi
 fi

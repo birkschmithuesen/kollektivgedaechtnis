@@ -36,25 +36,27 @@ HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY=
 # Deutscher Anbieter, EU-Endpunkt `api.eu.bfl.ai`.
 BFL_API_KEY=
 
-# 🔴 ACHTUNG — auf der Station war das am 2026-09-01 NICHT vollständig
-# umgestellt: In ihrer `config.toml` stand KEINE einzige `image_`-Zeile,
-# also galten die Vorgaben aus `kg2/config.py`:
-#
-#     image_api_mode = "openrouter"
-#     image_model    = "google/gemini-3-pro-image"
-#
-# Das ist ein US-Weg (OpenRouter → Google), und der `BFL_API_KEY` lag ungenutzt
-# daneben. Damit die Bilder wirklich über die EU laufen, müssen diese vier
-# Zeilen in die `config.toml`:
+# 🔴 Der Bildweg steht in `config2.toml`, NICHT in `config.toml` — der Traum
+# hat eine eigene Konfigurationsdatei, und kg2 wird mit `--config config2.toml`
+# gestartet. Auf der Station ist die EU-Kette dort bereits vollstaendig
+# eingetragen (abgelesen 2026-09-01):
 #
 #     image_api_mode    = "bfl"
+#     image_model       = "flux-2-pro-preview"
 #     image_url         = "https://api.eu.bfl.ai/v1"
-#     image_model       = "flux-pro-1.1"
 #     image_api_key_env = "BFL_API_KEY"
+#     image_width = 1344 / image_height = 768
+#
+# Die mitgelieferte `config2.example.toml` steht dagegen auf OpenRouter (US-Weg
+# ueber Google). Wer sie unveraendert kopiert, bekommt einen Traum, der ueber
+# die USA laeuft, waehrend der BFL-Schluessel ungenutzt danebenliegt.
 #
 # NICHT "bfl_proxy" — das ist eine reine vServer-Eigenheit (dort hat uid birk
 # per Firewall keinen Weg zu bfl.ai). Auf einem Ausstellungsrechner gibt es den
 # Broker nicht, und der Traum rendert dann stumm nichts.
+#
+# Die Verdichtung im Traum laeuft ebenfalls ueber Infomaniak
+# (`condense_url`), also ueber den Schluessel aus Punkt 1.
 
 # ---------------------------------------------------------------------------
 # 3. TELEGRAM   [nur für den alten Foto-Weg]

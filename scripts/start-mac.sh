@@ -96,8 +96,12 @@ for _ in $(seq 1 60); do
 done
 
 echo "[4/5] Traum startet auf Port $TRAUM_PORT"
+# 🔴 `config2.toml`, NICHT `config.toml`: der Traum hat eine eigene
+# Konfiguration (Bildweg, Verdichtung), und die Windows-Startdatei ruft ihn
+# genauso auf. Mit der falschen Datei liefe er auf den Vorgaben aus
+# kg2/config.py — also über OpenRouter statt über BFL.
 while true; do
-  uv run python -m kg2 --config config.toml
+  uv run python -m kg2 --config config2.toml
   echo "      Traum beendet ($?), Neustart in 5 s" >&2
   sleep 5
 done &

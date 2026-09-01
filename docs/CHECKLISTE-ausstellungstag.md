@@ -58,12 +58,11 @@ läuft die Station nicht oder liefert falsche Daten. Alles danach ist Feinschlif
 - [ ] **Erklärungstext für den Plenarsaal einsetzen** —
       `frontend/static/plenum-hinweis.js`, Zeile 32 und 40. Steht bewusst als
       Platzhalter da, Inhalt ist Birks Sache.
-- [ ] **🔴 EU-Kette schließen: der Traum läuft noch über die USA.** In der
-      `config.toml` steht keine `image_`-Zeile, also gilt die Vorgabe
-      `openrouter` + `google/gemini-3-pro-image` — der `BFL_API_KEY` liegt
-      ungenutzt daneben. Vier Zeilen fehlen, sie stehen in
-      `docs/env-vorlage-eu.txt`. Alles andere (Analyse, Weckwort, Embeddings,
-      Spracherkennung) läuft bereits über Infomaniak.
+- [ ] **EU-Kette beim Traum prüfen** — der Bildweg steht in **`config2.toml`**
+      (nicht `config.toml`). Auf der Station war er korrekt auf BFL/EU gesetzt;
+      die mitgelieferte `config2.example.toml` steht aber auf OpenRouter.
+      Sollwerte: `image_api_mode = "bfl"`, `image_model = "flux-2-pro-preview"`,
+      `image_url = "https://api.eu.bfl.ai/v1"`, `image_api_key_env = "BFL_API_KEY"`.
 - [ ] **Ein echtes Interview durchspielen**: Foto → Portrait → Analyse →
       erscheint an der Wand
 - [ ] Größen am Bedienpult einstellen (Zoom, Portrait, Tempo, Begriffe) —
