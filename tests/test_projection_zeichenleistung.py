@@ -258,6 +258,11 @@ def test_die_schalter_wecken_die_geste_und_nicht_die_fahrt(wand_mit_kante):
         "die Geste weckt die Schalter nicht mehr — dann sparen sie gar nichts"
     )
 
+    # Eine Mindestschrift, die dieses kleine Testnetz nicht von selbst liefert
+    # (2026-09-02): Sonst steht die Wand still, weil ohnehin alles lesbar im
+    # Bild ist -- richtig im Betrieb, aber dann misst dieser Test nichts ueber
+    # die Fahrt. 120 px ist der obere Anschlag des Reglers.
+    wand_mit_kante.evaluate("() => window.kgView.camera.setMinLabel(120)")
     wand_mit_kante.evaluate("() => window.kgView.camera.setMode('pan')")
     wand_mit_kante.evaluate(
         "() => { for (let i = 0; i < 100; i++) window.kgView.camera.step(0.05); }"
@@ -288,6 +293,11 @@ def test_die_automatische_kamerafahrt_laesst_die_kanten_stehen(wand_mit_kante):
     Gefahren wird ueber `camera.step()` statt ueber Warten: die Kamera ruht
     nach dem Moduswechsel erst 4,2 s (`ROAM.dwellMs`), und ein Test, der lange
     genug schlaeft, um daran vorbeizukommen, misst am Ende die Uhr."""
+    # Eine Mindestschrift, die dieses kleine Testnetz nicht von selbst liefert
+    # (2026-09-02): Sonst steht die Wand still, weil ohnehin alles lesbar im
+    # Bild ist -- richtig im Betrieb, aber dann misst dieser Test nichts ueber
+    # die Fahrt. 120 px ist der obere Anschlag des Reglers.
+    wand_mit_kante.evaluate("() => window.kgView.camera.setMinLabel(120)")
     wand_mit_kante.evaluate("() => window.kgView.camera.setMode('pan')")
     # Ueber die Ruhephase hinweg, ohne zu zeichnen — hier ist nichts zu sehen.
     wand_mit_kante.evaluate(

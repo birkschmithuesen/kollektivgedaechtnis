@@ -124,6 +124,10 @@ def test_die_fahrt_verfolgt_ein_wanderndes_ziel(kamera):
         """() => {
              const c = window.cam;
              c.setMode('pan');
+             // Ueber die Einfahrt hinweg (2026-09-02): Der Eintritt in `pan`
+             // ist selbst eine Uebergabefahrt, und `step()` gibt ihr Vorrang
+             // vor der Etappe -- ohne das liefe der Zweig hier gar nicht.
+             c.step(5.0);
              c._roam = { phase: 'travel', elapsed: 0, clock: 0,
                          targetId: 't1',
                          from: { x: 0, y: 0 },

@@ -145,7 +145,24 @@ CAMERA_VIEWS = [
         # Seit dem 2026-09-02 waehlt eine MINDESTSCHRIFT den Ausschnitt, nicht
         # ein Zoomfaktor -- und `fit` zeigt darum wieder woertlich alles. Die
         # Nahaufnahme gehoert deshalb in `pan`, wo die Mindestschrift wirkt.
-        "() => { const c = window.kgView.camera; c.setMode('pan'); c.setMinLabel(52); }",
+        #
+        # 🔴 Und deshalb wird hier gefahren statt gewartet: Der Wechsel vom
+        # Stehen ins Fahren ist eine Uebergabefahrt ueber 5 s (ROAM.handoverMs),
+        # aus demselben Grund wie jeder andere Uebergang in camera.js -- an der
+        # Wand richtig, fuer eine Referenzaufnahme toedlich. Gemessen: 600 ms
+        # nach dem Moduswechsel stand der Zoom auf 0,64 statt 2,0, und das Bild
+        # zeigte noch das ganze Netz. Dieselbe Falle wie bei `setDreamCamera`,
+        # nur ueber einen anderen Weg.
+        #
+        # 6 s in Schritten von 50 ms: 5 s Uebergabe plus eine Sekunde Rast, also
+        # sicher gelandet und noch in der Standzeit (ROAM.dwellMs sind 4,2 s) --
+        # die Aufnahme faellt damit nie mitten in eine Etappe.
+        """() => {
+             const c = window.kgView.camera;
+             c.setMode('pan');
+             c.setMinLabel(52);
+             for (let i = 0; i < 120; i++) c.step(0.05);
+           }""",
     ),
     (
         "camera-3-cluster-closeup",

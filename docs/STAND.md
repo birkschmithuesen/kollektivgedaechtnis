@@ -1113,10 +1113,12 @@ Unten rechts in der bestehenden Bedienleiste, neben „Übersicht", nur mit
 `?touch=1`. Die Wandansicht im Plenarsaal bekommt ihn nicht.
 
 - **Er postet nichts.** `camera.setVisitorZoom()` schreibt in den Viewport
-  DIESER Seite, genau wie eine Zweifingergeste es täte — nicht in `camera_zoom`,
-  das über `/events` auf allen Flächen gilt.
-- **Nicht über `setZoomFactor`**, so naheliegend das aussieht: Der Regler wird
-  immer im Modus `manual` bedient, und `setZoomFactor` steigt dort absichtlich
+  DIESER Seite, genau wie eine Zweifingergeste es täte — nicht in
+  `camera_min_label` (bis 2026-09-02: `camera_zoom`), das über `/events` auf
+  allen Flächen gilt.
+- **Nicht über `setMinLabel`** (bis 2026-09-02 `setZoomFactor`), so naheliegend
+  das aussieht: Der Regler wird
+  immer im Modus `manual` bedient, und `setMinLabel` steigt dort absichtlich
   aus, um dem Besucher nicht in die Hand zu fahren. Er hätte eine Zahl gesetzt
   und auf dem Schirm nichts bewegt.
 - **Wer zieht, steuert.** Die Bedienleiste ist von der 30-s-Ruheuhr ausgenommen
@@ -1229,7 +1231,7 @@ Bedeutung von „3×" — sonst holte der eine Weg nicht mehr aus dem heraus, wa
 der andere angerichtet hat. Der **Griff des Reglers folgt der Geste**
 (`showZoom`), damit er nicht etwas anderes anzeigt als das Bild.
 
-Nichts davon postet; `camera_zoom` bleibt unangetastet. Ohne `?touch=1` wird
+Nichts davon postet; `camera_min_label` bleibt unangetastet. Ohne `?touch=1` wird
 gar nichts angehängt — belegt.
 
 ### Die Diagnoseseite beantwortet jetzt die richtige Frage
@@ -1250,6 +1252,91 @@ macOS den externen Digitizer als reine Maus führt und **gar keine** Geste
 ausliefert. Dann greift keiner der drei Pfade, und der Regler aus §2o ist genau
 dafür da. Erste Handlung vor Ort: `/touchtest` öffnen, zwei Finger spreizen,
 ablesen.
+
+---
+
+## 2q. 🔴 Der Zoomregler ist weg — es gibt jetzt eine Mindestschrift (2026-09-02)
+
+**Wer die Bedienleiste kennt, sucht sonst vergeblich.** „Zoom" heißt jetzt
+**„Mindestschrift"** und steht in **Pixeln**, nicht in `×`.
+
+### Warum
+
+Birk am 2026-09-02: „Wenn ich den Zoom vom Operator für die Projektion auf ein
+sinnvolles Maß einstelle, aber so wie jetzt grade erst ein Interview und wenig
+Begriffe habe, dann ist alles viel zu groß und viel zu nah. Die Kamerafahrt
+sollte eigentlich erst einsetzen, wenn nicht mehr das ganze Netz darstellbar
+ist."
+
+Der alte Regler war ein **Faktor auf die Vollansicht**. Auf einem kleinen Netz
+multipliziert das eine ohnehin riesige Vollansicht — und die Fahrt lief
+durchgehend, auch wenn längst jeder Knoten im Bild stand.
+
+### Die Rechnung
+
+Cytoscape skaliert `font-size` mit dem Zoom, die Schrift auf der Wand ist also
+`--label-size × zoom`. Daraus folgt **beides aus einer Zahl**:
+
+```
+zielLevel   = minLabelPx / labelSize
+kameraLevel = max(Ausschnitt, zielLevel)
+fahrtNoetig = Ausschnitt < zielLevel
+```
+
+Solange die Vollansicht die Mindestschrift liefert, **steht die Wand still und
+zeigt alles** — `step()` schreibt dann keinen einzigen Wert, auch die
+Atembewegung nicht. Der Übergang ins Fahren läuft über den vorhandenen
+Handover, ist also eine Fahrt und kein Sprung. Hysterese 15 % im Rückweg, sonst
+kippt es an der Schwelle hin und her.
+
+### Die 40 px sind gemessen, nicht geraten
+
+Rekonstruiert aus Birks Kalibrierung vom 2026-09-01, die noch in `data/kg.db`
+stand (`camera_zoom` 1.55, `portrait_size` 330, `max_terms` 32), angewandt auf
+`data-dichte/60` (60 Personen, 78 Begriffe) auf der **3840×2160** breiten
+Ausstellungsfläche:
+
+```
+fit-Niveau 0,986  ×  Regler 1,55  ×  --label-size 26  =  39,7 px
+```
+
+Die Gegenprobe schließt sich: `40 / 26 = 1,538` — praktisch genau der Regler,
+den Birk eingestellt hatte. **Die neue Rechnung reproduziert die alte
+Kalibrierung, statt sie zu ersetzen.**
+
+Was die Zahl an der Wand bedeutet, über die Interview-Leiter gemessen (frisch
+geseedete Netze, gleicher Seed, Vollansicht, 3840×2160):
+
+| Interviews | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 20 | 30 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Schrift bei Vollansicht | 57,5 | 48,5 | 49,3 | **32,6** | 35,8 | 33,9 | 27,7 | 30,2 | 27,3 | 29,7 |
+
+Bis zum dritten Interview hält die Wand still, **ab dem vierten fährt sie**. Ab
+dem achten läuft es flach, weil `max_terms` die angezeigten Begriffe deckelt —
+die Schriftgröße auf der Wand ist von da an **konstant**. Genau die Zusage vom
+2026-09-01: „eigentlich sollte es immer identisch bleiben, den stelle ich
+einmal ein."
+
+### Was sich sonst mitverändert hat
+
+- **`fit` heißt wieder wörtlich „alles zeigen"** — der Faktor wurde dort nicht
+  mehr daraufgerechnet.
+- **Der Saal hat keine eigene Begriffszahl mehr** (Birk: „die anzahl der
+  begriffe soll bei plenar genau so sein wie auf dem touch screen, nur die
+  schriftgröße ggf anders"). Bis dahin standen dort 20 gegen 32 im Foyer, beide
+  Flächen zeigten also **verschiedene** Begriffe. Die Mindestschrift bleibt je
+  Fläche eigen; beide Vorgaben stehen auf 40 px.
+- **`setMinLabel` wirft nicht mehr**, wo `setZoomFactor` warf: Der Wert kommt
+  über `/events` herein, und eine kaputte Zahl darf eine unbeaufsichtigte Wand
+  nie anhalten.
+- **Browser-Tests laufen jetzt auch auf dem Mac.** `tests/conftest.py` und
+  `sim/prerender.py` suchten Chromium nur unter Linux-Pfaden — auf dem
+  Ausstellungs-MacBook ließ sich damit **kein einziger** Browser-Test fahren.
+
+**Endpunkt und Schlüssel heißen neu:** `POST /api/camera_min_label`
+(`{"pixels": …}`), Einstellung `camera_min_label` bzw. `plenum_camera_min_label`.
+Der alte `camera_zoom`-Eintrag bleibt unbenutzt in der Datenbank liegen — er
+wird **nicht** umgerechnet, das wäre geraten statt gemessen.
 
 ---
 

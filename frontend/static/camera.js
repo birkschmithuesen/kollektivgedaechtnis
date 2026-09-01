@@ -470,7 +470,9 @@ export class Camera {
     // Der Graph kann sich, während die Wand in `manual` stand, um zwanzig
     // Interviews verändert haben.
     if (mode !== 'manual') this._fahrtZustandPruefen();
-    if (previous === 'manual' && mode !== 'manual') this._startHandover();
+    // Der einzige Aufruf mit `capVon = 0`: Nur hier war die Porträtgrenze
+    // wirklich abgeschaltet, und nur hier gehört sie eingeblendet.
+    if (previous === 'manual' && mode !== 'manual') this._startHandover(0);
     else if (mode === 'fit') {
       if (this._dreamNodes()) this._startHandover();
       else this._frame();
@@ -480,6 +482,20 @@ export class Camera {
       // der vorige Modus hinterlassen hat.
       if (this._dreamNodes()) this._startHandover();
       else this._frame();
+    } else if (mode === 'pan') {
+      // 🔴 `pan` MIT Fahrt: auch das ist eine Fahrt, kein Sprung.
+      //
+      // Bis zum 2026-09-02 brauchte es diesen Zweig nicht, weil `fit` und die
+      // Fahrt auf demselben Niveau lagen (beide `fitLevel × zoomFactor`) — der
+      // Moduswechsel war unsichtbar. Seit `fit` wörtlich die Vollansicht zeigt
+      // und die Fahrt auf der Mindestschrift läuft, liegen die beiden ausein-
+      // ander: Ohne diesen Zweig schriebe der erste `step()` das Fahrtniveau
+      // in EINEM Frame, auf der kalibrierten Wand ein Zoomsprung von 55 %.
+      //
+      // Genau die Fehlerart, gegen die diese Datei an sechs Stellen gebaut ist
+      // (Birks Punkt 7, „springt immer mal wieder") — sie über einen neuen Weg
+      // wieder hereinzulassen wäre der Rückschritt.
+      this._startHandover();
     }
     this._onModeChanged(mode);
   }
@@ -496,7 +512,10 @@ export class Camera {
    * handover's own cosine, together with the pan and the zoom.
    */
   get portraitCapBlend() {
-    if (this._handover) return easeInOut(this._handover.elapsed / ROAM.handoverMs);
+    if (this._handover) {
+      const von = this._handover.capVon;
+      return von + (1 - von) * easeInOut(this._handover.elapsed / ROAM.handoverMs);
+    }
     return this._mode === 'manual' ? 0 : 1;
   }
 
@@ -1078,7 +1097,17 @@ export class Camera {
   }
 
   /** Begin the travel from the view the visitor left to the automatic one. */
-  _startHandover() {
+  /** @param capVon Wieviel Porträtgrenze beim START dieser Fahrt schon gilt.
+   *
+   * 🔴 Der Vorgabewert ist 1 und nicht 0, und das ist der ganze Punkt: Die
+   * Grenze wird NUR auf dem Rückweg aus `manual` eingeblendet, weil sie dort
+   * tatsächlich abgeschaltet war. Zwischen zwei getriebenen Modi — und beim
+   * Einschwenken auf ein Traumgebiet, das im Betrieb alle vier Minuten
+   * passiert — gilt sie schon, und eine Fahrt, die sie von 0 hochblendete,
+   * risse die Gesichter für fünf Sekunden auf ihre volle Größe und wieder
+   * zurück. Also genau der Sprung, den diese Fahrt entfernen soll, in dem
+   * einen Element, das dabei zehnfach übergroß ist. */
+  _startHandover(capVon = 1) {
     const from = { x: this.cy.pan().x, y: this.cy.pan().y, zoom: this.cy.zoom() };
     // In flight BEFORE the target is measured, and provisionally aimed at the
     // view it starts from. _automaticView() performs the hard framing and so
@@ -1088,7 +1117,7 @@ export class Camera {
     // the mode has already flipped — and those writes would size the discs as
     // if the ceiling were fully back on, i.e. exactly the snap this travel
     // exists to remove, one frame before it starts.
-    this._handover = { elapsed: 0, from, to: { ...from } };
+    this._handover = { elapsed: 0, from, to: { ...from }, capVon };
     this._handover.to = this._automaticView();
   }
 

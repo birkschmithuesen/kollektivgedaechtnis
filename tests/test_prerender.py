@@ -180,7 +180,10 @@ def test_the_camera_views_frame_progressively_less_of_the_net(tmp_path, seeded):
 
     assert [s.path.name for s in shots] == [
         "camera-1-fit-all-reference.png",
-        "camera-2-zoom2x-half-the-net.png",
+        # Seit dem 2026-09-02 waehlt eine MINDESTSCHRIFT den Ausschnitt statt
+        # eines Zoomfaktors -- und `fit` zeigt darum wieder woertlich alles,
+        # weshalb die mittlere Aufnahme in `pan` faellt.
+        "camera-2-mindestschrift-52px.png",
         "camera-3-cluster-closeup.png",
     ]
     zooms = [s.coverage["zoom"] for s in shots]

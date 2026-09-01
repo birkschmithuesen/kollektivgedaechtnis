@@ -86,6 +86,24 @@ window.cyStub = {
 """
 
 
+def in_die_fahrt(camera):
+    """In den Modus `pan` UND ueber die Einfahrt hinweg.
+
+    Seit dem 2026-09-02 ist auch der Eintritt in `pan` eine Uebergabefahrt
+    (5 s, ROAM.handoverMs) statt eines Sprungs: `fit` zeigt seither woertlich
+    das ganze Netz, die Fahrt laeuft auf der Mindestschrift, und zwischen
+    beiden liegt damit ein Weg, den es vorher nicht gab (beide lagen auf
+    `fitLevel x zoomFactor`).
+
+    Die Tests unten wollen die FAHRT messen, nicht die Einfahrt. Ohne dieses
+    Ausfahren wuerden sie nicht etwa scheitern, sondern Schlimmeres: Sie saessen
+    danach in der Standzeit, in der sich per Definition nichts bewegt, und
+    meldeten Erfolg, ohne irgendetwas geprueft zu haben.
+    """
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(5.0)")
+
+
 @pytest.fixture()
 def camera(page, static_server):
     page.goto(f"{static_server}/frontend/static/test-harness.html")
@@ -114,7 +132,7 @@ def test_manual_mode_never_moves_the_viewport_by_itself(camera):
 
 def test_pan_mode_travels_towards_a_term_instead_of_sliding_sideways(camera):
     """The automatic mode goes somewhere; it does not drift across the field."""
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     # Sit out the opening dwell, then take a step into the first leg.
     camera.evaluate("window.cam.step(5.0)")
     assert camera.evaluate("window.cam.roamState.phase") == "travel"
@@ -132,7 +150,7 @@ def test_a_leg_starts_and_ends_at_zero_speed(camera):
     Asserted as a relation, not a constant — the first slice of a leg must
     move less than the middle slice, and so must the last.
     """
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     camera.evaluate("window.cam.step(5.0)")  # into travel
     samples = camera.evaluate(
         """(() => {
@@ -149,7 +167,7 @@ def test_a_leg_starts_and_ends_at_zero_speed(camera):
 
 def test_the_camera_rests_after_arriving_before_choosing_again(camera):
     """The dwell is the beat that makes the motion read as deliberate."""
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     camera.evaluate("window.cam.step(5.0)")  # into travel
     camera.evaluate("window.cam.step(6.0)")  # past the end of the leg
     assert camera.evaluate("window.cam.roamState.phase") == "dwell"
@@ -162,7 +180,7 @@ def test_direction_never_changes_mid_flight(camera):
     moment a viewer sees the machine. Every direction change now happens at a
     standstill, between legs.
     """
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     camera.evaluate("window.cam.step(5.0)")
     xs = camera.evaluate(
         """(() => {
@@ -178,7 +196,7 @@ def test_direction_never_changes_mid_flight(camera):
 
 def test_a_target_that_leaves_the_graph_does_not_strand_the_camera(camera):
     """Density raised or term hidden mid-leg: restart, never point at nothing."""
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     camera.evaluate("window.cam.step(5.0)")
     camera.evaluate("window.cyStub._terms = []")
     camera.evaluate("window.cam.onGraphChanged()")
@@ -224,7 +242,7 @@ def test_changing_speed_mid_leg_does_not_jerk_the_camera(camera):
     flight, and the eased position would jump the moment the operator touched
     the slider — the one thing the easing exists to prevent.
     """
-    camera.evaluate("window.cam.setMode('pan')")
+    in_die_fahrt(camera)
     camera.evaluate("window.cam.step(5.0)")  # into travel at full speed
     before = camera.evaluate("window.cyStub._pan.x")
     camera.evaluate("window.cam.setRoamSpeed(0.25)")
@@ -278,8 +296,7 @@ def test_die_mindestschrift_ist_der_zoom_bei_dem_die_schrift_sie_erreicht(camera
     """
     camera.evaluate("window.cam.setLabelSize(26)")
     camera.evaluate("window.cam.setMinLabel(52)")
-    camera.evaluate("window.cam.setMode('pan')")
-    camera.evaluate("window.cam.step(0.1)")
+    in_die_fahrt(camera)
     assert camera.evaluate("window.cyStub._zoom") == pytest.approx(2.0, rel=1e-3)
 
 
@@ -293,8 +310,7 @@ def test_ein_theme_mit_groesserer_schrift_braucht_weniger_zoom(camera):
     """
     camera.evaluate("window.cam.setMinLabel(52)")
     camera.evaluate("window.cam.setLabelSize(52)")
-    camera.evaluate("window.cam.setMode('pan')")
-    camera.evaluate("window.cam.step(0.1)")
+    in_die_fahrt(camera)
     assert camera.evaluate("window.cyStub._zoom") == pytest.approx(1.0, rel=1e-3)
 
 
