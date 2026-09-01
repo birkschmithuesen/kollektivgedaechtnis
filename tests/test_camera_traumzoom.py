@@ -112,3 +112,69 @@ def test_ohne_traumgebiet_bleibt_der_regler_wie_er_war(traumkamera):
     traumkamera.evaluate("window.cam.setMode('fit')")
     traumkamera.evaluate("window.cam.setZoomFactor(3)")
     assert traumkamera.evaluate("window.cyStub._zoom") == 3
+
+
+def test_der_traumausschnitt_zieht_sich_nicht_ueber_die_zeit_auf(traumkamera):
+    """Der Bildausschnitt bleibt, wo der Regler ihn hinstellt.
+
+    Birk am 2026-09-01 an der Wand: „Mein Problem ist, dass es konstant immer
+    weiter rauszieht. Das ist ja nicht die Idee der Sache, eigentlich sollte
+    es immer identisch bleiben, den stelle ich einmal ein."
+
+    Bis dahin weitete `_dreamSpread()` den Ausschnitt über die vier Minuten
+    Haltezeit linear von 1,0 auf 2,1 — der Ausschnitt war also nach vier
+    Minuten mehr als doppelt so weit wie eingestellt und sprang beim nächsten
+    Traum zurück auf eins. Gemeint war eine Dramaturgie („erst den Traum
+    erklären, dann Kontext geben"), an der Wand war es ein Bild, das nie
+    stehenbleibt.
+
+    Geprüft wird der Faktor über die volle Haltezeit, nicht nur der Endwert:
+    ein Test auf `spreadTo == 1.0` allein wäre eine Wiederholung der
+    Konstanten und würde jede andere Aufziehmechanik durchlassen.
+    """
+    traumkamera.evaluate("window.cam.setMode('pan')")
+    _traumgebiet_setzen(traumkamera)
+
+    # 0 s, 2 min, 4 min, 8 min nach dem Auslöser -- die Haltezeit sind 4 min.
+    faktoren = traumkamera.evaluate(
+        """() => {
+             const seit = window.cam.dreamState.since;
+             return [0, 120000, 240000, 480000].map(
+               (ms) => window.cam._dreamSpread(seit + ms));
+           }"""
+    )
+    assert all(f == pytest.approx(1.0, rel=1e-6) for f in faktoren), (
+        f"Der Traumausschnitt darf sich nicht aufziehen, gemessen: {faktoren}"
+    )
+
+
+def test_das_fahrtniveau_bleibt_ueber_die_haltezeit_konstant(traumkamera):
+    """Die Gegenprobe am ECHTEN Wert, nicht an der Hilfsfunktion.
+
+    `_dreamSpread()` könnte konstant 1,0 liefern und der Ausschnitt sich
+    trotzdem bewegen, wenn ihn noch etwas anderes aufzieht. Deshalb hier das,
+    was die Wand tatsächlich sieht: das Fahrtniveau zu Beginn und am Ende der
+    Haltezeit.
+    """
+    traumkamera.evaluate("window.cam.setMode('pan')")
+    traumkamera.evaluate("window.cam.setZoomFactor(2)")
+    _traumgebiet_setzen(traumkamera)
+
+    niveaus = traumkamera.evaluate(
+        """() => {
+             const cam = window.cam;
+             const seit = cam.dreamState.since;
+             const echt = cam._dreamSpread.bind(cam);
+             const messe = (ms) => {
+               cam._dreamSpread = () => echt(seit + ms);
+               const v = cam._travelLevel();
+               cam._dreamSpread = echt;
+               return v;
+             };
+             return [messe(0), messe(240000)];
+           }"""
+    )
+    anfang, ende = niveaus
+    assert ende == pytest.approx(anfang, rel=1e-6), (
+        f"Das Fahrtniveau driftet über die Haltezeit: {anfang} -> {ende}"
+    )

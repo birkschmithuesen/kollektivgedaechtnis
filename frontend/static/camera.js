@@ -103,14 +103,32 @@ const DREAM = {
   // Sekunden wieder irgendwo und die Kopplung praktisch wirkungslos.
   holdMs: 240000,
   // „Erst den Traum erklären, dann immer mehr Kontext geben“ (Birk,
-  // 2026-08-31). Der Rundgang bleibt im Traumgebiet, aber der Ausschnitt
-  // weitet sich über die Haltezeit: zu Beginn eins zu eins auf den fünf
-  // Begriffen und ihren Personen, am Ende ein Stück weiter draußen, sodass die
-  // Umgebung dazukommt. Als ZOOM-Faktor auf die gemessene Box, nicht als
-  // wachsende Knotenmenge: eine Menge, die Knoten dazunimmt, springt bei jedem
-  // neuen Knoten in der Bildgröße, ein Faktor wächst stetig.
+  // 2026-08-31) — dieser Gedanke ist am 2026-09-01 an der Wand VERWORFEN
+  // worden, nachdem Birk ihn im Betrieb gesehen hat:
+  //
+  //   „Mein Problem ist, dass es konstant immer weiter rauszieht. Das ist ja
+  //    nicht die Idee der Sache, eigentlich sollte es immer identisch
+  //    bleiben, den stelle ich einmal ein, so wie man gut sehen kann. Und
+  //    dann soll die Kamerafahrt eigentlich nur über den ganzen Graphen hin
+  //    und her fahren."
+  //
+  // Der Ausschnitt weitete sich über die vier Minuten Haltezeit von 1,0 auf
+  // 2,1 — also auf mehr als das Doppelte — und begann beim nächsten Traum
+  // wieder von vorn. Auf dem Papier eine Dramaturgie, an der Wand ein
+  // Bildausschnitt, der nie da bleibt, wo er eingestellt wurde.
+  //
+  // BEIDE Werte stehen jetzt auf 1.0: der Traumausschnitt wird eins zu eins
+  // gezeigt und bleibt es. Die Bildgröße bestimmt allein der Zoomregler des
+  // Operators (`_zoomFactor`, siehe die Multiplikation in `_automaticView()`
+  // und `_travelLevel()`) — „ich will das mit dem manuellen Zoomregler
+  // machen" (Birk, 2026-09-01).
+  //
+  // Die Mechanik von `_dreamSpread()` bleibt absichtlich stehen, statt sie
+  // herauszuoperieren: bei spreadFrom == spreadTo ist der Faktor konstant 1,0
+  // und damit wirkungslos, und wenn das Aufziehen je wieder gewollt ist, ist
+  // es eine Zahl statt eines Umbaus.
   spreadFrom: 1.0,
-  spreadTo: 2.1,
+  spreadTo: 1.0,
 };
 
 /** Ease in and out — no abrupt starts, no arrivals that slam to a halt.
