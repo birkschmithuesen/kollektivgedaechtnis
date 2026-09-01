@@ -89,6 +89,11 @@ class Core:
             open_since=open_person.started_at if open_person else None,
             wake_word=cfg.wake_word,
             stop_intent=stop_intent,
+            # An interview opened by the microphone switch has no portrait
+            # yet, and a photo arriving later belongs to that person rather
+            # than to a new one (kg.session.photo). The store is what knows
+            # this across a restart.
+            open_without_portrait=open_person is not None and open_person.portrait_path is None,
         )
         self._queue: asyncio.Queue = asyncio.Queue()
         self._tasks: set[asyncio.Task] = set()
@@ -126,8 +131,8 @@ class Core:
         STT server on the operator page, at the one moment when telling them
         apart matters.
 
-        Like every other inbound callback here: never blocks. The close itself
-        happens in the worker.
+        Like every other inbound callback here: never blocks. The open or
+        close itself happens in the worker.
         """
         self.store.set_setting("mic_on", "1" if on else "0")
         broadcast_state(self.store, self.bus)
@@ -186,17 +191,40 @@ class Core:
         for transition in transitions:
             if transition.kind == "closed":
                 self._close(transition)
+            elif transition.kind == "portrait":
+                self._portrait(payload)
             else:
                 self._open(payload, transition)
 
     def _open(self, payload, transition) -> None:
-        photo_path, portrait_path = payload
+        # Two entrances, two payloads: the photo path carries the two image
+        # paths, the microphone switch carries its own on/off flag and no
+        # picture at all. Reading the paths off the reason instead of trying
+        # to unpack whatever arrived keeps the photo path exactly as it was —
+        # a photo without both paths stays a bug, not a person without a face.
+        photo_path, portrait_path = payload if transition.reason == "photo" else (None, None)
         self.store.create_person(
             started_at=transition.at, photo_path=photo_path, portrait_path=portrait_path
         )
         # The person node appears immediately; terms grow after the stop (spec 6).
         broadcast_graph(self.store, self.cfg, self.bus)
         broadcast_state(self.store, self.bus)
+
+    def _portrait(self, payload) -> None:
+        """A photo handed in to the interview that is already running.
+
+        Only ever reached for an interview the microphone switch opened and
+        that still has no portrait (`kg.session.photo` decides that, and only
+        once). The interview keeps running: same person, same started_at, same
+        transcript window — the face is merely added. No state change, so only
+        the graph is broadcast; the wall swaps the empty disc for the picture.
+        """
+        person = self.store.open_person()
+        if person is None:  # closed by another path between queueing and here
+            return
+        photo_path, portrait_path = payload
+        self.store.set_person_portrait(person.id, photo_path, portrait_path)
+        broadcast_graph(self.store, self.cfg, self.bus)
 
     def _close(self, transition) -> None:
         person = self.store.open_person()

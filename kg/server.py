@@ -305,18 +305,19 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
             """Der Schalter am Mikrofon, gemeldet vom STT-Server.
 
             Der zweite Weg, ein Interview zu beenden, neben der gesprochenen
-            Schlussphrase -- und ausdruecklich KEIN zweiter Weg, eins zu
-            beginnen: ein Interview ist hier ein Mensch mit Portraet, und das
-            Portraet kommt aus dem Foto (`SessionTracker.photo`). `on: true`
-            wird deshalb nur vermerkt und weitergemeldet; geschlossen wird bei
-            `on: false`, mit eigenem Grund "mic_switch", damit im Nachhinein
-            unterscheidbar bleibt, ob ein Interview per Schlusssatz oder per
-            Schalter endete.
+            Schlussphrase -- und seit 2026-09-01 auch der zweite, eins zu
+            beginnen: `on: true` eroeffnet ein Interview ohne Portraet, weil
+            wer kein Foto von sich moechte, trotzdem teilnehmen koennen muss
+            (`SessionTracker.mic_switch`). Geschlossen wird bei `on: false`,
+            mit eigenem Grund "mic_switch", damit im Nachhinein unterscheidbar
+            bleibt, ob ein Interview per Schlusssatz oder per Schalter endete
+            -- und geoeffnet mit demselben Grund, damit dasselbe fuer den
+            Anfang gilt.
 
             Kehrt sofort zurueck: `Core.on_mic_switch` legt den Wechsel nur in
-            die Warteschlange, geschlossen wird im Worker. Der STT-Server ruft
-            aus einem Wegwerf-Thread heraus auf und darf nicht auf eine
-            Pipeline warten.
+            die Warteschlange, geoeffnet und geschlossen wird im Worker. Der
+            STT-Server ruft aus einem Wegwerf-Thread heraus auf und darf nicht
+            auf eine Pipeline warten.
 
             `async def`, und das ist hier nicht Geschmack: eine gewoehnliche
             `def`-Route laesst FastAPI im Threadpool laufen, und

@@ -31,6 +31,8 @@ function cssVar(name, fallback) {
 function styleSchwarzplan() {
   const FF = cssVar('--label-font', 'Georgia, serif');
   const FS = cssVar('--label-size', '26');
+  const PERSON_FILL = cssVar('--person-fill', '#242424');
+  const PERSON_BLANK = cssVar('--person-blank', '#6E6656');
 
   return [
     /* ---- PERSONEN: Portrait mit Tiefe ------------------------------------
@@ -53,7 +55,20 @@ function styleSchwarzplan() {
         shape: 'ellipse',
         width: cssVar('--person-size', '110'),
         height: cssVar('--person-size', '110'),
-        'background-color': cssVar('--person-fill', '#242424'),
+        /* Zwei Fuellungen, nach Datenlage (Birk, 2026-09-01: „Es kann ja
+           sein, dass irgendwer nicht will, dass ein Foto von ihm oder ihr
+           gemacht wird"). Hinter einem Portrait bleibt der Grund schwarz --
+           er ist es, der die harte Knotenkante unter dem auslaufenden
+           PNG-Alpha verschwinden laesst. OHNE Portrait waere derselbe Grund
+           auf --bg #000000 buchstaeblich nichts: am Bild gemessen 247 von
+           28392 Pixeln nicht schwarz, und die kamen von der Kante zum
+           Begriff. In theme-f traegt weder Ring noch Lichthof (beide auf 0),
+           also muss die Fuellung selbst die Scheibe tragen.
+
+           Eine Farbe, keine Vertretung: kein Platzhalter-Avatar, kein
+           Fragezeichen, kein Icon. Wer sich gegen ein Bild entscheidet, ist
+           kein fehlendes Bild. */
+        'background-color': (ele) => (ele.data('portrait') ? PERSON_FILL : PERSON_BLANK),
         // KEIN radial-gradient hinter dem Portrait mehr. Er stammte aus dem
         // ersten Entwurf und sollte „die Scheibe dort fuellen, wo das Portrait
         // durchscheinend auslaeuft" — genau diese Aufgabe hat seit 2026-08-30
@@ -215,6 +230,9 @@ function styleSchwarzplan() {
 
 
 function style() {
+  const PERSON_FILL = cssVar('--person-fill', '#242424');
+  const PERSON_BLANK = cssVar('--person-blank', '#6E6656');
+
   return [
     {
       selector: 'node.person',
@@ -222,7 +240,11 @@ function style() {
         shape: 'ellipse',
         width: cssVar('--person-size', '96'),
         height: cssVar('--person-size', '96'),
-        'background-color': cssVar('--person-fill', '#242424'),
+        // Wie in styleSchwarzplan(): ohne Portrait eine eigene, ruhige
+        // Fuellung. Hier traegt der Ring die Scheibe zwar ohnehin, aber eine
+        // Person ohne Bild soll in allen Themes dasselbe sein und nicht in
+        // dreien eine leere und in einem eine gefuellte Scheibe.
+        'background-color': (ele) => (ele.data('portrait') ? PERSON_FILL : PERSON_BLANK),
         'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'border-width': cssVar('--ring-width', '5'),
@@ -1365,6 +1387,22 @@ export function createGraphView(
         element.data('dream_role', node.dream_role || '');
       }
     }
+
+    // Aus demselben Grund muss ein NACHGEREICHTES Portrait nachgezogen werden
+    // (seit 2026-09-01, kg.core `_portrait`): Wer per Mikrofonschalter ohne
+    // Foto begonnen hat und sich mitten im Gespräch doch fotografieren lässt,
+    // steht als leere Scheibe längst auf der Wand. `toCytoscape` setzt
+    // `portrait` nur beim ANLEGEN — ohne diese Schleife bliebe die Scheibe
+    // leer bis zum nächsten Neuladen der Seite, mit dem Bild in der Datenbank
+    // und nicht im Bild.
+    for (const node of view.nodes) {
+      if (node.type !== 'person') continue;
+      const element = cy.$id(node.id);
+      if (element.length === 0) continue;
+      const portrait = node.portrait || '';
+      if (element.data('portrait') !== portrait) element.data('portrait', portrait);
+    }
+
     returning.forEach((id) => cy.$id(id).position({ ...lastSeen.get(id) }));
 
     fresh.forEach((id, index) => {

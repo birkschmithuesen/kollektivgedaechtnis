@@ -223,7 +223,11 @@ verloren.
 
 ## Ablauf eines Interviews
 
-1. **Foto** an den Telegram-Bot → Personenknoten, Interview öffnet
+1. **Foto** an den Telegram-Bot → Personenknoten, Interview öffnet.
+   **Oder ohne Foto:** das Mikrofon einschalten → Interview öffnet ebenso, der
+   Personenknoten ist dann eine schlichte Scheibe ohne Bild. Für alle, die
+   nicht fotografiert werden wollen. Ein Foto darf jederzeit nachkommen; es
+   wird dieser laufenden Person zugeordnet und beginnt kein neues Interview.
 2. **Sprechen** — der STT läuft dauerhaft, ordnet aber nur zu, solange ein
    Interview offen ist
 3. **Beenden**, drei Wege:
@@ -236,8 +240,10 @@ verloren.
 4. Erst nach dem Stopp laufen Extraktion und Merge — die Begriffe wachsen
    **nicht** während des Gesprächs
 
-Ein neues Foto schließt ein offenes Interview automatisch; nach 15 Minuten
-ohne Stopp fällt es von selbst zu.
+Ein neues Foto schließt ein offenes Interview automatisch — außer es ist das
+erste Foto zu einem per Mikrofonschalter begonnenen Interview, dann wird es
+nachgetragen (siehe Punkt 1). Nach 15 Minuten ohne Stopp fällt ein Interview
+von selbst zu.
 
 ⚠️ Das Wake-Word ist **„Utopia", nicht „Utopie"**. Die Prüfung läuft auf
 ganzen Wörtern, „wir brauchen eine Utopie" löst also nichts aus — genau dafür
