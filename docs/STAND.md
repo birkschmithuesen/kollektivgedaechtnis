@@ -746,6 +746,68 @@ sind Birks Entscheidung.** Befehl steht in der Ausgabe des Skripts.
 
 ---
 
+## 2k. 🔴 Ruckeln: gemessen — nicht die Dienste, und wahrscheinlich kein neuer Rechner nötig
+
+Birk, 2026-09-01 vor Ort: der Touchscreen ruckelt beim Kameraschwenk und bei
+der Interaktion, sobald viele Begriffe im Bild sind. Frage: Webansicht
+schneller machen, Dienste auslagern — oder einen besseren Rechner holen?
+
+### Messung 1: Die Dienste sind es NICHT
+
+`scripts/miss-last.py` + `scripts/miss-bildrate.py`, dieselbe Szene
+(Stufe 60, 138 Knoten, 302 Kanten, beide Bildschirme):
+
+| Zustand | GPU 3D | CPU brave | CPU python (**alle** Dienste) |
+|---|---|---|---|
+| Stillstand (`fit`) | 10,6 % | 49,4 % | 11,5 % |
+| Kamerafahrt (`pan`) | 61,4 % | 144,4 % | 13,4 % |
+
+Die Fahrt kostet **5,8× GPU** und **2,9× CPU**. Die Python-Dienste bleiben
+konstant bei ~12 % — **unabhängig davon, was die Anzeige tut**. Auf 8 logischen
+Kernen sind das rund 1,5 % der Gesamtkapazität.
+
+➜ **Auslagern auf andere Rechner wäre viel Arbeit für nichts.** Das war die
+ursprüngliche Frage und ist damit beantwortet.
+
+### Messung 2: Der eigentliche Grund ist ein Bildschirm, den niemand sieht
+
+| Bildschirm | Auflösung | GPU | Pixel |
+|---|---|---|---|
+| **LEN40BA** (Lenovo-**Laptoppanel**) | **3840×2160** | NVIDIA Quadro M1000M | **8,29 MPx** |
+| IVM **PL6568** (iiyama Touchscreen) | 1920×1080 | Intel HD 530 | 2,07 MPx |
+
+Das 4K-Panel ist der **eingebaute Laptopbildschirm**. In der Ausstellung sieht
+den kein Besucher — er trägt aber **80 % der gesamten Pixellast**. Der
+Plenums-Beamer hängt gespiegelt am selben Ausgang (Windows meldet genau zwei
+Anzeigen, `POS_WAND` und `POS_TRAUM` zeigen beide auf `1920,0`).
+
+Die Quadro M1000M ist von 2015 mit 2 GB. Für 4K-Dauerschwenk über 138 Knoten
+ist sie knapp — für FullHD nicht.
+
+### 🔴 Eine eigene Empfehlung dabei zurückgenommen
+
+`pixelRatio: 1` war als dritter Schalter eingebaut, mit der Begründung „auf
+HiDPI zeichnet Cytoscape die vierfache Pixelmenge". **Gemessen: die
+Windows-Skalierung steht auf 100 %** (`LogPixels` nicht gesetzt), also ist
+`devicePixelRatio` bereits 1. Der Schalter bewirkt **nichts**. Er bleibt
+harmlos drin, ist aber kein Argument — und wäre ungemessen als Erfolg verkauft
+worden.
+
+### Reihenfolge zum Abarbeiten (billigste zuerst)
+
+1. **Laptoppanel abschalten** (Deckel zu / in den Anzeigeeinstellungen
+   deaktivieren) → 80 % der Pixellast fallen weg. Kostet nichts.
+2. Falls das Panel sichtbar bleiben muss: auf FullHD stellen → −75 % Pixel.
+3. `textureOnViewport` + `hideEdgesOnViewport` (in Prüfung).
+4. **Erst dann** ein anderer Rechner.
+
+🔴 **Nicht gemessen:** wie viel Schritt 1 und 2 tatsächlich bringen — dafür
+muss jemand vor Ort die Anzeige umstellen. `scripts/miss-bildrate.py`
+protokolliert nach `bildrate-protokoll.jsonl`, damit vorher/nachher
+vergleichbar ist statt geschätzt.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
