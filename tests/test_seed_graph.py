@@ -10,7 +10,14 @@ from PIL import Image
 
 from kg.config import Config
 from kg.store import Store
-from sim.seed_graph import TERM_LABELS, _write_placeholder_photo, person_specs, seed_graph
+from sim.seed_graph import (
+    NAMES,
+    QUOTES,
+    TERM_LABELS,
+    _write_placeholder_photo,
+    person_specs,
+    seed_graph,
+)
 
 PERSONS = 12
 SEED = 20260814
@@ -177,6 +184,40 @@ def test_placeholder_fill_is_muted_and_distinguishable_from_the_background(tmp_p
     bg_r, bg_g, bg_b = 0x00, 0x00, 0x00  # --bg in all three themes (Birk, 2026-08-15)
     distance = ((r - bg_r) ** 2 + (g - bg_g) ** 2 + (b - bg_b) ** 2) ** 0.5
     assert distance > 30, "placeholder must still be visible against --bg"
+
+
+def test_every_person_has_a_name_and_a_quote(tmp_path):
+    # Birk, 2026-09-01 vor Ort: ohne Namen und Zitate kann er die Größen
+    # (Portrait, Begriffe, Zitatkarte) nicht am Betriebsbild beurteilen.
+    # write_person() muss beides tatsächlich in die Datenbank schreiben, nicht
+    # nur im PersonSpec vorhalten.
+    _, db_path = _seed(tmp_path)
+    store = Store.open(db_path)
+    try:
+        persons = store.list_persons()
+        assert len(persons) == PERSONS
+        for person in persons:
+            assert person.name is not None and person.name.strip() != ""
+
+        quotes = store.list_quotes()
+        assert len(quotes) == PERSONS
+        quoted_persons = {q.person_id for q in quotes}
+        assert quoted_persons == {p.id for p in persons}
+        assert all(q.text.strip() != "" for q in quotes)
+    finally:
+        store.close()
+
+
+def test_names_and_quotes_are_drawn_from_the_fixed_lists_round_robin(tmp_path):
+    # "Reihum vergeben" (Auftrag): Person N bekommt Name/Zitat N % len(Liste),
+    # unabhängig vom rng — dieselbe Technik wie `_write_face_photo` für die
+    # Gesichter. Geprüft an person_specs, nicht an der DB, weil die DB die
+    # Zuordnung nicht in Personen-Index-Reihenfolge zurückgibt, wenn sich
+    # Zeitstempel je ändern sollten.
+    specs = person_specs(PERSONS, SEED)
+    for spec in specs:
+        assert spec.name == NAMES[spec.index % len(NAMES)]
+        assert spec.quote == QUOTES[spec.index % len(QUOTES)]
 
 
 def test_seeded_50_person_graph_keeps_its_75_term_25_single_shape(tmp_path):

@@ -127,6 +127,47 @@ TERM_LABELS = [
     "Bauwende als Generationenprojekt",
 ]
 
+# Birk, 2026-09-01 an der Wand: „Portraits zeigen keine Namen und Zitate. Das
+# brauche ich für Größenbewertung." Ursache: `write_person()` schrieb bisher
+# weder `person.name` noch eine `quote`-Zeile — Frontend (quote-overlay.js)
+# und Export (kg/export.py) waren die ganze Zeit bereit, es gab nur nichts zu
+# zeigen. 20 erfundene Vornamen, 20 erfundene Zitate aus dem Themenfeld
+# (Bauwende / Stadt der Zukunft, siehe TERM_LABELS), reihum nach Personen-
+# index vergeben wie die Gesichter in `_write_face_photo` — bewusst OHNE den
+# gemeinsamen `random.Random(seed)` zu berühren: der ist exakt an der
+# Term-Ziehung unten festgenagelt (siehe `test_seeded_50_person_graph_keeps_
+# its_75_term_25_single_shape` und `out/prerender2-state/kg.db`), ein
+# zusätzlicher Zug pro Person würde jede nachfolgende Ziehung verschieben.
+NAMES = [
+    "Mira", "Jonas", "Lena", "Elias", "Frieda",
+    "Anton", "Greta", "Paul", "Hanna", "Theo",
+    "Mathilda", "Finn", "Ida", "Karl", "Marlene",
+    "Lukas", "Sophie", "Felix", "Clara", "Bruno",
+]
+
+QUOTES = [
+    "Wir bauen um, nicht ab – das spart mehr CO2 als jede Dämmung.",
+    "Ohne Genossenschaften wird bezahlbares Wohnen zur Glückssache.",
+    "Photovoltaik auf jedem Dach wäre der Anfang, nicht das Ziel.",
+    "Ein Materialpass für jedes Gebäude – dann wüssten wir, was wir abreißen.",
+    "Lehm ist kein Rückschritt, sondern ein Baustoff mit Zukunft.",
+    "Holz-Hybrid-Hochhäuser zeigen, dass Höhe und Klimaschutz kein Widerspruch sind.",
+    "Solange Boden spekuliert wird, bleibt jede Wohnungspolitik Kosmetik.",
+    "Umbau statt Abriss ist die einzige Wärmepumpe, die schon existiert.",
+    "Ein Quartiersspeicher ersetzt zehn Hausbatterien und kostet weniger Nerven.",
+    "Schwammstadt heißt: dem Regen wieder einen Platz geben.",
+    "Eine Fassadenbegrünung ist kein Schmuck, sie ist Klimaanlage.",
+    "Autofrei heißt nicht autolos, sondern endlich Platz für alle anderen.",
+    "Lastenräder ersetzen den Transporter, wenn man ihnen die Straße gibt.",
+    "Barrierefreiheit von Anfang an spart die teure Nachrüstung später.",
+    "Zwischennutzung darf keine Ausrede für Leerstand sein.",
+    "Konzeptvergabe statt Höchstgebot – dann gewinnt die Idee, nicht das Geld.",
+    "Milieuschutz ohne Zähne ist nur ein Schild an der Tür.",
+    "Ein Gebäudetyp E gibt Architekten den Mut, den die Normen ihnen nehmen.",
+    "Vorfertigung in der Region hält die Wertschöpfung im Ort.",
+    "Housing First ist keine Utopie, sondern einfach der erste Schritt.",
+]
+
 # A fixed epoch (2026-08-01 00:00:00 UTC-ish, arbitrary but constant) so
 # started_at/stopped_at are deterministic and never touch time.time().
 _EPOCH_BASE = 1785542400.0
@@ -255,6 +296,8 @@ class PersonSpec:
     started_at: float
     stopped_at: float
     terms: tuple[str, ...]
+    name: str
+    quote: str
 
 
 def person_specs(persons: int = 50, seed: int = 20260814) -> list[PersonSpec]:
@@ -282,6 +325,10 @@ def person_specs(persons: int = 50, seed: int = 20260814) -> list[PersonSpec]:
                 started_at=started_at,
                 stopped_at=started_at + _INTERVIEW_DURATION_S,
                 terms=tuple(_draw_terms_for_person(rng, weights)),
+                # Reihum nach Index, wie die Gesichter in `_write_face_photo` —
+                # nicht aus `rng`, damit die Term-Ziehung oben unverändert bleibt.
+                name=NAMES[index % len(NAMES)],
+                quote=QUOTES[index % len(QUOTES)],
             )
         )
     return specs
@@ -314,6 +361,8 @@ def write_person(store: Store, cfg: Config, spec: PersonSpec, *, gesichter: bool
     # fifth value.
     store.close_person(person.id, stopped_at=spec.stopped_at, reason="spoken")
     store.set_person_status(person.id, "done")
+    store.set_person_name(person.id, spec.name)
+    store.add_quote(person.id, spec.quote, created_at=spec.started_at)
 
     for label in spec.terms:
         term = store.get_or_create_term(label, created_at=spec.started_at)
