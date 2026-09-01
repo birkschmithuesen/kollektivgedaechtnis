@@ -12,6 +12,32 @@ const MODES = ['fit', 'manual', 'pan'];
 // It picks a term node, travels to it, rests, and picks another. Motion then
 // carries meaning (it is going somewhere) and every direction change happens
 // while the camera is standing still at a target, never mid-glide.
+// Wieviel Luft der Fahrt-Ausschnitt jenseits der Knotenwolke behalten darf,
+// als Anteil der Bildbreite bzw. -höhe (Birk, 2026-08-31, Punkt 8).
+//
+// Die Bremse in `_panForCentering()` schiebt einen Ausschnitt zurück, der zu
+// weit ins Leere ragt. Ohne Luft klebte er exakt an der Wolke und läse sich
+// als Anschlag; 8 % lassen einen Rand stehen, der wie ein gewollter Bildrand
+// wirkt.
+//
+// Gemessen 2026-09-01, dichtes Testnetz (40 Personen, 60 Begriffe, 1920×1080)
+// bei Zoomregler 2,5× — also so, wie die Wand im Betrieb steht:
+//
+//                        ohne Bremse   mit Bremse
+//   schlechtester Fall        56 %         85 %
+//   Median                    92 %         92 %
+//
+// Der Median rührt sich nicht, und das ist der Punkt: Die Bremse greift NUR
+// dort, wo der Ausschnitt sonst ins Leere ragte. Ziele mitten im Netz bleiben
+// unberührt, die Fahrt zeigt weiterhin unterschiedliche Ausschnitte
+// (21 bis 32 von 100 Knoten je Ziel).
+//
+// Erster Messversuch lief in eine Falle und ist verworfen: bei Zoomregler 1
+// passt die ganze Wolke ohnehin ins Bild, alle 60 Ziele lieferten identisch
+// 82 % — gemessen wurde da nicht die Bremse, sondern dass es nichts zu
+// klemmen gab.
+const RAND_LUFT = 0.08;
+
 const ROAM = {
   // The FASTEST the tour ever goes (speed factor 1.0). Everything slower is
   // derived by dividing by the factor, so this pair stays the reference the
@@ -489,6 +515,30 @@ export class Camera {
   }
 
   onGraphChanged() {
+    // Das gecachte Fahrtniveau gilt für eine Knotenwolke, die es nicht mehr
+    // gibt (Birk, 2026-08-31, Punkt 7: „springt immer mal wieder").
+    //
+    // 🔴 Gemessen 2026-09-01 auf dem dichten Testnetz: `_roamBaseLevel` wurde
+    // beim ERSTEN Aufruf berechnet und nie wieder — es gab keinen einzigen
+    // Weg, den Cache zu verwerfen, außer einer Änderung am Zoomregler. Wächst
+    // der Graph, wird der gemerkte Wert falsch:
+    //
+    //     25 Personen (Wolke 3476px):  gecacht 0.4919, korrekt 0.4919   0 %
+    //     35 Personen (Wolke 3807px):  gecacht 0.4919, korrekt 0.4489   9,6 %
+    //     45 Personen (Wolke 3934px):  gecacht 0.4919, korrekt 0.4350  13,1 %
+    //     55 Personen (Wolke 4515px):  gecacht 0.4919, korrekt 0.3783  30,0 %
+    //
+    // Und weil `_travelLevel()` den Cache neu füllt, sobald er fehlt, führte
+    // das zu einem harten Zoomwechsel mitten im Betrieb — gemessen als
+    // Pan-Sprung von bis zu 961 Modellpixeln in EINEM Frame, gegen einen
+    // Median von 6 px. Genau Birks „springt von Zeit zu Zeit".
+    //
+    // Hier verworfen und nicht neu berechnet: Der nächste `_travelLevel()`
+    // holt ihn sich, und der läuft ohnehin in jedem Frame. Ein Neuberechnen
+    // an dieser Stelle wäre ein `cy.fit()` mitten in einem Frame, in dem
+    // gerade das Layout schreibt.
+    this._roamBaseLevel = undefined;
+
     // Same reason as in setZoomFactor: an interview arriving during the 1.5 s
     // handover moves the destination, so the handover is redirected rather
     // than overwritten.
@@ -684,6 +734,23 @@ export class Camera {
     const t = Math.min(1, roam.elapsed / (roam.duration ?? this._travelDuration()));
     const eased = easeInOut(t);
     this._applyZoom(this._breathingZoom(this._travelLevel(), roam.clock));
+    // Das Ziel wird JEDEN Frame neu vermessen, nicht beim Start eingefroren.
+    //
+    // 🔴 Gemessen 2026-09-01 (Birk, Punkt 7: „springt immer mal wieder"): Eine
+    // Fahrt dauert rund fünf Sekunden. Kommt in dieser Zeit ein Interview
+    // dazu, ordnet fcose das Netz neu und der Zielknoten steht am Ende
+    // woanders — die Fahrt landete gemessen 244 bis 536 Modellpixel neben
+    // ihm. Sichtbar wurde das nicht während der Fahrt (die läuft ja weich),
+    // sondern beim Übergang in die Standzeit: Der nächste Abschnitt beginnt
+    // an der falschen Stelle und reißt das Bild dorthin.
+    //
+    // `roam.from` bleibt eingefroren — es ist der Startpunkt und darf sich
+    // nicht bewegen, sonst würde die Fahrt in sich selbst zurücklaufen. Nur
+    // das ZIEL wird nachgeführt. Wandert es, verformt sich die Bahn weich,
+    // statt am Ende zu springen: `eased` ist beim Nachführen bereits nahe 1,
+    // die Korrektur also klein und über die Restzeit verteilt.
+    const ziel = roam.targetId ? this.cy.getElementById(roam.targetId) : null;
+    if (ziel && ziel.length && !ziel.empty()) roam.to = this._panForCentering(ziel);
     this.cy.pan({
       x: roam.from.x + (roam.to.x - roam.from.x) * eased,
       y: roam.from.y + (roam.to.y - roam.from.y) * eased,
@@ -749,6 +816,15 @@ export class Camera {
     return { x: (bb.x1 + bb.x2) / 2, y: (bb.y1 + bb.y2) / 2 };
   }
 
+  /** Ob gerade eine Übergabefahrt läuft — für die Wand, die während des
+   * Layout-Umzugs alles andere aussetzt (`projection.js`, tick()).
+   *
+   * Der Handover behält dort Vorrang: Er ist eine gewollte, kurze Bewegung
+   * (1,5 s) und würde beim Aussetzen mitten in der Luft stehenbleiben. */
+  get handoverActive() {
+    return this._handover !== null;
+  }
+
   _applyZoom(level) {
     // Around the viewport centre, so breathing does not also drift the frame.
     this.cy.zoom({
@@ -757,13 +833,73 @@ export class Camera {
     });
   }
 
-  /** The pan that puts `node` in the middle of the viewport at current zoom. */
+  /** The pan that puts `node` in the middle of the viewport at current zoom.
+   *
+   * Mit einer Bremse am Rand: Der sichtbare Ausschnitt darf die Knotenwolke
+   * nicht wesentlich verlassen (Birk, 2026-08-31, Punkt 8 — „die Hälfte des
+   * Bildes liegt außerhalb des Graphen, viel schwarze Fläche, wenig Inhalt").
+   *
+   * 🔴 Gemessen 2026-09-01, dichtes Testnetz (40 Personen, 60 Begriffe,
+   * 1920×1080), Zoomregler 2,5×: Der schlechteste Ausschnitt deckte nur 56 %
+   * des Bildes mit Knotenwolke ab — der Rest war schwarz. Ursache ist keine
+   * Fehlrechnung: Ein Ziel am Rand HAT nun einmal nur auf einer Seite
+   * Nachbarschaft. Mit der Bremse sind es 85 %.
+   *
+   * Die Bremse verschiebt den Ausschnitt zurück auf die Wolke, statt Ziele am
+   * Rand seltener zu wählen — die frisch gesagten Begriffe liegen naturgemäß
+   * außen, und genau die soll die Fahrt zeigen (Handoff, Punkt 8). Der
+   * Zielknoten wandert dabei aus der Mitte, bleibt aber im Bild.
+   *
+   * `RAND_LUFT` ist bewusst nicht 0: Ein Ausschnitt, der exakt an der Wolke
+   * klebt, sieht aus wie ein Anschlag. Ein Rest Luft ringsum liest sich als
+   * gewollter Bildrand. */
   _panForCentering(node) {
     const zoom = this.cy.zoom();
     const pos = node.position();
-    return {
+    const mitte = {
       x: this.cy.width() / 2 - pos.x * zoom,
       y: this.cy.height() / 2 - pos.y * zoom,
     };
+
+    const alle = this.cy.elements();
+    // Ohne messbare Wolke gibt es nichts zu klemmen: Cytoscape liefert immer
+    // eine Bounding-Box, ein schlanker Test-Stub nicht. Die Bremse ist eine
+    // Verbesserung des Bildaufbaus, kein Muss — fehlt die Messung, bleibt es
+    // beim mittigen Ausschnitt, statt hier zu werfen und die Fahrt anzuhalten.
+    if (typeof alle?.boundingBox !== 'function') return mitte;
+    const bb = alle.boundingBox({ includeLabels: false });
+    if (!(bb.w > 0) || !(bb.h > 0)) return mitte;
+
+    // Der sichtbare Modellbereich bei diesem Pan, in Modellkoordinaten.
+    const sichtbarB = this.cy.width() / zoom;
+    const sichtbarH = this.cy.height() / zoom;
+
+    // Passt die Wolke in eine Richtung ohnehin ganz ins Bild, wird dort
+    // zentriert statt geklemmt: Sonst zöge die Bremse an einem Netz, das
+    // kleiner als das Fenster ist, den Ausschnitt an eine Kante.
+    const luftX = sichtbarB * RAND_LUFT;
+    const luftY = sichtbarH * RAND_LUFT;
+
+    let x = mitte.x;
+    if (bb.w + 2 * luftX <= sichtbarB) {
+      x = this.cy.width() / 2 - ((bb.x1 + bb.x2) / 2) * zoom;
+    } else {
+      // Linke Bildkante darf höchstens `luftX` links der Wolke liegen …
+      const maxX = -(bb.x1 - luftX) * zoom;
+      // … und die rechte höchstens `luftX` rechts davon.
+      const minX = this.cy.width() - (bb.x2 + luftX) * zoom;
+      x = Math.min(maxX, Math.max(minX, x));
+    }
+
+    let y = mitte.y;
+    if (bb.h + 2 * luftY <= sichtbarH) {
+      y = this.cy.height() / 2 - ((bb.y1 + bb.y2) / 2) * zoom;
+    } else {
+      const maxY = -(bb.y1 - luftY) * zoom;
+      const minY = this.cy.height() - (bb.y2 + luftY) * zoom;
+      y = Math.min(maxY, Math.max(minY, y));
+    }
+
+    return { x, y };
   }
 }

@@ -1066,6 +1066,21 @@ async function migrate(
   const nodes = cy.nodes().sort(byId);
   const from = nodes.map((node) => ({ ...node.position() }));
 
+  // 🔴 Die Wand erfährt HIER, dass die Knoten sich bewegen — nicht erst kurz
+  // vor dem Gleiten (Birk, 2026-08-31, Punkt 7).
+  //
+  // Gemessen 2026-09-01: Der Sprung lag NICHT im Gleiten, sondern davor. Das
+  // `fcose` unten rechnet die neue Anordnung und schreibt sie den Knoten
+  // direkt ein; `settlePlacement` schiebt sie weiter, und danach setzt
+  // `nodes.forEach(...position(from[index]))` alles in einem Schlag zurück.
+  // In jedem dieser Frames misst die Kamera eine andere Wolke und zieht mit.
+  // `onGlideStart` kam für all das zu spät: Es lief erst NACH dem
+  // Zurücksetzen, also nach dem größten Sprung.
+  //
+  // Der Name bleibt, die Bedeutung ist jetzt „der Umbau hat begonnen" statt
+  // „das Gleiten hat begonnen" — beides endet an derselben Stelle.
+  onGlideStart();
+
   // Label offsets are geometry too, and stale ones (sized for the old, denser
   // arrangement) would measurably mislead the separation pass.
   resetLabelOffsets(cy);
@@ -1081,7 +1096,6 @@ async function migrate(
   const to = new Map(nodes.map((node) => [node.id(), { ...node.position() }]));
   nodes.forEach((node, index) => node.position(from[index]));
   await nextFrame();
-  onGlideStart();
   await runLayout(
     cy,
     { ...MIGRATION, animationDuration: duration, fit, positions: (node) => to.get(node.id()) },
@@ -1509,6 +1523,26 @@ export function createGraphView(
 
   let last = performance.now();
   function tick(now) {
+    // Während die Knoten umziehen, fährt die Kamera nicht.
+    //
+    // 🔴 Gemessen 2026-09-01 (Birk, Punkt 7): `migrate()` setzt alle Knoten in
+    // EINEM Schritt auf ihre alten Plätze zurück, bevor es sie 2,5 s lang an
+    // die neuen gleiten lässt (`nodes.forEach(node.position(from[index]))`).
+    // Die Kamera weiß davon nichts, misst in genau diesem Frame die Wolke neu
+    // und zieht mit — gemessen als Pan-Sprung von über 250 Modellpixeln in
+    // einem Frame, gegen einen Median unter 1 px.
+    //
+    // Sie steht dabei nicht still: Der Handover behält Vorrang (er IST eine
+    // gewollte Bewegung und läuft nur 1,5 s), und die Standzeit läuft weiter,
+    // damit die Fahrt nach dem Umzug nicht sofort losfährt. Ausgesetzt wird
+    // allein das Vermessen und Fahren — das Bild bleibt stehen, während sich
+    // der Graph sortiert, und nimmt die Fahrt danach weich wieder auf.
+    if (gliding && !camera.handoverActive) {
+      last = now;
+      applyPortraitSize();
+      requestAnimationFrame(tick);
+      return;
+    }
     camera.step((now - last) / 1000);
     last = now;
     // After the camera, because the handover moves the ceiling as well as the
