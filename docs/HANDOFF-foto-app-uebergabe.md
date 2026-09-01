@@ -1,7 +1,12 @@
 # Handoff: Foto-App — Übergabe an die nächste Session (2026-09-01)
 
+> 🔴 **OFFENER AUFTRAG: die Testreihe zur Gesichtserkennung fahren.**
+> Gebaut ist alles, **gemessen ist nichts**. Birk erwartet, dass die
+> übernehmende Session das durchführt — siehe Abschnitt „AUFTRAG" weiter
+> unten. Nicht als Restnotiz behandeln, das ist die eigentliche Aufgabe.
+
 Diese Sitzung ist abgeschlossen. Alles committet und auf `master` gepusht
-(22 Commits, `7dd94a6` … `428956d`).
+(23 Commits, `7dd94a6` … `cb802de`).
 
 **Zuerst lesen:** `AGENTS.md`, dann
 `docs/ARBEITSREGELN-ausstellungsrechner.md`. Jede Regel dort ist ein Fehler,
@@ -79,13 +84,66 @@ Ausstellungsrechner aus). Beim ersten echten START zeigt sein Fenster
 
 ---
 
-## Was noch offen ist
+## 🔴 AUFTRAG AN DIE ÜBERNEHMENDE SESSION: die Testreihe fahren
 
-- **Die Testreihe selbst.** Birk wollte Fotos mit mehreren Personen fahren;
-  dazu kam es in dieser Sitzung nicht mehr. Ablauf und Auswertung:
-  `docs/HANDOFF-fototest-zuschnitt.md`.
+**Das ist die eigentliche Aufgabe, nicht eine Restnotiz.** Birk,
+2026-09-01: *„Der Test steht noch aus und soll dann von der neuen Session
+durchgeführt werden."*
+
+Gebaut und bereitgestellt ist alles; **gemessen ist nichts.** Die Station
+läuft, die Werkzeuge liegen, die App zeigt Rahmen und Vorschau — aber es
+existiert keine einzige Auswertung.
+
+### Was zu tun ist
+
+1. **Voraussetzungen prüfen** (nicht annehmen — sie waren heute alle
+   mindestens einmal falsch):
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" --max-time 12 http://100.94.47.6:8800/api/state   # 200?
+   ssh SF-Tracking@100.94.47.6 "cd C:\Users\SF-Tracking\kg-start && C:\Users\birk\kollektivgedaechtnis\.venv\Scripts\python.exe pruefe-gesichtserkennung.py"
+   ```
+2. **Birk fotografieren lassen.** App auf „Direkt zur Station",
+   `100.94.47.6:8800`. Er macht die Fotos — insbesondere **mit mehreren
+   Personen im Bild**, das ist der Kern der Frage. Die Vorschau in der App
+   zeigt ihm sofort den Zuschnitt.
+3. **Jedes Foto durch das Messwerkzeug schicken:**
+   ```cmd
+   pruefe-gesichtserkennung.py <foto.jpg>
+   ```
+   Fotos liegen auf der Station unter
+   `C:\Users\birk\kollektivgedaechtnis\data\photos\`.
+4. **Zahlen sammeln, nicht Eindrücke.** Je Foto: Anzahl gefundener
+   Gesichter, welches gewählt wurde, Größe/Flächenanteil, ob der Ausschnitt
+   am Anschlag oder am Bildrand klemmte. Aggregieren **im Code**, nicht im
+   Kopf.
+5. **Ergebnis Birk vorlegen** — mit Empfehlung, aber die Entscheidung ist
+   seine (siehe unten).
+
+### Was die Messung beantworten soll
+
+- **Trifft die Haar-Kaskade zuverlässig genug?** Bekannte Grenze: sie findet
+  nur **frontale** Gesichter. Halbprofil und geneigte Köpfe fallen durch →
+  mittiger Schnitt. Häuft sich das, ist es eine Verfahrensgrenze, kein
+  Einstellungsproblem, und der Erkennerwechsel steht an
+  (`face_recognition`/dlib, verlangt vom Handoff 2026-08-31 Punkt 1 —
+  ausdrücklich **nicht ohne Messung an echten Booth-Fotos** entscheiden).
+- **Stimmt „das größte Gesicht gewinnt"?** Aktuelle Annahme in
+  `kg/photos.py`: befragte Person steht vorn, Interviewer weiter hinten.
+  Ungemessen.
+- **Sitzen `GESICHTS_ZOOM = 2.0` und `GESICHTS_BIAS = 0.46` richtig?**
+  Gesetzte, nicht gemessene Werte.
+
+🔴 **Die letzten beiden sind ästhetische Entscheidungen — die trifft Birk am
+Material, nicht der Agent.** Messen, vorlegen, ihn entscheiden lassen.
+
+Ablauf im Detail: `docs/HANDOFF-fototest-zuschnitt.md`.
+
+---
+
+## Weitere offene Punkte
+
 - **Erkennerwahl per Messung** (Haar-Kaskade vs. `face_recognition`/dlib) —
-  verlangt vom Handoff 2026-08-31, immer noch nicht gemacht.
+  Ergebnis der Testreihe oben.
 - **Kosmetischer Fehler beim Selbstnachziehen der Startdatei:** cmd meldet
   zweimal `'die' is not recognized`. Aus dem Bestand, nicht von dieser
   Session (geprüft), blockiert nichts. Bewusst nicht kurz vor dem
@@ -95,6 +153,7 @@ Ausstellungsrechner aus). Beim ersten echten START zeigt sein Fenster
   haben absolute Pfade eingebacken, ein Umzug macht jeden Dienst kaputt und
   braucht einen Neuaufbau aller Umgebungen. Kein Rechteproblem (gemessen).
   Nach der Ausstellung, nicht davor.
+- **Abholer im Dauerbetrieb** ist ungetestet (nur `einmal()` erprobt).
 
 ---
 

@@ -3,6 +3,16 @@
 Diese Datei wird von jeder Session automatisch geladen, die in diesem Repo
 arbeitet. Sie ist kurz und verweist auf das, was verbindlich ist.
 
+## 🔴 Offener Auftrag (Stand 2026-09-01)
+
+**Die Testreihe zur Gesichtserkennung fahren.** Foto-App, Sucherrahmen,
+Portrait-Vorschau und Messwerkzeug sind gebaut und einsatzbereit —
+**gemessen ist noch nichts.** Birk hat die Durchführung ausdrücklich an die
+übernehmende Session übergeben.
+
+Vollständiger Auftrag: `docs/HANDOFF-foto-app-uebergabe.md`
+Ablauf und Werkzeug: `docs/HANDOFF-fototest-zuschnitt.md`
+
 ## 🔴 Vor JEDEM Zugriff auf den Ausstellungsrechner
 
 **`docs/ARBEITSREGELN-ausstellungsrechner.md` lesen.** Vollständig, nicht
