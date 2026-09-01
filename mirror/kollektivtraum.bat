@@ -72,9 +72,9 @@ rem     Ueberspringen (kein Netz, bewusst alter Stand): `set KG_KEIN_PULL=1`
 rem     vor dem Aufruf.
 rem ---------------------------------------------------------------------
 if "%KG_KEIN_PULL%"=="1" (
-  echo   [0/5] Aktualisierung uebersprungen ^(KG_KEIN_PULL=1^)
+  echo   [0/6] Aktualisierung uebersprungen ^(KG_KEIN_PULL=1^)
 ) else (
-  echo   [0/5] Stand von GitHub holen
+  echo   [0/6] Stand von GitHub holen
   call :aktualisiere "%KG%" "Kollektivgedaechtnis"
   if exist "%SPIEGEL%\.git" call :aktualisiere "%SPIEGEL%" "Spiegel"
 )
@@ -143,7 +143,7 @@ rem
 rem     infomaniak-whisper, nicht elevenlabs-scribe: die Station laeuft in
 rem     Europa, und das steht so auch auf der oeffentlichen Seite.
 rem ---------------------------------------------------------------------
-echo   [1/5] Spracherkennung (Infomaniak Whisper, Schweiz)
+echo   [1/6] Spracherkennung (Infomaniak Whisper, Schweiz)
 call :starte "Spracherkennung" "%DIENSTE%\dienst-stt.bat" stt
 
 call :warte_auf http://127.0.0.1:5051/status "Spracherkennung" 30
@@ -151,7 +151,7 @@ call :warte_auf http://127.0.0.1:5051/status "Spracherkennung" 30
 rem ---------------------------------------------------------------------
 rem  2. Der Kern: Graph, Telegram, Interviewablauf.
 rem ---------------------------------------------------------------------
-echo   [2/5] Kern (Graph, Telegram)
+echo   [2/6] Kern (Graph, Telegram)
 call :starte "Kern" "%DIENSTE%\dienst-kern.bat" kern
 
 call :warte_auf http://127.0.0.1:8800/api/state "Kern" 60
@@ -161,7 +161,7 @@ rem  3. Der Traum. Haengt NICHT vom Kern ab (Spec 9): er kommt auch hoch,
 rem     wenn der Kern fehlt, und traeumt weiter, sobald dieser antwortet.
 rem     Deshalb wird hier auch nicht auf den Kern gewartet.
 rem ---------------------------------------------------------------------
-echo   [3/5] Traum (Kimi K2.6 Schweiz, FLUX Deutschland)
+echo   [3/6] Traum (Kimi K2.6 Schweiz, FLUX Deutschland)
 call :starte "Traum" "%DIENSTE%\dienst-traum.bat" traum
 
 call :warte_auf http://127.0.0.1:8810/api/state "Traum" 60
@@ -173,17 +173,36 @@ rem     merkt im Haus niemand etwas ? deshalb steht er hier hinten.
 rem ---------------------------------------------------------------------
 if exist "%SPIEGEL%\mirror\spiegel-start.bat" (
   if exist "%USERPROFILE%\.kg-mirror-token" (
-    echo   [4/5] Oeffentlicher Spiegel  ^(%OEFFENTLICH%^)
+    echo   [4/6] Oeffentlicher Spiegel  ^(%OEFFENTLICH%^)
     call :starte "Spiegel" "%SPIEGEL%\mirror\spiegel-start.bat" spiegel
   ) else (
-    echo   [4/5] Spiegel UEBERSPRUNGEN: .kg-mirror-token fehlt.
+    echo   [4/6] Spiegel UEBERSPRUNGEN: .kg-mirror-token fehlt.
   )
 ) else (
-  echo   [4/5] Spiegel UEBERSPRUNGEN: %SPIEGEL% nicht vorhanden.
+  echo   [4/6] Spiegel UEBERSPRUNGEN: %SPIEGEL% nicht vorhanden.
 )
 
 rem ---------------------------------------------------------------------
-rem  5. Die Anzeigen.
+rem  5. Der Abholer. Holt Fotos, die von Handys OHNE Tailnet-Zugang beim
+rem     oeffentlichen Spiegel eingeworfen wurden, und reicht sie an den
+rem     Kern weiter. Handys IM Tailnet brauchen ihn nicht.
+rem
+rem     Wie der Spiegel darueber: faellt er aus, laeuft die Wand weiter,
+rem     nur Fotos von aussen bleiben liegen. Deshalb steht er hier hinten.
+rem ---------------------------------------------------------------------
+if exist "%SPIEGEL%\mirror\abholer-start.bat" (
+  if exist "%USERPROFILE%\.kg-mirror-token" (
+    echo   [5/6] Foto-Abholer  ^(Handys ohne Tailnet^)
+    call :starte "Abholer" "%SPIEGEL%\mirror\abholer-start.bat" abholer
+  ) else (
+    echo   [5/6] Abholer UEBERSPRUNGEN: .kg-mirror-token fehlt.
+  )
+) else (
+  echo   [5/6] Abholer UEBERSPRUNGEN: abholer-start.bat nicht vorhanden.
+)
+
+rem ---------------------------------------------------------------------
+rem  6. Die Anzeigen.
 rem
 rem     Nur auf ausdruecklichen Wunsch (%KG_FENSTER%=1). Vorgabe ist AUS,
 rem     und das ist Birks Entscheidung von 2026-08-31: die Fensterautomatik
@@ -197,7 +216,7 @@ rem     Dann bekommt jedes Fenster ein eigenes Benutzerprofil, sonst macht
 rem     Edge aus dem zweiten Aufruf nur einen Tab im ersten.
 rem ---------------------------------------------------------------------
 if "%KG_FENSTER%"=="1" (
-  echo   [5/5] Fenster oeffnen ^(KG_FENSTER=1^)
+  echo   [6/6] Fenster oeffnen ^(KG_FENSTER=1^)
   rem Alles auf EINER Zeile. Die Fortsetzung mit ^ zerbricht hier: cmd liest
   rem die Folgezeile als eigenen Befehl und meldet
   rem "Der Befehl --user-data-dir ... konnte nicht gefunden werden".
@@ -206,7 +225,7 @@ if "%KG_FENSTER%"=="1" (
   start "" "%EDGE%" --kiosk --window-position=%POS_TRAUM% --user-data-dir="%LOGS%\edge-traum" --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "http://127.0.0.1:8810/dream"
   start "" "%EDGE%" --new-window --window-position=0,0 --window-size=1400,950 --user-data-dir="%LOGS%\edge-pult" --no-first-run "http://127.0.0.1:8800/operator" "http://127.0.0.1:8810/operator"
 ) else (
-  echo   [5/5] Fenster: keine ^(Adressen stehen unten^)
+  echo   [6/6] Fenster: keine ^(Adressen stehen unten^)
 )
 
 echo.

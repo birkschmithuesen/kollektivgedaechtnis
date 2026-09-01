@@ -39,7 +39,13 @@ def baue(daten: Path) -> FastAPI:
     portrait_dir.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(title="KG Testempfang")
-    app.mount("/portraits", StaticFiles(directory=portrait_dir), name="portraits")
+    # Derselbe Pfad wie bei der echten Station (kg/server.py mountet
+    # `portrait_dir` unter `/media/portraits`). Die App holt die Vorschau
+    # genau dort -- ein anderer Pfad hier faende ein 404 und die Vorschau
+    # bliebe stumm, ohne dass es an der App laege.
+    app.mount("/media/portraits", StaticFiles(directory=portrait_dir), name="portraits")
+    # Der alte Pfad bleibt, weil die Schauseite unten ihn benutzt.
+    app.mount("/portraits", StaticFiles(directory=portrait_dir), name="portraits_alt")
 
     @app.post("/api/photo")
     async def api_photo(request: Request) -> dict:
@@ -73,7 +79,12 @@ def baue(daten: Path) -> FastAPI:
             "zeit": time.strftime("%H:%M:%S", time.localtime(at)),
         })
         print(f"[{EINGANG[0]['zeit']}] Foto empfangen: {len(raw)} Bytes -> {portrait_path.name}")
-        return {"ok": True}
+        # `portrait` wie die echte Station (kg/server.py): die App holt sich
+        # damit das fertige Portrait und zeigt den Zuschnitt. Fehlte das Feld
+        # hier, bliebe die Vorschau am Geraet stumm -- und es saehe aus, als
+        # koennte die App es nicht, obwohl nur die Testgegenstelle schweigt.
+        # Genau das ist am 2026-09-01 passiert.
+        return {"ok": True, "portrait": portrait_path.name}
 
     @app.get("/", response_class=HTMLResponse)
     def schauseite() -> str:

@@ -17,16 +17,46 @@ Stand: 2026-08-31. Aufgebaut am 2026-08-29/30 in einer langen Session.
 | IP | `100.94.47.6` |
 | Windows-Hostname | `DESKTOP-QTVMC5L` |
 | Zugang | **nur SSH**, RDP ist zu |
-| Agent-Benutzer | `birk` |
-| Angemeldeter Benutzer | `SF-Tracking` (hat das Claude-Login) |
+| **Arbeitsbenutzer** | **`SF-Tracking`** — hier anmelden, hier arbeiten |
+| Zweitbenutzer | `birk` — hält nur den Quelltext, sonst nichts |
 | Sprache | **Deutsch** — siehe Fallstricke |
 
 ```bash
-ssh -o BatchMode=yes birk@100.94.47.6 "<cmd.exe-Befehl>"
+ssh -o BatchMode=yes SF-Tracking@100.94.47.6 "<cmd.exe-Befehl>"
 ```
 
-Pfade mit doppelten Backslashes escapen; `scp`-Ziel als
-`birk@100.94.47.6:C:/Users/birk/`.
+### 🔴 Immer als `SF-Tracking` arbeiten, nicht als `birk`
+
+Beide SSH-Zugänge funktionieren, und genau das ist die Falle: als `birk`
+angemeldet läuft alles scheinbar, aber man arbeitet in einem Profil, in dem
+Birk nie sitzt. Gemessen am 2026-09-01:
+
+| | `SF-Tracking` | `birk` |
+|---|---|---|
+| Desktop-Verknüpfungen START/STOP | **ja** | nein |
+| Claude-Login (`.claude/.credentials.json`) | **ja** | nein |
+| Startdatei `kg-start/kollektivtraum.bat` | **ja** | ja (zweite Kopie!) |
+| Token `.kg-mirror-token` | ja | ja |
+
+Der Mensch sitzt als **`SF-Tracking`** an der Kiste. Wer eine Verknüpfung,
+eine Startdatei oder eine Einstellung unter `birk` ablegt, legt sie dorthin,
+wo sie am Ausstellungstag **niemand sieht** — und es fällt erst auf, wenn
+etwas fehlt. Genau das ist am 2026-08-31 passiert und hat Zeit gekostet.
+
+**Der Quelltext liegt dagegen unter `C:\Users\birk\`** (`kollektivgedaechtnis`,
+`kg-spiegel`, `fundusbot`) und wird von dort auch als `SF-Tracking` benutzt —
+Lesen und Schreiben sind geprüft, es gibt kein Rechteproblem. Deshalb steht
+in den Startdateien bewusst der feste Pfad `C:\Users\birk\...` für den Code
+und `%USERPROFILE%` für alles Benutzereigene (Token, Logs, Profile).
+
+Faustregel:
+- **Code, venv, Repos** → `C:\Users\birk\...` (fest verdrahtet, einmal da)
+- **Token, Logs, Verknüpfungen, alles Sichtbare** → `%USERPROFILE%`, also
+  `SF-Tracking`
+
+Pfade mit doppelten Backslashes escapen; `scp`-Ziel für Code
+`SF-Tracking@100.94.47.6:C:/Users/birk/`, für Benutzereigenes
+`SF-Tracking@100.94.47.6:C:/Users/SF-Tracking/`.
 
 Der zweite Laptop im Tailnet, `licht-laptop` (`100.121.5.39`), ist für den
 **Kollektivtraum** vorgesehen. Dort ist SSH noch **nicht** offen — er
@@ -51,10 +81,10 @@ verbindet sich beim Start mit Proxy und STT; startet er gegen einen toten
 Proxy, sieht er funktionsfähig aus, liefert aber **stumm keine Begriffe**.
 
 ```bash
-ssh birk@100.94.47.6 "schtasks /Run /TN KgProxy"   # dann 10 s warten
-ssh birk@100.94.47.6 "schtasks /Run /TN KgStt"     # dann 15 s
-ssh birk@100.94.47.6 "schtasks /Run /TN KgCore"    # dann 25 s
-ssh birk@100.94.47.6 "schtasks /Run /TN KgDream"
+ssh SF-Tracking@100.94.47.6 "schtasks /Run /TN KgProxy"   # dann 10 s warten
+ssh SF-Tracking@100.94.47.6 "schtasks /Run /TN KgStt"     # dann 15 s
+ssh SF-Tracking@100.94.47.6 "schtasks /Run /TN KgCore"    # dann 25 s
+ssh SF-Tracking@100.94.47.6 "schtasks /Run /TN KgDream"
 ```
 
 Beenden: `schtasks /End /TN <name>`.
@@ -80,7 +110,7 @@ die ganze `.env`) **und die Interview-Transkripte im Klartext**. Nie roh
 ausgeben, nie weitergeben. Beim Lesen filtern:
 
 ```bash
-ssh birk@100.94.47.6 "powershell -NoProfile -Command \"Get-Content C:\Users\birk\kg_stt.log -Tail 20\"" | sed -E "s/sk_[A-Za-z0-9]+/<KEY>/g"
+ssh SF-Tracking@100.94.47.6 "powershell -NoProfile -Command \"Get-Content C:\Users\birk\kg_stt.log -Tail 20\"" | sed -E "s/sk_[A-Za-z0-9]+/<KEY>/g"
 ```
 
 `kg_core.log` enthält den Telegram-Bot-Token in den URLs → mit
@@ -140,7 +170,7 @@ Danach zieht der Proxy die neue Datei automatisch, **kein Neustart nötig**.
 
 Restlaufzeit prüfen:
 ```bash
-ssh birk@100.94.47.6 "powershell -NoProfile -Command \"\$p='C:\Users\SF-Tracking\.claude\.credentials.json'; \$d=Get-Content \$p -Raw|ConvertFrom-Json; \$e=[double]\$d.claudeAiOauth.expiresAt/1000; 'rest_h='+[math]::Round((\$e-[DateTimeOffset]::UtcNow.ToUnixTimeSeconds())/3600,2)\""
+ssh SF-Tracking@100.94.47.6 "powershell -NoProfile -Command \"\$p='C:\Users\SF-Tracking\.claude\.credentials.json'; \$d=Get-Content \$p -Raw|ConvertFrom-Json; \$e=[double]\$d.claudeAiOauth.expiresAt/1000; 'rest_h='+[math]::Round((\$e-[DateTimeOffset]::UtcNow.ToUnixTimeSeconds())/3600,2)\""
 ```
 
 ### 4. Wand lädt, ist gestylt und bleibt LEER
@@ -166,7 +196,7 @@ altes JavaScript erwartet altes → leere Wand trotz korrekter `graph.json`.
 
 **Vor jedem Deployment `git status` prüfen.** Stand vergleichen:
 ```bash
-ssh birk@100.94.47.6 "cd C:\Users\birk\kollektivgedaechtnis && git log --oneline -1"
+ssh SF-Tracking@100.94.47.6 "cd C:\Users\birk\kollektivgedaechtnis && git log --oneline -1"
 ```
 
 ---
@@ -179,8 +209,8 @@ Token**. Übertragung deshalb per Git-Bundle:
 ```bash
 cd ~/projekte/kollektivgedaechtnis
 git bundle create /tmp/kg.bundle master
-scp /tmp/kg.bundle birk@100.94.47.6:C:/Users/birk/kg.bundle
-ssh birk@100.94.47.6 "cd C:\Users\birk\kollektivgedaechtnis && git fetch C:\Users\birk\kg.bundle master:refs/remotes/bundle/master --force && git reset --hard refs/remotes/bundle/master"
+scp /tmp/kg.bundle SF-Tracking@100.94.47.6:C:/Users/birk/kg.bundle
+ssh SF-Tracking@100.94.47.6 "cd C:\Users\birk\kollektivgedaechtnis && git fetch C:\Users\birk\kg.bundle master:refs/remotes/bundle/master --force && git reset --hard refs/remotes/bundle/master"
 ```
 
 Danach `KgCore` (und bei Tool-2-Änderungen `KgDream`) neu starten.
