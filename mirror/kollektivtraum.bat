@@ -339,9 +339,54 @@ if errorlevel 2 (
   echo         %WIE%: Pull nicht moeglich - alter Stand bleibt, weiter.
 ) else (
   echo         %WIE%: aktuell.
+  call :startdatei_nachziehen
 )
 
 popd
+endlocal & exit /b 0
+
+rem ---------------------------------------------------------------------
+rem  Die laufende Startdatei sich selbst nachziehen.
+rem
+rem  Die Station startet aus einer KOPIE (`kg-start\`), nicht aus dem Repo:
+rem  Ein Doppelklick auf dem Schreibtisch soll nicht in einen Git-Ordner
+rem  fuehren. Der Pull oben holt aber nur das REPO -- die Kopie daneben
+rem  bleibt stehen, bis jemand sie von Hand ersetzt.
+rem
+rem  🔴 Genau das ist am 2026-09-01 aufgefallen: Die laufende Kopie war
+rem  eine alte Fassung OHNE den Pull-Schritt. Der Schritt existierte im
+rem  Repo und lief trotzdem nie -- ein Feature, das da ist und nicht
+rem  wirkt, ist schlechter als eines, das fehlt: Niemand sucht danach.
+rem
+rem  Kopiert wird NACH dem Lauf, nicht davor: Eine .bat, die sich waehrend
+rem  der Ausfuehrung selbst ueberschreibt, laeuft in cmd.exe ab der
+rem  naechsten Zeile im NEUEN Text weiter -- cmd liest die Datei
+rem  zeilenweise nach, nicht einmal am Anfang. Deshalb wird die neue
+rem  Fassung nur DANEBEN gelegt und beim naechsten Start wirksam.
+rem
+rem  Fehler sind hier folgenlos: Klappt das Kopieren nicht, laeuft die
+rem  Station mit der Datei weiter, die sie ohnehin schon benutzt.
+rem ---------------------------------------------------------------------
+:startdatei_nachziehen
+setlocal
+set "MEINE=%~f0"
+set "IM_REPO=%KG%\mirror\kollektivtraum.bat"
+
+if not exist "%IM_REPO%" endlocal & exit /b 0
+
+rem Laeuft die Station ohnehin aus dem Repo, gibt es nichts nachzuziehen.
+if /i "%MEINE%"=="%IM_REPO%" endlocal & exit /b 0
+
+fc "%MEINE%" "%IM_REPO%" >nul 2>&1
+if not errorlevel 1 endlocal & exit /b 0
+
+copy /y "%IM_REPO%" "%MEINE%" >nul 2>&1
+if errorlevel 1 (
+  echo         Startdatei: neuere Fassung im Repo, Kopieren fehlgeschlagen.
+) else (
+  echo         Startdatei erneuert - gilt ab dem naechsten Start.
+  copy /y "%KG%\mirror\kollektivtraum-stop.bat" "%~dp0kollektivtraum-stop.bat" >nul 2>&1
+)
 endlocal & exit /b 0
 
 :starte
