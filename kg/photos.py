@@ -46,6 +46,28 @@ GESICHTS_BIAS = 0.46
 # Porträt (45–60 %); vorher waren es 40 %.
 GESICHTS_ZOOM = 2.0
 
+# Der Ausschnitt wird NIE kleiner als das fertige Portrait (Birk, 2026-09-01:
+# „kleiner scharfer Kopf statt großer matschiger").
+#
+# Der Ausschnitt wird am Gesicht bemessen, das fertige Portrait ist aber immer
+# `portrait_size` (512) groß. Steht jemand weit weg, ist das Gesicht klein —
+# und ein kleiner Ausschnitt wird auf 512 HOCHgerechnet. Gemessen am 2026-09-01
+# über den Bestand: ein Gesicht von 61 px ergab 122 px Ausschnitt, also Faktor
+# 4,2 Hochrechnung, und eine Kantenschärfe von 9,6 gegenüber 677 beim mittigen
+# Schnitt — 1 %. Das ist der Matsch, den Birk auf der Projektion gesehen hat.
+#
+# Deshalb: ein Ausschnitt unter der Zielgröße wird aufgeweitet, statt
+# hochgerechnet zu werden. Der Kopf sitzt dann kleiner im Kreis (es kommt mehr
+# Umgebung dazu), bleibt aber scharf. Die Alternative wäre gewesen, kleine
+# Gesichter zu verwerfen und mittig zu schneiden — das hätte den Kopf aber auch
+# aus der Mitte verloren, sobald jemand seitlich steht.
+#
+# 🔴 NICHT über eine höhere App-Auflösung lösbar. Gemessen: mehr Auflösung
+# liefert UNSCHÄRFERE Portraits (−6 bis −11 %), weil die Erkennung dann öfter
+# greift und der engere Gesichtsausschnitt weniger echte Pixel hat als der
+# weite mittige Schnitt. Details in `docs/STAND.md` §2e.
+MINDEST_AUSSCHNITT = 512
+
 
 def soft_disc_mask(size: int, inner: float = 0.72, gamma: float = 1.6) -> Image.Image:
     """Alpha-Maske: voll deckend bis inner*r, dann glatt auf 0 am Rand.
@@ -289,6 +311,15 @@ def _square_crop(image: Image.Image) -> Image.Image:
         # Bild — steht jemand weit weg, greift `min(...)` und es bleibt beim
         # bisherigen Verhalten, statt einen Rand zu erfinden.
         side = min(int(round(gw * GESICHTS_ZOOM)), width, height)
+
+        # Untergrenze: lieber mehr Umgebung zeigen als hochrechnen. Steht die
+        # Person weit weg, ist `gw * GESICHTS_ZOOM` kleiner als das fertige
+        # Portrait, und `make_portrait` würde den Ausschnitt vergrößern —
+        # gemessen bis Faktor 4,2 und damit sichtbar matschig. `min(...)` hält
+        # die Aufweitung im Bild: ist das Bild selbst kleiner als
+        # MINDEST_AUSSCHNITT, bleibt es beim größtmöglichen Quadrat, denn Pixel
+        # erfinden kann auch diese Regel nicht.
+        side = min(max(side, MINDEST_AUSSCHNITT), width, height)
 
         # Waagerecht auf die Gesichtsmitte.
         left = int(round(gx + gw / 2 - side / 2))

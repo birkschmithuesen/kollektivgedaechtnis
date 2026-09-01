@@ -57,6 +57,9 @@ def _erwarteter_ausschnitt(breite, hoehe, gesicht):
     """
     gx, gy, gw, gh = gesicht
     seite = min(int(round(gw * photos.GESICHTS_ZOOM)), breite, hoehe)
+    # Seit 2026-09-01 gilt eine Untergrenze: ein Ausschnitt unter der
+    # Portraitgroesse wuerde beim Skalieren HOCHgerechnet und damit matschig.
+    seite = min(max(seite, photos.MINDEST_AUSSCHNITT), breite, hoehe)
     links = max(0, min(int(round(gx + gw / 2 - seite / 2)), breite - seite))
     oben = max(0, min(int(round(gy + gh / 2 - seite * photos.GESICHTS_BIAS)), hoehe - seite))
     return links, oben, seite
@@ -526,4 +529,118 @@ def test_bei_zwei_gesichtern_gewinnt_wirklich_das_groessere(tmp_path, monkeypatc
     mitte = gx + gw / 2
     assert mitte > breite / 2, (
         f"die Erkennung waehlte das linke (kleine) Gesicht bei x={mitte:.0f}"
+    )
+
+
+# --- Untergrenze fuer den Ausschnitt (Birk, 2026-09-01) --------------------
+#
+# Anlass: auf der Projektion sahen einzelne Portraits matschig aus. Gemessen
+# ueber den Bestand war die Ursache NICHT die Aufloesung der App, sondern ein
+# klein erkanntes Gesicht: 61 px Gesicht -> 122 px Ausschnitt -> auf 512
+# hochgerechnet, Faktor 4,2, Kantenschaerfe 9,6 gegen 677 beim mittigen
+# Schnitt. Birks Entscheidung: "kleiner scharfer Kopf statt grosser matschiger".
+
+
+def test_ein_kleines_gesicht_wird_nicht_mehr_hochgerechnet(tmp_path, monkeypatch):
+    """Der Fall, der den Matsch verursacht hat — mit den GEMESSENEN Zahlen.
+
+    `1788105156_5.jpg`: 720x1280, erkanntes Gesicht 61x61. Ohne Untergrenze
+    ergab das 122 px Ausschnitt, den `make_portrait` auf 512 hochrechnet.
+    """
+    breite, hoehe = 720, 1280
+    gesicht = (126, 1038, 61, 61)  # exakt das gemessene Rechteck
+    bild = _testbild(breite, hoehe, kopf=(156, 1068, 30))
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+    ausschnitt = photos._square_crop(bild)
+
+    roh = int(round(61 * photos.GESICHTS_ZOOM))
+    assert roh == 122, "Vorbedingung: ohne Untergrenze waeren es 122 px"
+    assert ausschnitt.size[0] >= photos.MINDEST_AUSSCHNITT, (
+        f"der Ausschnitt ist {ausschnitt.size[0]} px und wird auf "
+        f"{photos.MINDEST_AUSSCHNITT} HOCHgerechnet — genau der Matsch"
+    )
+
+
+def test_die_untergrenze_weitet_nie_ueber_das_bild_hinaus(tmp_path, monkeypatch):
+    """Pixel erfinden kann die Regel nicht.
+
+    Ist das Bild selbst kleiner als MINDEST_AUSSCHNITT, muss es beim
+    groesstmoeglichen Quadrat bleiben — sonst entstuende ein Ausschnitt
+    groesser als das Bild und damit ein schwarzer Balken im Kreis.
+    """
+    breite, hoehe = 300, 400
+    gesicht = (120, 150, 40, 40)
+    bild = _testbild(breite, hoehe, kopf=(140, 170, 20))
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+    ausschnitt = photos._square_crop(bild)
+
+    assert ausschnitt.size == (min(breite, hoehe), min(breite, hoehe))
+    assert ausschnitt.size[0] <= breite and ausschnitt.size[1] <= hoehe
+
+
+def test_ein_grosses_gesicht_bleibt_unveraendert(tmp_path, monkeypatch):
+    """Die Untergrenze darf NUR kleine Gesichter betreffen.
+
+    Sonst haette sie stillschweigend den Zuschnitt jedes normalen Portraits
+    geaendert — und das war ausdruecklich nicht gewollt.
+    """
+    breite, hoehe = 1280, 1280
+    gesicht = (358, 393, 470, 470)  # gemessen aus 1788115087_6.jpg
+    bild = _testbild(breite, hoehe, kopf=(593, 628, 235))
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+    ausschnitt = photos._square_crop(bild)
+
+    erwartet = min(int(round(470 * photos.GESICHTS_ZOOM)), breite, hoehe)
+    assert erwartet > photos.MINDEST_AUSSCHNITT, "Vorbedingung: grosses Gesicht"
+    assert ausschnitt.size == (erwartet, erwartet), (
+        "die Untergrenze hat einen Ausschnitt veraendert, den sie nicht anfassen darf"
+    )
+
+
+def test_der_kopf_bleibt_im_ausschnitt_wenn_aufgeweitet_wird(tmp_path, monkeypatch):
+    """Aufweiten darf den Kopf nicht aus dem Bild schieben.
+
+    Der Ausschnitt waechst um die Gesichtsmitte herum; wird er an den Bildrand
+    geklemmt, muss der Kopf trotzdem vollstaendig drin liegen — sonst waere ein
+    scharfes Portrait ohne Gesicht das Ergebnis.
+    """
+    breite, hoehe = 720, 1280
+    kx, ky, r = 156, 1068, 30
+    gesicht = (kx - r, ky - r, 2 * r, 2 * r)
+    bild = _testbild(breite, hoehe, kopf=(kx, ky, r))
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+    ausschnitt = photos._square_crop(bild)
+
+    links, oben, seite = _erwarteter_ausschnitt(breite, hoehe, gesicht)
+    assert ausschnitt.size == (seite, seite)
+    assert links <= kx - r and kx + r <= links + seite, "Kopf waagerecht abgeschnitten"
+    assert oben <= ky - r and ky + r <= oben + seite, "Kopf senkrecht abgeschnitten"
+
+
+def test_das_portrait_wird_nicht_mehr_hochskaliert(tmp_path, monkeypatch):
+    """Der Beweis am ENDPRODUKT, nicht nur am Zwischenschritt.
+
+    `make_portrait` skaliert den Ausschnitt auf `size`. Frueher war der
+    Ausschnitt kleiner als `size` (Hochrechnung); jetzt darf er das nicht mehr
+    sein. Gemessen wird ueber die Kantenschaerfe: ein hochgerechnetes Bild ist
+    messbar weicher als eines, das verkleinert wurde.
+    """
+    breite, hoehe = 720, 1280
+    gesicht = (126, 1038, 61, 61)
+    quelle = tmp_path / "klein.jpg"
+    _testbild(breite, hoehe, kopf=(156, 1068, 30)).save(quelle)
+
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _i: gesicht)
+
+    with Image.open(quelle) as img:
+        ausschnitt = photos._square_crop(img.convert("RGB"))
+
+    # 512 ist die Vorgabe von make_portrait. Der Ausschnitt muss mindestens so
+    # gross sein, sonst wird beim resize() hochgerechnet.
+    assert ausschnitt.size[0] >= 512, (
+        f"Ausschnitt {ausschnitt.size[0]} px < 512 — make_portrait rechnet hoch"
     )

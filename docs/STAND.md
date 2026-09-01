@@ -268,19 +268,41 @@ Bei 1024 px findet die Kaskade nichts, schneidet mittig, 576 px, scharf. Ab
 Erhöhung von `MAX_KANTE`, die ich in §4 als Weg (b) empfohlen hatte, **erzeugt
 diesen Fall, statt ihn zu beheben.** Empfehlung zurückgezogen.
 
-### Die eigentliche Stellschraube
+### Die eigentliche Stellschraube — ✅ EINGEBAUT 2026-09-01, 15:40
 
-Es fehlt eine **Untergrenze**: Ein Ausschnitt unter `portrait_size` (512 px)
-sollte gar nicht erst hochgerechnet werden. Zwei mögliche Regeln, **beide nicht
-umgesetzt**, weil sie den Zuschnitt jedes Portraits ändern (Birks Entscheidung):
+Es fehlte eine **Untergrenze**: Ein Ausschnitt unter `portrait_size` (512 px)
+darf nicht hochgerechnet werden. Birk hat sich für **(A)** entschieden
+(*„kleiner scharfer Kopf statt großer matschiger"*), umgesetzt in
+`kg/photos.py` als `MINDEST_AUSSCHNITT = 512`:
 
-- **(A) Ausschnitt nie unter 512 px** — bei kleinen Gesichtern wird der
-  Ausschnitt weiter, der Kopf sitzt kleiner im Bild, bleibt aber scharf.
-- **(B) Gesichter unter ~150 px verwerfen** und mittig schneiden — dann greift
-  bewusst der Rückfallweg, der hier nachweislich das schärfere Bild liefert.
+```python
+side = min(int(round(gw * GESICHTS_ZOOM)), width, height)
+side = min(max(side, MINDEST_AUSSCHNITT), width, height)   # neu
+```
 
-Beides ist ein Dreizeiler in `_square_crop`; die Frage ist nicht technisch,
-sondern ästhetisch: **kleiner scharfer Kopf oder großer matschiger.**
+Das `min(..., width, height)` außen ist nicht kosmetisch: Ist das Bild selbst
+kleiner als 512, bleibt es beim größtmöglichen Quadrat — Pixel erfinden kann auch
+diese Regel nicht.
+
+**Belegt am echten Foto** (`scripts/beleg-untergrenze.py`, auf der Station gegen
+eine Kopie gefahren, ohne den laufenden Kern anzufassen):
+
+| `1788105156_5.jpg` | Ausschnitt | Skalierung | Schärfe |
+|---|---|---|---|
+| vorher | 122 px | 0,24× (hochgerechnet) | **9,6** |
+| nachher | 512 px | 1,00× | **1552,5** |
+
+**Und die anderen 6 Fotos sind unverändert** — jeweils identischer Ausschnitt und
+identische Schärfe. Die Regel fasst genau den kaputten Fall an und sonst nichts.
+
+**Tests:** 5 neue in `tests/test_photos_gesicht.py`, dazu die Hilfsformel
+`_erwarteter_ausschnitt` nachgezogen. **4 Mutationsproben, alle tot:**
+Untergrenze entfernt (6 Tests rot), `max`→`min` (12 rot), Klemmung ans Bild weg
+(1 rot), `MINDEST_AUSSCHNITT = 0` (2 rot).
+
+🔴 **Was das NICHT löst:** Die Erkennung findet dieses Gesicht überhaupt nur bei
+kleinen Auflösungen (§2c). Die Untergrenze sorgt dafür, dass ein Treffer nicht
+mehr schadet — sie macht die Erkennung nicht treffsicherer.
 
 ---
 
@@ -315,13 +337,18 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
     erkannt und 4,2-fach hochgerechnet werden.
   🔴 **`MAX_KANTE = 1024` bleibt.** Meine frühere Empfehlung, auf 1600 zu gehen,
   ist durch §2e **widerlegt** — sie hätte die Bildqualität verschlechtert.
-- **Der Matsch ist ein Zuschnitt-Problem, kein Auflösungsproblem.** Zu
-  entscheiden ist stattdessen: Untergrenze für den Ausschnitt (A) oder kleine
-  Gesichter verwerfen (B) — siehe §2e. Ästhetische Frage: **kleiner scharfer
-  Kopf oder großer matschiger.** Nicht umgesetzt.
-- **`minSize` von 8 % auf 4 %** (§2c) bringt mehr Treffer — würde aber genau die
-  kleinen Gesichter finden, die den Matsch erzeugen. **Erst nach (A)/(B)
-  sinnvoll**, nicht davor.
+- **Der Matsch ist ein Zuschnitt-Problem, kein Auflösungsproblem.** ✅ **Erledigt
+  2026-09-01:** Birk hat (A) entschieden, `MINDEST_AUSSCHNITT = 512` ist
+  eingebaut und belegt (§2e). Schärfe im kaputten Fall 9,6 → 1552,5; die übrigen
+  6 Portraits unverändert.
+- **🔴 Die Station läuft noch auf dem alten Stand.** `git log` dort: `7ede951`,
+  der Fix ist `4b8c0c5`. Die Änderung wirkt erst nach einem Neustart über die
+  START-Verknüpfung (Schritt `[0/6]` zieht selbst von GitHub). **Nicht per SSH
+  nachgezogen:** der Kern läuft gerade und antwortet auf 8800; ein Eingriff im
+  Betrieb ist Birks Entscheidung.
+- **`minSize` von 8 % auf 4 %** (§2c) bringt mehr Treffer — und ist jetzt
+  **gefahrloser als vorher**, weil die Untergrenze den Matsch-Fall abfängt.
+  Trotzdem nicht umgesetzt: 7 Fotos sind keine Reihe.
 - **Welche APK liegt auf dem Handy?** Siehe §2d — bis das geklärt ist, misst
   jeder weitere Fototest womöglich eine andere Kette als die vom Ausstellungstag.
 - **Fotos mit mehreren Personen fehlen komplett.** Die Kernfrage („gewinnt das
