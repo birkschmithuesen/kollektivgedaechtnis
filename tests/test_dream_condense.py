@@ -293,92 +293,67 @@ def test_the_prompt_demands_both_poles_of_the_material_in_the_picture():
 
 
 def test_the_prompt_forbids_splitting_the_frame_into_two_pictures():
-    """Birk am ersten Bild des Pol-Aufbaus (2026-08-29): „Jetzt sind es zwei
-    Bilder in einem Bild geworden. Das Bild ist geteilt in links und rechts."
+    """Spec §5.2: ein Ort, eine Aufnahme — nicht zwei Haelften nebeneinander.
 
-    Die eigene Folge der Anweisung davor: „beide Seiten gleich groß" liest
-    sich für ein Bildmodell als Aufforderung zum Diptychon. Der
-    Einzelbild-Hinweis im Register („One single photographic frame, whole and
-    uncut") stand zwar schon da, aber er beschreibt den RAHMEN — gegen eine
-    Beschreibung, die zwei getrennte Halbszenen nennt, kommt er nicht an. Die
-    Trennung muss dort verhindert werden, wo sie entsteht: in Stufe 1.
+    🔴 Die Wache prueft die REGEL, nicht mehr ihre zweifache Nennung
+    (konsolidiert 2026-09-02). Vorher verlangte sie zusaetzlich die
+    Ueberschrift „AUCH HIER EIN ORT" — das war die WIEDERHOLUNG derselben
+    Regel im Widerspruch-Abschnitt. „Ein Ort, eine Aufnahme" stand an fuenf
+    Stellen im Prompt; das ist kein Nachdruck, sondern Streuung, und sie
+    entstand nur, weil der Prompt nach Themen statt nach Ausgabefeldern
+    geordnet war. Jetzt steht die Regel einmal ausfuehrlich bei der
+    Bildbeschreibung und wird beim Widerspruch mit einem Halbsatz in Bezug
+    genommen („ueber den Raum, nicht ueber eine Trennlinie").
 
-    Geprüft wird beides, weil beide Felder sie erzeugen können — die
-    Bildbeschreibung UND der Widerspruchs-Halbsatz.
+    Die Aussage bleibt: Was der Prompt verbietet, muss er weiter verbieten —
+    in BEIDEN Feldern.
     """
     system = build_condense_system()
 
-    # Die Bildbeschreibung: ein Ort, eine Kamera.
-    assert "EIN EINZIGER ORT" in system
-    ort = system[system.index("EIN EINZIGER ORT"):]
+    ort = system.split("EIN EINZIGER ORT")[1]
     assert "einzige Kamera" in ort
-    # Die verbotenen Trennwendungen müssen benannt sein, sonst ist die Regel
-    # eine Absichtserklärung: „links … rechts" ist genau der Fall, der auftrat.
+    # Die Trennwendungen, die den Ausschnitt zerlegen, stehen als Verbot da.
     assert "links" in ort
-    # KEIN Positivbeispiel mehr (2026-08-30, siehe
-    # test_the_prompt_demands_a_VISIBLE_contradiction_not_an_abstract_one):
-    # „a single façade where new render stops halfway" wurde wörtlich
-    # abgeschrieben. An seiner Stelle steht die Prüffrage.
-    assert "Gut (ein Ort)" not in ort
     assert "Kamera von einem Punkt" in ort
+    # Kein Positivbeispiel fuer den einen Ort — Beispielszenen werden
+    # abgeschrieben (gemessen 2026-08-30).
+    assert "Gut (ein Ort)" not in ort
 
-    # Der Widerspruchs-Halbsatz trägt dieselbe Regel.
-    assert "AUCH HIER EIN ORT" in system
-    halbsatz = system[system.index("AUCH HIER EIN ORT"):]
+    # Und im Widerspruch-Feld gilt dasselbe, auch ohne eigene Ueberschrift.
+    halbsatz = system.split("DER WIDERSPRUCH")[1]
     assert "Trennlinie" in halbsatz
 
+def test_the_prompt_demands_the_german_wording_when_something_carries_lettering():
+    """🔴 Umbenannt und umgeschrieben am 2026-09-02, weil sich die
+    ENTSCHEIDUNG geaendert hat, nicht die Formulierung.
 
-def test_the_prompt_prefers_no_lettering_but_demands_german_wording_when_used():
-    """Zwei Befunde Birks an einem Abend, die zusammen die Regel ergeben.
+    Die Wache hiess vorher `..._prefers_no_lettering_...` und verlangte
+    „Regelfall ist ein Bild OHNE Schrift" samt Ausnahmeregel — zusammen 2.422
+    Zeichen, 13 % des Prompts. Begruendet war das damit, dass der Wandsatz das
+    Textstueck der Arbeit ist und ein zweiter Text im Bild gegen ihn antritt.
 
-    Zuerst am Ein-Ort-Bild: „hier ist eine Tafel, aber da steht nichts drauf" —
-    das damalige Schriftverbot im Register hatte sie leeren müssen. Verbot
-    aufgehoben (ebb65d5).
+    Genau diese Begruendung hat Birk am 2026-08-29 verworfen (config2.toml:
+    „SCHRIFT IM BILD IST ERLAUBT … Aufgehoben, weil das Verbot einen
+    Bildinhalt unmoeglich machte, den das Material hergibt") und am
+    2026-09-02 noch einmal bestaetigt: „die schrift drauf stoert auch nicht".
+    Der Prompt hat die aufgehobene Regel danach eine Woche weiter
+    durchgesetzt.
 
-    Dann am schriftfreigegebenen Bild: „jetzt ist die Beschriftung auf
-    Englisch… wenn Beschriftung, dann müsste die explizit dem Modell übergeben
-    werden als deutsche Beschriftung." Richtig: der Prompt nannte nur „a
-    printed fee schedule board", WAS daraufsteht erfand das Modell — englisch,
-    weil der umgebende Prompt englisch ist.
-
-    Und schließlich: „generell schon auch besser ohne Schrift… entweder du
-    gehst deine Idee und checkst dass das alles ohne Schrift passiert, oder du
-    baust eine Tendenz ein."
-
-    Tendenz statt Verbot, weil beide Extreme einen belegten Fehler haben: Ein
-    Verbot erzwingt leere Tafeln (Befund 1). Freie Erlaubnis erzeugt
-    unzuverlässig gesetzten Text — Googles eigene Anleitung nennt Textrendering
-    ausdrücklich als nicht verlässlich, und verdrehte Buchstaben stünden in
-    hyperrealistischer Schärfe an der Wand.
-
-    Geprüft wird deshalb BEIDES: dass der Regelfall schriftlos ist, und dass
-    die Ausnahme Googles zwei Bedingungen erfüllt (exakter Wortlaut in
-    Anführungszeichen UND Zielsprache benannt).
+    Was BLEIBT und hier geprueft wird, ist der Teil, der nie zur Debatte
+    stand: Steht Schrift im Bild, muss ihr WORTLAUT dabeistehen, auf Deutsch.
+    Ohne das erfindet das Bildmodell englischen Text — und das Bild haengt in
+    einer deutschen Ausstellung.
     """
     system = build_condense_system()
+    schrift = system.split("SCHRIFT IM BILD")[1]
 
-    assert "SCHRIFT IM BILD" in system
-    schrift = system[system.index("SCHRIFT IM BILD"):]
-
-    # 1. Die Tendenz: Regelfall ohne Schrift, über die Form der Dinge.
-    assert "Regelfall ist ein Bild OHNE Schrift" in schrift
-    assert "FORM der" in schrift
-    assert "Regelfall (ohne Schrift" in schrift, "kein Positivbeispiel für den Regelfall"
-
-    # 2. Die Ausnahme ist als solche markiert, nicht als gleichwertige Option.
-    assert "AUSNAHME" in schrift
-    assert "EINZIGE Weg" in schrift
-
-    # 3. Googles zwei Bedingungen für Fremdsprachen-Text.
-    assert "Wortlaut" in schrift and "Anführungszeichen" in schrift
+    # Gross-/Kleinschreibung offen lassen: der Prompt betont Schluesselwoerter
+    # in Versalien, und daran soll eine Wache nicht haengen.
+    assert "wortlaut" in schrift.lower()
+    assert "anführungszeichen" in schrift.lower()
     assert "the German text reading" in schrift
-
-    # 4. Der real aufgetretene Fehler steht als Gegenbeispiel da.
-    assert "fee schedule board" in schrift
-
-    # 5. Nichts erfinden, was nicht im Material steht.
-    assert "Erfinde keine Zahlen" in schrift
-
+    # Kein Verbot mehr, nur noch eine Bedingung.
+    assert "Regelfall ist ein Bild OHNE Schrift" not in system
 
 def test_the_prompt_asks_for_the_contradiction_in_the_shape_stage_2_appends():
     """kg2/imagegen.py hangs `tension_source` behind a sentence of its own and

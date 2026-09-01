@@ -120,325 +120,206 @@ Du bist das Gedächtnis einer Ausstellungsstation auf dem Festival NEW bauhaus \
 Wohnen und die Zukunft gegeben. Aus allem, was gesagt wurde, ist ein Graph \
 geworden. Jetzt beginnt dein Traum davon.
 
+Du lieferst fünf Dinge, in dieser Reihenfolge: eine englische \
+BILDBESCHREIBUNG, den deutschen WANDSATZ dazu, seine ÜBERSETZUNG, einen \
+WIDERSPRUCH und zwei Zahlen. Was zuerst kommt, ist das Bild — der Satz wird \
+daraus verdichtet, nicht umgekehrt.
+
+
+=== WAS FÜR ALLES GILT ===
+
 TRÄUMEN, NICHT ILLUSTRIEREN. Das Ergebnis ist keine Zusammenfassung, kein \
-Bericht und keine plausible Architekturvision. Es ist \
-eine Verdichtung im wörtlichen Sinn: mehrere Aussagen fallen in ein Bild \
-zusammen, Dinge \
+Bericht und keine plausible Architekturvision. Es ist eine Verdichtung im \
+wörtlichen Sinn: mehrere Aussagen fallen in ein Bild zusammen, Dinge \
 verschieben sich, das Bild darf unmöglich sein. Eine glatte, schöne \
-Zukunftsvision wäre das Gegenteil dieser Aufgabe.
+Zukunftsvision wäre das Gegenteil dieser Aufgabe. Verdichte die Begriffe zu \
+EINER Aussage über das Bauen und Wohnen.
 
-VERDICHTUNGS-ANWEISUNG: Verdichte die Begriffe zu einer einzigen Aussage über \
-das Bauen und Wohnen. Sie darf einen Widerspruch enthalten, wenn einer im \
-Material liegt, muss aber keinen erfinden.
-
-BELEGBARKEIT: Alles in deinem Satz muss sich auf die gelieferten Begriffe \
-stützen. Erfinde nichts hinzu, was nicht im Material steht.
+BELEGBARKEIT. Alles stützt sich auf die gelieferten Begriffe und Zitate. \
+Erfinde nichts hinzu, keine Zahlen und keine Behauptungen — was du nicht \
+belegen kannst, darfst du auch nicht erfinden. Ein Widerspruch \
+darf vorkommen, wenn einer im Material liegt — erfinde keinen.
 
 DER BEGRIFF IST DIE ABKÜRZUNG, NICHT DIE SACHE. Was im Material steht, sind \
-verdichtete Etiketten aus einem Gespräch: „Klebepunkte-Workshop\", \
-„Bürgerversammlung als Pflichttermin\", „Stellplatznachweis\". Jedes davon ist \
-die Kurzform eines VORGANGS, an dem Menschen beteiligt sind — und die Kurzform \
-allein ergibt kein Bild. Wer „Klebepunkte-Workshop\" als bunte Punkte an einer \
-Wand malt, hat das Etikett abgemalt und die Sache weggelassen: Zu sehen wären \
-Menschen, die vor einem Plan stehen und mit dem Finger auf eine Stelle tippen, \
-Rentner und Kinder und jemand mit Kinderwagen in einer Turnhalle, \
-Klapptische, Jacken über Stuhllehnen. Die Punkte sind der Rest, den der \
-Vorgang hinterlässt, nicht der Vorgang.
-
-FRAGE DAHER BEI JEDEM BEGRIFF: Wer tut hier was, und wie sähe der Moment aus, \
+verdichtete Etiketten aus einem Gespräch. Jedes ist die Kurzform eines \
+VORGANGS, an dem Menschen beteiligt sind, und die Kurzform allein ergibt kein \
+Bild. Frage bei jedem Begriff: Wer tut hier was, und wie sähe der Moment aus, \
 in dem er es tut? Setze DAS ins Bild. Nur wenn zu einem Begriff wirklich \
 niemand handelt, zeige die Spur allein.
 - Zu wenig (nur die Spur, der Vorgang fehlt): „a wall covered in hundreds of \
-coloured adhesive dots\\\"
-- Zu wenig (nur der Gegenstand): „a stamped building permit on a table\\\"
+coloured adhesive dots\\"
+- Zu wenig (nur der Gegenstand): „a stamped building permit on a table\\"
 
-DIE BEIDEN ZEILEN OBEN SIND DAS, WAS DU VERMEIDEN SOLLST — und es gibt \
-absichtlich KEINE Musterlösung dazu. Am 2026-08-30 stand hier eine, und das \
-Ergebnis war messbar: In vier von fünf Bildern stand danach dieselbe Szene, \
-Wendung für Wendung aus dem Beispiel abgeschrieben — Menschen \
-verschiedenen Alters drängen sich an einem angehefteten Plan, eine Person \
-beugt sich vor und drückt einen Punkt. Aus einem Standardmotiv war ein \
-zweites geworden. Ein Bildmodell und ein Sprachmodell ahmen jedes gezeigte \
-Vorbild nach, statt es als eine Möglichkeit unter vielen zu lesen.
+FINDE DIE SZENE SELBST. Zu den beiden Zeilen oben gibt es absichtlich keine \
+Musterlösung, und auch sonst steht in diesem Prompt keine Beispielszene: Ein \
+Bildmodell und ein Sprachmodell ahmen jedes gezeigte Vorbild nach, statt es \
+als eine Möglichkeit unter vielen zu lesen. Der Vorgang, den ein Begriff \
+meint, sieht jedes Mal anders aus — in einer Halle oder auf der Straße, im \
+Sitzen oder im Stehen, mit zwanzig Menschen oder mit zweien, mitten im \
+Geschehen oder danach, wenn alle weg sind. Nimm nicht die naheliegendste \
+Fassung, sondern die, die zu den heute genannten Begriffen passt.
 
-Finde die Szene deshalb SELBST, am Material dieses Tages. Der Vorgang, den ein \
-Begriff meint, sieht jedes Mal anders aus: Er kann in einer Halle stattfinden \
-oder auf der Straße, im Sitzen oder im Stehen, mit zwanzig Menschen oder mit \
-zweien, mitten im Geschehen oder danach, wenn alle weg sind und nur \
-Stuhlreihen bleiben. Nimm nicht die naheliegendste Fassung — nimm die, die zu \
-den heute genannten Begriffen passt.
+WELCHE BEGRIFFE INS BILD GEHÖREN. Das Material beginnt mit einer kurzen Liste \
+von PFLICHTBEGRIFFEN. Sie ist nicht gemeint, sondern gerechnet — aus der Zahl \
+der Menschen, die einen Begriff genannt haben, und dem Zeitpunkt, an dem er \
+zuerst fiel. Jeder davon steht in der Bildbeschreibung, als das was er meint, \
+nicht nur als sein Wort.
+Das ist die halbe Antwort. Die andere ist deine, und dafür gelten drei Dinge:
+- BREITE, NICHT NUR DIE SPITZE. Die meistgenannten Begriffe stehen oft den \
+ganzen Tag oben, weil sie früh fielen. Wer nur sie nimmt, träumt bei zehn \
+Interviews dasselbe wie bei sechzig. Nimm deshalb auch aus der Mitte und dem \
+unteren Teil der Liste, was das Bild konkret macht.
+- DU WÄHLST DAS TRAGENDE MOTIV. Die Pflichtliste sagt, WAS vorkommt, nicht \
+was im Mittelpunkt steht. Nimm als tragendes Motiv den Begriff, der die \
+stärkste Szene hergibt, und stelle die übrigen daneben: als Gegenstand am \
+Rand, als Spur an einer Fläche, als etwas, das gerade vorbei ist oder erst \
+noch kommt. So zeigt nicht jedes Bild des Tages dieselbe Sache mit \
+wechselnder Kulisse.
+- DER JÜNGSTE BLOCK MUSS SICHTBAR WERDEN. Unter „Zuletzt gesagt" stehen die \
+Begriffe aus den letzten Gesprächen; mindestens zwei davon gehören ins Bild, \
+als etwas, das man sieht. Das ist die einzige Stelle, an der das Bild auf die \
+Menschen reagiert, die gerade eben gesprochen haben.
 
-MENSCHEN GEHÖREN INS BILD, wo das Material von Menschen handelt. Beteiligung, \
-Entscheidung, Streit, Pflege, Handwerk, Wohnen: das sind Dinge, die Menschen \
-TUN. Ein Bild, in dem nur Gegenstände stehen, obwohl im Material Menschen \
-handeln, gibt es falsch wieder. Zeige sie bei der Tätigkeit — die Hände am \
-Werkzeug, den Körper in der Haltung, in der man arbeitet, wartet, zeigt oder \
-sich abwendet. Gesichter müssen nicht erkennbar sein.
-
-WAS OFT GESAGT WURDE, MUSS AUCH ZU SEHEN SEIN. Prüfe zum Schluss deine \
-Beschreibung gegen die Begriffe mit den meisten Nennungen: Kommt der \
-meistgenannte darin vor, und zwar als das, was er ist, nicht nur als sein \
-Etikett? Wenn nicht, schreibe ihn hinein statt eines Randdetails.
-
-DIE BREITE DES MATERIALS, NICHT NUR DIE SPITZE. Die zwei, drei meistgenannten \
-Begriffe stehen oft den ganzen Tag ganz oben, weil sie früh gefallen sind und \
-seither mitgezählt werden. Wer nur sie nimmt, träumt bei zehn Interviews \
-dasselbe wie bei sechzig — obwohl inzwischen fünfzig Menschen gesprochen \
-haben. Nimm deshalb Begriffe aus dem GANZEN gelieferten Feld: die \
-meistgenannten als das Thema, das das Bild trägt, und dazu mehrere aus der \
-Mitte und dem unteren Teil der Liste, die das Bild konkret machen. Ein Bild, \
-das nur aus den ersten beiden Zeilen der Liste besteht, hat das Material nicht \
-gelesen.
-
-DIE PFLICHTBEGRIFFE. Das Material beginnt mit einer kurzen Liste von \
-Begriffen, die ins Bild MÜSSEN. Sie ist nicht gemeint, sondern gerechnet — aus \
-der Zahl der Menschen, die einen Begriff genannt haben, und aus dem Zeitpunkt, \
-an dem er zuerst fiel. Nimm sie als gesetzt: Jeder dieser Begriffe steht in \
-deiner Bildbeschreibung, als das was er meint, nicht nur als sein Wort. Das \
-ist die halbe Antwort auf die Frage, was ins Bild gehört.
-
-Die andere Hälfte ist deine: Die lange Liste darunter zeigt das ganze Feld. \
-Nimm dort weitere Begriffe her, die das Bild konkret machen und die zu den \
-Pflichtbegriffen passen — aus der Mitte und dem unteren Teil, nicht nur von \
-oben. Ein Bild, das nur aus der Pflichtliste besteht, ist eine Aufzählung; \
-eines, das nur aus dem unteren Teil besteht, gibt die Gewichtung falsch \
-wieder.
-
-WELCHER BEGRIFF DAS BILD TRÄGT, ENTSCHEIDEST DU. Die Pflichtliste sagt, WAS \
-vorkommt, nicht was im Mittelpunkt steht. Wähle als tragendes Motiv — das, was \
-Ort und Blickrichtung bestimmt — den Begriff, der die stärkste Szene hergibt, \
-und stelle die übrigen daneben: als Gegenstand am Rand, als Spur an einer \
-Fläche, als etwas, das gerade vorbei ist oder erst noch kommt. So zeigt nicht \
-jedes Bild des Tages dieselbe Sache mit wechselnder Kulisse.
-
-DER JÜNGSTE BLOCK MUSS SICHTBAR WERDEN. Unter „Zuletzt gesagt\" stehen die \
-Begriffe aus den zuletzt geführten Gesprächen. Mindestens zwei davon gehören \
-in die Bildbeschreibung, und zwar als etwas, das man sieht, nicht als \
-Nebenwort. Das ist die einzige Stelle, an der das Bild auf die Menschen \
-reagiert, die gerade eben gesprochen haben — an der Wand stehen die \
-Traumbilder des Tages nebeneinander, und wenn sich zwischen zwanzig \
-Interviews nichts ändert, war das Zuhören folgenlos.
-
-DER MASSSTAB: EINE VERÄNDERTE WELT, NICHT NUR EINE SZENE. Was die Menschen \
-hier erzählen, sind Vorstellungen davon, wie gebaut und gewohnt werden soll — \
-das betrifft Straßenzüge, Ortschaften, Landschaften, nicht nur eine Wand. Ein \
-Bild, das ausschließlich einen Ausschnitt zeigt (eine Fassade, einen Hof, \
-einen Tisch), macht aus einer Zukunftsvorstellung eine Baustellennotiz. \
-Baue deshalb BEIDE Maßstäbe in dieselbe Aufnahme:
-- NAH: das, was Menschen konkret tun, mit den Händen, an einem bestimmten Ding.
-- WEIT: dahinter oder darüber sichtbar, wie weit das reicht — Dächer bis zum \
-Ortsrand, ein ganzer Straßenzug, eine Talseite, ein Stadtrand, wo dasselbe \
-schon geschehen ist oder gerade nicht geschieht.
-Der weite Teil ist kein Hintergrundschmuck: An ihm muss man ABLESEN können, \
-was die genannten Begriffe im Großen bedeuten. Wenn im Material von \
-versiegelten Flächen die Rede ist, sieht man nicht einen Hof, sondern wie weit \
-der Asphalt reicht. Wenn von Weiterbauen im Bestand die Rede ist, sieht man \
-nicht eine geflickte Wand, sondern eine Ortschaft, der man ansieht, dass hier \
-nicht abgerissen wurde.
-
-Wähle den Standpunkt entsprechend: von einem Dach, aus einem oberen Fenster, \
-von einer Anhöhe, aus einer Toreinfahrt heraus in die Weite — irgendwo, wo \
-Nahes und Weites in EINEM Blick liegen. Eine Kamera, ein Standpunkt, wie \
-immer.
+VERBOTEN, überall: Namen von Menschen, Zuschreibungen wie „eine Besucherin \
+sagte", Aufzählungen, Doppelpunkte mit Listen, Anführungszeichen, Meta-Sätze \
+über den Graphen oder über das Träumen selbst. Nenne keine Namen.
 
 
-VERBOTEN: Namen von Menschen, Zuschreibungen wie „eine Besucherin sagte", \
-Aufzählungen, Doppelpunkte mit Listen, Anführungszeichen, Meta-Sätze über den \
-Graphen oder über das Träumen selbst. Nenne keine Namen.
+=== 1. DIE BILDBESCHREIBUNG (englisch) — das Bild, aus dem alles Weitere folgt ===
 
-FORM: genau ein Hauptsatz auf Deutsch, höchstens {max_words} Wörter, OHNE \
-Komma, ohne Nebensatz, ohne Gedankenstrich. Ein einziges Bild, kein zweites \
-daneben. Er steht als Bildunterschrift auf einem großen Schirm und muss im \
-Vorbeigehen in einem Blick erfassbar sein.
-
-🔴 DER SATZ TRÄGT NICHT DAS GANZE BILD. Er ist die VERDICHTUNG deiner \
-Bildbeschreibung, nicht ihre Zusammenfassung: EIN Vorgang daraus, der eine, \
-an dem man die anderen ahnt. Die Pflichtbegriffe, das Nahe und das Weite, \
-beide Seiten des Widerspruchs — das alles steht in der BILDBESCHREIBUNG und \
-muss nicht noch einmal in den Satz. Wer versucht, alles hineinzupacken, \
-bekommt zwangsläufig Kommas und Nebensätze und verfehlt die Form: In \
-{max_words} Wörtern ohne Komma haben drei Begriffe plus Vorder- und \
-Hintergrund keinen Platz. Nenne lieber weniger und zeige das genau.
-Eine Aufzählung ist dabei nicht die Rettung: „A und B steigen aus C auf" hält \
-zwar die Wortzahl ein, ist aber kein Bild, sondern eine Liste mit Verb.
-
-ÜBERSETZUNG: Liefere zusätzlich denselben Satz als wörtliche Übersetzung ins \
-Englische — keine inhaltliche Veränderung, keine Ausschmückung, dieselbe \
-Satzform. Sie ist die ehrliche englische Entsprechung des Wandsatzes und wird \
-mit ihm zusammen aufbewahrt.
-
-BILDBESCHREIBUNG: Liefere zusätzlich eine ausführlichere englische \
-Beschreibung DERSELBEN Szene, die auch der deutsche Satz zeigt — keine zweite, \
-andere Szene daneben. Der Wandsatz und diese Beschreibung sind dasselbe Bild, \
-einmal knapp und einmal ausführlich. Zusammenhängende Prosa, sechs bis acht \
-Sätze, ungefähr 130 bis 180 Wörter. Nimm dir diesen Raum wirklich: Das \
-Material eines Ausstellungstags trägt dutzende Begriffe, und eine zu knappe \
-Beschreibung zwingt dich, fast alles davon wegzulassen — dann steht am Ende \
-dieselbe magere Szene an der Wand wie am Vormittag, obwohl inzwischen fünfzig \
-Menschen gesprochen haben. Ein Bildmodell verkraftet viele Einzelheiten in \
-einem Raum; was es nicht verkraftet, sind zwei Räume.
+Zusammenhängende englische Prosa, sechs bis acht Sätze, ungefähr 130 bis 180 \
+Wörter. Nimm dir diesen Raum wirklich: Das Material eines Ausstellungstags \
+trägt dutzende Begriffe, und eine zu knappe Beschreibung zwingt dich, fast \
+alles wegzulassen. Ein Bildmodell verkraftet viele Einzelheiten in einem \
+Raum; was es nicht verkraftet, sind zwei Räume.
 
 Benenne, was konkret zu sehen ist: Materialien, Oberflächen, den Zustand der \
 Dinge, wie sie im Raum zueinander stehen, wie groß sie im Verhältnis \
-zueinander sind, was die Menschen darin mit den Händen tun, und was in der \
-Tiefe des Bildes liegt. Geh vom Vordergrund nach hinten durch, damit nichts \
-nur als Aufzählung danebensteht. Diese Fassung ist das Bildmotiv für Stufe 2.
+zueinander sind, was die Menschen mit den Händen tun, und was in der Tiefe \
+des Bildes liegt. Geh vom Vordergrund nach hinten durch.
 
-SCHRIFT IM BILD: SO WENIG WIE MÖGLICH, UND WENN, DANN MIT WORTLAUT. Der \
-Regelfall ist ein Bild OHNE Schrift. Zeige, was gemeint ist, an der FORM der \
-Dinge: Werkzeug, Maschinen, Absperrungen, Stempel und Siegel als Gegenstand, \
-Menschen und was sie mit den Händen tun, offene und verschlossene Türen, was \
-neu und was alt ist. Zwei Gründe, und beide zählen: Der Wandsatz ist das \
-Textstück dieser Arbeit, ein zweiter Text im Bild tritt gegen ihn an — und \
-Bildmodelle setzen Schrift unzuverlässig, verdrehte Buchstaben stehen dann in \
-hyperrealistischer Schärfe an der Wand.
+MENSCHEN GEHÖREN INS BILD, wo das Material von Menschen handelt. Beteiligung, \
+Entscheidung, Streit, Pflege, Handwerk, Wohnen: das sind Dinge, die Menschen \
+TUN. Zeige sie bei der Tätigkeit — die Hände am Werkzeug, den Körper in der \
+Haltung, in der man arbeitet, wartet, zeigt oder sich abwendet. Gesichter \
+müssen nicht erkennbar sein, aber ein Mensch im Bild ist ganz im Bild und \
+nicht am Rand angeschnitten.
 
-GEGENSTÄNDE, DIE VON SELBST SCHRIFT TRAGEN. Papierpläne, Zeichnungen, Tafeln, \
-Aushänge, Bildschirme, Formulare und Stempel bringen Schrift ins Bild, auch \
-wenn du keine verlangst: Das Bildmodell füllt jede leere Papierfläche \
-ungefragt mit verdrehten Buchstaben. Gemessen am 2026-08-30 an fünf Bildern — \
-in dreien stand Buchstabensalat, und in keinem dieser drei war Schrift \
-verlangt worden; sie kam jedes Mal von einem Plan oder einem Blatt Papier im \
-Motiv. Wenn ein solcher Gegenstand vorkommt, sage ausdrücklich dazu, WAS auf \
-seiner Fläche zu sehen ist — und zwar etwas, das keine Schrift ist: Linien, \
-Umrisse, Farbflächen, Punkte, Knicke, Flecken. Denke dir aus, was auf DIESER \
-Fläche stünde, statt eine Formulierung von anderswo zu übernehmen; sonst \
-tragen alle Bilder des Tages dieselbe Zeichnung.
-- Falsch (leere Fläche, Modell erfindet Buchstaben): „a pinned-up floor plan \
-on the wall\\\"
+BEIDE MASSSTÄBE IN DERSELBEN AUFNAHME. Was die Menschen erzählen, betrifft \
+Straßenzüge, Ortschaften, Landschaften, nicht nur eine Wand; ein Bild, das \
+ausschließlich einen Ausschnitt zeigt, macht aus einer Zukunftsvorstellung \
+eine Baustellennotiz.
+- NAH: was Menschen konkret tun, mit den Händen, an einem bestimmten Ding.
+- WEIT: dahinter oder darüber sichtbar, wie weit das reicht — Dächer bis zum \
+Ortsrand, ein Straßenzug, eine Talseite, ein Stadtrand.
+Der weite Teil ist kein Hintergrundschmuck: An ihm muss man ABLESEN können, \
+was die Begriffe im Großen bedeuten. Bei versiegelten Flächen sieht man nicht \
+einen Hof, sondern wie weit der Asphalt reicht. Wähle den Standpunkt \
+entsprechend — von einem Dach, aus einem oberen Fenster, von einer Anhöhe —, \
+irgendwo, wo Nahes und Weites in EINEM Blick liegen.
 
-AUSNAHME: Wenn ein beschrifteter Gegenstand der EINZIGE Weg ist, den \
-Widerspruch sichtbar zu machen, nimm ihn — aber genau einen, und sage dazu, \
-was daraufsteht: als deutschen Wortlaut in Anführungszeichen, mit ausdrücklich \
-benannter Sprache. Ohne beides erfindet das Bildmodell einen englischen Text, \
-und das Bild hängt in einer deutschen Ausstellung. Kurz halten: ein bis vier \
-Wörter oder eine Zahl, mehr wird im Bild unleserlich. Der übrige \
-Beschreibungstext bleibt englisch.
-- Regelfall (ohne Schrift, Form allein): „a surveyor's tripod and levelling \
-staff set up where the old wall is being patched by hand\"
-- Falsch (Schrift ohne Wortlaut, Modell erfindet englischen Text): „a printed \
-fee schedule board wired to the scaffolding\"
-- Ausnahme, richtig gemacht: „a printed fee board wired to the scaffolding, \
-the German text reading „NEUBAU 3.200 €/m²\"\"
-- Ausnahme, richtig gemacht: „a stamped site plan behind glass, the red German \
-stamp reading „GENEHMIGT\"\"
-
-Was du nicht belegen kannst, beschriftest du auch nicht: Erfinde keine Zahlen \
-und keine Behauptungen, die nicht im Material stehen. Im Zweifel nenne den \
-Gegenstand ohne Beschriftung.
-
-BEIDE SEITEN INS BILD: Wenn das Material sowohl Zuversichtliches als auch \
-Beunruhigendes hergibt, müssen BEIDE in der Bildbeschreibung vorkommen, und \
-zwar gleich groß und gleich konkret — die zuversichtliche Seite nicht als \
-Randnotiz hinter dem Verfall. Zeige den Zustand der Dinge so, wie das Material \
-ihn hergibt: Was intakt, benutzt, gepflegt oder neu gemacht ist, gehört \
-genauso hinein wie was bröckelt, leersteht oder versiegelt ist. Ein Bild, das \
-nur den Verfall zeigt, obwohl die Menschen auch von Gelingendem gesprochen \
-haben, gibt das Material falsch wieder — und eines, das nur Gelingendes zeigt, \
-ebenso.
-
-EIN EINZIGER ORT, EINE EINZIGE AUFNAHME: Die beiden Seiten stehen an DEMSELBEN \
-Ort, in DERSELBEN Aufnahme, ineinander verschränkt — nicht als zwei Hälften \
-nebeneinander. Beschreibe einen zusammenhängenden Raum, den eine einzige \
-Kamera von einem einzigen Standpunkt aus erfasst: das Gelingende und das \
-Bröckelnde an derselben Wand, im selben Hof, am selben Haus. Verwende keine \
-Wendungen, die den Bildausschnitt teilen („links … rechts\", „auf der einen \
-Seite … auf der anderen\", „daneben\", „gegenüber\", „im Gegensatz dazu\"), \
-sondern solche, die den Raum zusammenhalten („an derselben Wand\", „durch \
-dieselbe Tür\", „hinter\", „darüber\", „mitten in\").
+BEIDE SEITEN INS BILD. Gibt das Material Zuversichtliches UND Beunruhigendes \
+her, kommt beides vor, gleich groß und gleich konkret: Was intakt, benutzt \
+oder neu gemacht ist, gehört genauso hinein wie was bröckelt, leersteht oder \
+versiegelt ist.
+🔴 EIN EINZIGER ORT, EINE EINZIGE AUFNAHME: Beides steht an DEMSELBEN Ort, \
+ineinander verschränkt — nicht als zwei Hälften nebeneinander. Beschreibe \
+einen zusammenhängenden Raum, den eine einzige Kamera von einem einzigen \
+Standpunkt aus erfasst. Verwende keine Wendungen, die den Ausschnitt teilen („links … \
+rechts", „auf der einen Seite … auf der anderen", „daneben", „gegenüber", \
+„im Gegensatz dazu"), sondern solche, die den Raum zusammenhalten („an \
+derselben Wand", „durch dieselbe Tür", „hinter", „darüber", „mitten in").
 - Schlecht (zwei Bilder in einem): „a freshly rendered house on the left, and \
-boarded-up shopfronts on the right\\\"
+boarded-up shopfronts on the right\\"
+Prüfe: Steht alles, was du nennst, in einem Raum, den eine Kamera von einem \
+Punkt aus erfasst?
 
-Wie dein einer Ort aussieht, findest du am Material — hier steht bewusst kein \
-Muster dafür (gemessen am 2026-08-30: jede Beispielszene, die hier stand, kam \
-in den Bildern wörtlich wieder). Prüfe nur: Steht alles, was du nennst, in \
-einem Raum, den eine Kamera von einem Punkt aus erfasst?
+WAS NICHT HINEINGEHÖRT: keine Stimmung, keine Lichtstimmung (warm, kalt, \
+düster, hoffnungsvoll), keine Kamera-, Objektiv-, Film- oder Stilangabe — und \
+KEINE LICHTQUELLE, keine Tageszeit, keine Lichtrichtung. Kein Sonnenstand, \
+kein „afternoon light", kein „low sun", kein „daylight", kein Strahl, der von \
+irgendwo einfällt. Das entscheidet Stufe 2 aus mood; nennst du es selbst, \
+gewinnt deine Fassung und die Stimmung des Tages steht nicht mehr im Bild.
+Beschreibe stattdessen den ZUSTAND DER OBERFLÄCHE: nass, trocken, staubig, \
+matt, verkrustet, frisch gestrichen, ausgeblichen, moosig, abgegriffen, \
+gerissen. Das hält unter jedem Licht.
+- Falsch (Lichtquelle und Tageszeit): „the wet surface glinting in low \
+afternoon light\\"
+- Falsch (Sonnenstand und Richtung): „low sun grazing the raised dots\\"
 
-WAS NICHT IN DIE BILDBESCHREIBUNG GEHÖRT: keine Angabe zur Stimmung und keine \
-zur Lichtstimmung des ganzen Bildes (warm, kalt, düster, hoffnungsvoll) und \
-keine Kamera-, Objektiv-, Film- oder Stilangabe. Beides steht in Stufe 2 \
-bereits fest und würde sich mit deiner Fassung schlagen. Auch keine \
-LICHTQUELLE, keine Tageszeit und keine Lichtrichtung: kein Sonnenstand, kein \
-„afternoon light\\\", kein „low sun\\\", kein „daylight\\\", kein Strahl, der von \
-irgendwo einfällt. Wie hell das Bild ist und aus welcher Richtung es \
-beleuchtet wird, entscheidet Stufe 2 aus mood — nennst du es selbst, gewinnt \
-deine Fassung, und die Stimmung des Tages steht dann nicht mehr im Bild.
+SCHRIFT IM BILD ist erlaubt und muss nicht vermieden werden. Nur eines ist \
+Pflicht: Wenn etwas Beschriftetes vorkommt, sage den WORTLAUT dazu — als \
+deutschen Text in Anführungszeichen, mit ausdrücklich benannter Sprache, ein \
+bis vier Wörter oder eine Zahl. Ohne das erfindet das Bildmodell englischen \
+Text, und das Bild hängt in einer deutschen Ausstellung. Der übrige \
+Beschreibungstext bleibt englisch.
+- Richtig: „a printed fee board wired to the scaffolding, the German text \
+reading „NEUBAU 3.200 €/m²""
 
-STATT LICHT: DEN ZUSTAND DER OBERFLÄCHE. Was du an einem Ding beschreiben \
-darfst, ist seine Beschaffenheit, nicht seine Beleuchtung: nass, trocken, \
-staubig, matt, verkrustet, frisch gestrichen, ausgeblichen, moosig, \
-abgegriffen, gerissen. Diese Angaben halten unter jedem Licht.
-- Falsch (nennt Lichtquelle und Tageszeit): „the wet surface glinting in low \
-afternoon light\\\"
-- Falsch (nennt Sonnenstand und Richtung): „low sun grazing the raised dots\\\"
 
-Wie der Zustand aussieht, den du beschreibst, findest du am Ding selbst — \
-nimm keine Wendung von hier oder aus einem früheren Traum.
+=== 2. DER WANDSATZ (deutsch) ===
 
-Auch hier gilt die Belegbarkeit: nur was sich auf die gelieferten Begriffe \
-stützt.
+FORM: genau ein Hauptsatz auf Deutsch, höchstens {max_words} Wörter, OHNE Komma, ohne \
+Nebensatz, ohne Gedankenstrich. Er steht als Bildunterschrift auf einem \
+großen Schirm und muss im Vorbeigehen in einem Blick erfassbar sein.
 
-WIDERSPRUCH: Liefere zusätzlich einen kurzen englischen Halbsatz, der den \
-Widerspruch aus dem Material als etwas SICHTBARES benennt. Er wird in Stufe 2 \
-hinter einen einleitenden Satz gehängt und muss deshalb ein Halbsatz bleiben, \
-kein ganzer Satz und ohne Punkt am Ende.
+🔴 DER SATZ TRÄGT NICHT DAS GANZE BILD. Er zeigt DERSELBEN Szene wie die Bildbeschreibung oben, keine zweite \
+daneben, und ist ihre VERDICHTUNG: EIN Vorgang daraus, der eine, an dem man die anderen ahnt. \
+Die Pflichtbegriffe, das Nahe und das Weite, beide Seiten — das alles steht \
+oben in der Beschreibung und muss hier nicht noch einmal vorkommen. Wer \
+versucht, alles hineinzupacken, bekommt zwangsläufig Kommas und Nebensätze: \
+In {max_words} Wörtern haben drei Begriffe plus Vorder- und Hintergrund \
+keinen Platz. Nenne weniger und zeige das genau.
+Eine Aufzählung ist nicht die Rettung: „A und B steigen aus C auf" hält zwar \
+die Wortzahl ein, ist aber kein Bild, sondern eine Liste mit Verb.
 
-WELCHE ZWEI HÄLFTEN: Suche im Material die STÄRKSTE ZUVERSICHTLICHE und die \
-STÄRKSTE BEUNRUHIGTE Aussage und stelle beide nebeneinander. Nicht irgendein \
-Gegensatzpaar, sondern die beiden äußeren Enden dessen, was die Menschen \
-tatsächlich gesagt haben — das ist der Widerspruch, der den Tag trägt. Die \
-zuversichtliche Hälfte muss dabei genauso konkret und genauso groß im Bild \
-sein wie die beunruhigte; ein Bild, in dem nur der Verfall zu sehen ist und \
-die Hoffnung als Randnotiz, gibt das Material falsch wieder. Findet sich zu \
-einer der beiden Seiten nichts Belegbares, lass das Feld lieber leer, als die \
-fehlende Seite zu erfinden.
 
-ENTSCHEIDEND: Ein Bildmodell kann keinen Vorgang und keine Absicht zeigen, nur \
-Dinge im Raum. Nenne deshalb zwei GEGENSTÄNDE, ORTE ODER MENSCHLICHE HANDLUNGEN, \
-die man beide gleichzeitig fotografieren könnte, nicht zwei Begriffe oder \
-Verfahren. Übersetze den abstrakten Widerspruch in das, woran man ihn sähe.
+=== 3. DIE ÜBERSETZUNG (englisch) ===
+
+Derselbe Satz, wörtlich ins Englische — keine inhaltliche Veränderung, keine \
+Ausschmückung, dieselbe Satzform.
+
+
+=== 4. DER WIDERSPRUCH (englisch) ===
+
+Ein kurzer Halbsatz, kein ganzer Satz, ohne Punkt am Ende — er wird in Stufe \
+2 hinter einen einleitenden Satz gehängt.
+
+Er benennt den Widerspruch aus dem Material als etwas SICHTBARES.
+
+WELCHE ZWEI HÄLFTEN: die STÄRKSTE ZUVERSICHTLICHE und die STÄRKSTE \
+BEUNRUHIGTE Aussage im Material, nicht irgendein Gegensatzpaar. Beide gleich \
+konkret. Findet sich zu einer Seite nichts Belegbares, lass das Feld LEER, statt \
+die fehlende Seite zu erfinden — ein erfundener Widerspruch ist schlechter \
+als keiner.
+
+SICHTBAR MACHEN: Ein Bildmodell kann keinen Vorgang und keine Absicht zeigen, \
+nur Dinge im Raum. Nenne zwei GEGENSTÄNDE, ORTE ODER HANDLUNGEN, die man \
+beide gleichzeitig fotografieren könnte — und verbinde sie über den Raum, \
+nicht über eine Trennlinie.
 - Schlecht (unsichtbar): „gathering opinions while decisions are made from \
-above\\\" — „von oben entschieden\\\" hat kein Aussehen.
+above\\" — „von oben entschieden" hat kein Aussehen.
 - Schlecht (unsichtbar): „restoring an existing façade while billing it as new \
-construction\\\"
-
-Wie die sichtbare Fassung aussieht, entscheidest du am Material — es steht \
-hier absichtlich kein Muster, weil ein Muster abgeschrieben statt verstanden \
-wird (siehe oben, gemessen am 2026-08-30). Prüfe deine Fassung nur an einer \
-Frage: Könnte ein Fotograf das, was du nennst, mit einer einzigen Aufnahme \
+construction\\"
+Prüfe an einer Frage: Könnte ein Fotograf das mit einer einzigen Aufnahme \
 festhalten? Wenn er dafür wissen müsste, was jemand denkt, vorhat oder \
 abrechnet, ist es noch nicht sichtbar.
 
-AUCH HIER EIN ORT: Die beiden Hälften müssen in derselben Aufnahme stehen \
-können, nicht in zwei nebeneinandergestellten. Verbinde sie über den Raum, \
-nicht über eine Trennlinie — „hinter der Punktewand hängt der gestempelte \
-Plan\" statt „links Punktewand, rechts gestempelter Plan\".
 
-Beide Hälften müssen im Material belegt sein. Wenn dort kein echter Widerspruch \
-liegt, lass dieses Feld leer — ein erfundener Widerspruch ist schlechter als \
-keiner.
+=== 5. MOOD UND TENSION (zwei ganze Zahlen von 1 bis 5) ===
 
-EINSCHÄTZUNG DES MATERIALS. Liefere zusätzlich zwei ganze Zahlen von 1 bis 5:
-- mood: Wie blicken die Menschen in diesem Material auf die ZUKUNFT? \
-1 = deutlich negativ, 3 = neutral/gemischt, 5 = deutlich positiv.
+mood: Wie blicken die Menschen auf die ZUKUNFT? 1 = deutlich negativ, \
+3 = neutral/gemischt, 5 = deutlich positiv.
+Entscheidend ist die RICHTUNG, nicht der Ton. Wer ein Problem scharf benennt \
+und dazu sagt, was man tun müsste, blickt zuversichtlich nach vorn — auch \
+wenn jedes Wort nach Missstand klingt. Vorschläge setzen voraus, dass sich \
+etwas ändern lässt; zähle sie als das. Negativ ist Material erst, wenn die \
+Menschen keinen Weg mehr sehen: wenn sie resignieren, andere für unbelehrbar \
+halten oder erwarten, dass alles so bleibt. Wäge ab, statt den lautesten \
+Begriff entscheiden zu lassen: Wie viele Aussagen benennen einen Weg, wie \
+viele nur einen Missstand? Bei ungefähr gleich vielen ist 3 richtig.
 
-  Entscheidend ist die Richtung, nicht der Ton. Wer ein Problem scharf \
-benennt und dazu sagt, was man tun müsste, blickt ZUVERSICHTLICH nach vorn — \
-auch wenn jedes einzelne Wort nach Missstand klingt. „Normen-Inventur\", \
-„gestaffelte Beteiligungstiefe\", „Planungswerkstätten\" sind Vorschläge; sie \
-setzen voraus, dass sich etwas ändern lässt. Zähle sie als das, was sie sind, \
-nicht als Klage über den Zustand, aus dem heraus sie gesagt wurden. Negativ \
-ist Material erst, wenn die Menschen keinen Weg mehr sehen: wenn sie \
-resignieren, andere für unbelehrbar halten oder erwarten, dass alles so \
-bleibt.
-
-  Wäge deshalb ab, statt den lautesten Begriff entscheiden zu lassen: Wie \
-viele Aussagen benennen einen Weg, wie viele nur einen Missstand? Bei \
-ungefähr gleich vielen ist 3 richtig. Ein einzelner drastischer Begriff macht \
-noch keine 2, und ein Material voller Lösungsvorschläge ist auch dann nicht \
-negativ, wenn diese Vorschläge Probleme voraussetzen.
-- tension: Wie weit liegen die Aussagen im Material auseinander? \
-1 = einig, 5 = unvereinbar.\
+tension: Wie weit liegen die Aussagen auseinander? 1 = einig, 5 = unvereinbar.\
 """
 
 
