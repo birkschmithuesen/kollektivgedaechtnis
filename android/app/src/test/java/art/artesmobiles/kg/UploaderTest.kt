@@ -276,4 +276,60 @@ class UploaderTest {
         val text = (ergebnis as Uploader.Ergebnis.Fehler).text
         assertTrue(text.contains("Tailnet"))
     }
+
+    // --- schalte(): Interview per Handy starten und beenden ------------------
+
+    @Test
+    fun `der schalter schickt den gewuenschten zustand als json`() {
+        // 🔴 Absolut ("on": true/false) und nicht "umschalten": ginge eine
+        // Anfrage verloren, liefe ein Umschalter dauerhaft gegenphasig zur
+        // Station. Ein absoluter Wert kann hoechstens wirkungslos sein.
+        val gesendet = ByteArrayOutputStream()
+        Uploader.schalte(URL("http://x:8800/api/interview_switch"), an = true) {
+            attrappe(200, gesendet)
+        }
+        val koerper = gesendet.toString("UTF-8")
+        assertTrue(koerper, koerper.contains("\"on\":true"))
+        // `source` unterscheidet in den Logs Handy von Mikrofonschalter --
+        // sonst ist im Nachhinein nicht klaerbar, wer geschaltet hat.
+        assertTrue(koerper, koerper.contains("handy"))
+    }
+
+    @Test
+    fun `beenden schickt on false`() {
+        val gesendet = ByteArrayOutputStream()
+        Uploader.schalte(URL("http://x:8800/api/interview_switch"), an = false) {
+            attrappe(200, gesendet)
+        }
+        assertTrue(gesendet.toString("UTF-8").contains("\"on\":false"))
+    }
+
+    @Test
+    fun `der schalter meldet sich als json an`() {
+        // Ohne diesen Kopf antwortet FastAPI mit 422, und die Meldung im Flur
+        // waere "Station antwortet mit 422" -- richtig, aber unbrauchbar.
+        var gesehen: String? = null
+        Uploader.schalte(URL("http://x:8800/api/interview_switch"), an = true) {
+            object : HttpURLConnection(it) {
+                override fun connect() {}
+                override fun disconnect() {}
+                override fun usingProxy() = false
+                override fun getOutputStream() = ByteArrayOutputStream()
+                override fun getResponseCode() = 200
+                override fun setRequestProperty(key: String, value: String) {
+                    if (key == "Content-Type") gesehen = value
+                }
+            }
+        }
+        assertEquals("application/json", gesehen)
+    }
+
+    @Test
+    fun `eine station ohne schalter wird als alte fassung benannt`() {
+        val ergebnis = Uploader.schalte(URL("http://x:8800/api/interview_switch"), an = true) {
+            attrappe(404)
+        }
+        val text = (ergebnis as Uploader.Ergebnis.Fehler).text
+        assertTrue(text, text.contains("alte Fassung"))
+    }
 }

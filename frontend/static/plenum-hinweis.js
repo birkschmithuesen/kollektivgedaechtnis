@@ -20,32 +20,56 @@
  * und seine beiden Zahlen stehen als Regler im Bedienfeld.
  */
 
-/** 🔴 PLATZHALTER — hier kommt Birks Text hin.
+/** Der Erklärungstext. Von Birk freigegeben am 2026-09-01 (Vorschlag A, um
+ * den Datenschutzsatz erweitert: „Ich nehme den Vorschlag auf, auch das ein.").
  *
- * Der Inhalt ist ausdrücklich seine Sache und nicht meine (Auftrag: „Erfinde
- * keine Marketing-Prosa"). Bis er dasteht, sagt die Wand selbst, dass sie
- * unfertig ist: Ein hübsch klingender Fülltext würde im Saal für den
- * endgültigen gehalten und bliebe stehen.
+ * Der Wortlaut nimmt bewusst die Sprache der Handyseite auf
+ * (`mirror/web/start.html`, Absatz `.willkommen` und der Hinweis-Block
+ * darunter). Saal und Telefon sollen dieselbe Arbeit gleich erklären — wer
+ * hier liest und danach scannt, darf keine zweite, anders klingende Version
+ * vorfinden. Wird der eine Text geändert, gehört der andere mit angesehen.
  *
- * Zu ersetzen ist genau diese eine Zeichenkette. */
+ * Länge ist hier eine technische Grenze, keine Geschmacksfrage: die Karte
+ * steht 25 Sekunden (`hinweis_dauer` in `kg/server.py`) und wird aus
+ * Saalentfernung bei 42 px gelesen. Drei Sätze sind das Maß; ein vierter
+ * drängt die Karte in die Höhe des QR-Codes. */
 export const ERKLAERUNGSTEXT =
-  'PLATZHALTER — hier steht der Erklärungstext: was die Installation draußen ' +
-  'im Foyer ist. Zu ersetzen in frontend/static/plenum-hinweis.js, Konstante ' +
-  'ERKLAERUNGSTEXT.';
+  'Draußen im Foyer führen wir Interviews. Aus dem, was gesagt wird, wächst ' +
+  'dieses Netz — und daraus träumt die Maschine ein Bild. Es wird kein Ton ' +
+  'aufgezeichnet, und nichts davon verlässt Europa.';
 
-/** Die Zeile, die auf den QR-Code zeigt. Ebenfalls Platzhalter, aus demselben
- * Grund — und getrennt vom Text darüber, weil sie kleiner gesetzt ist
- * (`.plenum-hinweis-scan` in plenum.css) und eine andere Aufgabe hat. */
-export const SCANZEILE =
-  'PLATZHALTER — Aufforderung zum Scannen des Codes rechts unten. Konstante ' +
-  'SCANZEILE in derselben Datei.';
+/** Die Zeile, die auf den QR-Code zeigt — getrennt vom Text darüber, weil sie
+ * kleiner gesetzt ist (`.plenum-hinweis-scan` in plenum.css) und eine andere
+ * Aufgabe hat: nicht erklären, sondern auf den Code rechts unten zeigen. */
+export const SCANZEILE = 'Live auf Ihrem Telefon — gleich erscheint der Code.';
+
+/** Die Adresse unter dem Vollbild-Code.
+ *
+ * Sie steht als Text da, weil nicht jede Kamera will und nicht jeder eine
+ * dabeihat. Wortgleich mit `ADRESSE` in `scripts/qr-erzeugen.py` — was der
+ * Code enthält, muss darunter lesbar sein, sonst führt die Fläche zwei
+ * verschiedene Wege vor. Wird der eine geändert, gehört der andere mit. */
+export const QR_ADRESSE = 'kollektivgedaechtnis.flashclash.de';
+
+/** Wie lange der Code allein auf der Fläche steht, in Millisekunden.
+ *
+ * Bewusst kein eigener Regler: die Zahl hängt an der Standzeit des Textes
+ * (`hinweis_dauer`), und zwar als Anteil. Ein zweiter Regler im Saal-Pult
+ * ließe sich so einstellen, dass Text und Code zusammen länger stehen als der
+ * Abstand zwischen zwei Auftritten — die Wand zeigte dann dauerhaft eine
+ * Einblendung und nie mehr den Graphen. Ein Anteil kann das nicht.
+ *
+ * 0,55 heißt: bei 25 s Text stehen danach rund 14 s Code. Genug, um ein Handy
+ * aus der Tasche zu holen, zu entsperren und zu zielen — das ist der Vorgang,
+ * der hier die Zeit bestimmt, nicht das Lesen. */
+const QR_ANTEIL = 0.55;
 
 /** Vorgaben des Takts, in Millisekunden. Überschrieben vom Bedienfeld
  * (`plenum_hinweis_intervall` / `plenum_hinweis_dauer`), sobald der erste
  * Zustand über SSE ankommt — diese beiden Zahlen gelten also nur in der
  * Zeitspanne davor und auf einer Seite ohne Server. */
 const INTERVALL_MS = 120000;
-const DAUER_MS = 20000;
+const DAUER_MS = 25000;
 
 /** Wie lange nach dem Laden die Einblendung zum ersten Mal kommt.
  *
@@ -95,6 +119,30 @@ export function attachPlenumHinweis({
 
   ziel.appendChild(karte);
 
+  // Der zweite Takt: der Code über die ganze Fläche (Birk, 2026-09-01). Er
+  // hängt am selben Handle wie die Karte, weil die beiden EINE Einblendung in
+  // zwei Teilen sind — wer den einen entfernt, muss den anderen mitnehmen,
+  // sonst bliebe ein schwarzes Vollbild über dem Graphen stehen.
+  const qrFlaeche = document.createElement('section');
+  qrFlaeche.className = 'plenum-qr-voll';
+  qrFlaeche.id = 'plenum-qr-voll';
+  qrFlaeche.setAttribute('aria-hidden', 'true');
+
+  const qrBild = document.createElement('img');
+  // Dieselbe Datei wie in der Ecke: `scripts/qr-erzeugen.py` erzeugt sie, und
+  // sie ist ein SVG — es gibt also keine Auflösungsgrenze beim Vergrößern.
+  qrBild.src = 'static/qr-handyseite.svg';
+  qrBild.alt = '';
+  qrBild.className = 'qr-bild-voll';
+  qrFlaeche.appendChild(qrBild);
+
+  const qrZeile = document.createElement('p');
+  qrZeile.className = 'qr-voll-zeile';
+  qrZeile.textContent = QR_ADRESSE;
+  qrFlaeche.appendChild(qrZeile);
+
+  ziel.appendChild(qrFlaeche);
+
   let takt = { intervallMs, dauerMs };
   let timer = null;
 
@@ -105,37 +153,67 @@ export function attachPlenumHinweis({
 
   function verbergen() {
     karte.classList.remove('sichtbar');
+    qrFlaeche.classList.remove('sichtbar');
   }
 
   function zeigen() {
     karte.classList.add('sichtbar');
   }
 
-  /** Ein Auftritt: einblenden, nach `dauerMs` wieder ausblenden, nach
-   * `intervallMs` von vorn.
+  function qrZeigen() {
+    // Der Text geht, der Code kommt — nie beide zugleich. Der Code liegt auf
+    // schwarzem Grund über allem; stünde die Karte noch, läge sie darunter
+    // und wäre trotzdem weg. Sie hier ausdrücklich abzuräumen, macht den
+    // Zustand im DOM ehrlich statt bloß unsichtbar.
+    karte.classList.remove('sichtbar');
+    qrFlaeche.classList.add('sichtbar');
+  }
+
+  /** Ein Auftritt in ZWEI Teilen (Birk, 2026-09-01): erst lädt der Text ein,
+   * dann kommt der Code über die ganze Fläche.
    *
    * Der Wartezeitpunkt hängt am ANFANG des Auftritts, nicht an seinem Ende:
    * „alle zwei Minuten" soll zwei Minuten von Erscheinen zu Erscheinen heißen
    * und nicht zwei Minuten plus Standzeit — sonst verschiebt sich der Takt
-   * jedesmal, wenn jemand die Dauer verstellt. Die Untergrenze schützt vor
-   * einer Einstellung, in der die Einblendung nie verschwindet. */
+   * jedesmal, wenn jemand die Dauer verstellt.
+   *
+   * 🔴 Die Untergrenzen sind kein Zierrat: Die Summe aus Text- und Codezeit
+   * muss unter dem Intervall bleiben, sonst begänne der nächste Auftritt,
+   * bevor der laufende endet, und die Wand zeigte nie wieder den Graphen. Wer
+   * im Saal die Dauer hochdreht, darf das nicht auslösen können — deshalb
+   * wird die Gesamtzeit hier auf `intervallMs - 1000` gedeckelt und der Code
+   * bekommt nur seinen Anteil DAVON, nicht von der Wunschzahl. */
   function auftritt() {
     zeigen();
-    const stehzeit = Math.min(takt.dauerMs, Math.max(1000, takt.intervallMs - 1000));
+    const gesamt = Math.min(
+      takt.dauerMs * (1 + QR_ANTEIL),
+      Math.max(1000, takt.intervallMs - 1000),
+    );
+    const qrZeit = Math.round(gesamt * (QR_ANTEIL / (1 + QR_ANTEIL)));
+    const textZeit = gesamt - qrZeit;
+
     timer = setTimer(() => {
-      verbergen();
-      timer = setTimer(auftritt, Math.max(1000, takt.intervallMs - stehzeit));
-    }, stehzeit);
+      qrZeigen();
+      timer = setTimer(() => {
+        verbergen();
+        timer = setTimer(auftritt, Math.max(1000, takt.intervallMs - gesamt));
+      }, qrZeit);
+    }, textZeit);
   }
 
   timer = setTimer(auftritt, ersterAuftrittMs);
 
   return {
     element: karte,
+    qrElement: qrFlaeche,
     zeigen,
+    qrZeigen,
     verbergen,
     get sichtbar() {
       return karte.classList.contains('sichtbar');
+    },
+    get qrSichtbar() {
+      return qrFlaeche.classList.contains('sichtbar');
     },
     /** Neuer Takt aus dem Bedienfeld. Wirkt ab dem NÄCHSTEN Auftritt und
      * schneidet keinen laufenden ab: Wer im Saal am Regler dreht, während der
@@ -148,6 +226,9 @@ export function attachPlenumHinweis({
     entfernen() {
       abbrechen();
       karte.remove();
+      // Beide Teile, sonst bliebe bei `sim/prerender.py` ein schwarzes
+      // Vollbild über der Aufnahme stehen.
+      qrFlaeche.remove();
     },
   };
 }

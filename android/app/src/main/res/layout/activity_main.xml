@@ -92,9 +92,38 @@
         android:id="@+id/ausloeser"
         android:layout_width="0dp"
         android:layout_height="96dp"
-        android:layout_margin="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="16dp"
         android:textSize="22sp"
         android:text="@string/ausloeser"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/interview" />
+
+    <!--
+      Interview starten / beenden (Birk, 2026-09-01: „analog zu dem Mikrofon
+      an außen ... Start/Stopp halt über das Handy haben").
+
+      UNTER dem Auslöser und flacher (64dp gegen 96dp): Der Auslöser ist der
+      Knopf, der im Flur am häufigsten und oft mit einer Hand bedient wird —
+      er behält den Daumenplatz und seine Größe. Ein gleich großer zweiter
+      Knopf darunter würde beim blinden Danebengreifen ein Interview beenden,
+      und das ist der teuerste Fehlgriff, den diese App anbieten kann.
+
+      Die Beschriftung wechselt zwischen „Interview starten" und „Interview
+      beenden" — was der Knopf tut, hängt am Zustand der STATION, nicht an
+      einem Merker in der App (siehe MainActivity.zeigeZustand).
+    -->
+    <Button
+        android:id="@+id/interview"
+        android:layout_width="0dp"
+        android:layout_height="64dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:textSize="18sp"
+        android:text="@string/interview_starten"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />

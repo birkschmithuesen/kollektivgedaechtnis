@@ -37,7 +37,7 @@ from kg.transcript import TranscriptionEvent, TranscriptLog
 
 def test_switching_off_closes_the_interview_with_its_own_reason():
     tracker = SessionTracker(timeout_s=900, stop_phrases=["auf wiedersehen"])
-    tracker.photo(at=100.0)
+    tracker.mic_switch(on=True, at=100.0)
 
     transitions = tracker.mic_switch(on=False, at=200.0)
 
@@ -48,9 +48,9 @@ def test_switching_off_closes_the_interview_with_its_own_reason():
 def test_the_reason_stays_distinguishable_from_a_spoken_goodbye():
     """Im Nachhinein muss unterscheidbar bleiben, wie ein Interview endete."""
     tracker = SessionTracker(timeout_s=900, stop_phrases=["auf wiedersehen"])
-    tracker.photo(at=100.0)
+    tracker.mic_switch(on=True, at=100.0)
     spoken = tracker.transcript("also dann auf wiedersehen", at=150.0)
-    tracker.photo(at=200.0)
+    tracker.mic_switch(on=True, at=200.0)
     switched = tracker.mic_switch(on=False, at=250.0)
 
     assert spoken[0].reason == "spoken"
@@ -72,7 +72,7 @@ def test_switching_on_opens_an_interview_with_its_own_reason():
 def test_switching_on_does_not_disturb_a_running_interview():
     """Kein zweites Interview daneben, keine Neueroeffnung: idempotent."""
     tracker = SessionTracker(timeout_s=900, stop_phrases=[])
-    tracker.photo(at=100.0)
+    tracker.mic_switch(on=True, at=100.0)
     assert tracker.mic_switch(on=True, at=150.0) == []
     assert tracker.open_since == 100.0
 
@@ -108,30 +108,37 @@ def test_a_photo_after_a_switch_opening_hands_in_the_portrait():
     assert tracker.open_since == 100.0
 
 
-def test_a_photo_after_a_photo_stays_a_new_visitor():
-    """Die Absicherung gegen das Vermischen: Ein Foto auf ein per FOTO
-    eroeffnetes Interview bleibt ein neuer Besucher. Sonst schriebe der
-    zweite Besucher still das Portraet des ersten um."""
+def test_ein_foto_ohne_interview_bewirkt_nichts():
+    """🔴 Umgestellt am 2026-09-01 (Birk: „ein foto duerfte eigentlich kein
+    interview mehr eroeffnen, das ist ueberholt").
+
+    Dieser Test hiess vorher `test_a_photo_after_a_photo_stays_a_new_visitor`
+    und sicherte die Regel ab, dass ein zweites Foto einen zweiten Besucher
+    anlegt. Die Regel gibt es nicht mehr -- weil es das Eroeffnen per Foto
+    nicht mehr gibt. Ein Foto ohne laufendes Interview verpufft."""
     tracker = SessionTracker(timeout_s=900, stop_phrases=[])
-    tracker.photo(at=100.0)
 
-    transitions = tracker.photo(at=200.0)
+    assert tracker.photo(at=100.0) == []
+    assert tracker.open_since is None
+    assert tracker.photo(at=200.0) == []
+    assert tracker.open_since is None
 
-    assert [(t.kind, t.reason) for t in transitions] == [("closed", "new_photo"), ("opened", "photo")]
-    assert tracker.open_since == 200.0
 
+def test_nach_dem_nachreichen_ersetzt_das_naechste_foto_nur_das_bild():
+    """Vorher war das zweite Foto ein neuer Besucher -- seit 2026-09-01
+    bleibt es dieselbe Person mit einem neuen Bild.
 
-def test_only_the_first_photo_is_handed_in():
-    """Nach dem nachgereichten Portraet ist das Interview eines wie jedes
-    andere: Das naechste Foto ist wieder ein neuer Besucher."""
+    Wichtig ist die zweite Zusage: `open_since` bleibt bei 100. Wanderte sie
+    mit, waere das Transkriptfenster der Person ab hier abgeschnitten, und
+    ihre Begriffe kaemen aus einem halben Gespraech."""
     tracker = SessionTracker(timeout_s=900, stop_phrases=[])
     tracker.mic_switch(on=True, at=100.0)
     tracker.photo(at=150.0)
 
     transitions = tracker.photo(at=200.0)
 
-    assert [(t.kind, t.reason) for t in transitions] == [("closed", "new_photo"), ("opened", "photo")]
-    assert tracker.open_since == 200.0
+    assert [(t.kind, t.reason) for t in transitions] == [("portrait", "replaced_photo")]
+    assert tracker.open_since == 100.0
 
 
 def test_a_resumed_interview_without_a_portrait_still_takes_one():
@@ -147,7 +154,7 @@ def test_a_resumed_interview_without_a_portrait_still_takes_one():
 
 def test_switching_off_twice_closes_once():
     tracker = SessionTracker(timeout_s=900, stop_phrases=[])
-    tracker.photo(at=100.0)
+    tracker.mic_switch(on=True, at=100.0)
     assert len(tracker.mic_switch(on=False, at=200.0)) == 1
     assert tracker.mic_switch(on=False, at=201.0) == []
 
@@ -189,6 +196,7 @@ def core(tmp_path):
 
 
 async def test_the_switch_closes_the_person_and_starts_the_pipeline(core):
+    core.on_mic_switch(on=True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
     person_id = core.store.open_person().id
@@ -249,6 +257,7 @@ async def test_switching_on_twice_does_not_open_a_second_interview(core):
 
 
 async def test_switching_on_does_not_disturb_a_photo_interview(core):
+    core.on_mic_switch(on=True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     core.on_mic_switch(on=True, at=150.0)
     await core.drain()
@@ -287,23 +296,28 @@ async def test_a_late_photo_fills_in_the_portrait_instead_of_starting_over(core)
     assert core.processed == []  # nichts wurde geschlossen, nichts verdichtet
 
 
-async def test_a_photo_after_a_photo_stays_a_new_visitor_in_the_core(core):
-    """Punkt 5 der Aufgabe, die Absicherung gegen das Vermischen: Der zweite
-    Besucher bekommt eine eigene Person, statt das Portraet des ersten
-    still zu ueberschreiben."""
+async def test_zwei_fotos_bleiben_eine_person_im_core(core):
+    """Seit 2026-09-01: Zwei Fotos machen keine zwei Besucher mehr.
+
+    Vorher stand hier die umgekehrte Zusage. Was bleibt, ist der Kern
+    dahinter -- es darf nichts still verlorengehen: Person p1 behaelt ihr
+    Gespraech, und das neue Bild kommt an."""
+    core.on_mic_switch(on=True, at=100.0)
     core.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
     await core.drain()
     core.on_photo(photo_path="b.jpg", portrait_path="b.png", at=400.0)
     await core.drain()
 
-    assert core.store.get_person("p1").stop_reason == "new_photo"
-    assert core.store.get_person("p1").portrait_path == "a.png"
-    assert core.store.open_person().id == "p2"
-    assert core.store.get_person("p2").portrait_path == "b.png"
+    offen = core.store.open_person()
+    assert offen is not None and offen.id == "p1"
+    assert offen.portrait_path == "b.png", "das zweite Bild kam nicht an"
+    assert offen.started_at == 100.0
+    assert len(core.store.list_persons()) == 1
 
 
-async def test_a_second_photo_after_a_late_photo_is_a_new_visitor(core):
-    """Sobald das Portraet nachgereicht ist, gilt wieder die Fotoregel."""
+async def test_ein_foto_nach_dem_nachgereichten_ersetzt_es(core):
+    """Sobald das Portraet nachgereicht ist, ersetzt das naechste Foto es --
+    frueher eroeffnete es einen neuen Besuch."""
     core.on_mic_switch(on=True, at=100.0)
     core.on_photo(photo_path="spaet.jpg", portrait_path="spaet.png", at=150.0)
     await core.drain()
@@ -311,9 +325,10 @@ async def test_a_second_photo_after_a_late_photo_is_a_new_visitor(core):
     core.on_photo(photo_path="b.jpg", portrait_path="b.png", at=400.0)
     await core.drain()
 
-    assert core.store.get_person("p1").stop_reason == "new_photo"
-    assert core.store.get_person("p1").portrait_path == "spaet.png"
-    assert core.store.open_person().id == "p2"
+    offen = core.store.open_person()
+    assert offen is not None and offen.id == "p1"
+    assert offen.portrait_path == "b.png"
+    assert len(core.store.list_persons()) == 1
 
 
 async def test_a_restart_keeps_the_portrait_open(core, tmp_path):

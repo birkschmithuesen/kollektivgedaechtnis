@@ -89,6 +89,9 @@ def test_im_foyer_gibt_es_keinen_erklaerungstext(foyer):
     den er gerade erkundet."""
     assert foyer.evaluate("() => document.querySelector('.plenum-hinweis') === null")
     assert foyer.evaluate("() => window.kgPlenumHinweis === null")
+    # Und erst recht kein Vollbild-Code: der legte sich schwarz über den
+    # gesamten Graphen, mitten in der Erkundung durch einen Besucher.
+    assert foyer.evaluate("() => document.querySelector('.plenum-qr-voll') === null")
 
 
 def test_die_legende_steht_im_foyer_weiter(foyer):
@@ -110,12 +113,23 @@ def test_der_qr_code_hat_unveraenderte_masse(foyer):
     masse = foyer.evaluate(
         """() => {
              const s = getComputedStyle(document.querySelector('.qr-bild'));
-             return { breite: s.width, hoehe: s.height, deckkraft: s.opacity };
+             const aussen = getComputedStyle(document.querySelector('.qr-hinweis'));
+             return {
+               breite: s.width,
+               hoehe: s.height,
+               deckkraft: s.opacity,
+               anzeige: aussen.display,
+             };
            }"""
     )
     assert masse["breite"] == "132px", masse
     assert masse["hoehe"] == "132px", masse
     assert float(masse["deckkraft"]) == pytest.approx(0.7), masse
+    # 🔴 Seit 2026-09-01 ist `display` eine Variable, weil der Saal den
+    # Eck-Code abschaltet. Der Vorgabewert muss im Foyer weiter `block` sein —
+    # genau hier könnte die Saal-Änderung dem Foyer den Code wegnehmen, und
+    # niemand fiele es auf, bis jemand vor der Wand steht und nichts findet.
+    assert masse["anzeige"] == "block", masse
 
 
 def test_die_zitatkarte_behaelt_ihre_helle_kante(foyer):

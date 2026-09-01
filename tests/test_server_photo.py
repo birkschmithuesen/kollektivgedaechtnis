@@ -51,6 +51,12 @@ def png_bytes(groesse: tuple[int, int] = (640, 480)) -> bytes:
 def umgebung(tmp_path):
     cfg = Config(data_dir=tmp_path / "state")
     store = Store.open(cfg.db_path)
+    # Seit 2026-09-01 nimmt `/api/photo` nur an, was zu einem LAUFENDEN
+    # Interview gehoert (Birk: „ein foto duerfte eigentlich kein interview
+    # mehr eroeffnen"). Die Faelle hier pruefen den Bildweg -- Format,
+    # Groesse, Namensvergabe -- und brauchen dafuer ein offenes Interview,
+    # so wie es am Booth der Schalter anlegt.
+    store.create_person(started_at=100.0, photo_path=None, portrait_path=None)
     core = CoreSpy()
     app = create_app(store, cfg, EventBus(), core=core)
     with TestClient(app) as client:
@@ -60,7 +66,7 @@ def umgebung(tmp_path):
     store.close()
 
 
-def test_ein_foto_eroeffnet_ein_interview(umgebung):
+def test_ein_foto_erreicht_das_laufende_interview(umgebung):
     antwort = umgebung.post(
         "/api/photo", content=jpeg_bytes(), headers={"Content-Type": "image/jpeg"}
     )

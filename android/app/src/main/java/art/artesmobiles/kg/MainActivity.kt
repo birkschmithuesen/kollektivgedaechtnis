@@ -22,6 +22,9 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -42,10 +45,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ausloeser: Button
     private lateinit var sucher: PreviewView
     private lateinit var vorschau: ImageView
+    private lateinit var interviewKnopf: Button
     private var aufnahme: ImageCapture? = null
 
     /** Verhindert, dass ein zweiter Druck ein zweites Interview eröffnet. */
     private var sendetGerade = false
+
+    /**
+     * Was die Station beim letzten Nachfragen gemeldet hat.
+     *
+     * `null` heißt „nicht erreichbar" und ist ausdrücklich ein dritter
+     * Zustand, nicht ein „läuft nicht": Ein Umschalter, der den Stand nicht
+     * kennt, macht im Zweifel das Gegenteil des Gewollten — deshalb wird der
+     * Knopf dann gesperrt statt geraten.
+     */
+    private var interviewLaeuft: Boolean? = null
+
+    /** Läuft, solange die App vorn ist. Siehe `beobachteZustand`. */
+    private var beobachter: Job? = null
 
     private val kameraFreigabe = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -63,6 +80,10 @@ class MainActivity : AppCompatActivity() {
         ausloeser = findViewById(R.id.ausloeser)
         sucher = findViewById(R.id.sucher)
         vorschau = findViewById(R.id.vorschau)
+        // Bis die erste Antwort der Station da ist, ist der Stand unbekannt —
+        // und ein Knopf, dessen Beschriftung gleich umspringt, hat schon
+        // jemanden zum Danebendrücken verleitet. Also erst sperren.
+        interviewLaeuft = null
 
         // Antippen blendet die Vorschau weg — sie verdeckt einen Teil des
         // Suchers, und wer das nächste Foto machen will, soll sie loswerden,
@@ -75,6 +96,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         ausloeser.setOnClickListener { schiesse() }
+        interviewKnopf = findViewById(R.id.interview)
+        interviewKnopf.setOnClickListener { schalteInterview() }
         findViewById<ImageButton>(R.id.einstellungen).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -94,6 +117,137 @@ class MainActivity : AppCompatActivity() {
         // wohin die App jetzt schickt — die Adresse ist die einzige Sache,
         // die im Flur schiefgeht.
         zeige(getString(R.string.bereit, einstellungen.aktuellesZiel().first), fehler = false)
+        beobachteZustand()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 🔴 Die Abfrage MUSS hier enden. Ohne das liefe sie weiter, während
+        // das Handy in der Tasche steckt — alle drei Sekunden eine Anfrage an
+        // die Station, den ganzen Ausstellungstag lang, für eine Anzeige, die
+        // niemand sieht. `lifecycleScope` allein rettet das nicht: der räumt
+        // erst beim Beenden auf, nicht beim Wegschalten.
+        beobachter?.cancel()
+        beobachter = null
+    }
+
+    /**
+     * Fragt die Station regelmäßig, ob ein Interview läuft.
+     *
+     * Der Grund für das Ganze (Birk, 2026-09-01): Der Knopf soll nicht raten.
+     * Ein Interview kann auch am Mikrofonschalter oder durch die gesprochene
+     * Schlussphrase enden — ohne Nachfrage stünde das Handy dann auf „läuft"
+     * und der nächste Druck beendete etwas, das längst vorbei ist.
+     *
+     * Drei Sekunden sind ein Kompromiss aus zwei echten Kosten: Häufiger wäre
+     * Funkverkehr für nichts (die App liegt am Booth oft nur herum),
+     * seltener und der Knopf hinkte spürbar hinterher, wenn jemand nebenan am
+     * Mikrofonschalter war.
+     *
+     * Über den Spiegel-Weg wird gar nicht erst gefragt: Dort gibt es weder
+     * `/api/state` noch den Schalter, und eine Abfrage, die garantiert
+     * scheitert, sähe drei Sekunden lang wie eine ausgefallene Station aus.
+     */
+    private fun beobachteZustand() {
+        beobachter?.cancel()
+        if (einstellungen.ziel != Einstellungen.Ziel.STATION) {
+            interviewLaeuft = null
+            zeigeZustand()
+            return
+        }
+        beobachter = lifecycleScope.launch {
+            while (isActive) {
+                val adresse = einstellungen.stationsAdresse
+                val zustand = withContext(Dispatchers.IO) { Uploader.holeZustand(adresse) }
+                // Während gerade geschaltet oder gesendet wird, NICHT
+                // überschreiben: die Station braucht einen Moment, bis sich
+                // der neue Stand in `/api/state` zeigt, und eine Antwort von
+                // vorher würde den Knopf kurz zurückspringen lassen — genau
+                // das Flackern, das Birk nicht will.
+                if (!sendetGerade) {
+                    interviewLaeuft = zustand?.interviewLaeuft
+                    zeigeZustand()
+                }
+                delay(3_000)
+            }
+        }
+    }
+
+    /** Bringt Knopfbeschriftung und Freigabe auf den zuletzt bekannten Stand. */
+    private fun zeigeZustand() {
+        val laeuft = interviewLaeuft
+        when {
+            einstellungen.ziel != Einstellungen.Ziel.STATION -> {
+                interviewKnopf.isEnabled = false
+                interviewKnopf.text = getString(R.string.interview_starten)
+            }
+            laeuft == null -> {
+                // Unbekannt: sperren statt raten.
+                interviewKnopf.isEnabled = false
+                interviewKnopf.text = getString(R.string.interview_starten)
+            }
+            else -> {
+                interviewKnopf.isEnabled = !sendetGerade
+                interviewKnopf.text = getString(
+                    if (laeuft) R.string.interview_beenden else R.string.interview_starten
+                )
+            }
+        }
+    }
+
+    /**
+     * Schaltet das Interview um — dasselbe, was der Schalter am Mikrofon tut.
+     *
+     * Gesendet wird der GEWÜNSCHTE Zustand (`on: true/false`) und kein
+     * „umschalten": Ginge unterwegs eine Anfrage verloren und die App schickte
+     * „das Gegenteil von dem, was ich glaube", liefe sie dauerhaft
+     * gegenphasig. Ein absoluter Wert kann höchstens wirkungslos sein.
+     */
+    private fun schalteInterview() {
+        val laeuft = interviewLaeuft ?: return  // unbekannt: der Knopf ist ohnehin gesperrt
+        if (einstellungen.ziel != Einstellungen.Ziel.STATION) {
+            zeige(getString(R.string.nur_im_tailnet), fehler = true)
+            return
+        }
+        val neuerZustand = !laeuft
+        interviewKnopf.isEnabled = false
+        lifecycleScope.launch {
+            val adresse = einstellungen.stationsAdresse
+            val ergebnis = withContext(Dispatchers.IO) {
+                try {
+                    Uploader.schalte(
+                        Uploader.endpunkt(adresse, "/api/interview_switch"), neuerZustand
+                    )
+                } catch (e: Exception) {
+                    Uploader.Ergebnis.Fehler(getString(R.string.adresse_ungueltig))
+                }
+            }
+            when (ergebnis) {
+                is Uploader.Ergebnis.Erfolg -> {
+                    // Sofort übernehmen, nicht auf die nächste Abfrage warten:
+                    // bis zu drei Sekunden Verzögerung nach einem Druck fühlen
+                    // sich nach einem nicht angekommenen Knopf an, und dann
+                    // drückt man noch einmal.
+                    interviewLaeuft = neuerZustand
+                    zeige(
+                        getString(
+                            if (neuerZustand) R.string.interview_gestartet
+                            else R.string.interview_beendet
+                        ),
+                        fehler = false,
+                    )
+                }
+                is Uploader.Ergebnis.Fehler -> {
+                    // Der Stand ist jetzt unbekannt, nicht etwa der alte: Die
+                    // Anfrage kann die Station erreicht haben und nur die
+                    // Antwort verloren gegangen sein. Die nächste Abfrage
+                    // klärt es; bis dahin bleibt der Knopf gesperrt.
+                    interviewLaeuft = null
+                    zeige(ergebnis.text, fehler = true)
+                }
+            }
+            zeigeZustand()
+        }
     }
 
     private fun starteKamera() {
@@ -174,6 +328,19 @@ class MainActivity : AppCompatActivity() {
             }
             when (ergebnis) {
                 is Uploader.Ergebnis.Erfolg -> {
+                    // Ein angekommenes Foto BELEGT, dass ein Interview laeuft:
+                    // Seit 2026-09-01 nimmt die Station Fotos nur noch dazu an
+                    // und weist sie sonst mit 409 ab (`kg/server.py`). Eine
+                    // 200 ist damit die verlaesslichste Auskunft ueber den
+                    // Zustand, die die App bekommen kann -- verlaesslicher als
+                    // die letzte Abfrage, die bis zu drei Sekunden alt ist.
+                    //
+                    // Nur auf dem direkten Weg: Der Spiegel nimmt das Foto
+                    // entgegen, ohne die Station zu fragen, seine 200 sagt
+                    // ueber das Interview also nichts.
+                    if (einstellungen.ziel == Einstellungen.Ziel.STATION) {
+                        interviewLaeuft = true
+                    }
                     fertig(getString(R.string.gesendet), fehler = false)
                     // Die Vorschau kommt NACH der Erfolgsmeldung und blockiert
                     // den Auslöser nicht: sie ist eine Dreingabe. Über den
@@ -181,8 +348,15 @@ class MainActivity : AppCompatActivity() {
                     // erst beim Abholen — dann bleibt `portrait` null.
                     ergebnis.portrait?.let { zeigeVorschau(adresse, it) }
                 }
-                is Uploader.Ergebnis.Fehler ->
+                is Uploader.Ergebnis.Fehler -> {
+                    // Ein abgelehntes Foto sagt auch etwas ueber den
+                    // Interview-Zustand: Die haeufigste Ablehnung ist seit
+                    // 2026-09-01 "kein Interview offen" -- und dann steht der
+                    // Knopf womoeglich falsch auf "beenden". Also nachfragen
+                    // statt beim eigenen Glauben bleiben.
+                    interviewLaeuft = null
                     fertig(ergebnis.text, fehler = true)
+                }
             }
         }
     }
@@ -215,6 +389,10 @@ class MainActivity : AppCompatActivity() {
         sendetGerade = false
         ausloeser.isEnabled = true
         zeige(text, fehler)
+        // Der Interview-Knopf war waehrend des Sendens gesperrt (`sendetGerade`
+        // in zeigeZustand) -- hier gibt er sich wieder frei, mit der
+        // Beschriftung, die jetzt gilt.
+        zeigeZustand()
     }
 
     private fun zeige(text: String, fehler: Boolean) {

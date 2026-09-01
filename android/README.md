@@ -21,6 +21,44 @@ Datensouveränität und verlinkt eine Transparenzseite. Ein Portraitfoto über
 einen US-Messenger zu schicken, um es an eine EU-souveräne Pipeline zu
 übergeben, wäre der Widerspruch im eigenen Aufbau.
 
+## Interview starten und beenden (seit 2026-09-01)
+
+Unter dem Auslöser sitzt ein zweiter, flacherer Knopf: **Interview starten**
+bzw. **Interview beenden**. Er tut genau dasselbe wie der Schalter am Mikrofon
+(`POST /api/interview_switch`) — bewusst derselbe Endpunkt und kein eigener,
+damit sich die beiden Wege nicht auseinanderentwickeln.
+
+**Der Knopf rät nicht.** Die App fragt alle drei Sekunden `GET /api/state` und
+richtet Beschriftung und Freigabe danach. Das ist nötig, weil ein Interview
+auch anders enden kann — am Mikrofonschalter, durch die gesprochene
+Schlussphrase, durch den Timeout. Ohne Nachfrage stünde das Handy dann auf
+„läuft" und der nächste Druck beendete etwas längst Beendetes.
+
+Ist die Station nicht erreichbar, wird der Knopf **gesperrt** statt geraten.
+Ein Umschalter, der den Stand nicht kennt, macht im Zweifel das Gegenteil.
+
+**Nur über den direkten Weg.** Der öffentliche Spiegel nimmt Fotos entgegen
+und sonst nichts — er ist die Fassade nach draußen und darf die Station nicht
+steuern. Im Spiegel-Modus ist der Knopf deshalb aus.
+
+### 🔴 Ein Foto eröffnet kein Interview mehr
+
+Bis zum 2026-09-01 war das Foto der Anfang eines Besuchs. Heute ist der Anfang
+eine bewusste Handlung am Schalter. Ein Foto kann nur noch drei Dinge tun:
+
+| Lage | Was passiert |
+|---|---|
+| kein Interview offen | **abgewiesen** (HTTP 409), keine Datei entsteht |
+| offen, ohne Portrait | Bild wird nachgereicht (`late_photo`) |
+| offen, mit Portrait | Bild **ersetzt** das bisherige (`replaced_photo`) |
+
+Der Grund ist der Betrieb am Booth: Dort wird probiert und nachjustiert.
+Solange jedes Foto ein Interview eröffnete, erzeugte jeder Probeauslöser eine
+Person an der Wand, die nie etwas gesagt hat — und ein zweites Foto während
+eines Gesprächs zerschnitt dieses in zwei Personen.
+
+Die App zeigt bei 409 „Kein Interview offen — zuerst unten Interview starten".
+
 ## Sucherrahmen und Vorschau (für Testreihen)
 
 Die App zeigt **im Sucher** einen goldenen Kreis: so beschneidet die Station
@@ -29,10 +67,49 @@ Kopfhöhe. Der Rahmen bildet den **mittigen Rückfallweg** ab — findet die
 Station ein Gesicht, wird der Ausschnitt enger, der Kreis ist dann die
 sichere Untergrenze.
 
-**Nach dem Auslösen** erscheint unten links das fertige Portrait, wie es die
-Station zugeschnitten hat (antippen blendet es weg). Das ist das **echte**
-Bild von der Station, keine Nachbildung — die Station nennt in ihrer Antwort
-den Dateinamen, die App holt es über `/media/portraits/<name>`.
+**Nach dem Auslösen** erscheint das fertige Portrait **formatfüllend** über
+dem Sucher, wie es die Station zugeschnitten hat (antippen blendet es weg).
+Das ist das **echte** Bild von der Station, keine Nachbildung — die Station
+nennt in ihrer Antwort den Dateinamen, die App holt es über
+`/media/portraits/<name>`.
+
+> Bis einschließlich **v6** hing die Vorschau als 140dp-Kachel in der Ecke.
+> Vollbild gilt ab **v7** (Layout-Änderung vom 2026-09-01, Commit `7fd4425`).
+> Wer eine Kachel sieht, hat ein altes APK installiert — nicht im Code suchen,
+> sondern die Version prüfen (siehe unten).
+
+## 🔴 Welche Version liegt auf dem Telefon?
+
+Der häufigste Fehlschluss bei dieser App: Der Quellcode ist längst richtig,
+das **APK auf dem Gerät** ist alt. Am 2026-09-01 lief so eine Meldung auf
+(„zeigt das Foto nur klein"), obwohl die Änderung seit Stunden auf `master`
+lag — nur eben nicht auf dem Handy.
+
+Am Gerät: *Einstellungen → Apps → Kollektivgedächtnis Foto*. Die
+`versionName` steht bei allen Builds auf `1.0` und **hilft nicht weiter** —
+sie unterscheidet die Stände nicht. Verlässlich ist nur das Datum unter
+„App-Details" gegen die Bauzeit des APK.
+
+Aus einem vorliegenden APK lässt sich der Stand ohne Android-Werkzeuge
+ablesen — das Layout steckt als Binär-XML drin:
+
+```bash
+uv run python scripts/apk-layout-lesen.py out/kollektivgedaechtnis-foto-v8.apk
+```
+
+`layout_width: 140dip` beim `ImageView` heißt Kachel (v6 und älter),
+`0dip` heißt Vollbild (ab v7).
+
+**Drüberinstallieren geht.** Alle Builds tragen dasselbe Debug-Zertifikat
+(SHA-256 `b1f145d4…`, nachgemessen 2026-09-01) — Android nimmt das Update an,
+ohne dass die alte App deinstalliert werden muss. Wäre es ein anderer
+Schlüssel, bräche die Installation mit „App nicht installiert" ab.
+
+**Wo das APK liegt:** in der RoboCloud unter
+`Hermes-Agent/RoboCloud/NewBauhaus-2026-Interviews/`. Das ist der einzige
+Ort, an den das Telefon herankommt — `out/` liegt bewusst nicht im Git
+(Binaries), war deshalb aber auch für niemanden erreichbar. **Wer ein neues
+APK baut, lädt es dorthin hoch, sonst ist es gebaut und nicht ausgeliefert.**
 
 Über den **Spiegel-Weg gibt es keine Vorschau**: dort entsteht das Portrait
 erst beim Abholen. Kein Fehler.
@@ -100,6 +177,30 @@ scp fundusbot@91.98.143.165:~/kg-android/app/build/outputs/apk/release/app-relea
 Das APK ist mit dem **Debug-Schlüssel** signiert. Für eine
 Seitenlade-Installation reicht das; ein Release-Keystore müsste verwahrt
 werden und kauft für zwei Ausstellungstage nichts.
+
+🔴 **Nach dem Bauen ausliefern, sonst war es umsonst.** Das APK landet in
+`out/`, und `out/` ist nicht im Git — es ist damit für kein Telefon
+erreichbar. Zwei Schritte gehören zum Bauen dazu:
+
+```bash
+cp app-release.apk out/kollektivgedaechtnis-foto-vN.apk
+rclone copy out/kollektivgedaechtnis-foto-vN.apk \
+  hermes-vault:Hermes-Agent/RoboCloud/NewBauhaus-2026-Interviews/
+```
+
+Am 2026-09-01 fehlte genau das: v7 und v8 waren gebaut, lagen aber nur auf
+dem vServer. Auf dem Telefon blieb v6, und die Vollbild-Vorschau schien nicht
+zu funktionieren — obwohl sie seit Stunden im Code stand.
+
+**Ein Build ist erst fertig, wenn er neuer ist als der letzte Commit.**
+Ebenfalls am 2026-09-01: v8 wurde um 16:09 gebaut, `51d615b` änderte
+`Bildbytes.kt` um 16:11. v8 trug deshalb noch `MAX_KANTE = 1024` statt 1600 —
+ein Build, der bereits beim Entstehen veraltet war. Vor dem Ausliefern:
+
+```bash
+git log -1 --format=%ai -- android/     # letzte Quelländerung
+ls -l --time-style=full-iso out/*.apk   # Bauzeit
+```
 
 ## Wenn es im Flur klemmt
 

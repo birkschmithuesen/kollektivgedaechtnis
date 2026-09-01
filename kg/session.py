@@ -27,10 +27,12 @@ log = logging.getLogger(__name__)
 class Transition:
     kind: str  # "opened" | "closed" | "portrait"
     at: float
-    # opened: "photo" | "mic_switch"
-    # closed: "text" | "spoken" | "spoken_llm" | "timeout" | "new_photo"
-    #       | "mic_switch"
-    # portrait: "late_photo"
+    # opened: "mic_switch"   (seit 2026-09-01 der EINZIGE Weg hinein --
+    #         "photo" ist entfallen, siehe SessionTracker.photo)
+    # closed: "text" | "spoken" | "spoken_llm" | "timeout" | "mic_switch"
+    #         ("new_photo" ist mit demselben Schritt entfallen: ein Foto
+    #          schliesst kein Interview mehr)
+    # portrait: "late_photo" | "replaced_photo"
     reason: str
 
 
@@ -72,41 +74,47 @@ class SessionTracker:
         return self._open_since
 
     def photo(self, at: float) -> list[Transition]:
-        """A photo is normally the next visitor — but not always.
+        """Ein Foto gehoert IMMER zum laufenden Interview — oder zu keinem.
 
-        On an interview that was opened by the microphone switch and still has
-        no portrait, the photo belongs to the person already talking: they
-        changed their mind, or the operator got round to it late. Closing that
-        interview and opening a second one would cut one conversation in two.
+        Umgestellt am 2026-09-01 (Birk: „ein foto duerfte eigentlich kein
+        interview mehr eroeffnen, das ist ueberholt"). Vorher war das Foto der
+        Anfang eines Besuchs; heute ist der Anfang eine bewusste Handlung am
+        Schalter — am Mikrofon oder in der Handy-App.
 
-        Only that one case. A photo after a photo stays what it always was, a
-        new visitor with reason "new_photo" — and so does the second photo
-        after a handed-in portrait. Otherwise the next visitor would silently
-        overwrite the previous one's portrait instead of getting their own
-        node.
+        Drei Faelle, und keiner davon eroeffnet:
 
-        OFFEN (Birk, 2026-09-01) — der Alternativ-Cache ist noch nicht gebaut:
+        * **Kein Interview offen** → nichts. Das Bild wird nicht zu einer
+          Person. Am Booth wird probiert und nachjustiert; jeder dieser
+          Ausloeser erzeugte vorher eine stumme Scheibe an der Wand.
+        * **Offen, noch ohne Portraet** → das Bild wird nachgereicht
+          ("late_photo"). Der Fall, fuer den es den Schalter gibt: wer erst
+          kein Foto wollte und es sich anders ueberlegt.
+        * **Offen, schon mit Portraet** → das Bild ERSETZT das bisherige
+          ("replaced_photo"). Wer im laufenden Gespraech noch einmal
+          ausloest, will ein besseres Bild.
+
+        Was damit WEGFAELLT: der Uebergang "new_photo", der ein laufendes
+        Interview schloss und ein neues oeffnete. Ein Interview endet jetzt
+        ueber den Schalter, die gesprochene Schlussphrase, eine Textnachricht
+        oder den Timeout — nicht mehr dadurch, dass jemand fotografiert.
+
+        TEILWEISE OFFEN — der Alternativ-Cache mit Auswahl ist nicht gebaut:
 
             „Wenn während eines laufenden Interviews ein zweites Foto gemacht
             wird, soll das in einen alternativ Foto cache für das laufende
-            Interview."
+            Interview." (Birk, 2026-09-01)
 
-        Das ändert genau den `new_photo`-Zweig unten: ein zweites Foto ist
-        dann kein neuer Besuch mehr, sondern eine weitere Aufnahme derselben
-        Person, aus der später ausgewählt werden kann. Die Stelle ist hier
-        markiert, das Verhalten aber bewusst UNVERÄNDERT gelassen — solange
-        es keinen Cache gibt, in den das zweite Bild fällt, wäre das Foto
-        sonst schlicht verloren, und das ist schlechter als der heutige
-        Stand.
+        Der teuerste Teil davon ist erledigt: Das zweite Foto zerschneidet das
+        Interview nicht mehr, es bleibt bei derselben Person. Was fehlt, ist
+        die AUSWAHL — heute ersetzt das neue Bild das alte, statt beide
+        aufzuheben und jemanden entscheiden zu lassen.
 
-        Was vor dem Bauen entschieden sein muss, weil es sich hinterher nicht
-        mehr billig ändern lässt:
+        Die Frage, die das damals blockierte, hat sich dabei von selbst
+        beantwortet: „Wie fängt dann der nächste Besuch an, wenn jedes Foto in
+        den Cache fällt?" — über den Schalter, am Mikrofon oder am Handy. Das
+        ist seit heute der einzige Weg hinein.
 
-        * **Wie fängt dann der nächste Besuch an?** Fällt jedes Foto in den
-          Cache, gibt es keinen Weg mehr, per Foto ein neues Interview zu
-          eröffnen. Der Schalter kann das (`mic_switch`), der Timeout auch —
-          aber das ist eine Entscheidung über den Ablauf an der Station, keine
-          Implementierungsfrage.
+        Was noch zu entscheiden ist, bevor der Cache gebaut wird:
         * **Wo liegen die Bilder, und wie lange?** `person.photo_path` hält
           genau einen Pfad. Ein Cache braucht eine eigene Tabelle (oder eine
           Liste), plus eine Regel, wann die verworfenen Aufnahmen gelöscht
@@ -117,16 +125,40 @@ class SessionTracker:
 
         Ausführlich in `docs/HANDOFF-alternativ-foto-cache.md`.
         """
-        if self._open_since is not None and self._without_portrait:
+        if self._open_since is None:
+            # 🔴 Ein Foto EROEFFNET kein Interview mehr (Birk, 2026-09-01:
+            # „ein foto duerfte eigentlich kein interview mehr eroeffnen, das
+            # ist ueberholt"). Seit es den Schalter gibt -- am Mikrofon und
+            # seit heute auch am Handy -- ist das Eroeffnen eine bewusste
+            # Handlung, und ein Foto ist keine.
+            #
+            # Der Grund ist nicht Ordnungsliebe: Am Booth wird probiert,
+            # nachjustiert, ein zweites Mal ausgeloest. Solange jedes Foto ein
+            # Interview eroeffnete, erzeugte jeder Probeausloeser eine Person
+            # an der Wand, die nie etwas gesagt hat -- eine leere Scheibe, die
+            # niemand mehr zuordnen kann.
+            #
+            # Keine Transition, KEIN Fehler: Der Aufrufer (kg/core.py) sieht
+            # eine leere Liste und laesst das Bild liegen. Die Station
+            # entscheidet danach, was sie dem Einwerfer meldet -- hier faellt
+            # nur die Entscheidung, dass daraus kein Interview wird.
+            return []
+        if self._without_portrait:
             self._without_portrait = False
             return [Transition("portrait", at, "late_photo")]
-        transitions: list[Transition] = []
-        if self._open_since is not None:
-            transitions.append(Transition("closed", at, "new_photo"))
-        self._open_since = at
-        self._without_portrait = False
-        transitions.append(Transition("opened", at, "photo"))
-        return transitions
+        # Ein zweites Foto im laufenden Interview: dieselbe Person, neues
+        # Bild. Bis heute wurde hier das Interview geschlossen und ein neues
+        # eroeffnet -- genau das faellt weg.
+        #
+        # Es ERSETZT das bisherige Portrait, und das ist die naheliegende
+        # Lesart: Wer im laufenden Gespraech noch einmal ausloest, will ein
+        # besseres Bild, nicht ein zweites Gespraech. Verloren geht dabei
+        # nichts, was nicht wiederholbar waere -- die alte Aufnahme bleibt als
+        # Datei liegen (`cfg.photo_dir`), nur der Verweis der Person wandert.
+        # Der in `docs/HANDOFF-alternativ-foto-cache.md` beschriebene Cache
+        # mit Auswahl ist damit NICHT gebaut, aber sein teuerster Nebeneffekt
+        # ist weg: kein zerschnittenes Interview mehr.
+        return [Transition("portrait", at, "replaced_photo")]
 
     def text_message(self, at: float) -> list[Transition]:
         return self._close(at, "text")

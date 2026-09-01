@@ -38,22 +38,28 @@ def llm_tracker(answer=True):
     )
 
 
-def test_photo_opens_an_interview():
+def test_ein_foto_ohne_laufendes_interview_bewirkt_nichts():
+    """🔴 Die Umstellung vom 2026-09-01 (Birk: „ein foto duerfte eigentlich
+    kein interview mehr eroeffnen, das ist ueberholt").
+
+    Am Booth wird probiert und nachjustiert. Solange jedes Foto ein Interview
+    eroeffnete, erzeugte jeder Probeausloeser eine Person an der Wand, die nie
+    etwas gesagt hat."""
     t = tracker()
-    assert t.photo(at=100.0) == [Transition("opened", 100.0, "photo")]
-    assert t.open_since == 100.0
+    assert t.photo(at=100.0) == []
+    assert t.open_since is None
 
 
 def test_any_text_message_stops_it():
     t = tracker()
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.text_message(at=160.0) == [Transition("closed", 160.0, "text")]
     assert t.open_since is None
 
 
 def test_spoken_command_in_the_transcript_stops_it():
     t = tracker()
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.transcript("okay, Interview beendet", at=200.0) == [
         Transition("closed", 200.0, "spoken")
     ]
@@ -62,7 +68,7 @@ def test_spoken_command_in_the_transcript_stops_it():
 def test_the_bot_addressed_by_name_stops_it():
     """Both entrances run through find_stop_phrase — spoken text as well."""
     t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.transcript("Utopia, das Interview ist damit beendet", at=200.0) == [
         Transition("closed", 200.0, "spoken")
     ]
@@ -70,7 +76,7 @@ def test_the_bot_addressed_by_name_stops_it():
 
 def test_the_bots_name_alone_does_not_stop_it():
     t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.transcript("Utopia hat mir gestern geholfen", at=150.0) == []
     assert t.open_since == 100.0
 
@@ -82,7 +88,7 @@ def test_a_freely_worded_stop_behind_the_name_closes_the_interview():
     phrase list ever will. Behind the wake word the LLM decides.
     """
     t, intent = llm_tracker(answer=True)
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == [
         Transition("closed", 200.0, "spoken_llm")
@@ -97,7 +103,7 @@ def test_a_freely_worded_stop_behind_the_name_closes_the_interview():
 def test_the_mechanical_hit_never_costs_an_llm_call():
     """The fast, free, deterministic normal case stays untouched."""
     t, intent = llm_tracker(answer=True)
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     assert t.transcript("okay, Interview beendet", at=200.0) == [
         Transition("closed", 200.0, "spoken")
@@ -109,7 +115,7 @@ def test_without_the_wake_word_the_llm_is_never_even_asked():
     """The cost guarantee: no wake word, no call. Otherwise it is the
     continuous listening this design exists to avoid."""
     t, intent = llm_tracker(answer=True)
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     assert t.transcript("hiermit beende ich das Interview", at=200.0) == []
     assert t.transcript("wir brauchen mehr Holzbau", at=210.0) == []
@@ -119,7 +125,7 @@ def test_without_the_wake_word_the_llm_is_never_even_asked():
 
 def test_a_no_from_the_llm_leaves_the_interview_running():
     t, intent = llm_tracker(answer=False)
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     assert t.transcript("Utopia hat mir gestern geholfen", at=200.0) == []
     assert t.open_since == 100.0
@@ -130,7 +136,7 @@ def test_a_failing_llm_leaves_the_interview_running_and_is_logged(caplog):
     """A wrongly ended interview is the more expensive mistake: on a timeout,
     an error or an unusable answer nothing closes."""
     t, _ = llm_tracker(answer=TimeoutError("proxy is dead"))
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     with caplog.at_level(logging.ERROR):
         assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == []
@@ -141,7 +147,7 @@ def test_a_failing_llm_leaves_the_interview_running_and_is_logged(caplog):
 
 def test_switched_off_the_tracker_behaves_exactly_as_before():
     t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, wake_word="Utopia")
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
 
     assert t.transcript("Utopia, hiermit beende ich das Interview", at=200.0) == []
     assert t.open_since == 100.0
@@ -149,27 +155,30 @@ def test_switched_off_the_tracker_behaves_exactly_as_before():
 
 def test_ordinary_transcript_does_not_stop_it():
     t = tracker()
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.transcript("wir brauchen mehr Holzbau", at=150.0) == []
     assert t.open_since == 100.0
 
 
 def test_timeout_closes_a_forgotten_interview():
     t = tracker()
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     assert t.tick(now=999.0) == []
     assert t.tick(now=1000.0) == [Transition("closed", 1000.0, "timeout")]
     assert t.open_since is None
 
 
-def test_a_new_photo_implicitly_closes_the_running_interview():
+def test_ein_zweites_foto_ersetzt_das_bild_statt_das_interview_zu_teilen():
+    """Der Kern der Umstellung: Ein Interview wird nicht mehr zerschnitten.
+
+    Wer im laufenden Gespraech noch einmal ausloest, will ein besseres Bild --
+    kein zweites Gespraech. `started_at` bleibt deshalb stehen, sonst waere
+    das Transkriptfenster der Person ab hier abgeschnitten."""
     t = tracker()
-    t.photo(at=100.0)
-    assert t.photo(at=400.0) == [
-        Transition("closed", 400.0, "new_photo"),
-        Transition("opened", 400.0, "photo"),
-    ]
-    assert t.open_since == 400.0
+    t.mic_switch(True, at=100.0)
+    t.photo(at=200.0)  # das erste Bild, nachgereicht
+    assert t.photo(at=400.0) == [Transition("portrait", 400.0, "replaced_photo")]
+    assert t.open_since == 100.0
 
 
 def test_stop_signals_without_an_open_interview_are_ignored():
@@ -179,18 +188,19 @@ def test_stop_signals_without_an_open_interview_are_ignored():
     assert t.tick(now=99999.0) == []
 
 
-def test_only_one_interview_can_be_open_at_a_time():
+def test_kein_foto_verschiebt_den_beginn_des_laufenden_interviews():
+    """Egal wie oft ausgeloest wird: Es bleibt EIN Interview, und es bleibt
+    bei seinem Beginn. Vorher wanderte `open_since` mit jedem Foto mit."""
     t = tracker()
-    t.photo(at=100.0)
+    t.mic_switch(True, at=100.0)
     t.photo(at=200.0)
     t.photo(at=300.0)
-    assert t.open_since == 300.0
+    assert t.open_since == 100.0
 
 
 def test_a_tracker_can_resume_an_interview_already_open_in_storage():
     t = SessionTracker(timeout_s=900, stop_phrases=PHRASES, open_since=100.0)
     assert t.open_since == 100.0
-    assert t.photo(at=400.0) == [
-        Transition("closed", 400.0, "new_photo"),
-        Transition("opened", 400.0, "photo"),
-    ]
+    # Ein wiederaufgenommenes Interview hat laut Vorgabe schon ein Portraet
+    # (`open_without_portrait` steht nicht) -- das Foto ersetzt es also.
+    assert t.photo(at=400.0) == [Transition("portrait", 400.0, "replaced_photo")]
