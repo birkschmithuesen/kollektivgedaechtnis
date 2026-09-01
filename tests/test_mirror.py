@@ -390,7 +390,8 @@ def test_die_wurzel_ist_die_startseite_und_zeigt_auf_beide_ansichten(client):
     assert "viewport-fit=cover" in antwort.text
     assert 'href="/graph"' in antwort.text
     assert 'href="/traum"' in antwort.text
-    assert "Der Graph" in antwort.text and "Der Traum" in antwort.text
+    assert "Das Kollektivgedächtnis" in antwort.text
+    assert "Der Kollektivtraum" in antwort.text
     # Der Weg zum langen Text ist von hier aus da.
     assert 'href="/transparenz"' in antwort.text
     # Und der Graph liegt jetzt woanders, nicht mehr auf der Wurzel.
