@@ -140,6 +140,30 @@ Das APK ist mit dem **Debug-Schlüssel** signiert. Für eine
 Seitenlade-Installation reicht das; ein Release-Keystore müsste verwahrt
 werden und kauft für zwei Ausstellungstage nichts.
 
+🔴 **Nach dem Bauen ausliefern, sonst war es umsonst.** Das APK landet in
+`out/`, und `out/` ist nicht im Git — es ist damit für kein Telefon
+erreichbar. Zwei Schritte gehören zum Bauen dazu:
+
+```bash
+cp app-release.apk out/kollektivgedaechtnis-foto-vN.apk
+rclone copy out/kollektivgedaechtnis-foto-vN.apk \
+  hermes-vault:Hermes-Agent/RoboCloud/NewBauhaus-2026-Interviews/
+```
+
+Am 2026-09-01 fehlte genau das: v7 und v8 waren gebaut, lagen aber nur auf
+dem vServer. Auf dem Telefon blieb v6, und die Vollbild-Vorschau schien nicht
+zu funktionieren — obwohl sie seit Stunden im Code stand.
+
+**Ein Build ist erst fertig, wenn er neuer ist als der letzte Commit.**
+Ebenfalls am 2026-09-01: v8 wurde um 16:09 gebaut, `51d615b` änderte
+`Bildbytes.kt` um 16:11. v8 trug deshalb noch `MAX_KANTE = 1024` statt 1600 —
+ein Build, der bereits beim Entstehen veraltet war. Vor dem Ausliefern:
+
+```bash
+git log -1 --format=%ai -- android/     # letzte Quelländerung
+ls -l --time-style=full-iso out/*.apk   # Bauzeit
+```
+
 ## Wenn es im Flur klemmt
 
 Die Statuszeile nennt den Fall beim Namen — sie ist der Diagnoseweg, nicht
