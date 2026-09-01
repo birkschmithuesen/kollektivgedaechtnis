@@ -240,6 +240,12 @@ function render(graph, state) {
   document.getElementById('interview').textContent = state.interview
     ? 'Interview läuft'
     : 'kein Interview';
+  // Der Knopf erscheint nur, wenn es etwas zu beenden gibt. Ein dauerhaft
+  // sichtbarer „Interview beenden"-Knopf ohne laufendes Interview lädt dazu
+  // ein, ihn auszuprobieren — und die Station steht während einer Ausstellung
+  // vor Publikum. Sichtbarkeit IST hier die Absicherung, deshalb hängt sie an
+  // derselben Zustandsquelle wie der Text daneben.
+  document.getElementById('interview-stop').hidden = !state.interview;
 
   const list = document.getElementById('entries');
   const draft = editingDraft(list);
@@ -307,6 +313,21 @@ function showZoomValue(factor) {
 
 document.getElementById('max-terms').addEventListener('change', (event) =>
   post('/api/max_terms', { value: Number(event.target.value) }),
+);
+// Rückfall, wenn die Interviewperson den Schalter am Mikrofon vergisst
+// (Birk, 2026-09-01). Bewusst DERSELBE Endpunkt wie der Schalter, mit
+// demselben Grund „mic_switch": ein zweiter Weg zum selben Ziel, kein
+// zweiter Mechanismus. Ein eigener Endpunkt hätte einen eigenen Grund
+// erzeugt, und damit zwei Arten von beendeten Interviews, die im Nachhinein
+// auseinanderzuhalten wären, ohne dass jemand etwas davon hat.
+//
+// Kein Bestätigungsdialog: Der Knopf ist nur sichtbar, wenn ein Interview
+// läuft (siehe render()), und ein versehentlich beendetes Interview ist an
+// dieser Station kein Verlust — der nächste Schalterdruck oder das nächste
+// Foto beginnt das nächste. Ein Dialog vor einem harmlosen Knopf kostet in
+// dem Moment Zeit, in dem jemand ihn eilig braucht.
+document.getElementById('interview-stop').addEventListener('click', () =>
+  post('/api/interview_switch', { on: false }),
 );
 document.getElementById('camera').addEventListener('change', (event) =>
   post('/api/camera', { mode: event.target.value }),

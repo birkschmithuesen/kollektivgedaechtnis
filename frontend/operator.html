@@ -76,6 +76,20 @@
     <output id="camera-speed-value">1/1</output>
   </label>
   <span id="interview"></span>
+  <!-- Rückfall für den Mikrofonschalter (Birk, 2026-09-01: „Als Backup sollte
+       allerdings auch noch ein Button in einem Operator UI sein für
+       Interview-Stop, falls die Interviewperson das vergisst").
+
+       Den Schalter bedient eine eingewiesene Interviewperson, nicht der Gast —
+       er ist damit der verlässliche Weg, und dieser Knopf ist ausdrücklich nur
+       das Netz darunter. Deshalb steht er neben der Statusanzeige und nicht
+       bei den Reglern: Wer hier hinsieht, sieht zuerst, DASS ein Interview
+       läuft, und erst dann den Weg, es zu beenden.
+
+       Er ruft denselben Endpunkt wie der Schalter (`/api/interview_switch`
+       mit `on: false`) — ein zweiter Weg zum selben Ziel, kein zweiter
+       Mechanismus, der eigene Zustände erzeugen könnte. -->
+  <button id="interview-stop" type="button" hidden>Interview beenden</button>
 </header>
 <pre id="transcript"></pre>
 <ul id="entries"></ul>

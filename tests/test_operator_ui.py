@@ -657,3 +657,84 @@ def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_workin
     )
     ui.click("#entry-t1 button.hide")
     assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
+
+
+# --- Der Rueckfall-Knopf fuer den Mikrofonschalter --------------------------
+#
+# Birk, 2026-09-01: „Als Backup sollte allerdings auch noch ein Button in einem
+# Operator UI sein für Interview-Stop, falls die Interviewperson das vergisst."
+#
+# Den Schalter am Mikrofon bedient eine eingewiesene Interviewperson, nicht der
+# Gast. Er ist damit der verlaessliche Weg; dieser Knopf ist das Netz darunter.
+
+
+def test_der_stop_knopf_erscheint_nur_bei_laufendem_interview(ui):
+    """Sichtbarkeit IST hier die Absicherung.
+
+    Ein dauerhaft sichtbarer „Interview beenden"-Knopf ohne laufendes Interview
+    laedt dazu ein, ihn auszuprobieren -- und die Station steht waehrend einer
+    Ausstellung vor Publikum. Deshalb kein Bestaetigungsdialog, sondern: den
+    Knopf gibt es nur, wenn es etwas zu beenden gibt.
+    """
+    # STATE oben hat interview=None -> kein Interview.
+    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is True
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
+    )
+    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is False
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
+
+    # Und wieder weg, wenn das Interview zu ist -- sonst bliebe ein Knopf
+    # stehen, der ins Leere greift.
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "interview": None}]
+    )
+    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is True
+
+
+def test_der_stop_knopf_ruft_denselben_endpunkt_wie_der_schalter(ui):
+    """🔴 DERSELBE Endpunkt, nicht ein eigener.
+
+    `/api/interview_switch` mit `on: false` ist genau das, was der physische
+    Schalter sendet. Ein eigener Endpunkt haette einen eigenen Grund erzeugt
+    (statt „mic_switch") und damit zwei Arten beendeter Interviews, die im
+    Nachhinein auseinanderzuhalten waeren, ohne dass jemand etwas davon hat.
+
+    `SessionTracker.mic_switch` ist ausserdem idempotent -- ein Klick, waehrend
+    der Schalter schon geschlossen hat, schliesst nichts ein zweites Mal.
+    """
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
+    )
+    ui.click("#interview-stop")
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/interview_switch", {"on": False}]
+
+
+def test_der_stop_knopf_beendet_nur_und_startet_nie(ui):
+    """Er sendet ausschliesslich `on: false`.
+
+    Ein Knopf, der zwischen Start und Stop umschaltet, waere an dieser Station
+    falsch: Ein Interview beginnt am Mikrofon oder mit einem Foto, im Raum --
+    nicht am Rechner des Operators. Mehrfaches Klicken darf daher nie ein
+    Interview eroeffnen.
+    """
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
+    )
+    ui.click("#interview-stop")
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "interview": {"person_id": "p2", "started_at": 200}}],
+    )
+    ui.click("#interview-stop")
+
+    gesendet = ui.evaluate("window.kgFetches.filter(f => f[0] === '/api/interview_switch')")
+    assert len(gesendet) == 2
+    assert all(eintrag[1] == {"on": False} for eintrag in gesendet), (
+        f"der Knopf hat etwas anderes als on:false gesendet: {gesendet}"
+    )
