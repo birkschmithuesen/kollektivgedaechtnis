@@ -1,18 +1,20 @@
-# Zweiter Rechner (Plenarsaal) — Fernzugriff einrichten + Brave auf die NVIDIA zwingen
+# licht-laptop (Plenarsaal) — Fernzugriff einrichten + Brave auf die NVIDIA zwingen
 
 Stand 2026-09-01, vor Ort während des Aufbaus.
 
 ## Was gerade ist
 
-`yoga-260-conference` (Tailscale `100.104.169.106`) ist **online und sichtbar**,
+`licht-laptop` (Tailscale `100.121.5.39`) ist **online und antwortet**
+(`tailscale ping` -> pong in 12 ms),
 aber **nicht fernsteuerbar**: SSH-Port 22 antwortet nicht, ebensowenig 5985
 (WinRM). Auf dem Tracking-Laptop ist SSH eingerichtet, auf diesem Rechner nicht
 — das ist der ganze Unterschied.
 
-🔴 **Nicht verifizierbar von hier aus:** ob `yoga-260-conference` tatsächlich
-der Plenarsaal-Rechner ist. Der Name legt es nahe, die Zuordnung ist aber
-ungeprüft. Vor dem ersten Eingriff am Gerät gegenprüfen (`hostname` in der
-PowerShell).
+Birk hat den Rechner am 2026-09-01 benannt: **`licht-laptop`**, nicht
+`yoga-260-conference` — mein erster Tipp ging nach dem Namen und war falsch.
+
+Gemessen: Port 22, 3389 (RDP) und 8080 sind alle zu. Der Rechner ist im
+Tailnet erreichbar, aber es horcht nichts darauf.
 
 ## Teil 1 — Brave auf die NVIDIA zwingen (2 Minuten, ohne Fernzugriff)
 
@@ -78,7 +80,7 @@ Für ein normales Benutzerkonto reicht `authorized_keys` im Profil.
 **Gegenprobe vom vServer aus** (macht der Agent):
 
 ```
-ssh <benutzer>@100.104.169.106 'hostname'
+ssh birk@100.121.5.39 'hostname'
 ```
 
 ## Warum das die Mühe wert ist
