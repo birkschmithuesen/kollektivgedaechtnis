@@ -40,16 +40,26 @@
       <option value="pan">automatisch schwenken</option>
     </select>
   </label>
-  <label>Zoom
-    <!-- Continuous, not three steps (Birk, 2026-08-26): the question being
-         answered on site is "far enough in that the labels are readable on
-         THIS wall, from THIS distance", and that has no reason to land on one
-         of three preset numbers. Range and step match the server's own bound
-         (CameraZoom: 1.0-4.0) so the UI can never post a value the API
-         rejects. `input` would fire on every pixel of the drag and flood the
-         SSE fanout; `change` fires once, when the operator lets go. -->
-    <input id="camera-zoom" type="range" min="1" max="4" step="0.05" value="1">
-    <output id="camera-zoom-value">1,00×</output>
+  <label>Mindestschrift
+    <!-- Die kleinste Schrift, die auf dieser Wand noch stehen soll, in
+         gezeichneten Pixeln. Bis zum 2026-09-02 stand hier ein Zoomfaktor
+         („1,55x enger als die Vollansicht"); der beantwortete die falsche
+         Frage. Vor Ort wird entschieden „kann man das von hier lesen", und
+         das ist eine Groesse, keine Vergroesserung — ein Faktor auf ein
+         kleines Netz angewandt zoomt in drei Begriffe hinein (Birk,
+         2026-09-02: „alles viel zu gross und viel zu nah").
+
+         Aus derselben Zahl folgt auch, OB die Kamera faehrt: Liefert die
+         Vollansicht schon diese Schriftgroesse, steht die Wand still.
+
+         Stufenlos und nicht in Stufen, aus demselben Grund wie beim alten
+         Regler. Bereich und Schritt spiegeln die Serverschranke
+         (CameraMinLabel: 8-120), damit die Oberflaeche keinen Wert posten
+         kann, den die API ablehnt. `input` feuerte bei jedem Pixel des Ziehens
+         und flutete die SSE-Verteilung; `change` feuert einmal, beim
+         Loslassen. -->
+    <input id="camera-min-label" type="range" min="8" max="120" step="1" value="40">
+    <output id="camera-min-label-value">mindestens 40 px</output>
   </label>
   <label>Porträtgröße
     <!-- Eine OBERGRENZE in Bildschirm-Pixeln, keine feste Größe (Birk,

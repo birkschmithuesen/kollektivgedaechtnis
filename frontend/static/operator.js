@@ -11,7 +11,7 @@ let lastGraph = { nodes: [], edges: [], quotes: [] };
 let lastState = {
   max_terms: 32,
   camera_mode: 'fit',
-  camera_zoom: 1,
+  camera_min_label: 40,
   camera_speed: 1,
   portrait_size: 120,
   stt_connected: false,
@@ -225,8 +225,8 @@ function render(graph, state) {
   document.getElementById('max-terms').value = String(state.max_terms);
   showDensityCounts(graph);
   document.getElementById('camera').value = state.camera_mode;
-  document.getElementById('camera-zoom').value = String(state.camera_zoom ?? 1);
-  showZoomValue(state.camera_zoom ?? 1);
+  document.getElementById('camera-min-label').value = String(state.camera_min_label ?? 40);
+  showMinLabelValue(state.camera_min_label ?? 40);
   document.getElementById('camera-speed').value = String(state.camera_speed ?? 1);
   showSpeedValue(state.camera_speed ?? 1);
   document.getElementById('portrait-size').value = String(state.portrait_size ?? 120);
@@ -298,17 +298,19 @@ function showTranscript(text) {
 /** Print the slider's value the way an operator reads it, not the way JS
  * stringifies a float: "1,45×", never "1.4500000000000002×".
  *
- * At 1,00× the whole net is in frame by definition, so the automatic tour has
- * nowhere to travel to: it still runs, but every target is already on screen
- * and the wall looks motionless. That reads as a broken camera (Birk,
- * 2026-08-26 — reported as "no automatic movement" with the slider at the
- * bottom stop), so the control says it rather than leaving it to be
- * rediscovered on the exhibition floor. */
-function showZoomValue(factor) {
-  const value = Number(factor);
-  const hint = value < 1.05 ? ' — ganzes Netz, Fahrt ohne Wirkung' : '';
-  document.getElementById('camera-zoom-value').textContent =
-    `${value.toFixed(2).replace('.', ',')}×${hint}`;
+ * Am unteren Anschlag steht das ganze Netz ohnehin lesbar im Bild, also fährt
+ * die Kamera gar nicht — sie hat nichts zu suchen, was nicht schon zu sehen
+ * wäre. Das ist seit dem 2026-09-02 gewollt und kein Defekt (Birk: „solange
+ * das ganze Netz darstellbar ist […] brauchen wir gar keine Kamerafahrt"),
+ * aber es sieht aus wie eine kaputte Kamera, wenn niemand es sagt — genau die
+ * Rückmeldung, die am 2026-08-26 zum alten Zoomregler kam („keine
+ * automatische Bewegung" am unteren Anschlag). Also sagt es der Regler, statt
+ * es auf der Ausstellungsfläche wiederentdecken zu lassen. */
+function showMinLabelValue(px) {
+  const value = Number(px);
+  const hint = value <= 12 ? ' — vermutlich immer das ganze Netz, ohne Fahrt' : '';
+  document.getElementById('camera-min-label-value').textContent =
+    `mindestens ${Math.round(value)} px${hint}`;
 }
 
 document.getElementById('max-terms').addEventListener('change', (event) =>
@@ -337,11 +339,11 @@ document.getElementById('camera').addEventListener('change', (event) =>
 // tracks the hand. `change` fires once on release and is the only one that
 // posts — a POST per pixel would push a state broadcast to every SSE client
 // (wall, plenary mirror) dozens of times per second.
-document.getElementById('camera-zoom').addEventListener('input', (event) =>
-  showZoomValue(event.target.value),
+document.getElementById('camera-min-label').addEventListener('input', (event) =>
+  showMinLabelValue(event.target.value),
 );
-document.getElementById('camera-zoom').addEventListener('change', (event) =>
-  post('/api/camera_zoom', { factor: Number(event.target.value) }),
+document.getElementById('camera-min-label').addEventListener('change', (event) =>
+  post('/api/camera_min_label', { pixels: Number(event.target.value) }),
 );
 
 /** The largest a portrait may get on the wall, in the unit the operator is
@@ -393,7 +395,7 @@ let graph = { nodes: [], edges: [], quotes: [] };
 let state = {
   max_terms: 32,
   camera_mode: 'fit',
-  camera_zoom: 1,
+  camera_min_label: 40,
   camera_speed: 1,
   portrait_size: 120,
   stt_connected: false,

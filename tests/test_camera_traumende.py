@@ -69,7 +69,7 @@ SONDE = """
   let uhr = echteUhr();
   performance.now = () => uhr;
   try {
-    cam.setZoomFactor(1.55);
+    cam.setMinLabel(40);  // Birks Kalibrierung: 40/26 = 1,54 -- wie das alte 1,55
     cam.setMode(opts.mode);
     cam.focusDream(gebiet);
     // Über die Haltezeit springen. Gemessen wird der ÜBERGANG, nicht die
@@ -111,7 +111,7 @@ SONDE_EINTRITT = """
   let uhr = echteUhr();
   performance.now = () => uhr;
   try {
-    cam.setZoomFactor(1.55);
+    cam.setMinLabel(40);  // Birks Kalibrierung: 40/26 = 1,54 -- wie das alte 1,55
     cam.setMode('pan');
 
     // Bis MITTEN in eine Etappe fahren, statt eine Framenummer zu raten:
@@ -210,24 +210,41 @@ def test_der_ausschnitt_wechselt_ueberhaupt_und_zwar_ueber_viele_frames(wand, mo
     STATTFINDET, und dass er sich über viele Frames verteilt.
     """
     bilder = _fahre(wand, mode)
-    zoom, _ = _spruenge(bilder)
+    zoom, mitte = _spruenge(bilder)
 
     # NICHT erster gegen letzten Frame: der Lauf beginnt VOR der Einfahrt ins
     # Traumgebiet und endet nach der Ausfahrt, beide Enden liegen also auf der
-    # Gesamtansicht und die Differenz wäre null. Verglichen wird der engste
-    # Stand (das gehaltene Traumgebiet) gegen den Stand am Ende.
-    engster = max(b["z"] for b in bilder)
-    gesamt = (engster / bilder[-1]["z"] - 1) * 100
-    assert gesamt > 20, (
-        f"[{mode}] der engste Ausschnitt liegt nur {gesamt:.1f} % über dem "
-        f"Endstand — das Traumgebiet läuft gar nicht ab"
+    # Gesamtansicht und die Differenz wäre null. Verglichen wird der Stand, der
+    # am weitesten vom Endstand entfernt ist (das gehaltene Traumgebiet), gegen
+    # den Stand am Ende.
+    #
+    # 🔴 Gemessen wird der AUSSCHNITT und nicht mehr nur der Zoom (2026-09-02).
+    # Seit die Mindestschrift den Zoomfaktor ersetzt hat, ist das Fahrtniveau
+    # `max(Ausschnitt, Ziel)` — liegen sowohl die Traumbox als auch die
+    # Vollansicht unter der Mindestschrift, laufen BEIDE auf demselben Niveau,
+    # und der Wechsel zeigt sich allein im Schwenk. Das ist keine Schwäche,
+    # sondern die Zusicherung, um die es geht: „eigentlich sollte es immer
+    # identisch bleiben" (Birk, 2026-09-01) — die Wand behält ihre
+    # Schriftgröße und wechselt den Ort. Ein Test, der weiter nur den Zoom
+    # misst, würde genau diese Eigenschaft als Fehler melden.
+    ende = bilder[-1]
+    zoomwechsel = (max(b["z"] for b in bilder) / ende["z"] - 1) * 100
+    weiteste = max(
+        ((b["mx"] - ende["mx"]) ** 2 + (b["my"] - ende["my"]) ** 2) ** 0.5 for b in bilder
+    )
+    # Der weiteste Abstand, gemessen in Bildbreiten am Endstand — damit die
+    # Schwelle nicht von der Netzgröße abhängt.
+    ortswechsel = weiteste / (1920 / ende["z"]) * 100
+    assert zoomwechsel > 20 or ortswechsel > 25, (
+        f"[{mode}] der Ausschnitt wandert nur {ortswechsel:.1f} % einer Bildbreite "
+        f"und der Zoom nur {zoomwechsel:.1f} % — das Traumgebiet läuft gar nicht ab"
     )
 
     # Der Wechsel muss sich auf eine Überblendung verteilen, nicht auf eine
     # Handvoll Frames. `ROAM.handoverMs` sind 5 s, also rund 300 Frames.
-    bewegte = sum(1 for d in zoom if d > 0.05)
+    bewegte = sum(1 for dz, dm in zip(zoom, mitte) if dz > 0.05 or dm > 1.0)
     assert bewegte > 150, (
-        f"[{mode}] nur {bewegte} Frames bewegen den Zoom nennenswert — "
+        f"[{mode}] nur {bewegte} Frames bewegen den Ausschnitt nennenswert — "
         f"der Wechsel ist keine Fahrt"
     )
 
@@ -337,7 +354,7 @@ ABLAUF_IM_UMZUG = """
   let uhr = echteUhr();
   performance.now = () => uhr;
   try {
-    cam.setZoomFactor(1.55);
+    cam.setMinLabel(40);  // Birks Kalibrierung: 40/26 = 1,54 -- wie das alte 1,55
     cam.setMode('fit');
     cam.focusDream(gebiet);
     cam._dream.until = uhr + 100000;

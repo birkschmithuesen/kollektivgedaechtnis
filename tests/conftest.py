@@ -42,7 +42,25 @@ def browser():
             # access to fall back on anyway). Reuse whatever chromium build
             # is already present in the local playwright cache instead of
             # requiring an exact revision match.
-            candidates = sorted(Path.home().glob(".cache/ms-playwright/chromium-*/chrome-linux64/chrome"))
+            #
+            # Zwei Muster, weil die Station inzwischen auf einem Mac laeuft
+            # (scripts/start-mac.sh, 2026-09-01) und der Cache dort anders
+            # heisst UND anderswo liegt: `~/Library/Caches` statt `~/.cache`,
+            # eine `.app` statt einer nackten Binaerdatei. Ohne den zweiten
+            # Eintrag laesst sich auf dem Entwicklungsrechner der Ausstellung
+            # kein einziger Browser-Test ausfuehren -- er faellt in denselben
+            # `raise`, den der Linux-Pfad fuer eine fehlende Installation
+            # vorsieht, und meldet damit ein fehlendes Chromium, waehrend zwei
+            # brauchbare Builds daneben liegen.
+            candidates = sorted(
+                path
+                for muster in (
+                    ".cache/ms-playwright/chromium-*/chrome-linux64/chrome",
+                    "Library/Caches/ms-playwright/chromium-*/chrome-mac-*/"
+                    "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+                )
+                for path in Path.home().glob(muster)
+            )
             if not candidates:
                 raise
             browser = p.chromium.launch(executable_path=str(candidates[-1]))

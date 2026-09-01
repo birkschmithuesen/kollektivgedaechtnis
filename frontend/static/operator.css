@@ -32,12 +32,13 @@ select { font: inherit; padding: 0.2rem; }
 .entry.hidden .portrait { opacity: 0.35; }
 button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
 
-/* Continuous zoom. Wide enough that 1.00-4.00 can be hit precisely with a
-   mouse on the operator laptop — a short slider makes 0.05 steps a lottery. */
-#camera-zoom { width: 200px; vertical-align: middle; }
-#camera-zoom-value {
+/* Stufenlose Mindestschrift. Breit genug, dass 8-120 px auf dem
+   Operator-Laptop mit der Maus genau zu treffen sind — ein kurzer Regler
+   macht aus 1-px-Schritten eine Lotterie. */
+#camera-min-label { width: 200px; vertical-align: middle; }
+#camera-min-label-value {
   display: inline-block;
-  min-width: 4.2em;          /* reserves room so the row never reflows mid-drag */
+  min-width: 9em;            /* Platz fuer „mindestens 120 px", ohne Umbruch beim Ziehen */
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
 }

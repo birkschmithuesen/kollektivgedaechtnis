@@ -15,7 +15,7 @@ es egal, der Regler muss in beiden Fällen tragen.
 Drei Eigenschaften tragen hier, und alle drei können still verlorengehen:
 
 1. **Er postet nicht.** Was ein Besucher in der Vorhalle anfasst, darf die
-   Wand im Plenarsaal nicht bewegen (`camera_zoom` ist globaler Zustand).
+   Wand im Plenarsaal nicht bewegen (`camera_min_label` ist globaler Zustand).
 2. **Er zählt als Bedienung.** Sonst bliebe die Wand für immer auf dem
    Ausschnitt des letzten Besuchers stehen — die Bedienleiste ist von der
    Ruheuhr ausdrücklich AUSGENOMMEN, und der Regler braucht die umgekehrte
@@ -69,14 +69,14 @@ def test_ein_faktor_sitzt_genau_so_viel_enger_als_die_gesamtansicht(kamera):
 def test_der_regler_ruehrt_die_kalibrierung_des_operators_nicht_an(kamera):
     """🔴 Die Isolationseigenschaft, in der Kamera selbst.
 
-    `_zoomFactor` ist die Einstellung, die über `/events` von der Station
+    `_minLabelPx` ist die Einstellung, die über `/events` von der Station
     kommt und auf ALLEN Flächen gilt. Ein Besucher schreibt in den Viewport
     dieser Seite, genau wie eine Zweifingergeste — nicht in die Kalibrierung.
-    Ginge der Regler über `setZoomFactor`, käme dazu, dass er im manuellen
+    Ginge der Regler über `setMinLabel`, käme dazu, dass er im manuellen
     Modus (dem einzigen, in dem er bedient wird) gar nichts bewegte.
     """
     kamera.evaluate("window.cam.setVisitorZoom(4)")
-    assert kamera.evaluate("window.cam.zoomFactor") == 1
+    assert kamera.evaluate("window.cam.minLabelPx") == 40
 
 
 def test_der_regler_wirkt_auch_im_manuellen_modus(kamera):
@@ -337,7 +337,7 @@ def test_der_regler_erreicht_den_server_nicht(flaeche):
     """🔴 Die tragende Regel dieser Fläche: „whatever a visitor presses on
     surface A must stay on surface A".
 
-    `camera_zoom` ist globaler Zustand und wird über `/events` an jede Fläche
+    `camera_min_label` ist globaler Zustand und wird über `/events` an jede Fläche
     verteilt. Ein POST von hier zöge die Projektion im Plenarsaal vor
     sitzendem Publikum mit — ohne dass dort jemand etwas angefasst hätte.
     """
@@ -348,14 +348,15 @@ def test_der_regler_erreicht_den_server_nicht(flaeche):
 
 
 def test_der_regler_laesst_die_kalibrierung_der_station_stehen(flaeche):
-    """Auch lokal nicht: `camera_zoom` bleibt, was der Operator gesetzt hat.
+    """Auch lokal nicht: `camera_min_label` bleibt, was der Operator gesetzt hat.
 
     Sonst widerspräche die Vorhalle für den Rest des Tages der Einstellung
     der Station, ohne dass es jemand bemerkt — dasselbe Argument, aus dem die
     Dichtestufen am 2026-08-26 hier verschwunden sind.
     """
+    vorher = flaeche.evaluate("window.kgView.camera.minLabelPx")
     _ziehen(flaeche, 0.7)
-    assert flaeche.evaluate("window.kgView.camera.zoomFactor") == 1
+    assert flaeche.evaluate("window.kgView.camera.minLabelPx") == vorher
 
 
 def test_wer_am_regler_zieht_steuert_auch_auf_der_echten_flaeche(flaeche):
@@ -377,7 +378,10 @@ def test_uebersicht_ist_weiterhin_der_ganze_rueckweg(flaeche):
     flaeche.click("#touch-overview")
 
     assert flaeche.evaluate("window.kgView.camera.mode") == "fit"
-    assert flaeche.evaluate("window.kgView.camera.zoomFactor") == 1
+    # Der Weg zurueck ist eine FAHRT und kein Sprung (siehe `_startHandover`).
+    assert flaeche.evaluate("window.kgView.camera.handoverActive") is True
+    # Und die Kalibrierung der Station ist dabei nicht angefasst worden.
+    assert flaeche.evaluate("window.kgView.camera.minLabelPx") == 40
     assert flaeche.evaluate("document.getElementById('touch-zoom').value") == "0"
     assert flaeche.evaluate("window.kgTouch.autonomy.manual") is False
     assert flaeche.evaluate("window.kgFetches") == []

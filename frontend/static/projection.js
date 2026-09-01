@@ -1440,6 +1440,14 @@ export function createGraphView(
   // zone and take the whole wall down on load.
   let camera = null;
   camera = new Camera(cy, {
+    // Die Schriftgröße des Themes, in Modelleinheiten. Die Kamera braucht sie,
+    // weil ihr ganzer Regler eine Aussage über GEZEICHNETE Pixel ist und
+    // Cytoscape `font-size` mit dem Zoom skaliert: `labelSize × zoom` ist die
+    // Schrift auf der Wand. Von HIER gereicht und nicht dort gelesen — diese
+    // Datei liest `--label-size` ohnehin schon für den Stylesheet-Aufbau, und
+    // ein zweiter Leseweg wäre eine zweite Stelle, an der ein Theme-Wechsel
+    // hängenbleibt (theme-a hat 22, theme-c hat 44).
+    labelSize: Number(cssVar('--label-size', '26')),
     fitWith: (fit) => atPlacementSize(fit),
     // A mode change IS a size change now (the ceiling applies to the driven
     // modes only), and it has to land in the same synchronous breath as the

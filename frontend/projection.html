@@ -231,12 +231,17 @@
           // Two things at once, because "Übersicht" means one thing to the
           // visitor: leave my manual zoom AND show the whole net.
           autonomy.releaseNow();
-          view.camera.setZoomFactor(1);
+          // Nur der Modus, und NICHT mehr auch der Regler: `fit` zeigt seit
+          // dem 2026-09-02 wörtlich das ganze Netz, ohne dass etwas darauf
+          // gerechnet würde. Ein `setMinLabel(…)` hier würfe zusätzlich die
+          // Kalibrierung des Operators weg — auf allen Flächen, weil eine
+          // Besucherhand sonst über den geteilten Zustand in den Saal
+          // durchschlüge.
           view.camera.setMode('fit');
         },
         // Der Ersatz für die Zweifingergeste. Rein lokal: `setVisitorZoom`
         // schreibt in den Viewport DIESER Seite, genau wie ein Pinch es täte,
-        // und nicht in `camera_zoom` — das ist die Kalibrierung des Operators
+        // und nicht in `camera_min_label` — das ist die Kalibrierung des Operators
         // und gilt auf allen Flächen.
         onZoom: (faktor) => view.camera.setVisitorZoom(faktor),
       });
@@ -283,19 +288,31 @@
         // Richtung zu scheitern.
         const regler = (istPlenum && payload.state.plenum) || payload.state;
 
-        // The operator's term cap applies to every surface, touchscreen
-        // included — it just has no counterpart to reflect there any more.
-        view.setMaxTerms(regler.max_terms);
+        // 🔴 Die Begriffszahl ist FLÄCHENÜBERGREIFEND und kommt deshalb aus
+        // `payload.state`, nicht aus `regler` (Birk, 2026-09-02): „die anzahl
+        // der begriffe soll bei plenar genau so sein wie auf dem touch screen,
+        // nur die schriftgröße ggf anders". Der eigene Saal-Regler dafür ist
+        // aus PLENUM_REGLER entfernt — es gibt also gar keinen zweiten Wert
+        // mehr, den diese Zeile abgreifen könnte.
+        //
+        // Der Zoom daneben bleibt getrennt, und genau das ist der Sinn der
+        // Aufteilung: gleiche Begriffe, andere Schriftgröße.
+        view.setMaxTerms(payload.state.max_terms);
         // Route the operator's mode through the autonomy guard on the touch
         // surface: applying it directly would snatch the view away from a
         // visitor mid-gesture. Everywhere else it applies immediately.
         if (autonomy) autonomy.setOperatorMode(regler.camera_mode);
         else view.camera.setMode(regler.camera_mode);
-        // D4: the zoom level is an on-site setting, carried in the same state
-        // push as the mode. Guard the value — setZoomFactor throws below 1,
-        // and an exhibition wall must degrade rather than stop rendering.
-        const zoom = Number(regler.camera_zoom);
-        if (zoom >= 1) view.camera.setZoomFactor(zoom);
+        // D4: die Nähe der Ansicht ist eine Einstellung vor Ort und kommt im
+        // selben Zustandspaket wie der Modus. Seit dem 2026-09-02 ist es eine
+        // MINDESTSCHRIFTGRÖSSE in gezeichneten Pixeln statt eines Zoomfaktors
+        // — aus derselben Zahl folgt jetzt auch, ob es überhaupt eine
+        // Kamerafahrt gibt (siehe MIN_LABEL_DEFAULT in camera.js).
+        //
+        // Ohne Wächter, anders als früher: `setMinLabel` wirft nicht mehr,
+        // sondern verwirft einen unbrauchbaren Wert selbst. Die Schranke steht
+        // damit an EINER Stelle statt an zweien.
+        view.camera.setMinLabel(regler.camera_min_label);
         // Guarded the same way: setRoamSpeed clamps rather than throws, but an
         // absent field (older server, replayed state) must leave the pace alone
         // instead of resetting it to full.

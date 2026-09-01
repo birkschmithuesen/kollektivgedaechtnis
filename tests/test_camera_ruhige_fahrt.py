@@ -72,24 +72,43 @@ def kamera(page, static_server):
 def test_ein_neuer_graph_verwirft_das_gemerkte_fahrtniveau(kamera):
     """🔴 Punkt 7, Ursache (a).
 
-    `_travelLevel()` merkt sich den Zoom, bei dem das ganze Netz ins Bild
-    passt -- ein `cy.fit()` pro Frame waere sonst ein zweiter Schreiber auf
-    dem Viewport neben `step()`. Der Cache war aber NUR ueber den Zoomregler
-    zu verwerfen, nicht ueber einen gewachsenen Graphen. Nach ein paar
-    Interviews fuhr die Kamera damit auf einem Niveau, das zu einer Wolke
-    gehoerte, die es nicht mehr gab -- und der naechste Neuaufbau riss den
-    Zoom hart um.
+    `_fitLevel()` merkt sich den Zoom, bei dem das ganze Netz ins Bild passt
+    -- ein `cy.fit()` pro Frame waere sonst ein zweiter Schreiber auf dem
+    Viewport neben `step()`. Der Cache war aber NUR ueber den Zoomregler zu
+    verwerfen, nicht ueber einen gewachsenen Graphen. Nach ein paar Interviews
+    fuhr die Kamera damit auf einem Niveau, das zu einer Wolke gehoerte, die es
+    nicht mehr gab -- und der naechste Neuaufbau riss den Zoom hart um.
+
+    Der Cache hiess bis zum 2026-09-02 `_roamBaseLevel` und sass in
+    `_travelLevel()`; seit die Mindestschrift den Regler ersetzt hat, sitzt er
+    eine Ebene tiefer und heisst `_fitLevelCache`. Die Zusicherung ist
+    dieselbe geblieben.
     """
+    # Eine Mindestschrift unterhalb dessen, was die Vollansicht ohnehin
+    # liefert: Dann IST das Fahrtniveau das Fit-Niveau, und ein veralteter
+    # Cache ist am Fahrtniveau direkt abzulesen.
+    kamera.evaluate("window.cam.setMinLabel(13)")  # 13/26 = 0,5
     kamera.evaluate("window.cam.setMode('pan')")
     erst = kamera.evaluate("window.cam._travelLevel()")
     assert erst > 0
-    assert kamera.evaluate("window.cam._roamBaseLevel !== undefined"), (
+    assert kamera.evaluate("window.cam._fitLevelCache !== undefined"), (
         "der Cache wurde gar nicht erst gefuellt -- dann misst dieser Test nichts"
     )
 
+    # Das Netz waechst: dieselbe Wolke passt jetzt nur noch bei halbem Zoom.
+    kamera.evaluate(
+        """() => {
+             window.cyStub.fit = function (a, b) {
+               this._zoom = 0.25;
+               this._pan = {x: 0, y: 0};
+               this.calls.push(['fit', a]);
+             };
+           }"""
+    )
     kamera.evaluate("window.cam.onGraphChanged()")
-    assert kamera.evaluate("window.cam._roamBaseLevel === undefined"), (
-        "onGraphChanged() hat das gemerkte Fahrtniveau nicht verworfen"
+    assert kamera.evaluate("window.cam._travelLevel()") == pytest.approx(0.5, rel=1e-6), (
+        "onGraphChanged() hat das gemerkte Fahrtniveau nicht verworfen -- "
+        f"die Kamera faehrt weiter auf {erst}, das zu einer Wolke gehoert, die es nicht mehr gibt"
     )
 
 
@@ -167,7 +186,7 @@ def test_der_ausschnitt_verlaesst_die_knotenwolke_nicht(kamera):
 
     Ein Ziel am Rand hat nur auf einer Seite Nachbarschaft; mittig darauf
     zentriert liegt der halbe Schirm im Leeren. Gemessen 2026-09-01 an der
-    echten Wand bei Zoomregler 2,5x: schlechtester Ausschnitt 56 % Fuellung,
+    echten Wand bei Fahrtniveau 2,5x: schlechtester Ausschnitt 56 % Fuellung,
     mit der Bremse 85 %.
 
     Hier am Stub geprueft, und zwar die Absicht: Der Ausschnitt fuer den
@@ -177,7 +196,7 @@ def test_der_ausschnitt_verlaesst_die_knotenwolke_nicht(kamera):
         """() => {
              const c = window.cam, cy = window.cyStub;
              c.setMode('pan');
-             c.setZoomFactor(2.5);
+             c.setMinLabel(65);  // 65/26 = 2,5 -- dasselbe Niveau wie frueher
              const bb = cy.elements().boundingBox({ includeLabels: false });
              // Der aeusserste Stub-Knoten -- der Fall, um den es geht.
              const rand = cy.getElementById('t3');
@@ -214,7 +233,7 @@ def test_die_bremse_zentriert_ein_kleines_netz_statt_es_an_die_kante_zu_ziehen(k
 
     Sonst zoege sie ein Netz, das kleiner als das Fenster ist, an eine Kante,
     und der Bildaufbau waere SCHLECHTER als ohne sie. Genau dieser Fall hat
-    beim ersten Messversuch die Messung entwertet: bei Zoomregler 1 passte die
+    beim ersten Messversuch die Messung entwertet: bei Fahrtniveau 1 passte die
     ganze Wolke ins Bild, alle 60 Ziele lieferten identisch 82 % Fuellung --
     gemessen wurde da nicht die Bremse, sondern dass es nichts zu klemmen gab.
     """
@@ -222,7 +241,7 @@ def test_die_bremse_zentriert_ein_kleines_netz_statt_es_an_die_kante_zu_ziehen(k
         """() => {
              const c = window.cam, cy = window.cyStub;
              c.setMode('pan');
-             c.setZoomFactor(1);
+             c.setMinLabel(26);  // 26/26 = 1,0 -- die Vollansicht
              // Eine bewusst KLEINE Wolke: kleiner als das Fenster, damit
              // dieser Fall wirklich eintritt. Frueher stand hier ein
              // pytest.skip, wenn die Wolke zu gross war -- das hiess, der

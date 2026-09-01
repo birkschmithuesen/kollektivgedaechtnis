@@ -28,7 +28,7 @@ GRAPH = {
 STATE = {
     "max_terms": 2,
     "camera_mode": "pan",
-    "camera_zoom": 2,
+    "camera_min_label": 52,
     "portrait_size": 150,
     "stt_connected": True,
     "interview": None,
@@ -287,77 +287,87 @@ def test_the_camera_switch_reflects_state_and_posts_changes(ui):
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera", {"mode": "fit"}]
 
 
-def test_the_zoom_slider_reflects_state_and_posts_on_release(ui):
+def test_the_min_label_slider_reflects_state_and_posts_on_release(ui):
     """21b: without this control an operator with no touchscreen reach cannot
-    zoom at all — Camera.setZoomFactor is otherwise constructor-only.
+    set the wall's framing at all — the camera is otherwise constructor-only.
 
     Continuous since 2026-08-26: the on-site question is "far enough in that
-    the labels read on THIS wall", which does not land on a preset.
+    the labels read on THIS wall", which does not land on a preset. Seit dem
+    2026-09-02 stellt der Regler genau diese Frage direkt — als Größe in
+    gezeichneten Pixeln statt als Vergrößerung.
     """
-    assert ui.eval_on_selector("#camera-zoom", "el => el.value") == "2"
-    assert ui.eval_on_selector("#camera-zoom-value", "el => el.textContent") == "2,00×"
+    assert ui.eval_on_selector("#camera-min-label", "el => el.value") == "52"
+    assert (
+        ui.eval_on_selector("#camera-min-label-value", "el => el.textContent")
+        == "mindestens 52 px"
+    )
 
-    # A value strictly between the old presets — the whole point of the change.
     ui.evaluate(
         """() => {
-             const el = document.getElementById('camera-zoom');
-             el.value = '1.65';
+             const el = document.getElementById('camera-min-label');
+             el.value = '33';
              el.dispatchEvent(new Event('change', { bubbles: true }));
            }"""
     )
-    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera_zoom", {"factor": 1.65}]
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/camera_min_label", {"pixels": 33}]
 
 
-def test_dragging_the_zoom_slider_updates_the_readout_without_posting(ui):
+def test_dragging_the_min_label_slider_updates_the_readout_without_posting(ui):
     """A POST per pixel would broadcast state to every SSE client mid-drag."""
     before = ui.evaluate("window.kgFetches.length")
     ui.evaluate(
         """() => {
-             const el = document.getElementById('camera-zoom');
-             el.value = '3.4';
+             const el = document.getElementById('camera-min-label');
+             el.value = '34';
              el.dispatchEvent(new Event('input', { bubbles: true }));
            }"""
     )
-    assert ui.eval_on_selector("#camera-zoom-value", "el => el.textContent") == "3,40×"
+    assert (
+        ui.eval_on_selector("#camera-min-label-value", "el => el.textContent")
+        == "mindestens 34 px"
+    )
     assert ui.evaluate("window.kgFetches.length") == before
 
 
 def test_the_slider_cannot_post_a_value_the_server_would_reject(ui):
-    """Range/step mirror CameraZoom's own bound (ge=1.0, le=4.0)."""
-    bounds = ui.eval_on_selector(
-        "#camera-zoom", "el => [el.min, el.max, el.type]"
-    )
-    assert bounds == ["1", "4", "range"]
+    """Range/step mirror CameraMinLabel's own bound (ge=8.0, le=120.0)."""
+    bounds = ui.eval_on_selector("#camera-min-label", "el => [el.min, el.max, el.type]")
+    assert bounds == ["8", "120", "range"]
 
 
 def test_the_bottom_stop_warns_that_roaming_has_no_effect_there(ui):
-    """1,00× frames the whole net, so the tour has nowhere to travel.
+    """Am unteren Anschlag steht das ganze Netz ohnehin lesbar im Bild.
 
-    Reported 2026-08-26 as "the automatic camera doesn't start" — it did, but
-    with every node already on screen nothing appeared to move. The control
-    has to say so; the operator cannot be expected to derive it.
+    Dann fährt die Kamera nicht — sie hat nichts zu suchen, was nicht schon zu
+    sehen wäre. Das ist seit dem 2026-09-02 gewollt, sieht aber aus wie eine
+    kaputte Kamera, wenn niemand es sagt: genau die Rückmeldung vom
+    2026-08-26 („die automatische Kamera startet nicht"). Der Regler sagt es
+    deshalb selbst.
     """
     ui.evaluate(
         """() => {
-             const el = document.getElementById('camera-zoom');
-             el.value = '1';
+             const el = document.getElementById('camera-min-label');
+             el.value = '8';
              el.dispatchEvent(new Event('input', { bubbles: true }));
            }"""
     )
-    text = ui.eval_on_selector("#camera-zoom-value", "el => el.textContent")
-    assert text.startswith("1,00×")
-    assert "ohne Wirkung" in text
+    text = ui.eval_on_selector("#camera-min-label-value", "el => el.textContent")
+    assert text.startswith("mindestens 8 px")
+    assert "ohne Fahrt" in text
 
 
-def test_a_zoomed_in_value_carries_no_warning(ui):
+def test_a_readable_value_carries_no_warning(ui):
     ui.evaluate(
         """() => {
-             const el = document.getElementById('camera-zoom');
-             el.value = '1.6';
+             const el = document.getElementById('camera-min-label');
+             el.value = '40';
              el.dispatchEvent(new Event('input', { bubbles: true }));
            }"""
     )
-    assert ui.eval_on_selector("#camera-zoom-value", "el => el.textContent") == "1,60×"
+    assert (
+        ui.eval_on_selector("#camera-min-label-value", "el => el.textContent")
+        == "mindestens 40 px"
+    )
 
 
 def test_the_portrait_slider_reflects_state_and_posts_on_release(ui):
@@ -415,16 +425,17 @@ def test_the_portrait_slider_cannot_post_a_value_the_server_would_reject(ui):
     ]
 
 
-def test_the_portrait_size_is_independent_of_the_zoom_control(ui):
-    """Two different things (Birk's brief): the zoom picks the section of the
-    net on the wall, the portrait size how big the faces in it are drawn. A
-    state push that changes one must leave the other's control alone."""
+def test_the_portrait_size_is_independent_of_the_min_label_control(ui):
+    """Two different things (Birk's brief): the min label size picks the
+    section of the net on the wall, the portrait size how big the faces in it
+    are drawn. A state push that changes one must leave the other's control
+    alone."""
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])",
-        [GRAPH, {**STATE, "camera_zoom": 3.5}],
+        [GRAPH, {**STATE, "camera_min_label": 64}],
     )
 
-    assert ui.eval_on_selector("#camera-zoom", "el => el.value") == "3.5"
+    assert ui.eval_on_selector("#camera-min-label", "el => el.value") == "64"
     assert ui.eval_on_selector("#portrait-size", "el => el.value") == "150"
 
 

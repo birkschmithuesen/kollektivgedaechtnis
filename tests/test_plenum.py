@@ -77,7 +77,7 @@ def test_der_zustand_traegt_beide_saetze_nebeneinander(client):
     for schluessel in (
         "max_terms",
         "camera_mode",
-        "camera_zoom",
+        "camera_min_label",
         "camera_speed",
         "portrait_size",
         "stt_connected",
@@ -90,8 +90,13 @@ def test_der_zustand_traegt_beide_saetze_nebeneinander(client):
     assert set(saal) == {regler["key"] for regler in PLENUM_REGLER}
     # Die Vorgaben für den Saal sind absichtlich andere als die des Foyers.
     assert saal["camera_mode"] == "pan", "im Saal ist die Fahrt die Vorgabe"
-    assert saal["max_terms"] < zustand["max_terms"] or zustand["max_terms"] == 1
     assert saal["qr_size"] > 132, "der QR-Code im Saal muss deutlich größer sein"
+    # 🔴 Die Begriffszahl ist KEIN Saalregler mehr (Birk, 2026-09-02): „die
+    # anzahl der begriffe soll bei plenar genau so sein wie auf dem touch
+    # screen, nur die schriftgröße ggf anders". Bis dahin standen dort 20 gegen
+    # 32 im Foyer, beide Flächen zeigten also verschiedene Begriffe.
+    assert "max_terms" not in saal, "der Saal hat keine eigene Begriffszahl mehr"
+    assert "camera_min_label" in saal, "die Schriftgröße bleibt je Fläche eigen"
 
 
 def test_ein_saalregler_veraendert_die_foyerwerte_nicht(client):
@@ -99,19 +104,21 @@ def test_ein_saalregler_veraendert_die_foyerwerte_nicht(client):
     beide Flächen lasen dieselben Werte."""
     vorher = client.get("/api/state").json()
 
-    assert client.post("/api/plenum", json={"key": "camera_zoom", "value": 3.4}).status_code == 200
-    assert client.post("/api/plenum", json={"key": "max_terms", "value": 12}).status_code == 200
+    assert (
+        client.post("/api/plenum", json={"key": "camera_min_label", "value": 64}).status_code == 200
+    )
+    assert client.post("/api/plenum", json={"key": "portrait_size", "value": 120}).status_code == 200
 
     nachher = client.get("/api/state").json()
-    assert nachher["plenum"]["camera_zoom"] == 3.4
-    assert nachher["plenum"]["max_terms"] == 12
+    assert nachher["plenum"]["camera_min_label"] == 64
+    assert nachher["plenum"]["portrait_size"] == 120
     # Und das Foyer steht Zeichen für Zeichen, wo es stand.
     assert {k: v for k, v in nachher.items() if k != "plenum"} == {
         k: v for k, v in vorher.items() if k != "plenum"
     }
     # Auch in der Datenbank: eigene Schlüssel, nicht dieselben.
-    assert client.store.get_setting("plenum_camera_zoom", "-") == "3.4"
-    assert client.store.get_setting("camera_zoom", "1") == "1"
+    assert client.store.get_setting("plenum_camera_min_label", "-") == "64.0"
+    assert client.store.get_setting("camera_min_label", "40") == "40"
 
 
 def test_ein_foyerregler_veraendert_die_saalwerte_nicht(client):
@@ -119,12 +126,12 @@ def test_ein_foyerregler_veraendert_die_saalwerte_nicht(client):
     wird den ganzen Tag gedreht."""
     vorher = client.get("/api/state").json()["plenum"]
 
-    assert client.post("/api/camera_zoom", json={"factor": 2.5}).status_code == 200
+    assert client.post("/api/camera_min_label", json={"pixels": 26}).status_code == 200
     assert client.post("/api/max_terms", json={"value": 80}).status_code == 200
     assert client.post("/api/portrait_size", json={"pixels": 640}).status_code == 200
 
     zustand = client.get("/api/state").json()
-    assert zustand["camera_zoom"] == 2.5
+    assert zustand["camera_min_label"] == 26
     assert zustand["plenum"] == vorher, "ein Foyer-Regler hat in den Saal durchgeschlagen"
 
 
@@ -153,14 +160,14 @@ def test_ein_unbekannter_regler_wird_abgewiesen(client):
 @pytest.mark.parametrize(
     ("key", "wert"),
     [
-        ("camera_zoom", 0.5),  # unter der Untergrenze
-        ("camera_zoom", 9.0),  # über der Obergrenze
+        ("camera_min_label", 2.0),  # unter der Untergrenze
+        ("camera_min_label", 400.0),  # über der Obergrenze
         ("camera_speed", 0.0),
         ("qr_size", 5000),
-        ("max_terms", 0),
+        ("portrait_size", 0),
         ("hinweis_dauer", 1),
         ("camera_mode", "rueckwaerts"),  # keine gültige Auswahl
-        ("camera_zoom", "sehr weit"),  # gar keine Zahl
+        ("camera_min_label", "sehr gross"),  # gar keine Zahl
     ],
 )
 def test_werte_ausserhalb_der_schranke_werden_abgewiesen(client, key, wert):
@@ -198,11 +205,11 @@ def test_ein_unlesbarer_gespeicherter_wert_haelt_die_wand_nicht_an(client):
     """Von Hand editiert, halb geschriebene Datei, ältere Fassung: Ein
     kaputter Eintrag darf die Saalwand nicht ausfallen lassen. Sie zeigt dann
     die Vorgabe."""
-    client.store.set_setting("plenum_camera_zoom", "ganz weit")
-    client.store.set_setting("plenum_max_terms", "-4")
+    client.store.set_setting("plenum_camera_min_label", "ganz gross")
+    client.store.set_setting("plenum_portrait_size", "-4")
     saal = client.get("/api/state").json()["plenum"]
-    assert saal["camera_zoom"] == 1.8
-    assert saal["max_terms"] == 20
+    assert saal["camera_min_label"] == 40.0
+    assert saal["portrait_size"] == 260.0
 
 
 # --- Die Fläche selbst -------------------------------------------------------
@@ -463,23 +470,25 @@ def test_ein_regler_postet_erst_beim_loslassen(pult):
     `change`, angezeigt schon vorher."""
     pult.evaluate(
         """() => {
-             const f = document.getElementById('regler-camera_zoom');
-             f.value = '2.5';
+             const f = document.getElementById('regler-camera_min_label');
+             f.value = '52';
              f.dispatchEvent(new Event('input', { bubbles: true }));
            }"""
     )
     assert pult.evaluate("() => window.kgPosts") == []
-    assert "2,50" in pult.evaluate(
-        "() => document.querySelector('[data-wert-fuer=camera_zoom]').textContent"
+    assert "52" in pult.evaluate(
+        "() => document.querySelector('[data-wert-fuer=camera_min_label]').textContent"
     )
 
     pult.evaluate(
         """() => {
-             const f = document.getElementById('regler-camera_zoom');
+             const f = document.getElementById('regler-camera_min_label');
              f.dispatchEvent(new Event('change', { bubbles: true }));
            }"""
     )
-    assert pult.evaluate("() => window.kgPosts") == [["/api/plenum", {"key": "camera_zoom", "value": "2.5"}]]
+    assert pult.evaluate("() => window.kgPosts") == [
+        ["/api/plenum", {"key": "camera_min_label", "value": "52"}]
+    ]
 
 
 def test_das_pult_zeigt_den_zustand_des_saals_und_nicht_den_des_foyers(pult):
@@ -487,22 +496,23 @@ def test_das_pult_zeigt_den_zustand_des_saals_und_nicht_den_des_foyers(pult):
     man im Saal an Zahlen, die dort gar nicht gelten — und merkte es erst,
     wenn die Wand nicht reagiert."""
     pult.evaluate(
-        """() => window.kgOperatorPlenum.anzeigen({ camera_zoom: 3.2, max_terms: 15 })"""
+        """() => window.kgOperatorPlenum.anzeigen({ camera_min_label: 52, portrait_size: 300 })"""
     )
     werte = pult.evaluate(
         """() => ({
-             zoom: document.getElementById('regler-camera_zoom').value,
-             begriffe: document.getElementById('regler-max_terms').value,
+             zoom: document.getElementById('regler-camera_min_label').value,
+             begriffe: document.getElementById('regler-portrait_size').value,
            })"""
     )
-    # 15 und nicht 14: der Begriffe-Schieber hat Schrittweite 5 (PLENUM_REGLER
-    # in kg/server.py), ein Zwischenwert rastet auf das nächste Vielfache. Die
-    # erste Fassung prüfte mit 14 einen Wert, den dieser Regler gar nicht
+    # 300 und nicht 302: der Porträt-Schieber hat Schrittweite 5 (PLENUM_REGLER
+    # in kg/server.py), ein Zwischenwert rastet auf das nächste Vielfache. Eine
+    # frühere Fassung prüfte hier mit einem Wert, den der Regler gar nicht
     # annehmen KANN — sie prüfte damit nicht den Zustandsweg, sondern die
     # Rasterung des Schiebers, und scheiterte daran. Korrigiert am 2026-09-01,
     # nachdem der Auftrag im Turn-Limit abbrach und der Test unfertig liegen
-    # blieb.
-    assert werte == {"zoom": "3.2", "begriffe": "15"}
+    # blieb; der Begriffe-Schieber, an dem das auffiel, ist am 2026-09-02 aus
+    # dem Saalpult verschwunden (die Begriffszahl gilt jetzt für beide Flächen).
+    assert werte == {"zoom": "52", "begriffe": "300"}
 
 
 # --- Was die Saalfläche NICHT tun darf ---------------------------------------

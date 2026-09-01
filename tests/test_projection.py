@@ -1050,15 +1050,26 @@ def test_a_crowded_wall_lets_the_portrait_stay_under_the_ceiling(page, static_se
     assert sizes["twenty"]["disc"] > sizes["fifty"]["disc"]
 
 
-def test_the_operators_zoom_grows_the_portrait_only_up_to_the_ceiling(view):
-    # The zoom slider frames the wall, and in a driven mode the portrait rides
-    # along with it — up to the ceiling and no further. Measured on the harness
-    # (theme a, 20 persons): 47.9px at 1x, and 143.7px at 3x if nothing capped
-    # it.
+def test_the_operators_dial_grows_the_portrait_only_up_to_the_ceiling(view):
+    # Der Regler des Operators rahmt die Wand, und in einem getriebenen Modus
+    # faehrt das Portrait mit — bis zur Obergrenze und keinen Schritt weiter.
+    # Gemessen am Harness (theme a, 20 Personen): 47,9 px bei 1x, und 143,7 px
+    # bei 3x, wenn nichts deckelte.
+    #
+    # In `pan` und nicht mehr in `fit` (2026-09-02): Seit der Regler eine
+    # Mindestschriftgroesse ist, zeigt `fit` woertlich das ganze Netz und
+    # nimmt gar keine Naehe mehr an. Die Mindestschrift wirkt dort, wo sie
+    # gemeint ist — in der Fahrt.
     update(view, _dense_net(persons=20, terms=30))
     before = _portrait(view)
 
-    view.evaluate("() => window.kgView.camera.setZoomFactor(3)")
+    # theme a setzt `--label-size: 22`, also ist 66 px das Dreifache der
+    # Vollansicht — dieselbe Naehe, die frueher `setZoomFactor(3)` bedeutete.
+    view.evaluate("() => window.kgView.camera.setMode('pan')")
+    view.evaluate("() => window.kgView.camera.setMinLabel(66)")
+    # Ueber die Uebergabefahrt hinaus: der Wechsel ins Fahren ist seit dem
+    # 2026-09-02 eine Fahrt und kein Sprung, das Niveau steht also erst danach.
+    view.evaluate("() => { for (let i = 0; i < 40; i++) window.kgView.camera.step(0.25); }")
 
     after = _portrait(view)
     assert after["zoom"] > 2 * before["zoom"]

@@ -80,11 +80,45 @@ class CameraSpeed(BaseModel):
     factor: float = Field(ge=0.05, le=1.0)
 
 
-class CameraZoom(BaseModel):
-    # >= 1 by construction: 1 = the whole net in frame, 2 = half its width
-    # across the wall. The upper bound keeps a stray value from zooming the
-    # wall into a single node at an unattended exhibition.
-    factor: float = Field(ge=1.0, le=4.0)
+#: Die Mindestschriftgroesse, mit der eine Flaeche startet, in gezeichneten
+#: Pixeln — fuer Foyer UND Saal dieselbe (Birk, 2026-09-02).
+#:
+#: 🔴 GEMESSEN, nicht gesetzt. Rekonstruiert aus Birks Kalibrierung vom
+#: 2026-09-01, die in `data/kg.db` stand (`camera_zoom` 1.55, `portrait_size`
+#: 330, `max_terms` 32), angewandt auf das dichte Netz aus `data-dichte/60`
+#: (60 Personen, 78 Begriffe) auf der 3840x2160 breiten Ausstellungsflaeche:
+#: fit-Niveau 0.986 x Regler 1.55 x `--label-size` 26 = 39.7 px. Die
+#: Gegenprobe schliesst sich: 40 / 26 = 1.538, also praktisch genau der
+#: Regler, den Birk eingestellt hatte.
+#:
+#: Im Saal (1920x1080) bedeuten dieselben 40 px den doppelten Bildanteil, also
+#: weniger Netz und groessere Schrift — was dort die erklaerte Absicht ist
+#: („aus dem Saal zaehlt Lesbarkeit, nicht Fuelle", PLENUM_REGLER unten).
+#:
+#: Die Herleitung im Langen steht bei `MIN_LABEL_DEFAULT` in
+#: frontend/static/camera.js, zusammen mit der gemessenen Interview-Leiter.
+MIN_LABEL_DEFAULT = 40.0
+
+
+class CameraMinLabel(BaseModel):
+    # Die kleinste Schrift, die auf der Wand noch stehen soll, in GEZEICHNETEN
+    # Pixeln — der Regler, der am 2026-09-02 den Zoomfaktor abgeloest hat.
+    #
+    # Warum keine Vergroesserung mehr: Ein Faktor auf ein kleines Netz zoomt in
+    # drei Begriffe hinein. Birk am 2026-09-02: „so wie jetzt grade erst ein
+    # Interview und wenig Begriffe habe, dann ist alles viel zu gross und viel
+    # zu nah." Eine Mindestschrift beantwortet dagegen die Frage, die vor der
+    # Wand steht — und aus derselben Zahl folgt AUCH, ob es ueberhaupt eine
+    # Kamerafahrt braucht: Liefert die Vollansicht schon diese Schriftgroesse,
+    # ist das ganze Netz lesbar und die Kamera hat nichts zu suchen.
+    #
+    # Beidseitig beschraenkt, aus demselben Grund wie die Portraitgroesse
+    # daneben: Was ein Streuwert auch anrichtet, er darf eine unbeaufsichtigte
+    # Wand nicht unbrauchbar hinterlassen. 8 px ist unterhalb jeder Lesbarkeit
+    # und damit praktisch „nie fahren"; 120 px sind auf 2160 px Hoehe ein
+    # Zwanzigstel des Bildes und damit die Grenze, ab der ein einzelner Begriff
+    # die Wand fuellt.
+    pixels: float = Field(ge=8.0, le=120.0)
 
 
 class PortraitSize(BaseModel):
@@ -130,24 +164,20 @@ class PortraitSize(BaseModel):
 # Die Vorgaben sind ein Startpunkt für den Saal, kein Ergebnis: 1920×1080 aus
 # Saalbreite gelesen. Beurteilt wird am Bild, deshalb sind es Regler.
 PLENUM_REGLER: tuple[dict, ...] = (
-    {
-        "key": "max_terms",
-        "label": "Begriffe auf der Wand",
-        "typ": "int",
-        # 🔴 Nicht 1..1000 wie im Foyer, und das ist kein Versehen: Der Foyer-
-        # Regler ist eine Auswahlliste mit acht Stufen bis „alle", dieser hier
-        # ist ein Schieber. Über 1000 Werte gezogen lägen 20 und 40 zwei Pixel
-        # auseinander — der brauchbare Bereich wäre unbedienbar. 200 ist
-        # zugleich die Aussage: Im Saal ist „alle" keine sinnvolle Stellung.
-        "min": 5,
-        "max": 200,
-        "schritt": 5,
-        "default": 20,
-        "einheit": "",
-        # Deutlich weniger als im Foyer (32): halbe Auflösung, vielfache
-        # Entfernung. „Weniger Elemente" ist Birks Punkt 1.
-        "hinweis": "weniger als im Foyer — aus dem Saal zählt Lesbarkeit, nicht Fülle",
-    },
+    # 🔴 KEIN eigener `max_terms` mehr (Birk, 2026-09-02): „die anzahl der
+    # begriffe soll bei plenar genau so sein wie auf dem touch screen, nur die
+    # schriftgröße ggf anders". Der Saal hatte bis dahin einen eigenen Schieber
+    # mit der Vorgabe 20 gegen 32 im Foyer — beide Flächen zeigten also
+    # verschiedene Begriffe, und wer im Saal auf etwas zeigte, meinte ein
+    # anderes Bild als der, der am Touchscreen stand.
+    #
+    # Die Trennung, die BLEIBT, ist die Schriftgröße: `camera_min_label` steht
+    # weiterhin je Fläche, weil eine 1920er Projektion aus zwanzig Metern eine
+    # andere Zahl braucht als ein Touchscreen aus einem Meter. Dass beide
+    # Vorgaben heute gleich sind, ist eine Einstellung, keine Kopplung.
+    #
+    # Die Flächen greifen die Begriffszahl deshalb aus dem Foyer-Zustand ab,
+    # nicht aus `plenum` — siehe frontend/projection.html, `setMaxTerms`.
     {
         "key": "camera_mode",
         "label": "Kamera",
@@ -160,15 +190,17 @@ PLENUM_REGLER: tuple[dict, ...] = (
         "hinweis": "im Saal schaut man zu — die Fahrt ist die Vorgabe",
     },
     {
-        "key": "camera_zoom",
-        "label": "Zoom",
+        "key": "camera_min_label",
+        "label": "Mindestschrift",
         "typ": "float",
-        "min": 1.0,
-        "max": 4.0,
-        "schritt": 0.05,
-        "default": 1.8,
-        "einheit": "×",
-        "hinweis": "1,00× zeigt das ganze Netz — dann hat die Fahrt kein Ziel",
+        # Bereich und Schritt spiegeln die Serverschranke `CameraMinLabel`,
+        # damit das Bedienfeld keinen Wert anbieten kann, den die API ablehnt.
+        "min": 8.0,
+        "max": 120.0,
+        "schritt": 1,
+        "default": MIN_LABEL_DEFAULT,
+        "einheit": "px",
+        "hinweis": "so klein darf die Schrift werden — darunter fährt die Kamera näher heran",
     },
     {
         "key": "camera_speed",
@@ -313,11 +345,13 @@ def current_state(store) -> dict:
     return {
         "max_terms": int(store.get_setting("max_terms", "1")),
         "camera_mode": store.get_setting("camera_mode", "fit"),
-        # D4 (Birk, 2026-08-19): the wall opens on the whole net; zoom is set
-        # on site. The Camera component has always supported a zoom factor,
-        # but until 21b it was reachable only through its constructor — so an
-        # operator with no touchscreen access could not zoom at all.
-        "camera_zoom": float(store.get_setting("camera_zoom", "1")),
+        # D4 (Birk, 2026-08-19): Die Wand öffnet auf dem ganzen Netz, die Nähe
+        # wird vor Ort eingestellt. Seit dem 2026-09-02 ist der Regler dafür
+        # eine MINDESTSCHRIFTGRÖSSE in gezeichneten Pixeln statt eines
+        # Zoomfaktors — und entscheidet damit zugleich, ob es überhaupt eine
+        # Kamerafahrt gibt: Solange die Vollansicht diese Schrift liefert,
+        # steht die Wand still (siehe MIN_LABEL_DEFAULT in camera.js).
+        "camera_min_label": float(store.get_setting("camera_min_label", str(MIN_LABEL_DEFAULT))),
         # 1.0 = the traversal's tuned pace, 0.25 = a quarter of it. Slowing the
         # tour down is a room-and-audience judgement, like the zoom next to it,
         # so it belongs to the operator rather than to a constant.
@@ -490,18 +524,18 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
         broadcast_state(store, bus)
         return {"ok": True}
 
-    @app.post("/api/camera_zoom")
-    def api_camera_zoom(payload: CameraZoom) -> dict:
+    @app.post("/api/camera_min_label")
+    def api_camera_min_label(payload: CameraMinLabel) -> dict:
         # A display-only control, like the camera mode next to it. Spec §7's
         # "exactly one runtime dial" governs controls that change EXTRACTION
         # or MERGING; this changes neither.
-        store.set_setting("camera_zoom", str(payload.factor))
+        store.set_setting("camera_min_label", str(payload.pixels))
         broadcast_state(store, bus)
         return {"ok": True}
 
     @app.post("/api/camera_speed")
     def api_camera_speed(payload: CameraSpeed) -> dict:
-        # Display-only, exactly like camera_zoom: it changes how long the tour
+        # Display-only, exactly like camera_min_label: it changes how long the tour
         # dwells and travels, never what is extracted or merged.
         store.set_setting("camera_speed", str(payload.factor))
         broadcast_state(store, bus)
@@ -511,7 +545,7 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
     def api_portrait_size(payload: PortraitSize) -> dict:
         # Display-only, like the two camera controls above: it bounds how big
         # a face is drawn, never what is extracted, merged or shown.
-        # Deliberately independent of camera_zoom — that one chooses the
+        # Deliberately independent of camera_min_label — that one chooses the
         # SECTION of the net on the wall, this one bounds the portraits inside
         # it, and turning either must leave the other alone.
         store.set_setting("portrait_size", str(payload.pixels))

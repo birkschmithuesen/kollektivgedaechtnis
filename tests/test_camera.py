@@ -255,42 +255,67 @@ def test_the_speed_is_clamped_rather_than_rejected(camera):
     assert camera.evaluate("window.cam.roamSpeed") == 1, "NaN faellt auf volles Tempo zurueck"
 
 
-def test_the_default_zoom_factor_fits_the_whole_net(camera):
-    assert camera.evaluate("window.cam.zoomFactor") == 1
+def test_fit_zeigt_das_ganze_netz_und_rechnet_nichts_darauf(camera):
+    """„Alles zeigen" heisst alles.
+
+    Bis zum 2026-09-02 rechnete `fit` den Zoomfaktor des Operators auf den
+    Rahmen und zeigte damit 1,55x enger als alles -- der Modus widersprach
+    seinem eigenen Namen. Die Naehe entscheidet jetzt allein die
+    Mindestschrift, und die wirkt in `pan`.
+    """
     camera.evaluate("window.cam.onGraphChanged()")
-    # Fit-all must stay exactly a fit: no zoom call on top of it.
     assert camera.evaluate("window.cyStub.calls.filter(c => c[0] === 'zoom').length") == 0
+    assert camera.evaluate("window.cyStub._zoom") == 1
 
 
-def test_a_zoom_factor_sits_that_many_times_tighter_than_fit_all(camera):
-    camera.evaluate("window.cam.setZoomFactor(2)")
-    assert camera.evaluate("window.cam.zoomFactor") == 2
-    # fit() first (the stub leaves zoom at 1 = the fit-all level), then 2x it.
-    assert camera.evaluate("window.cyStub._zoom") == 2
-    assert camera.evaluate("window.cyStub.calls.filter(c => c[0] === 'fit').length") == 1
+def test_die_mindestschrift_ist_der_zoom_bei_dem_die_schrift_sie_erreicht(camera):
+    """`labelSize x zoom` ist die Schrift auf der Wand -- das ist die Rechnung.
+
+    Der Stub laesst nach einem fit() den Zoom auf 1 stehen (= Vollansicht), die
+    Schrift steht dort also auf `labelSize`. Bei einer Mindestschrift von 52 px
+    und einer Schriftgroesse von 26 Modelleinheiten muss die Fahrt auf 2,0
+    laufen -- und keinen Schritt enger.
+    """
+    camera.evaluate("window.cam.setLabelSize(26)")
+    camera.evaluate("window.cam.setMinLabel(52)")
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(0.1)")
+    assert camera.evaluate("window.cyStub._zoom") == pytest.approx(2.0, rel=1e-3)
 
 
-def test_the_zoom_factor_is_reapplied_when_the_graph_changes(camera):
-    camera.evaluate("window.cam.setZoomFactor(3)")
-    camera.evaluate("window.cyStub.calls.length = 0")
-    camera.evaluate("window.cam.onGraphChanged()")
-    assert camera.evaluate("window.cyStub.calls") == [["fit", 60], ["zoom", 3]]
+def test_ein_theme_mit_groesserer_schrift_braucht_weniger_zoom(camera):
+    """Dieselbe Mindestschrift, doppelte Schriftgroesse, halber Zoom.
+
+    Der Grund, warum die Schriftgroesse ueberhaupt hereingereicht wird: Die
+    Themes setzen `--label-size` zwischen 22 (theme-a) und 44 (theme-c). Eine
+    Mindestgroesse in Pixeln waere ohne diesen Bezug eine Aussage ueber
+    Modelleinheiten und damit je Theme etwas anderes.
+    """
+    camera.evaluate("window.cam.setMinLabel(52)")
+    camera.evaluate("window.cam.setLabelSize(52)")
+    camera.evaluate("window.cam.setMode('pan')")
+    camera.evaluate("window.cam.step(0.1)")
+    assert camera.evaluate("window.cyStub._zoom") == pytest.approx(1.0, rel=1e-3)
 
 
-def test_a_zoom_factor_below_one_is_rejected(camera):
-    # Below 1 would frame emptiness around the net on an unattended wall.
-    assert (
-        camera.evaluate(
-            "(() => { try { window.cam.setZoomFactor(0.5); return 'no'; } catch (e) { return 'raised'; } })()"
-        )
-        == "raised"
-    )
+def test_ein_unbrauchbarer_wert_haelt_die_wand_nicht_an(camera):
+    """Der Wert kommt ueber /events herein; eine kaputte Zahl darf nichts kosten.
+
+    Der Vorgaenger `setZoomFactor` warf unter 1, und projection.html musste den
+    Wurf abfangen. Eine unbeaufsichtigte Wand muss langsamer werden oder stehen
+    bleiben, nie aufhoeren zu zeichnen -- dieselbe Regel wie bei
+    `clampRoamSpeed`.
+    """
+    camera.evaluate("window.cam.setMinLabel(40)")
+    for kaputt in ("0", "-5", "NaN", "'weit'", "undefined"):
+        camera.evaluate(f"window.cam.setMinLabel({kaputt})")
+        assert camera.evaluate("window.cam.minLabelPx") == 40, kaputt
 
 
-def test_manual_mode_is_never_reframed_by_a_zoom_factor_change(camera):
+def test_manual_mode_is_never_reframed_by_a_min_label_change(camera):
     camera.evaluate("window.cam.setMode('manual')")
     camera.evaluate("window.cyStub.calls.length = 0")
-    camera.evaluate("window.cam.setZoomFactor(4)")
+    camera.evaluate("window.cam.setMinLabel(80)")
     assert camera.evaluate("window.cyStub.calls.length") == 0
 
 

@@ -111,20 +111,21 @@ def test_camera_mode_round_trips(client):
     assert client.post("/api/camera", json={"mode": "warp"}).status_code == 422
 
 
-def test_camera_zoom_round_trips_and_defaults_to_the_whole_net(client):
-    # D4: the wall opens on the whole net, so an untouched station reports 1.
-    assert client.get("/api/state").json()["camera_zoom"] == 1.0
+def test_die_mindestschrift_geht_hin_und_zurueck_und_startet_auf_dem_messwert(client):
+    # 40 px ist Birks Kalibrierung vom 2026-09-01, nachgemessen am 2026-09-02
+    # (siehe MIN_LABEL_DEFAULT) -- keine geratene Vorgabe.
+    assert client.get("/api/state").json()["camera_min_label"] == 40.0
 
-    assert client.post("/api/camera_zoom", json={"factor": 2}).status_code == 200
-    assert client.get("/api/state").json()["camera_zoom"] == 2.0
+    assert client.post("/api/camera_min_label", json={"pixels": 26}).status_code == 200
+    assert client.get("/api/state").json()["camera_min_label"] == 26.0
 
-    # Below 1 the camera would show LESS than the net without filling the wall,
-    # and Camera.setZoomFactor raises on it; above 4 a stray value would zoom
-    # the unattended wall into a single node.
-    assert client.post("/api/camera_zoom", json={"factor": 0.5}).status_code == 422
-    assert client.post("/api/camera_zoom", json={"factor": 99}).status_code == 422
+    # Beidseitig beschraenkt wie die Portraitgroesse daneben: Ein Streuwert darf
+    # eine unbeaufsichtigte Wand nicht unbrauchbar hinterlassen -- weder als
+    # Schrift, die niemand mehr lesen kann, noch als ein Begriff, der sie fuellt.
+    assert client.post("/api/camera_min_label", json={"pixels": 0}).status_code == 422
+    assert client.post("/api/camera_min_label", json={"pixels": 400}).status_code == 422
     # The rejected writes must not have moved the stored value.
-    assert client.get("/api/state").json()["camera_zoom"] == 2.0
+    assert client.get("/api/state").json()["camera_min_label"] == 26.0
 
 
 def test_portrait_size_round_trips_and_survives_a_restart(client):
@@ -134,7 +135,7 @@ def test_portrait_size_round_trips_and_survives_a_restart(client):
 
     assert client.post("/api/portrait_size", json={"pixels": 180}).status_code == 200
     assert client.get("/api/state").json()["portrait_size"] == 180.0
-    # It is a stored setting like camera_zoom, so it comes back after a crash
+    # It is a stored setting like camera_min_label, so it comes back after a crash
     # (spec 10.5) — the same store, re-read, is what a restart does.
     assert client.store.get_setting("portrait_size", "120") == "180.0"
 
@@ -145,19 +146,19 @@ def test_portrait_size_round_trips_and_survives_a_restart(client):
     assert client.get("/api/state").json()["portrait_size"] == 180.0
 
 
-def test_the_portrait_size_and_the_camera_zoom_do_not_touch_each_other(client):
-    # Two different controls (Birk's brief, 2026-08-29): the zoom chooses the
-    # section of the net on the wall, the portrait size how big the faces in it
-    # are drawn. Both must keep working independently.
-    client.post("/api/camera_zoom", json={"factor": 2.5})
+def test_the_portrait_size_and_the_min_label_do_not_touch_each_other(client):
+    # Two different controls (Birk's brief, 2026-08-29): the min label size
+    # chooses the section of the net on the wall, the portrait size how big the
+    # faces in it are drawn. Both must keep working independently.
+    client.post("/api/camera_min_label", json={"pixels": 52})
     client.post("/api/portrait_size", json={"pixels": 60})
 
     state = client.get("/api/state").json()
-    assert (state["camera_zoom"], state["portrait_size"]) == (2.5, 60.0)
+    assert (state["camera_min_label"], state["portrait_size"]) == (52.0, 60.0)
 
-    client.post("/api/camera_zoom", json={"factor": 1.5})
+    client.post("/api/camera_min_label", json={"pixels": 26})
     state = client.get("/api/state").json()
-    assert (state["camera_zoom"], state["portrait_size"]) == (1.5, 60.0)
+    assert (state["camera_min_label"], state["portrait_size"]) == (26.0, 60.0)
 
 
 def test_positions_are_persisted_so_the_layout_never_reshuffles(client):

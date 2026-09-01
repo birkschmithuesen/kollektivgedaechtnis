@@ -40,9 +40,11 @@ const RAND_LUFT = 0.08;
 
 /** Wie weit ein BESUCHER hineinzoomen darf: 8x enger als die Gesamtansicht.
  *
- * Weiter als der Regler des Operators (dort 1–4, gespiegelt an der
- * Serverschranke), und das ist Absicht: Der Operator kalibriert damit die
- * DAUERANSICHT der Wand, ein Besucher ersetzt damit eine Geste. In `manual`
+ * Eine ANDERE Einheit als der Regler des Operators, und das ist Absicht: Der
+ * Operator kalibriert mit einer Mindestschriftgröße die DAUERANSICHT der Wand
+ * (`MIN_LABEL_DEFAULT`), ein Besucher ersetzt hiermit eine Geste — „dreimal
+ * näher als die Übersicht" ist, was eine Hand meint, und hat mit Lesbarkeit
+ * nichts zu tun. In `manual`
  * gilt auch die Porträt-Schranke nicht, „dort darf ein Besucher in ein Gesicht
  * hineinzoomen, bis es formatfüllend ist" (operator.html). 8x sind auf 1920 px
  * rund ein Achtel der Netzbreite — nah genug für ein Gesicht oder ein langes
@@ -55,6 +57,79 @@ const RAND_LUFT = 0.08;
  * Kamera ist die Stelle, die beide bedienen, also gehört die Schranke hierhin
  * und wird hier auch durchgesetzt (`setVisitorZoom`), nicht nur angezeigt. */
 export const ZOOM_MAX = 8;
+
+/** Die kleinste Schrift, die auf der Wand noch stehen darf, in GEZEICHNETEN
+ * Pixeln. Der einzige Regler, den der Operator für den Bildausschnitt hat.
+ *
+ * Er ersetzt den Zoomfaktor („1,55× enger als die Vollansicht"), und zwar
+ * weil ein Faktor die falsche Frage beantwortet. Ein Faktor auf ein kleines
+ * Netz angewandt zoomt in drei Begriffe hinein; Birk am 2026-09-02: „so wie
+ * jetzt grade erst ein Interview und wenig Begriffe habe, dann ist alles viel
+ * zu groß und viel zu nah". Eine Mindestschrift beantwortet stattdessen
+ * genau die Frage, die vor der Wand steht — „kann man das von hier lesen" —
+ * und beantwortet sie in einer Einheit, die nicht von der Netzgröße abhängt.
+ *
+ * Aus derselben Zahl folgt AUCH, ob es überhaupt eine Fahrt braucht: Liefert
+ * die Vollansicht schon diese Schriftgröße, ist das ganze Netz lesbar und die
+ * Kamera hat nichts zu suchen (Birk, 2026-09-02: „solange das ganze Netz
+ * darstellbar ist und es zu klein wird, brauchen wir gar keine Kamerafahrt").
+ * Ein zweiter Parameter für die Schwelle wäre eine zweite Zahl, die von der
+ * ersten wegdriften kann.
+ *
+ * 🔴 40 ist GEMESSEN, nicht gesetzt (2026-09-02, scratchpad-Messreihe gegen
+ * den echten Renderer). Rekonstruiert aus der Kalibrierung, die Birk am
+ * 2026-09-01 vor Ort gemacht und in `data/kg.db` hinterlassen hat
+ * (`camera_zoom` 1.55, `portrait_size` 330, `max_terms` 32) — angewandt auf
+ * das dichte Netz aus `data-dichte/60` (60 Personen, 78 Begriffe) auf der
+ * 3840×2160 breiten Ausstellungsfläche:
+ *
+ *     fit-Niveau 0,986  ×  Regler 1,55  ×  --label-size 26  =  39,7 px
+ *
+ * Die Gegenprobe schließt sich: 40 / 26 = 1,538 — praktisch genau der Regler,
+ * den Birk eingestellt hatte. Die neue Rechnung reproduziert die alte
+ * Kalibrierung, statt sie zu ersetzen.
+ *
+ * Was die Zahl an der Wand bedeutet, über die Interview-Leiter gemessen
+ * (frisch geseedete Netze, gleicher Seed, Vollansicht, 3840×2160):
+ *
+ *     Interviews    1     2     3     4     5     6     8    10    20    30
+ *     Schrift    57,5  48,5  49,3  32,6  35,8  33,9  27,7  30,2  27,3  29,7 px
+ *
+ * Bis zum dritten Interview steht das ganze Netz lesbar im Bild und die Wand
+ * hält still; ab dem vierten setzt die Fahrt ein. Und ab dem achten läuft es
+ * flach — weil `max_terms` die ANGEZEIGTEN Begriffe deckelt, wächst das Netz
+ * auf der Wand nicht weiter, und die Schriftgröße bleibt von da an konstant.
+ * Das ist genau die Zusicherung, die Birk am 2026-09-01 verlangt hat:
+ * „eigentlich sollte es immer identisch bleiben, den stelle ich einmal ein."
+ *
+ * Gilt für BEIDE Flächen mit demselben Wert (Birk, 2026-09-02). Im Saal sind
+ * 40 px auf 1080 doppelt so groß im Bildanteil wie im Foyer auf 2160 — also
+ * weniger Netz und größere Schrift, was dort die erklärte Absicht ist
+ * („aus dem Saal zählt Lesbarkeit, nicht Fülle", kg/server.py). */
+export const MIN_LABEL_DEFAULT = 40;
+
+/** Die Schriftgröße der Begriffe in MODELLEINHEITEN, wenn niemand sie nennt.
+ *
+ * Sie kommt im Betrieb aus dem Theme (`--label-size`) und wird von
+ * `projection.js` hereingereicht — dort wird sie ohnehin schon gelesen, und
+ * ein zweiter Leseweg wäre eine zweite Stelle, an der ein Theme-Wechsel
+ * hängenbleibt. 26 ist der Wert von theme-f, dem Layout der Ausstellung. */
+const LABEL_SIZE_DEFAULT = 26;
+
+/** Wieviel Luft der Rückweg vom Fahren ins Stehen braucht.
+ *
+ * 🔴 Ohne Hysterese kippt die Wand an der Schwelle hin und her. Gemessen
+ * 2026-09-02 über die Interview-Leiter: Bei 4 Interviews liefert die
+ * Vollansicht 32,6 px, bei 5 dann 35,8 px — die Kurve ist nicht monoton, weil
+ * fcose das Netz bei jedem Interview neu ordnet und die Wolke mal kompakter,
+ * mal weiter ausfällt. Läge die Schwelle dazwischen, begänne und endete die
+ * Fahrt im Wechsel, alle paar Minuten, ohne dass sich etwas Sichtbares
+ * geändert hätte.
+ *
+ * Also: losfahren, sobald die Vollansicht unter die Mindestschrift fällt —
+ * aber erst wieder anhalten, wenn sie 15 % darüber liegt. Dieselbe Bauart wie
+ * die Begriffs-Hysterese in `projection.js`, aus demselben Grund. */
+const FAHRT_HYSTERESE = 1.15;
 
 const ROAM = {
   // The FASTEST the tour ever goes (speed factor 1.0). Everything slower is
@@ -137,8 +212,8 @@ const DREAM = {
   //
   // BEIDE Werte stehen jetzt auf 1.0: der Traumausschnitt wird eins zu eins
   // gezeigt und bleibt es. Die Bildgröße bestimmt allein der Zoomregler des
-  // Operators (`_zoomFactor`, siehe die Multiplikation in `_automaticView()`
-  // und `_travelLevel()`) — „ich will das mit dem manuellen Zoomregler
+  // Operators (`_minLabelPx`, siehe `_travelLevel()`) — „ich will das mit
+  // dem manuellen Zoomregler
   // machen" (Birk, 2026-09-01).
   //
   // Die Mechanik von `_dreamSpread()` bleibt absichtlich stehen, statt sie
@@ -225,7 +300,8 @@ export class Camera {
     {
       panSpeed = 18,
       padding = 60,
-      zoomFactor = 1,
+      minLabelPx = MIN_LABEL_DEFAULT,
+      labelSize = LABEL_SIZE_DEFAULT,
       roamSpeed = 1,
       random = Math.random,
       fitWith = (fit) => fit(),
@@ -249,11 +325,23 @@ export class Camera {
     // — with a single portrait on the wall that has no solution at all. The
     // default is the plain call, so a Camera used on its own is unchanged.
     this._fitWith = fitWith;
-    // 1 = the whole net in frame. >1 = that many times tighter, i.e. only
-    // 1/factor of the net's width is on the wall. Fit-all is illegible at 50
-    // persons (pre-render series, 2026-08-14), so the zoom level is a setting
-    // of this component, not a second camera bolted on next to it.
-    this._zoomFactor = 1;
+    // Die Mindestschrift und die Schriftgröße, aus denen sich ALLES ableitet,
+    // was diese Kamera über Nähe entscheidet: das Fahrtniveau, der
+    // Traumausschnitt und die Frage, ob es überhaupt eine Fahrt gibt.
+    // Fit-all ist bei 50 Personen unlesbar (Prerender-Serie, 2026-08-14) —
+    // deshalb ist das eine Einstellung dieser Komponente und keine zweite
+    // Kamera daneben.
+    this._minLabelPx = MIN_LABEL_DEFAULT;
+    this._labelSize = LABEL_SIZE_DEFAULT;
+    // Ob die Wand gerade fährt oder steht. GEMERKT und nicht in jedem Frame
+    // neu entschieden, denn die Entscheidung hat eine Hysterese und ist damit
+    // vom eigenen Vorzustand abhängig — und weil sie ein `cy.fit()` kostet,
+    // das im Bildtakt nichts zu suchen hat. Neu bewertet wird sie genau dort,
+    // wo sich eine ihrer beiden Eingangsgrößen ändern kann: beim Graphen
+    // (`onGraphChanged`), am Regler (`setMinLabel`) und beim Moduswechsel.
+    this._fahrt = false;
+    // Das gemessene Niveau der Vollansicht, bis der nächste Graph es umwirft.
+    this._fitLevelCache = undefined;
     this._mode = 'fit';
     this._direction = -1;
     // Injected so a test can drive the traversal deterministically; production
@@ -278,15 +366,29 @@ export class Camera {
     // `manual` is the only mode where a visitor is meant to move anything;
     // apply that for the initial mode too, not just from setMode onward.
     this._applyInteractivity(this._mode);
-    this.setZoomFactor(zoomFactor);
+    this.setLabelSize(labelSize);
+    this.setMinLabel(minLabelPx);
   }
 
   get mode() {
     return this._mode;
   }
 
-  get zoomFactor() {
-    return this._zoomFactor;
+  /** Die kleinste Schrift, die auf dieser Fläche stehen soll, in Pixeln. */
+  get minLabelPx() {
+    return this._minLabelPx;
+  }
+
+  /** Die Schriftgröße der Begriffe in Modelleinheiten (aus dem Theme). */
+  get labelSize() {
+    return this._labelSize;
+  }
+
+  /** Ob die Wand gerade fährt — und damit auch, ob das ganze Netz noch lesbar
+   * ins Bild passt. Für die Tests, den Prerender und die Bedienoberfläche;
+   * die Wand selbst liest es nur über `step()`. */
+  get fahrtNoetig() {
+    return this._fahrt;
   }
 
   get roamSpeed() {
@@ -364,8 +466,18 @@ export class Camera {
     // Gilt ein Traumgebiet, ist auch der Weg nach `fit` eine Fahrt statt eines
     // harten Frames: `_frame()` zeigt das ganze Netz und risse die Kopplung
     // auf, `_startHandover()` fährt über `_automaticView()` auf das Gebiet.
+    // Beim Betreten eines getriebenen Modus neu bewerten, ob gefahren wird:
+    // Der Graph kann sich, während die Wand in `manual` stand, um zwanzig
+    // Interviews verändert haben.
+    if (mode !== 'manual') this._fahrtZustandPruefen();
     if (previous === 'manual' && mode !== 'manual') this._startHandover();
     else if (mode === 'fit') {
+      if (this._dreamNodes()) this._startHandover();
+      else this._frame();
+    } else if (mode === 'pan' && !this._fahrt) {
+      // `pan` ohne Fahrt IST die Vollansicht — und weil `step()` dort nichts
+      // schreibt, muss sie hier gesetzt werden. Ohne das bliebe stehen, was
+      // der vorige Modus hinterlassen hat.
       if (this._dreamNodes()) this._startHandover();
       else this._frame();
     }
@@ -388,18 +500,129 @@ export class Camera {
     return this._mode === 'manual' ? 0 : 1;
   }
 
-  setZoomFactor(factor) {
-    if (!(factor >= 1)) throw new Error(`zoom factor must be >= 1: ${factor}`);
-    const changed = factor !== this._zoomFactor;
-    this._zoomFactor = factor;
-    // Manual is the visitor's mode: re-framing under their hands would fight
-    // them. Every other mode is driven, so it re-frames at the new level.
-    if (!changed || this._mode === 'manual') return;
-    // A new level moves the destination. Steer the handover onto it instead of
-    // framing hard underneath it — a hard frame mid-flight is the snap all
-    // over again, and the next step() would drag the view back out of it.
+  /** Der Regler des Operators: die kleinste Schrift, die auf dieser Fläche
+   * noch stehen soll, in gezeichneten Pixeln.
+   *
+   * Wirft NICHT bei einem unbrauchbaren Wert, anders als der `setZoomFactor`,
+   * den diese Methode ablöst. Der Grund steht schon bei `clampRoamSpeed`: Der
+   * Wert kommt über `/events` von einem Server herein, und an einer
+   * unbeaufsichtigten Wand muss eine kaputte Zahl die Anzeige verlangsamen
+   * oder unverändert lassen — nie anhalten. Der Aufrufer in projection.html
+   * musste den alten Wurf vorher abfangen; jetzt gibt es nichts mehr
+   * abzufangen. */
+  setMinLabel(px) {
+    const n = Number(px);
+    if (!Number.isFinite(n) || !(n > 0)) return;
+    const changed = n !== this._minLabelPx;
+    this._minLabelPx = n;
+    if (!changed) return;
+    this._neuRahmen();
+  }
+
+  /** Die Schriftgröße der Begriffe in Modelleinheiten, aus dem Theme.
+   *
+   * Zusammen mit `minLabelPx` ergibt sie das Zielniveau: Cytoscape skaliert
+   * `font-size` mit dem Zoom, also ist die Schrift auf der Wand schlicht
+   * `labelSize × zoom` — und der Zoom, bei dem sie die Mindestgröße erreicht,
+   * ist `minLabelPx / labelSize`. Das ist die ganze Rechnung. */
+  setLabelSize(px) {
+    const n = Number(px);
+    if (!Number.isFinite(n) || !(n > 0)) return;
+    const changed = n !== this._labelSize;
+    this._labelSize = n;
+    if (!changed) return;
+    this._neuRahmen();
+  }
+
+  /** Der Zoom, bei dem die Begriffsschrift genau die Mindestgröße erreicht. */
+  _zielLevel() {
+    const level = this._minLabelPx / this._labelSize;
+    return level > 0 && Number.isFinite(level) ? level : 1;
+  }
+
+  /** Das Niveau, auf dem das GANZE Netz ins Bild passt — gemessen, indem der
+   * Rahmen einmal wirklich gesetzt und wieder zurückgenommen wird.
+   *
+   * Über `_fitWith()` und nicht über `_levelForBox(cy.elements())`, obwohl das
+   * naheliegt und billiger wäre: Die beiden liefern verschiedene Zahlen. Die
+   * Projektion leitet die Größe der Porträtscheiben aus dem Zoom ab, und
+   * `_fitWith` setzt sie für die Messung erst auf ihre PLATZIERUNGSgröße
+   * zurück (siehe den Kommentar bei `this._fitWith` im Konstruktor).
+   * `_levelForBox` misst dagegen die gerade gezeichneten Scheiben. Für die
+   * Frage „passt das ganze Netz noch lesbar ins Bild" muss genau das Niveau
+   * gelten, das `_frame()` auch wirklich fährt — sonst entscheidet die
+   * Schwelle über eine Ansicht, die die Wand so nie zeigt.
+   *
+   * Gecacht, weil es in `_travelLevel()` steckt und das in jedem Frame läuft:
+   * ein `cy.fit()` pro Bild wäre ein zweiter Schreiber auf dem Viewport neben
+   * `step()`. Der Cache fällt in `onGraphChanged()`, also genau dann, wenn
+   * sich die Knotenwolke bewegt haben kann. */
+  _fitLevel() {
+    if (this._fitLevelCache !== undefined) return this._fitLevelCache;
+    const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
+    this._fitWith(() => this.cy.fit(this.padding));
+    const level = this.cy.zoom();
+    this.cy.zoom(before.zoom);
+    this.cy.pan(before.pan);
+    this._fitLevelCache = level > 0 && Number.isFinite(level) ? level : 0;
+    return this._fitLevelCache;
+  }
+
+  /** Das Niveau des Ausschnitts, den die Automatik gerade zeigen WILL, bevor
+   * die Mindestschrift daran zieht: das Traumgebiet, sonst das ganze Netz.
+   *
+   * Eine Stelle für beides, damit die Schwelle („reicht das?") und das
+   * Fahrtniveau („dann eben näher") sich nie auf verschiedene Ausschnitte
+   * beziehen können. */
+  _ausschnittLevel() {
+    const dream = this._dreamNodes();
+    if (dream) {
+      const level = this._levelForBox(dream, this._dreamSpread());
+      if (level > 0) return level;
+    }
+    return this._fitLevel();
+  }
+
+  /** Neu bewerten, ob gefahren wird — und, wenn sich das ändert, hinfahren
+   * statt hinzuspringen.
+   *
+   * Der Zustandswechsel ist die eine sichtbare Bewegung dieser ganzen
+   * Mechanik: Beim vierten Interview hört die Wand auf, das ganze Netz zu
+   * zeigen, und beginnt zu fahren. Über den Handover (5 s Cosinus) ist das
+   * dieselbe ruhige Fahrt wie jede andere; ohne ihn wäre es der Sprung, gegen
+   * den diese Datei an sechs Stellen gebaut ist. */
+  _fahrtZustandPruefen() {
+    const vorher = this._fahrt;
+    const ausschnitt = this._ausschnittLevel();
+    // Ohne messbare Wolke bleibt es beim gemerkten Zustand: ein leerer Graph
+    // oder ein schlanker Test-Stub darf die Wand nicht umschalten.
+    if (ausschnitt > 0) {
+      const ziel = this._zielLevel();
+      // Losfahren, sobald die Vollansicht die Mindestschrift unterschreitet;
+      // anhalten erst, wenn sie mit Luft darüber liegt (siehe FAHRT_HYSTERESE).
+      this._fahrt = vorher ? ausschnitt < ziel * FAHRT_HYSTERESE : ausschnitt < ziel;
+    }
+    return this._fahrt !== vorher;
+  }
+
+  /** Die Ansicht neu werfen, nachdem sich eine Eingangsgröße geändert hat.
+   *
+   * Im manuellen Modus nicht: dort hat der Besucher die Wand in der Hand, und
+   * ihm unter den Fingern neu zu rahmen wäre genau das Gegenteil dessen, wofür
+   * der Modus da ist. Läuft schon eine Fahrt, wird sie UMGELENKT statt
+   * überschrieben — ein hartes Framing mitten im Flug ist der Ruck, den der
+   * Handover gerade vermeidet. */
+  _neuRahmen() {
+    if (this._mode === 'manual') return;
+    this._fahrtZustandPruefen();
     if (this._handover) this._handover.to = this._automaticView();
-    else this._frame();
+    // Hart rahmen nur dort, wo „alles zeigen" auch wirklich alles zeigt: im
+    // Modus `fit`, ohne geltendes Traumgebiet. Das ist die Ansicht, die der
+    // Prerender unmittelbar nach dem Setzen fotografiert — eine Fahrt statt
+    // eines Rahmens lieferte ihm ein Bild mitten in der Bewegung. Überall
+    // sonst wird gefahren, auch in den Stillstand hinein.
+    else if (this._mode === 'fit' && !this._dreamNodes()) this._frame();
+    else this._startHandover();
   }
 
   /** Der Zoom eines BESUCHERS — von der Zwei-Finger-Geste wie vom Regler.
@@ -417,12 +640,13 @@ export class Camera {
    * holt der eine Weg nicht mehr aus dem heraus, was der andere angerichtet
    * hat. `touch-zoom-geste.js` ruft mit Punkt, `touch-controls.js` ohne.
    *
-   * 🔴 Und deshalb NICHT `setZoomFactor`, so naheliegend das aussieht: Der
+   * 🔴 Und deshalb NICHT `setMinLabel`, so naheliegend das aussieht: Der
    * Regler wird im Modus `manual` bedient (die Berührung schaltet die Kamera
-   * über `attachTouchAutonomy` dorthin), und `setZoomFactor` steigt in genau
+   * über `attachTouchAutonomy` dorthin), und `setMinLabel` steigt über
+   * `_neuRahmen()` in genau
    * diesem Modus absichtlich aus, um dem Besucher nicht in die Hand zu
    * fahren. Der Regler hätte also eine Zahl gesetzt und auf dem Schirm nichts
-   * bewegt — gebaut, plausibel, wirkungslos. Ausserdem ist `_zoomFactor` die
+   * bewegt — gebaut, plausibel, wirkungslos. Ausserdem ist `_minLabelPx` die
    * Kalibrierung des Operators, die über `/events` hereinkommt; ein Besucher
    * schreibt nicht daran, er schreibt in den Viewport DIESER Seite, genau wie
    * eine Geste es täte.
@@ -537,9 +761,16 @@ export class Camera {
     this._dream = { ids, until: now + DREAM.holdMs, since: now };
     // Im manuellen Modus bleibt die Ansicht, wie sie ist — aber gemerkt ist
     // gemerkt. Sonst ist ein laufender Handover auf das neue Gebiet
-    // umzulenken, aus demselben Grund wie in setZoomFactor: ein hartes Framing
+    // umzulenken, aus demselben Grund wie in setMinLabel: ein hartes Framing
     // mitten im Flug ist der Ruck, den der Handover gerade vermeidet.
     if (this._mode === 'manual') return;
+    // Ein Traumgebiet ist kleiner als das ganze Netz, passt also eher lesbar
+    // ins Bild — die Frage „braucht es eine Fahrt" wird damit neu gestellt und
+    // bezieht sich ab jetzt auf DIESEN Ausschnitt (`_ausschnittLevel`). Erst
+    // hinter dem `manual`-Wächter, denn die Bewertung kostet im
+    // ungebundenen Fall ein `cy.fit()`, und in der Hand des Besuchers fasst
+    // diese Kamera den Viewport überhaupt nicht an.
+    this._fahrtZustandPruefen();
     // Kein hartes Framing, sondern eine Fahrt: der Handover ist bereits die
     // Bewegung, die genau dafür gebaut wurde — 5 s Cosinus, von Birk am
     // 2026-08-30 an der Wand auf diesen Wert gesetzt, weil 1,5 s „als Ruck
@@ -578,7 +809,7 @@ export class Camera {
     // Vorrang vor allem anderen, deshalb muss er hier wirklich weg sein.
     //
     // Ohne Neu-Rahmen: Der Aufrufer setzt unmittelbar danach die Ansicht, die
-    // er haben will (`setMode`/`setZoomFactor`/`focus`). Hier zusätzlich zu
+    // er haben will (`setMode`/`setMinLabel`/`focus`). Hier zusätzlich zu
     // rahmen hieße, sie zweimal zu werfen.
     this._handover = null;
   }
@@ -644,7 +875,10 @@ export class Camera {
     if (this._dreamNodes(now)) return;
     this._dream = null;
     if (this._mode === 'manual') return;
-    // Wie in focusDream() und setZoomFactor(): eine laufende Fahrt wird
+    // Der Bezug wechselt vom Traumgebiet zurück auf das ganze Netz, also gilt
+    // die Schwelle wieder für dieses.
+    this._fahrtZustandPruefen();
+    // Wie in focusDream() und setMinLabel(): eine laufende Fahrt wird
     // umgelenkt statt überschrieben.
     if (this._handover) this._handover.to = this._automaticView();
     else this._startHandover();
@@ -670,15 +904,21 @@ export class Camera {
     return { ids: [...this._dream.ids], until: this._dream.until, since: this._dream.since };
   }
 
+  /** Das GANZE Netz ins Bild — und nichts weiter.
+   *
+   * Bis zum 2026-09-02 wurde hier noch der Zoomfaktor des Operators
+   * daraufgerechnet, was `fit` seinem eigenen Namen widersprechen ließ:
+   * „alles zeigen" zeigte 1,55× enger als alles. Die Nähe entscheidet jetzt
+   * allein die Mindestschrift, und die wirkt in `pan` — `fit` ist wieder
+   * wörtlich zu nehmen. */
   _frame() {
     this._fitWith(() => this.cy.fit(this.padding));
-    if (this._zoomFactor === 1) return;
-    // Zoom about the middle of the viewport, so the net stays centred on the
-    // wall instead of drifting towards the model origin.
-    this.cy.zoom({
-      level: this.cy.zoom() * this._zoomFactor,
-      renderedPosition: { x: this.cy.width() / 2, y: this.cy.height() / 2 },
-    });
+    // Gratis gemessen: Was `cy.fit()` gerade eingestellt hat, IST das Niveau
+    // der Vollansicht. Es hier mitzunehmen spart dem nächsten `_fitLevel()`
+    // ein zweites `cy.fit()` — und zwar an der Stelle, an der es sonst am
+    // teuersten wäre, nämlich direkt nach einem Graph-Update.
+    const level = this.cy.zoom();
+    this._fitLevelCache = level > 0 && Number.isFinite(level) ? level : 0;
   }
 
   _applyInteractivity(mode) {
@@ -724,7 +964,8 @@ export class Camera {
     // Das gecachte Fahrtniveau gilt für eine Knotenwolke, die es nicht mehr
     // gibt (Birk, 2026-08-31, Punkt 7: „springt immer mal wieder").
     //
-    // 🔴 Gemessen 2026-09-01 auf dem dichten Testnetz: `_roamBaseLevel` wurde
+    // 🔴 Gemessen 2026-09-01 auf dem dichten Testnetz: das gecachte Niveau
+    // (damals `_roamBaseLevel`, heute `_fitLevelCache`) wurde
     // beim ERSTEN Aufruf berechnet und nie wieder — es gab keinen einzigen
     // Weg, den Cache zu verwerfen, außer einer Änderung am Zoomregler. Wächst
     // der Graph, wird der gemerkte Wert falsch:
@@ -743,11 +984,32 @@ export class Camera {
     // holt ihn sich, und der läuft ohnehin in jedem Frame. Ein Neuberechnen
     // an dieser Stelle wäre ein `cy.fit()` mitten in einem Frame, in dem
     // gerade das Layout schreibt.
-    this._roamBaseLevel = undefined;
+    this._fitLevelCache = undefined;
 
-    // Same reason as in setZoomFactor: an interview arriving during the 1.5 s
-    // handover moves the destination, so the handover is redirected rather
-    // than overwritten.
+    // 🔴 Ob das ganze Netz noch lesbar ins Bild passt, kann sich NUR hier
+    // geändert haben — ein Interview ist dazugekommen, ein Begriff gefallen,
+    // das Layout hat neu geordnet. Das ist der Moment, in dem die Wand vom
+    // Zeigen ins Fahren übergeht (gemessen zwischen dem dritten und vierten
+    // Interview, siehe MIN_LABEL_DEFAULT).
+    //
+    // VOR den drei Zweigen und nicht in einem davon, obwohl das die Messung
+    // im `fit`-Fall sparen würde: `_automaticView()` im ersten Zweig liest
+    // `this._fahrt` und muss den neuen Stand sehen. Getestet in
+    // test_camera_mindestschrift.py — ein zweiter Graph-Push innerhalb der
+    // fünf Sekunden Übergabefahrt (die kommen alle ~12 s, das ist keine
+    // Ausnahme) übersprang die Bewertung sonst vollständig, und die Wand blieb
+    // im falschen Zustand stehen, bis der übernächste sie zufällig fing.
+    //
+    // Nur in `pan`, und das ist keine Sparsamkeit: In `fit` zeigt die Wand
+    // ohnehin alles, der Zustand hätte dort keine Wirkung — und `setMode()`
+    // bewertet ihn beim Betreten eines getriebenen Modus neu, es kann also
+    // auch nichts veralten. In `manual` fasst diese Kamera den Viewport gar
+    // nicht an, und die Bewertung kostet ein `cy.fit()`.
+    const gewechselt = this._mode === 'pan' ? this._fahrtZustandPruefen() : false;
+
+    // Same reason as in setMinLabel: an interview arriving during the handover
+    // moves the destination, so the handover is redirected rather than
+    // overwritten.
     if (this._handover) this._handover.to = this._automaticView();
     // `_frame()` zeigt das GANZE Netz. Gilt ein Traumgebiet, wäre das der
     // Rückschritt hinter die Kopplung: jeder Graph-Push (also genau der
@@ -758,6 +1020,11 @@ export class Camera {
       if (this._dreamNodes()) this._startHandover();
       else this._frame();
     }
+    // Der Wechsel zwischen Stehen und Fahren ist selbst eine Bewegung und
+    // bekommt deshalb dieselbe Fahrt wie der Rückweg aus `manual`. Ohne diesen
+    // Zweig bliebe im Stillstand der Fahrt-Ausschnitt stehen — `step()`
+    // schreibt dort nichts mehr, was ihn aufräumen könnte.
+    else if (gewechselt) this._startHandover();
     // A target that just left the graph (density raised, term hidden) must not
     // strand the traversal mid-leg pointing at nothing.
     if (this._roam && this._roam.targetId && this.cy.getElementById(this._roam.targetId).empty()) {
@@ -844,14 +1111,13 @@ export class Camera {
     // zur Gesamtansicht.
     const dream = this._dreamNodes();
     if (dream) {
-      // Mal `_zoomFactor`, genau wie `_frame()` und `_travelLevel()` es tun:
-      // der Regler bedeutet „so viel enger als die Vollansicht" und muss auf
-      // dem Traumgebiet dasselbe bedeuten wie auf dem ganzen Netz. Ohne diese
-      // Multiplikation verwarf jedes geltende Traumgebiet die Reglerstellung
-      // stillschweigend — gemessen 2026-09-01: Faktor 3 ergab 1,00x statt 3x,
-      // und weil im Betrieb fast immer ein Traumgebiet gilt, wirkte der Regler
-      // an der Wand gar nicht (Birk, 2026-08-31).
-      const level = this._levelForBox(dream, this._dreamSpread()) * this._zoomFactor;
+      // Über `_travelLevel()`, also mit derselben Mindestschrift wie die Fahrt
+      // — der Regler muss auf dem Traumgebiet dasselbe bedeuten wie auf dem
+      // ganzen Netz. Ohne das verwarf jedes geltende Traumgebiet die
+      // Reglerstellung stillschweigend (gemessen 2026-09-01: Faktor 3 ergab
+      // 1,00x statt 3x), und weil im Betrieb fast immer ein Traumgebiet gilt,
+      // wirkte der Regler an der Wand gar nicht (Birk, 2026-08-31).
+      const level = this._travelLevel();
       if (level > 0) {
         const centre = this._dreamCentre(dream);
         return {
@@ -861,7 +1127,10 @@ export class Camera {
         };
       }
     }
-    if (this._mode === 'fit') {
+    // Steht die Wand — sei es im Modus `fit`, sei es weil das ganze Netz
+    // ohnehin lesbar ist —, ist die Vollansicht das Ziel. Das ist der Weg, den
+    // die Übergabe vom Fahren in den Stillstand nimmt.
+    if (this._mode === 'fit' || !this._fahrt) {
       this._frame();
     } else {
       // Pan mode does not re-frame: its opening dwell holds the pan where it
@@ -976,6 +1245,26 @@ export class Camera {
       return;
     }
     if (this._mode !== 'pan') return;
+    // 🔴 DER STILLSTAND. Passt das ganze Netz lesbar ins Bild, schreibt dieser
+    // Modus überhaupt nichts — kein Pan, kein Zoom, nicht einmal die
+    // Atembewegung (Birk, 2026-09-02: „solange das ganze Netz darstellbar ist
+    // […] brauchen wir gar keine Kamerafahrt", und vom 2026-09-01: „eigentlich
+    // sollte es immer identisch bleiben").
+    //
+    // Auch die Atembewegung nicht, und das ist kein Vergessen: Ihre ±6 % um
+    // das Fahrtniveau sind gedacht als Leben in einem Ausschnitt, der ohnehin
+    // enger ist als das Netz. Auf der Vollansicht schöbe dieselbe Amplitude
+    // die äußeren Knoten im Wechsel aus dem Bild — sichtbar als ein Netz, das
+    // atmet, statt als ein Bild, das lebt.
+    //
+    // Gerahmt wird hier NICHT: Das ist beim Zustandswechsel passiert
+    // (`_neuRahmen` / `onGraphChanged`), als Fahrt statt als Sprung. Ein
+    // `_frame()` pro Bild wäre der zweite Schreiber auf dem Viewport, den
+    // diese Datei an mehreren Stellen bewusst vermeidet.
+    if (!this._fahrt) {
+      this._roam = null;
+      return;
+    }
     if (!this._roam) this._roam = { phase: 'dwell', elapsed: 0, targetId: null, clock: 0 };
     const roam = this._roam;
     roam.clock += dtMs;
@@ -1031,35 +1320,26 @@ export class Camera {
     }
   }
 
-  /** The zoom level the traversal travels at, derived from the calibrated
-   * factor the same way `_frame` derives it — so "1.8×" means the same thing
-   * whether the operator is in fit or in pan.
+  /** Das Niveau, auf dem die Fahrt läuft: eng genug, dass die Schrift die
+   * Mindestgröße erreicht — aber nie enger, als der Ausschnitt es verlangt.
    *
-   * Gilt ein Traumgebiet, wird stattdessen DESSEN Box vermessen und über die
-   * Haltezeit aufgezogen (`_dreamSpread`) — „erst den Traum eins zu eins, dann
-   * immer mehr Kontext". Dieser Zweig wird bewusst NICHT gecacht: der Faktor
-   * ändert sich per Definition jede Sekunde, ein Cache wäre hier genau das
-   * Gegenteil dessen, was er sonst leistet. Der Cache bleibt für den
-   * ungebundenen Fall, wo `cy.fit()` sonst in jedem Frame liefe. */
+   * Gilt ein Traumgebiet, ist DESSEN Box der Ausschnitt (`_ausschnittLevel`),
+   * sonst das ganze Netz. Der Cache sitzt eine Ebene tiefer, in `_fitLevel()`:
+   * Die Traumbox wird bewusst in jedem Frame neu vermessen (sie schrumpft,
+   * während die Fahrt hineinzoomt — siehe `_advanceHandover`), die Vollansicht
+   * dagegen bliebe ohne Cache ein `cy.fit()` pro Bild. */
   _travelLevel() {
-    const dream = this._dreamNodes();
-    if (dream) {
-      // Mal `_zoomFactor` aus demselben Grund wie in `_automaticView()`: der
-      // gecachte Zweig unten multipliziert ihn ebenfalls (`* this._zoomFactor`),
-      // und die Fahrt darf nicht auf einem anderen Niveau laufen als das Ziel,
-      // auf das der Handover sie setzt.
-      const level = this._levelForBox(dream, this._dreamSpread()) * this._zoomFactor;
-      if (level > 0) return level;
-    }
-    if (this._roamBaseLevel === undefined || this._roamBaseFactor !== this._zoomFactor) {
-      const before = { pan: { ...this.cy.pan() }, zoom: this.cy.zoom() };
-      this._fitWith(() => this.cy.fit(this.padding));
-      this._roamBaseLevel = this.cy.zoom() * this._zoomFactor;
-      this._roamBaseFactor = this._zoomFactor;
-      this.cy.zoom(before.zoom);
-      this.cy.pan(before.pan);
-    }
-    return this._roamBaseLevel;
+    const ausschnitt = this._ausschnittLevel();
+    const ziel = this._zielLevel();
+    // `max` und nicht `×`: Der Regler sagt „so groß muss die Schrift
+    // MINDESTENS sein", nicht „so viel enger als die Übersicht". Reicht der
+    // Ausschnitt für sich schon, bleibt er wie er ist — der Traumausschnitt
+    // wird dann eins zu eins gezeigt, was die Entscheidung vom 2026-09-01 ist
+    // („der Traumausschnitt wird eins zu eins gezeigt und bleibt es"), und die
+    // Vollansicht bleibt die Vollansicht. Reicht er nicht, wird genau so weit
+    // herangefahren, wie die Lesbarkeit verlangt, und keinen Schritt weiter.
+    if (!(ausschnitt > 0)) return ziel;
+    return Math.max(ausschnitt, ziel);
   }
 
   /** Der Zoom, bei dem `eles` ins Fenster passt, geteilt durch `spread`.

@@ -137,12 +137,15 @@ CAMERA_VIEWS = [
     (
         "camera-1-fit-all-reference",
         "Camera 1: fit mode, the whole net in frame — the reference view.",
-        "() => { const c = window.kgView.camera; c.setZoomFactor(1); c.setMode('fit'); }",
+        "() => { const c = window.kgView.camera; c.setMode('fit'); }",
     ),
     (
-        "camera-2-zoom2x-half-the-net",
-        "Camera 2: fit mode at zoom factor 2 — half the net's width across the wall, centred.",
-        "() => { const c = window.kgView.camera; c.setMode('fit'); c.setZoomFactor(2); }",
+        "camera-2-mindestschrift-52px",
+        "Camera 2: pan mode at a 52px minimum label — twice the theme's own type size, so the camera has to move in until the labels read that big.",
+        # Seit dem 2026-09-02 waehlt eine MINDESTSCHRIFT den Ausschnitt, nicht
+        # ein Zoomfaktor -- und `fit` zeigt darum wieder woertlich alles. Die
+        # Nahaufnahme gehoert deshalb in `pan`, wo die Mindestschrift wirkt.
+        "() => { const c = window.kgView.camera; c.setMode('pan'); c.setMinLabel(52); }",
     ),
     (
         "camera-3-cluster-closeup",
@@ -370,7 +373,15 @@ def _launch_chromium(playwright):
     try:
         return playwright.chromium.launch()
     except Exception:
-        candidates = sorted(Path.home().glob(".cache/ms-playwright/chromium-*/chrome-linux64/chrome"))
+        candidates = sorted(
+            path
+            for muster in (
+                ".cache/ms-playwright/chromium-*/chrome-linux64/chrome",
+                "Library/Caches/ms-playwright/chromium-*/chrome-mac-*/"
+                "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+            )
+            for path in Path.home().glob(muster)
+        )
         if not candidates:
             raise
         return playwright.chromium.launch(executable_path=str(candidates[-1]))

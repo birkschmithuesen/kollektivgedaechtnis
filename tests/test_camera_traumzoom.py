@@ -1,16 +1,20 @@
-"""Der Zoomregler des Operators wirkt auch auf ein geltendes Traumgebiet.
+"""Der Regler des Operators wirkt auch auf ein geltendes Traumgebiet.
 
 Warum es diese Datei gibt (Birk, 2026-08-31: „Zoom und Portraitgröße im
 Operator ändern an der Wand nichts"):
 
-`_frame()` und der gecachte Zweig von `_travelLevel()` multiplizieren das
-Fit-Niveau mit `_zoomFactor`. Der Traum-Zweig — der Weg, den die Wand nimmt,
-sobald ein Traumgebiet gilt — tat es nicht, und verwarf die Reglerstellung
-damit stillschweigend. Weil im Betrieb fast durchgehend ein Traumgebiet gilt
-(Haltezeit 4 Minuten), war das an der Wand der Normalfall und nicht der
-Sonderfall.
+`_frame()` und der gecachte Zweig von `_travelLevel()` rechneten den Regler
+ein, der Traum-Zweig — der Weg, den die Wand nimmt, sobald ein Traumgebiet
+gilt — tat es nicht und verwarf die Reglerstellung damit stillschweigend.
+Weil im Betrieb fast durchgehend ein Traumgebiet gilt (Haltezeit 4 Minuten),
+war das an der Wand der Normalfall und nicht der Sonderfall.
 
 Gemessen vor der Reparatur: Faktor 3 ergab am Traumgebiet 1,00× statt 3×.
+
+Am 2026-09-02 hat der Regler die Einheit gewechselt — aus dem Zoomfaktor
+wurde eine Mindestschriftgröße in gezeichneten Pixeln, und aus der
+Multiplikation ein `max(Ausschnitt, Ziel)`. Die Frage dieser Datei bleibt
+Wort für Wort dieselbe: Kommt der Regler im Traum-Zweig überhaupt an.
 
 Der bestehende `tests/test_camera.py` deckt diesen Zweig nicht ab, weil sein
 `cyStub` weder `collection()` noch `boundingBox()` kennt — beides ergänzt der
@@ -75,19 +79,31 @@ def _zielzoom(cam):
     return cam.evaluate("window.cam._automaticView().zoom")
 
 
-def test_zoomregler_wirkt_auf_das_traumgebiet(traumkamera):
+def test_die_mindestschrift_wirkt_auf_das_traumgebiet(traumkamera):
+    """Reicht die Traumbox für sich, wird sie eins zu eins gezeigt — sonst
+    zieht die Mindestschrift den Ausschnitt enger.
+
+    Das ist dieselbe Regel wie für das ganze Netz (`max(Ausschnitt, Ziel)`),
+    und sie muss es sein: Ein Traumgebiet, das anders gerechnet würde, wäre
+    genau der stillschweigend verworfene Regler, gegen den diese Datei
+    geschrieben ist.
+    """
     traumkamera.evaluate("window.cam.setMode('fit')")
+    # Klein genug, dass die Traumbox die Schrift von sich aus liefert.
+    traumkamera.evaluate("window.cam.setMinLabel(8)")
     _traumgebiet_setzen(traumkamera)
-    eins = _zielzoom(traumkamera)
+    eins_zu_eins = _zielzoom(traumkamera)
 
-    traumkamera.evaluate("window.cam.setZoomFactor(3)")
+    # Und jetzt eine Mindestschrift, die die Box nicht mehr hergibt.
+    traumkamera.evaluate("window.cam.setMinLabel(104)")  # 104/26 = 4,0
     _traumgebiet_setzen(traumkamera)
-    drei = _zielzoom(traumkamera)
+    enger = _zielzoom(traumkamera)
 
-    # Der Regler bedeutet „so viel enger als die Vollansicht" — auf dem
-    # Traumgebiet dasselbe wie auf dem ganzen Netz.
-    assert drei == pytest.approx(eins * 3, rel=1e-3), (
-        f"Zoomfaktor 3 muss das Traumziel verdreifachen: {eins} -> {drei}"
+    assert enger > eins_zu_eins, (
+        f"die Mindestschrift muss den Traumausschnitt enger ziehen: {eins_zu_eins} -> {enger}"
+    )
+    assert enger == pytest.approx(4.0, rel=1e-3), (
+        "und zwar genau bis zur Mindestschrift, nicht weiter"
     )
 
 
@@ -96,7 +112,7 @@ def test_die_fahrt_laeuft_auf_demselben_niveau_wie_ihr_ziel(traumkamera):
     # Niveau meinen, sonst zieht die Fahrt die Ansicht nach der Ankunft wieder
     # weg. Beide Zweige mussten repariert werden, also prüft das hier beide.
     traumkamera.evaluate("window.cam.setMode('pan')")
-    traumkamera.evaluate("window.cam.setZoomFactor(2)")
+    traumkamera.evaluate("window.cam.setMinLabel(78)")  # 78/26 = 3,0
     _traumgebiet_setzen(traumkamera)
 
     ziel = _zielzoom(traumkamera)
@@ -106,12 +122,12 @@ def test_die_fahrt_laeuft_auf_demselben_niveau_wie_ihr_ziel(traumkamera):
     )
 
 
-def test_ohne_traumgebiet_bleibt_der_regler_wie_er_war(traumkamera):
-    # Die Gegenprobe zur Reparatur: der Weg ohne Traumgebiet war nie defekt
-    # und darf sich nicht mitverändert haben.
-    traumkamera.evaluate("window.cam.setMode('fit')")
-    traumkamera.evaluate("window.cam.setZoomFactor(3)")
-    assert traumkamera.evaluate("window.cyStub._zoom") == 3
+def test_ohne_traumgebiet_faehrt_der_regler_auf_dasselbe_niveau(traumkamera):
+    # Die Gegenprobe zur Reparatur: der Weg ohne Traumgebiet muss dieselbe
+    # Rechnung fahren wie der mit, sonst sind es wieder zwei Rechnungen.
+    traumkamera.evaluate("window.cam.setMode('pan')")
+    traumkamera.evaluate("window.cam.setMinLabel(78)")  # 78/26 = 3,0
+    assert traumkamera.evaluate("window.cam._travelLevel()") == pytest.approx(3.0, rel=1e-3)
 
 
 def test_der_traumausschnitt_zieht_sich_nicht_ueber_die_zeit_auf(traumkamera):
@@ -157,7 +173,7 @@ def test_das_fahrtniveau_bleibt_ueber_die_haltezeit_konstant(traumkamera):
     Haltezeit.
     """
     traumkamera.evaluate("window.cam.setMode('pan')")
-    traumkamera.evaluate("window.cam.setZoomFactor(2)")
+    traumkamera.evaluate("window.cam.setMinLabel(78)")  # 78/26 = 3,0
     _traumgebiet_setzen(traumkamera)
 
     niveaus = traumkamera.evaluate(

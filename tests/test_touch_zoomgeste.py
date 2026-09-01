@@ -442,7 +442,8 @@ def test_eine_geste_erreicht_den_server_nicht(flaeche):
     _pinch(flaeche, dy=-60)
     _pinch(flaeche, dy=+30)
     assert flaeche.evaluate("window.kgFetches") == []
-    assert flaeche.evaluate("window.kgView.camera.zoomFactor") == 1
+    # Und die Kalibrierung der Station steht, wo sie stand.
+    assert flaeche.evaluate("window.kgView.camera.minLabelPx") == 40
 
 
 def test_der_griff_des_reglers_folgt_der_geste(flaeche):

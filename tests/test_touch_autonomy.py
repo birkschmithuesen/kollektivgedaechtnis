@@ -21,7 +21,7 @@ window.fakeCamera = {
   _zoom: 1,
   get mode() { return this._mode; },
   setMode(m) { this._mode = m; window.calls.push(['setMode', m]); },
-  setZoomFactor(z) { this._zoom = z; window.calls.push(['setZoomFactor', z]); },
+  setMinLabel(px) { this._minLabel = px; window.calls.push(['setMinLabel', px]); },
 };
 window.fakeView = { camera: window.fakeCamera };
 window.fetchCalls = [];
@@ -215,10 +215,20 @@ def test_uebersicht_survives_as_the_one_thing_a_visitor_may_still_do(surface_a):
     Without it there is no way out of a visitor's abandoned close-up except
     waiting 30 s for the idle timeout, so it stays while the density goes.
     """
+    # Ueber `setVisitorZoom` und nicht ueber den Regler des Operators: Das ist
+    # der Weg, den eine Besucherhand wirklich nimmt (Geste wie Schieber), und
+    # seit dem 2026-09-02 auch der einzige, der im manuellen Modus etwas
+    # bewegt.
     surface_a.evaluate(
-        "window.kgView.camera.setMode('manual'); window.kgView.camera.setZoomFactor(2.5)"
+        "window.kgView.camera.setMode('manual'); window.kgView.camera.setVisitorZoom(3)"
     )
     surface_a.click("#touch-overview")
     assert surface_a.evaluate("window.kgView.camera.mode") == "fit"
-    assert surface_a.evaluate("window.kgView.camera.zoomFactor") == 1
+    # Der Weg zurueck ist eine FAHRT, kein Sprung -- fuenf Sekunden Cosinus aus
+    # dem Ausschnitt des Besuchers heraus (`_startHandover`, ROAM.handoverMs).
+    # Geprueft wird deshalb, dass sie laeuft, nicht dass sie schon angekommen
+    # ist; das Ankommen selbst deckt test_camera_traumende.py ab.
+    assert surface_a.evaluate("window.kgView.camera.handoverActive") is True
+    # Und die Kalibrierung der Station ist dabei nicht angefasst worden.
+    assert surface_a.evaluate("window.kgView.camera.minLabelPx") == 40
     assert surface_a.evaluate("window.kgFetches") == []
