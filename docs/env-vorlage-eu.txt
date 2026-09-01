@@ -78,14 +78,31 @@ KG_TELEGRAM_TOKEN=
 # Bewusst entscheiden, nicht vorsichtshalber eintragen.
 
 # ---------------------------------------------------------------------------
-# SPRACHERKENNUNG — braucht KEINEN Schlüssel   [geprüft 2026-09-01]
+# SPRACHERKENNUNG — läuft über Infomaniak, KEIN eigener Schlüssel nötig
 # ---------------------------------------------------------------------------
-# Der `stt_server` (Port 5051) läuft vollständig LOKAL auf dem Gerät. Im Code
-# nachgesehen (RoboCloud/stt_server): zwei Erkenner, `vosk` und `faster-whisper`
-# mit `large-v3-turbo` — das Modell wird per `WhisperModel(...)` in den
-# Arbeitsspeicher geladen, es gibt keinen HTTP-Aufruf an einen Erkennungsdienst.
-# Der einzige `requests`-Aufruf im ganzen Dienst geht an eine lokale Adresse.
+# 🔴 An der laufenden Station abgelesen (Prozess-Kommandozeile, 2026-09-01):
 #
-# Die Erwähnung von „elevenlabs-scribe" in `config.example.toml` ist ein
-# veralteter Startbefehl aus einer früheren Fassung. **Die Interview-Audios
-# verlassen den Rechner nicht.**
+#     python -m fundusapps.stt_server --language de infomaniak-whisper \
+#            --channels regie --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY
+#
+# Also **Whisper bei Infomaniak** (Schweiz) — und der Dienst liest denselben
+# Schlüssel wie oben unter Punkt 1. Deshalb steht hier keine eigene Variable:
+# `HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY` trägt vier Dinge (Analyse,
+# Weckwort, Embeddings, Spracherkennung).
+#
+# Der stt_server KANN auch rein lokal (`vosk`, `faster-whisper` mit
+# large-v3-turbo auf dem Gerät) — das wird aber bewusst nicht genutzt, weil ein
+# Ausstellungsrechner die Rechenlast nicht nebenher trägt. Die Wahl fällt beim
+# START des Dienstes, nicht in dieser Datei.
+#
+# 🔴 Der Dienst liegt NICHT in diesem Repo (`stt_url = "http://127.0.0.1:5051"`
+# spricht nur einen laufenden Prozess an). Auf dem Mac muss er also getrennt
+# gestartet werden — auf dem Windows-Rechner tat das
+# `kg-start\dienste\dienst-stt.bat`. **Für den Mac gibt es dafür noch keine
+# Entsprechung; das ist ein offener Punkt vor dem ersten Interview.**
+#
+# LEHRE (für Agenten): Ich hatte hier zuerst "läuft lokal, verlässt den Rechner
+# nicht" stehen — abgeleitet aus einer Kopie des stt_server in der RoboCloud,
+# die von MAI stammt und den Infomaniak-Erkenner noch gar nicht enthielt. Eine
+# alte Kopie ist kein Beleg für einen laufenden Dienst. Die Kommandozeile des
+# echten Prozesses ist einer.

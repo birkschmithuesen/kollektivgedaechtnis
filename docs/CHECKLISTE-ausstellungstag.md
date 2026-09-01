@@ -52,12 +52,23 @@ Bedienleiste. Auf dem Windows-Rechner fehlte er über ein Jahr unbemerkt.
 - [ ] **Erklärungstext für den Plenarsaal einsetzen** —
       `frontend/static/plenum-hinweis.js`, Zeile 32 und 40. Steht bewusst als
       Platzhalter da, Inhalt ist Birks Sache.
+- [ ] **🔴 STT-Dienst auf dem Mac starten — sonst kein Interview.** Der
+      Erkenner läuft als eigener Prozess auf Port 5051 und liegt **nicht** in
+      diesem Repo. Auf dem Windows-Rechner tat das
+      `kg-start\dienste\dienst-stt.bat`; **für den Mac gibt es dafür noch
+      keine Entsprechung.** Der Befehl, an der Station abgelesen:
+      ```
+      python -m fundusapps.stt_server --language de infomaniak-whisper \
+             --channels regie --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY
+      ```
+      Braucht den `fundusbot`-Checkout auf dem Mac. `scripts/start-mac.sh`
+      startet ihn **nicht** mit — das war eine falsche Annahme meinerseits.
 - [ ] **🔴 EU-Kette schließen: der Traum läuft noch über die USA.** In der
       `config.toml` steht keine `image_`-Zeile, also gilt die Vorgabe
       `openrouter` + `google/gemini-3-pro-image` — der `BFL_API_KEY` liegt
       ungenutzt daneben. Vier Zeilen fehlen, sie stehen in
-      `docs/env-vorlage-eu.txt`. Alles andere (Analyse, Weckwort, Embeddings)
-      läuft bereits über Infomaniak, die Spracherkennung sogar lokal.
+      `docs/env-vorlage-eu.txt`. Alles andere (Analyse, Weckwort, Embeddings,
+      Spracherkennung) läuft bereits über Infomaniak.
 - [ ] **Ein echtes Interview durchspielen**: Foto → Portrait → Analyse →
       erscheint an der Wand
 - [ ] Größen am Bedienpult einstellen (Zoom, Portrait, Tempo, Begriffe) —
