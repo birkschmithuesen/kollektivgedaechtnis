@@ -808,6 +808,47 @@ vergleichbar ist statt geschätzt.
 
 ---
 
+## 2l. GPU-Umstellung: gemessen, mit Vorbehalt (2026-09-01, 18:50)
+
+Birk am Task-Manager: *„die interne GPU ist dauerhaft 72 % ausgelastet und die
+Quadro nur zu 30 %, da ist noch richtig Luft."* Er hatte recht — und meine
+frühere Messung hatte es verdeckt, weil sie nach KARTE gemittelt hat statt nach
+Prozess UND Karte aufzuschlüsseln.
+
+Nach dem Setzen der GPU-Zuordnung (`scripts/gpu-auf-nvidia.py --setzen`,
+`UserGpuPreferences` → Höchstleistung) und einem Neustart von Brave:
+
+| | vorher | nachher |
+|---|---|---|
+| GPU 3D **Intel** | 22,9 % | **1,4 %** |
+| GPU 3D **NVIDIA** | 38,5 % | 70,7 % |
+| **CPU brave** | **144,4 %** | **94,2 %** |
+| CPU dwm | 21,3 % | 26,5 % |
+| CPU python | 13,4 % | 15,8 % |
+
+**Die Intel-GPU ist praktisch raus.** Dass die Quadro-Zahl steigt, ist keine
+Verschlechterung: es ist dieselbe Arbeit, jetzt vollständig auf der richtigen
+Karte statt auf zwei aufgeteilt. Der eigentliche Gewinn steht in der
+CPU-Zeile — **Brave fällt um ein Drittel**, und genau die CPU-Last war beim
+Ruckeln der Flaschenhals.
+
+### 🔴 Zwei Vorbehalte, die den Vergleich einschränken
+
+1. **Das Tempo stand beim Nachher-Lauf auf 0,5, beim Vorher-Lauf auf 0,25.**
+   Birk hat es zwischendurch verstellt (die Untergrenze wurde ja gerade erst
+   geöffnet). Eine schnellere Fahrt kostet mehr, die Zahlen sind also **nicht
+   sauber vergleichbar** — der Gewinn ist eher größer als hier abgebildet,
+   aber das ist eine Schlussfolgerung, keine Messung.
+2. **Eine erste Momentaufnahme zeigte 48,4 % statt 70,7 %** und hätte fast als
+   Erfolgsmeldung gedient. Sie war schlicht zu kurz: ein einzelner
+   Zähler-Abruf trifft je nach Fahrtphase (Etappe oder Standzeit) sehr
+   unterschiedliche Werte. Erst der 18-Sekunden-Lauf ist belastbar.
+   **Lehre: GPU-Auslastung nie aus einem Abruf ableiten.**
+
+Ob das Ruckeln damit weg ist, entscheidet Birk am Bild — nicht diese Tabelle.
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
