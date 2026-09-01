@@ -31,11 +31,15 @@ import math
 import re
 import sqlite3
 from collections.abc import Sequence
+import logging
+import time
 from pathlib import Path
 from typing import Protocol
 
 _WORD = re.compile(r"\w+", flags=re.UNICODE)
 
+
+log = logging.getLogger(__name__)
 
 class Embedder(Protocol):
     def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
@@ -97,11 +101,23 @@ class OpenAICompatibleEmbedder:
         api_key: str | None,
         url: str,
         post=_httpx_post,
+        retry_budget_s: float = 0.0,
     ) -> None:
         self.model = model
         self.api_key = api_key
         self.url = url
         self.post = post
+        #: Wie lange bei einem AUSFALL DES ANBIETERS weiterversucht wird
+        #: (Sekunden). Bis zum 2026-09-01 gab es hier GAR KEINE Wiederholung:
+        #: ein einziger 503 riss die Vorauswahl mit und damit die
+        #: Zusammenfuehrung gleicher Begriffe. Infomaniak war an dem Abend
+        #: zweimal fuer Minuten weg. 0 = das alte Verhalten.
+        #:
+        #: Die Erkennung teilt sich diese Datei NICHT mit kg.llm, sondern
+        #: benutzt dessen Funktion: es ist derselbe Anbieter, dieselben
+        #: Fehlerbilder, und zwei Kopien der Musterliste wuerden beim
+        #: naechsten Fehlerbild auseinanderlaufen.
+        self.retry_budget_s = retry_budget_s
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         texts = list(texts)
@@ -112,11 +128,7 @@ class OpenAICompatibleEmbedder:
                 "no embeddings api key — set OPENROUTER_API_KEY, or the variable "
                 "named by embedding_api_key_env; embeddings need it on a cache miss"
             )
-        payload = self.post(
-            self.url,
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={"model": self.model, "input": texts},
-        )
+        payload = self._post_mit_wiederholung(texts)
         rows = payload["data"]
         if len(rows) != len(texts):
             raise RuntimeError(
@@ -133,6 +145,39 @@ class OpenAICompatibleEmbedder:
             raise RuntimeError("embeddings: response rows are missing or duplicate an index")
         rows = sorted(rows, key=lambda row: row["index"])
         return [_normalise(row["embedding"]) for row in rows]
+
+    def _post_mit_wiederholung(self, texts: Sequence[str]) -> dict:
+        """Ein Request, der einen kurzen Ausfall des Anbieters aussitzt.
+
+        Nur ein AUSFALL wird ausgesessen, keine schlechte Antwort: gegen eine
+        Antwort mit fehlenden Zeilen hilft Warten nicht, es kostet nur die
+        Zeit, in der die naechste Person schon spricht. Die Unterscheidung
+        trifft `kg.llm._ist_ausfall` -- derselbe Anbieter, dieselben
+        Fehlerbilder, eine Musterliste.
+        """
+        from kg.llm import _WARTEPLAN, _ist_ausfall  # noqa: PLC0415 — Zirkelbezug vermeiden
+
+        frist = time.monotonic() + self.retry_budget_s
+        wartend = 0
+        while True:
+            try:
+                return self.post(
+                    self.url,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={"model": self.model, "input": list(texts)},
+                )
+            except Exception as exc:
+                if not (_ist_ausfall(exc) and time.monotonic() < frist):
+                    raise
+                pause = _WARTEPLAN[min(wartend, len(_WARTEPLAN) - 1)]
+                pause = min(pause, max(0.0, frist - time.monotonic()))
+                wartend += 1
+                log.warning(
+                    "embeddings: Anbieter nicht erreichbar (%s) — Versuch %s, "
+                    "warte %.0f s", exc, wartend + 1, pause,
+                )
+                if pause > 0:
+                    time.sleep(pause)
 
 
 #: Der Name, unter dem diese Klasse bis zum 2026-08-31 lief. Bleibt als Alias,
@@ -206,6 +251,7 @@ def build_embedder(cfg, hash_only: bool = False) -> "Embedder":
         return HashEmbedder()
     return CachedEmbedder(
         OpenAICompatibleEmbedder(
+            retry_budget_s=getattr(cfg, "llm_retry_budget_s", 0.0),
             model=cfg.embedding_model,
             api_key=cfg.embedding_api_key,
             url=cfg.embedding_url,

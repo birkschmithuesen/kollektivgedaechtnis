@@ -109,6 +109,29 @@ class Config:
     # every restart (spec 7, 10.5).
     default_camera_mode: str = "pan"
     portrait_size: int = 512
+    #: Wie lange bei einem AUSFALL DES ANBIETERS weiterversucht wird, in
+    #: Sekunden (Birk, 2026-09-01: „die retries wenn keine antwort kommt von
+    #: infomaniak muessen auch in den script code rein").
+    #:
+    #: Anlass: An dem Abend war Infomaniak ZWEIMAL komplett weg, rund 5 und
+    #: rund 2 Minuten, HTTP 503 auf allen Pfaden gleichzeitig -- Analyse,
+    #: Embeddings und Spracherkennung. Die Wiederholung, die es gab, lief
+    #: ohne jede Pause: zwei Versuche gegen einen 503, der nach 0,1 s
+    #: zurueckkommt, waren in 0,2 s aufgebraucht. Ein Interview in diesem
+    #: Fenster war verloren, und die Person haette als leere Scheibe an der
+    #: Wand gestanden.
+    #:
+    #: 300 s deckt beide gemessenen Ausfaelle mit Reserve. Es blockiert die
+    #: Station nicht: die Auswertung laeuft in einem eigenen Thread
+    #: (`kg.core`, `asyncio.to_thread`), Wand und Aufnahme laufen weiter.
+    #: Gilt NUR fuer Ausfaelle -- eine schlechte Antwort wird weiterhin
+    #: sofort und ohne Pause wiederholt.
+    #:
+    #: 🔴 Das WECKWORT bekommt das ausdruecklich NICHT (kg/stop_intent.py):
+    #: dort haengt ein Ja/Nein im heissen Pfad einer laufenden Aufnahme an
+    #: einem 6-Sekunden-Budget.
+    llm_retry_budget_s: float = 300.0
+
     server_host: str = "127.0.0.1"
     server_port: int = 8800
     anthropic_api_key: str | None = None
@@ -205,6 +228,7 @@ _FIELD_NAMES = {
     "default_max_terms",
     "default_camera_mode",
     "portrait_size",
+    "llm_retry_budget_s",
     "server_host",
     "server_port",
 }

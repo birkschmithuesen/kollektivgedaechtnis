@@ -158,4 +158,12 @@ def build_stop_intent_llm(cfg):
         # the hot path, and a retry that lands after the guest has walked away
         # is worth nothing. The mechanical way and the text message stay.
         max_attempts=1,
+        # 🔴 KEIN Aussitzen eines Anbieter-Ausfalls, anders als bei der
+        # Analyse (kg.config.llm_retry_budget_s = 300 s). Hier faellt ein
+        # Ja/Nein im heissen Pfad einer LAUFENDEN Aufnahme, mit 6 Sekunden
+        # Budget darueber. Ein Client, der zwei Minuten wartet, haelt den
+        # Thread fest, waehrend der Gast schon weitergeredet hat -- und die
+        # Antwort waere dann ohnehin verworfen. Ist Infomaniak weg, bleibt
+        # der mechanische Weg ueber die Stopp-Phrasen, genau wie vorgesehen.
+        retry_budget_s=0.0,
     )

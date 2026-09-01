@@ -167,6 +167,7 @@ async def main_async(args) -> None:
         api_mode=cfg.condense_api_mode,
         url=cfg.condense_url or None,
         reasoning_effort=cfg.condense_reasoning_effort or None,
+        retry_budget_s=cfg.condense_retry_budget_s,
     )
 
     app = create_dream_app(store, cfg, bus)

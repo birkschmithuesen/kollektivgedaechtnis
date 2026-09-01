@@ -87,6 +87,48 @@ keine Quelle für Begriffe oder das Zitat — aber du verwirfst deswegen nichts.
 """
 
 
+# 🔴 WAS IN AUFGABE 2 STEHT UND WARUM — die Begruendungen gehoeren HIERHER,
+# nicht in den Prompt (konsolidiert 2026-09-02).
+#
+# Am Abend des 2026-09-01 ist Aufgabe 2 von rund 1100 auf 3484 Zeichen
+# gewachsen, weil zwei fehlende Aspekte nachgeruestet wurden. Dabei standen am
+# Ende drei Regeln DOPPELT (Wortzahl, „Substantivphrase, kein Satz",
+# Leerwoerter), zwei Absaetze erklaerten dem Modell die Entstehungsgeschichte
+# einer Beispielwahl samt Datum, und zwei Anweisungen widersprachen sich:
+# „Lieber weniger Begriffe als schwache" gegen „Fehlt eines, ist es vergessen
+# worden". Jetzt 2323 Zeichen, jede Regel genau einmal.
+#
+# Die Belege, die aus dem Prompt entfernt wurden und trotzdem gelten:
+#
+# * WARUM DER AKTEUR IN DEN BEGRIFF GEHOERT. Birk sagte am 2026-09-01 im
+#   ersten echten Interview „Ich hoffe, dass alle Rohstoffabhaengigkeiten von
+#   der KI geplant werden." Extrahiert wurde „Rohstoffabhaengigkeiten" — das
+#   Thema, nicht die Aussage. Gemessen ueber acht Laeufe: der KI-Aspekt kam in
+#   4 von 8 vor. Mit der Regel: 8 von 8.
+#
+# * WARUM EINE HALTUNG EIN BEGRIFF IST. Derselbe Satz enthielt „und will, dass
+#   alles ein bisschen mehr mit der Natur verbunden ist". Das fiel unter den
+#   Tisch, weil es der Schlecht-Liste („Nachhaltigkeit") aehnlich sieht.
+#   Gemessen: 1 von 8 vorher, 5 von 8 nachher.
+#
+# * WARUM DIE LAENGE HART IST. Die zwei Regeln darueber verfuehren dazu,
+#   Akteur, Sache und Haltung in eine Phrase zu packen. Ohne harte Grenze
+#   stieg der Anteil der Begriffe ueber vier Woertern an zwoelf synthetischen
+#   Interviews von 2/10 auf 6/11; mit Grenze 3/12. Auf der Wand haengen bis zu
+#   32 Etiketten gleichzeitig (`default_max_terms`), lange kollidieren.
+#
+# * WARUM DAS FORMBEISPIEL NICHT ZUM MATERIAL PASSEN DARF. Als hier eine
+#   Beispielphrase stand, die inhaltlich zum Interview passte
+#   („KI-geplante Rohstoffketten"), schrieb das Modell ihr Substantiv woertlich
+#   ab: in 4 von 8 Laeufen stand „Rohstoffketten" im Begriff — ein Wort, das
+#   die Person nie gesagt hatte. Dieselbe Falle ist in kg2/condense.py
+#   dokumentiert (dort mit Bildszenen, gemessen am 2026-08-30). Beispiele in
+#   diesem Prompt stammen deshalb aus einem fremden Thema.
+#
+# Messlatte fuer die naechste Aenderung, an Birks echtem Transkript
+# (`data/transcript.jsonl`, 679 Zeichen) und den zwoelf Interviews unter
+# sim/data/interviews/: KI-Aspekt 8/8, Natur-Aspekt 5/8, Begriffe ueber vier
+# Woertern 3/12, leere Extraktionen 0/12.
 def _build_system(task_one: str) -> str:
     return f"""\
 Du verdichtest das Transkript eines gesprochenen Interviews auf einer \
@@ -140,15 +182,44 @@ Deine vier Aufgaben:
 
 2. BEGRIFFE. Nur aus dem Text VOR `interview_end_index`. Optimiere auf \
 KONKRETHEIT, nicht auf Häufigkeit.
+
+   FORM, nicht verhandelbar: deutsche Substantivphrase, HÖCHSTENS VIER Wörter, \
+ohne Artikel, kein Satz, keine Personennamen, keine Firmennamen. Der Begriff \
+steht als Etikett an einer Wand, auf der bis zu 32 davon gleichzeitig hängen; \
+was länger ist, überlappt seine Nachbarn und schrumpft unter Lesegröße. \
+Braucht ein Gedanke mehr Worte, sind es ZWEI Begriffe — trenne sie, statt \
+einen langen zu bilden.
+
+   WAS HINEINGEHÖRT:
+   * Die Sache — und WER oder WOMIT sie geschieht, wenn die Person das sagt. \
+Wer plant, baut, entscheidet, bezahlt, pflegt, gehört in den Begriff. Nur den \
+Gegenstand zu nehmen lässt das Thema übrig und wirft die Aussage weg. Der \
+Akteur reist als Bestimmungswort oder als Partizip mit, nie als Prädikat.
+   * WIE JEMAND LEBEN WILL. Danach ist ausdrücklich gefragt worden, die \
+Antwort darauf ist kein Beiwerk. Das ist ein eigener Begriff neben der \
+Bauweise, kein Anbau an sie: Wer „Lehmhaus" sagt, hat „Lehmhaus" gesagt — \
+daraus „Wohnen im Lehmhaus" zu machen verlängert nur das Etikett.
+
    Gut (konkret, bildhaft, überraschend): „Betonspritzen mit Drohnen", \
 „Genossenschaftliches Wohnen", „Recycling-Beton", „Ländlicher Leerstand", \
-„Ko-Kreation mit KI", „Modulares Bauen".
+„Ko-Kreation mit KI", „Modulares Bauen". Die ersten beiden zeigen zugleich, \
+wie ein Akteur mitreist — „Drohnen spritzen Beton" wäre ein Satz und falsch.
    Schlecht (nichtssagend, verbindet alles mit allem): „Nachhaltigkeit", \
-„Zukunft", „Digitalisierung", „Veränderung", „Technologie", „Innovation".
-   Regeln: deutsche Substantivphrase, 1–4 Wörter, ohne Artikel, keine ganzen \
-Sätze, keine Personennamen, keine Firmennamen. Lieber weniger Begriffe als \
-schwache Begriffe. `evidence` ist die kurze Textstelle, auf die sich der \
-Begriff stützt.
+„Zukunft", „Digitalisierung", „Veränderung", „Technologie", „Innovation". \
+Die Probe: Könnten zwei Menschen hier verschieden antworten? „Nachhaltigkeit" \
+würde jeder unterschreiben und sagt deshalb nichts.
+
+   🔴 Nimm aus den Beispielen die FORM. Den WORTLAUT nimmst du ausschließlich \
+aus dem Transkript — kein Wort, das die Person nicht gesagt hat.
+
+   PRÜFUNG ZUM SCHLUSS, beides in einem Durchgang:
+   * Vollständig? Wer eine Bauweise nennt UND ein Verhältnis zur Umgebung UND \
+eine Vorstellung davon, wer etwas regeln soll, hat drei Dinge gesagt, nicht \
+eins. Ein schwacher Begriff ist schlimmer als ein fehlender — aber ein \
+eigenständiger Wunsch, den die Person genannt hat, ist nie schwach.
+   * Kurz genug? Zähle die Wörter. Höchstens vier, ohne Ausnahme.
+
+   `evidence` ist die kurze Textstelle, auf die sich der Begriff stützt.
 
 3. ZITAT. Genau EIN wörtliches Zitat der Person, höchstens 200 Zeichen, \
 sprachlich geglättet (Füllwörter raus), inhaltlich unverändert. Wähle nicht \

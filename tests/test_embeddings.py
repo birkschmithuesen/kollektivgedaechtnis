@@ -226,3 +226,52 @@ def test_build_embedder_can_be_pointed_at_infomaniak(tmp_path, monkeypatch):
 
 def test_the_hash_embedder_route_is_untouched(tmp_path):
     assert isinstance(build_embedder(make_cfg(tmp_path), hash_only=True), HashEmbedder)
+
+
+# --- Wiederholen bei einem Ausfall des Anbieters (Birk, 2026-09-01) ---------
+#
+# Die Embeddings gehen ueber denselben Infomaniak-Endpunkt wie die Analyse und
+# hatten GAR KEINE Wiederholung: ein einziger 503 riss die Vorauswahl mit,
+# und damit die Zusammenfuehrung gleicher Begriffe. An dem Abend war der
+# Anbieter zweimal fuer Minuten weg.
+
+import kg.embeddings as emb_modul
+
+
+def test_embeddings_sitzen_einen_kurzen_ausfall_aus(monkeypatch):
+    geschlafen = []
+    monkeypatch.setattr(emb_modul.time, "sleep", geschlafen.append)
+    versuche = []
+
+    def post(url, headers, json):
+        versuche.append(1)
+        if len(versuche) < 3:
+            raise RuntimeError("peer closed connection without sending complete message body")
+        return {"data": [{"index": 0, "embedding": [1.0, 0.0]}]}
+
+    e = emb_modul.OpenAICompatibleEmbedder(
+        model="m", api_key="k", url="https://example.invalid/v1", post=post,
+        retry_budget_s=120.0,
+    )
+
+    assert e.embed(["hallo"]) == [[1.0, 0.0]]
+    assert len(versuche) == 3
+    assert geschlafen, "ohne Pause ist die Wiederholung gegen einen Ausfall wirkungslos"
+
+
+def test_embeddings_sitzen_einen_formfehler_nicht_aus(monkeypatch):
+    """Eine Antwort mit fehlenden Zeilen ist kein Ausfall — Warten hilft nicht."""
+    geschlafen = []
+    monkeypatch.setattr(emb_modul.time, "sleep", geschlafen.append)
+
+    def post(url, headers, json):
+        return {"data": []}
+
+    e = emb_modul.OpenAICompatibleEmbedder(
+        model="m", api_key="k", url="https://example.invalid/v1", post=post,
+        retry_budget_s=120.0,
+    )
+
+    with pytest.raises(RuntimeError):
+        e.embed(["hallo"])
+    assert not geschlafen

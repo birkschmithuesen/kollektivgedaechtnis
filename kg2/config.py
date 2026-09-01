@@ -96,6 +96,14 @@ class DreamConfig:
     #: einer einzigen Stimme); 3 = die kleinste Zahl, die dagegen mittelt.
     #: 0 schaltet die Zitate ebenfalls ab.
     condense_quote_persons: int = 3
+    #: Wie lange Stufe 1 bei einem AUSFALL DES ANBIETERS weiterversucht
+    #: (Sekunden). Kleiner als in Tool 1 und mit Absicht: Ein verlorenes
+    #: Interview ist unwiederbringlich -- eine Person fehlt dann den ganzen
+    #: Tag an der Wand. Ein verlorener Traum ist es nicht: der naechste
+    #: Ausloeser kommt ohnehin nach `min_interval_s` (240 s), und ein
+    #: Traumlauf, der laenger haengt, haelt die Traumschleife auf, ohne dass
+    #: irgendetwas gerettet waere.
+    condense_retry_budget_s: float = 120.0
     condense_api_mode: str = "anthropic"
     condense_url: str = ""
     condense_api_key_env: str = ""
@@ -208,6 +216,7 @@ _FIELD_NAMES = {
     "condense_max_tokens",
     "condense_include_quotes",
     "condense_quote_persons",
+    "condense_retry_budget_s",
     "condense_api_mode",
     "condense_url",
     "condense_api_key_env",

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -53,6 +54,60 @@ API_MODES = ("anthropic", "chat_completions")
 #: nicht im heißen Pfad. Der Wake-Word-Client setzt sein eigenes, hartes Budget
 #: (kg.stop_intent).
 DEFAULT_TIMEOUT_S = 300.0
+
+#: Woran ein AUSFALL DES ANBIETERS zu erkennen ist -- im Unterschied zu einer
+#: schlechten Antwort. Der Unterschied entscheidet, ob Warten hilft: Gegen
+#: kaputtes JSON hilft es nicht (das Modell antwortet ja), gegen einen
+#: Dienst, der gerade weg ist, hilft nur es.
+#:
+#: Am 2026-09-01 war Infomaniak ZWEIMAL fuer ein bis fuenf Minuten komplett
+#: weg. Die Fehlerbilder, wortwoertlich aus den Logs dieses Abends:
+#:   „peer closed connection without sending complete message body
+#:    (incomplete chunked read)"        -- der haeufigste
+#:   „Response ended prematurely"       -- im STT-Backend
+#:   HTTP 503 mit einer HTML-Seite      -- „Service momentanement indisponible"
+#:
+#: Geprueft wird am TEXT der Ausnahme und nicht an ihrer Klasse: durch diesen
+#: Client laufen httpx-, anthropic- und Standardbibliotheks-Fehler, und die
+#: Klassenliste waere beim naechsten Bibliotheks-Update still unvollstaendig.
+#: Ein Textmuster, das nicht mehr passt, macht die Wiederholung hoechstens
+#: wirkungslos -- eine falsch geratene Klasse laesst sie unbemerkt ausfallen.
+_AUSFALL_MUSTER = (
+    "peer closed connection",
+    "incomplete chunked read",
+    "connection broken",
+    "response ended prematurely",
+    "server disconnected",
+    "connection reset",
+    "connection refused",
+    "timed out",
+    "timeout",
+    "temporarily unavailable",
+    "service unavailable",
+    " 429",
+    " 500",
+    " 502",
+    " 503",
+    " 504",
+    "status_code=429",
+    "status_code=500",
+    "status_code=502",
+    "status_code=503",
+    "status_code=504",
+)
+
+#: Wartezeiten zwischen zwei Versuchen, in Sekunden. Nicht exponentiell ins
+#: Blaue: die zwei gemessenen Ausfaelle dauerten rund 2 und rund 5 Minuten,
+#: und der Anbieter kam beide Male ohne Vorwarnung zurueck. Deshalb erst
+#: dicht nachfassen (ein 20-Sekunden-Ausfall soll kaum auffallen), dann
+#: ruhiger, damit ein langer Ausfall nicht hunderte Anfragen erzeugt.
+_WARTEPLAN = (2.0, 5.0, 10.0, 20.0, 30.0)
+
+
+def _ist_ausfall(exc: Exception) -> bool:
+    """Ist das ein Anbieter, der gerade weg ist -- oder eine schlechte Antwort?"""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(muster in text for muster in _AUSFALL_MUSTER)
 
 
 class LLMError(RuntimeError):
@@ -125,6 +180,7 @@ class LLMClient:
         api_key: str | None = None,
         client=None,
         max_attempts: int = 2,
+        retry_budget_s: float = 0.0,
         api_mode: str = "anthropic",
         url: str | None = None,
         reasoning_effort: str | None = None,
@@ -137,6 +193,11 @@ class LLMClient:
         self.effort = effort
         self.max_tokens = max_tokens
         self.max_attempts = max_attempts
+        #: Wie lange bei einem AUSFALL DES ANBIETERS insgesamt weiterversucht
+        #: wird (Sekunden). 0 = das Verhalten von vor dem 2026-09-01: sofort
+        #: aufgeben. Gilt NUR fuer Ausfaelle; eine schlechte Antwort wird
+        #: weiterhin nur `max_attempts`-mal und ohne Pause wiederholt.
+        self.retry_budget_s = retry_budget_s
         self.api_mode = api_mode
         self.api_key = api_key
         self.url = url
@@ -152,8 +213,30 @@ class LLMClient:
             )
 
     def parse(self, system: str, user: str, output_model: type[T]) -> T:
+        """Ein Aufruf, mit zwei verschiedenen Arten von Wiederholung.
+
+        SCHLECHTE ANTWORT (kaputtes JSON, Schema verfehlt, Verweigerung):
+        sofort noch einmal, bis `max_attempts`. Das ist das Verhalten von
+        jeher -- Warten hilft hier nicht, das Modell hat ja geantwortet.
+
+        ANBIETER WEG (HTTP 503, abgerissene Verbindung, Timeout): warten und
+        weiterversuchen, bis `retry_budget_s` aufgebraucht ist. Diese zweite
+        Art gibt es seit dem 2026-09-01 (Birk am Ausstellungsabend, nachdem
+        Infomaniak zweimal fuer Minuten weg war). Vorher lief die Schleife
+        ohne jede Pause: zwei Versuche gegen einen 503, der nach 0,1 s
+        zurueckkommt, waren in 0,2 s aufgebraucht, und das Interview, das in
+        dieses Fenster fiel, war verloren -- die Person haette als leere
+        Scheibe an der Wand gestanden.
+
+        Der Aufrufer entscheidet ueber `retry_budget_s`, und das ist wichtig:
+        `kg.stop_intent` hat 6 Sekunden Budget im heissen Pfad einer
+        laufenden Aufnahme und darf NIE warten (dort steht 0).
+        """
         last_error: Exception | None = None
-        for attempt in range(1, self.max_attempts + 1):
+        frist = time.monotonic() + self.retry_budget_s
+        wartend = 0        # wie oft schon wegen eines Ausfalls gewartet wurde
+        antwortversuche = 0  # zaehlt nur die Versuche, die eine Antwort ergaben
+        while True:
             try:
                 if self.api_mode == "anthropic":
                     text = self._anthropic_text(system, user, output_model)
@@ -165,7 +248,26 @@ class LLMClient:
                 return output_model.model_validate(payload)
             except Exception as exc:  # JSONDecodeError, ValidationError, API errors, refusals
                 last_error = exc
-                log.warning("llm attempt %s/%s failed: %s", attempt, self.max_attempts, exc)
+                if _ist_ausfall(exc) and time.monotonic() < frist:
+                    pause = _WARTEPLAN[min(wartend, len(_WARTEPLAN) - 1)]
+                    # Nie ueber die Frist hinaus schlafen: ein Budget, das erst
+                    # nach dem Schlafen geprueft wird, ist keins.
+                    pause = min(pause, max(0.0, frist - time.monotonic()))
+                    wartend += 1
+                    log.warning(
+                        "llm: Anbieter nicht erreichbar (%s) — Versuch %s, "
+                        "warte %.0f s (Budget noch %.0f s)",
+                        exc, wartend + 1, pause, max(0.0, frist - time.monotonic()),
+                    )
+                    if pause > 0:
+                        time.sleep(pause)
+                    continue
+                antwortversuche += 1
+                log.warning(
+                    "llm attempt %s/%s failed: %s", antwortversuche, self.max_attempts, exc
+                )
+                if antwortversuche >= self.max_attempts:
+                    break
         raise LLMError(f"llm call failed after {self.max_attempts} attempts: {last_error}")
 
     def _anthropic_text(self, system: str, user: str, output_model: type[T]) -> str:
@@ -273,4 +375,5 @@ def build_llm(cfg) -> LLMClient:
         api_mode=cfg.llm_api_mode,
         url=cfg.llm_url,
         reasoning_effort=cfg.llm_reasoning_effort,
+        retry_budget_s=getattr(cfg, "llm_retry_budget_s", 0.0),
     )

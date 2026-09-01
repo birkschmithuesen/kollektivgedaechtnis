@@ -147,3 +147,46 @@ def test_the_second_client_can_be_pointed_at_a_chat_completions_endpoint(tmp_pat
 def test_switching_the_way_off_still_builds_no_client_at_all(tmp_path):
     assert build_stop_intent_llm(make_cfg(tmp_path, wake_word_llm=False)) is None
     assert build_stop_intent_llm(make_cfg(tmp_path, wake_word="")) is None
+
+
+def test_der_zweite_client_sitzt_einen_anbieter_ausfall_NICHT_aus(tmp_path, monkeypatch):
+    """🔴 Hier darf NICHT gewartet werden, anders als bei der Analyse.
+
+    Seit dem 2026-09-01 sitzt `kg.llm` einen Ausfall des Anbieters aus — bis
+    zu 300 s in Tool 1 (`kg.config.llm_retry_budget_s`), weil ein verlorenes
+    Interview unwiederbringlich ist. Dieser Client hier ist der Gegenfall:
+    An ihm haengt ein Ja/Nein im HEISSEN PFAD einer laufenden Aufnahme, und
+    darueber liegt ein Budget von 6 Sekunden (`wake_word_llm_timeout_s`, das
+    `call_with_timeout` in `make_stop_intent` durchsetzt). Ein Client, der
+    zwei Minuten auf Infomaniak wartet, haelt den Thread fest, waehrend der
+    Gast laengst weitergeredet hat — und seine Antwort wuerde danach ohnehin
+    verworfen. Ist der Anbieter weg, bleibt der mechanische Weg ueber die
+    Stopp-Phrasen, genau so vorgesehen.
+
+    Geprueft wird, dass die 0 AUSDRUECKLICH uebergeben wird, nicht nur, dass
+    sie am fertigen Client steht. Der Unterschied ist gemessen: `LLMClient`
+    hat selbst die Vorgabe 0.0, also bliebe ein blosser Blick auf
+    `llm.retry_budget_s` gruen, wenn jemand die Zeile ersatzlos loescht — und
+    die Ausnahme haenge dann nur noch an einer fremden Vorgabe, die niemand
+    fuer diesen Pfad versprochen hat.
+    """
+    import kg.llm as llm_modul
+
+    uebergeben = {}
+
+    class Mitschrift(llm_modul.LLMClient):
+        def __init__(self, **kw):
+            uebergeben.update(kw)
+            super().__init__(**kw)
+
+    monkeypatch.setattr(llm_modul, "LLMClient", Mitschrift)
+
+    # Bewusst mit grossem Budget fuer die Analyse: es darf sich NICHT vererben.
+    llm = build_stop_intent_llm(make_cfg(tmp_path, llm_retry_budget_s=300.0))
+
+    assert "retry_budget_s" in uebergeben, (
+        "kg.stop_intent muss das Budget ausdruecklich auf 0 setzen und sich "
+        "nicht auf die Vorgabe von LLMClient verlassen"
+    )
+    assert uebergeben["retry_budget_s"] == 0.0
+    assert llm.retry_budget_s == 0.0

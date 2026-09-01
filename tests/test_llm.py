@@ -362,3 +362,140 @@ def test_an_unknown_api_mode_is_refused_at_construction():
     Interview auffallen."""
     with pytest.raises(ValueError, match="llm_api_mode"):
         LLMClient(model="m", effort="high", max_tokens=100, api_mode="openai", client=object())
+
+
+# --- Wiederholen, wenn der Anbieter kurz weg ist (Birk, 2026-09-01) ---------
+#
+# Infomaniak war an diesem Abend ZWEIMAL fuer ein bis fuenf Minuten komplett
+# weg (HTTP 503 auf allen Pfaden). Die Wiederholung, die es damals gab, lief
+# ohne jede Pause: `max_attempts=2` gegen einen 503, der nach 0,1 s
+# zurueckkommt, war in 0,2 s aufgebraucht. Ein Interview, das in dieses
+# Fenster fiel, war verloren -- die Person haette als leere Scheibe an der
+# Wand gestanden.
+#
+# Birk: „die retries wenn keine antwort kommt von infomaniak muessen auch in
+# den script code rein. also genau wie du jetzt muss der code entsprechend oft
+# neu versuchen."
+
+import kg.llm as llm_modul
+
+
+class _Antwort(BaseModel):
+    ok: bool
+
+
+def _client(post, **kw):
+    return LLMClient(
+        model="m", effort="low", max_tokens=10, api_key="k",
+        api_mode="chat_completions", url="https://example.invalid/v1",
+        post=post, **kw,
+    )
+
+
+def _gute_antwort():
+    return {"choices": [{"message": {"content": '{"ok": true}'}}]}
+
+
+def test_ein_kurzer_ausfall_wird_ausgesessen(monkeypatch):
+    """Zwei 503 hintereinander, dann geht es wieder — das Ergebnis kommt an."""
+    geschlafen = []
+    monkeypatch.setattr(llm_modul.time, "sleep", geschlafen.append)
+
+    versuche = []
+
+    def post(url, headers, json, timeout):
+        versuche.append(1)
+        if len(versuche) < 3:
+            raise RuntimeError("peer closed connection without sending complete message body")
+        return _gute_antwort()
+
+    ergebnis = _client(post, retry_budget_s=120.0).parse("s", "u", _Antwort)
+
+    assert ergebnis.ok is True
+    assert len(versuche) == 3
+    # Und es wurde wirklich gewartet, nicht nur schnell dreimal gescheitert.
+    assert geschlafen, "ohne Pause ist die Wiederholung gegen einen Ausfall wirkungslos"
+
+
+def test_ohne_budget_bleibt_alles_wie_vorher(monkeypatch):
+    """Der Weckwort-Pfad hat 6 s Budget und darf NICHT warten.
+
+    Die Obergrenze im `post` steht aus demselben Grund wie in
+    `test_das_budget_wird_eingehalten`, und zwar hier besonders: Bei Budget 0
+    faellt die Pause auf 0 herunter, `time.sleep` wird also gar nicht erst
+    aufgerufen. Ein Test, der allein am gepatchten Schlafen haengt, wuerde
+    deshalb ENDLOS LAUFEN statt rot zu werden, sobald jemand die
+    Fristpruefung aus der Bedingung nimmt — gemessen, nicht vermutet.
+    `pytest.fail` bricht als BaseException durch das `except Exception` der
+    Schleife hindurch und kommt wirklich heraus.
+    """
+    monkeypatch.setattr(llm_modul.time, "sleep", lambda s: pytest.fail("darf nicht schlafen"))
+
+    versuche = []
+
+    def post(url, headers, json, timeout):
+        versuche.append(1)
+        if len(versuche) > 3:
+            pytest.fail("ohne Budget darf ein Ausfall nicht wiederholt werden")
+        raise RuntimeError("503 Service Unavailable")
+
+    with pytest.raises(LLMError):
+        _client(post, max_attempts=1, retry_budget_s=0.0).parse("s", "u", _Antwort)
+
+    assert len(versuche) == 1, f"max_attempts=1, aber {len(versuche)} Versuche"
+
+
+def test_ein_schemafehler_wird_nicht_ausgesessen(monkeypatch):
+    """Kaputtes JSON ist kein Ausfall — dagegen hilft Warten nicht, es kostet
+    nur die Zeit, in der die naechste Person schon spricht."""
+    geschlafen = []
+    monkeypatch.setattr(llm_modul.time, "sleep", geschlafen.append)
+
+    def post(url, headers, json, timeout):
+        return {"choices": [{"message": {"content": "kein json"}}]}
+
+    with pytest.raises(LLMError):
+        _client(post, retry_budget_s=120.0).parse("s", "u", _Antwort)
+
+    assert not geschlafen, "auf einen Schemafehler darf nicht gewartet werden"
+
+
+def test_das_budget_wird_eingehalten(monkeypatch):
+    """Es wird nicht ewig versucht — sonst haengt die Pipeline am toten Anbieter.
+
+    Zum Aufbau, denn er ist hier die halbe Aussage: Die gepatchte Uhr rueckt
+    bei JEDEM Ablesen ein Stueck vor, nicht erst beim Schlafen — und die Zahl
+    der Versuche ist hart gedeckelt. Beides, weil dieser Test sonst als Wache
+    wertlos waere: Haengt die Uhr allein am `time.sleep`, dann steht sie
+    still, sobald jemand das Schlafen entfernt; das Budget liefe nie ab und
+    der Test HINGE ENDLOS, statt rot zu werden. Ein Test, der bei einer
+    Mutation haengt, meldet nichts — er faellt erst auf, wenn die Ausstellung
+    schon laeuft. `pytest.fail` bricht dabei als BaseException durch das
+    `except Exception` der Schleife hindurch, kommt also wirklich heraus.
+    """
+    jetzt = [0.0]
+
+    def monotonic():
+        # Schon das Ablesen der Uhr kostet Zeit. So laeuft das Budget auch
+        # dann ab, wenn gar nicht geschlafen wird.
+        jetzt[0] += 0.5
+        return jetzt[0]
+
+    monkeypatch.setattr(llm_modul.time, "monotonic", monotonic)
+    monkeypatch.setattr(llm_modul.time, "sleep", lambda s: jetzt.__setitem__(0, jetzt[0] + s))
+
+    versuche = []
+
+    def post(url, headers, json, timeout):
+        versuche.append(1)
+        if len(versuche) > 12:
+            pytest.fail(
+                "es wird ewig weiterversucht: nach 12 Versuchen greift das "
+                "Budget von 30 s immer noch nicht"
+            )
+        raise RuntimeError("peer closed connection")
+
+    with pytest.raises(LLMError):
+        _client(post, retry_budget_s=30.0).parse("s", "u", _Antwort)
+
+    assert jetzt[0] <= 60.0, f"Budget 30 s deutlich ueberschritten: {jetzt[0]} s"
