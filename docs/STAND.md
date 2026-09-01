@@ -128,6 +128,20 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
 
 ## 5. Wenn die nächste Session anfängt
 
+### 🔴 Der Auftrag: die Testreihe zur Gesichtserkennung fahren
+
+Foto-App, Sucherrahmen, Portrait-Vorschau und Messwerkzeug sind **gebaut und
+einsatzbereit — gemessen ist nichts.** Birk hat die Durchführung ausdrücklich
+an die übernehmende Session übergeben. Das ist die eigentliche Aufgabe, keine
+Restnotiz.
+
+Vollständiger Auftrag: `docs/HANDOFF-foto-app-uebergabe.md`
+Ablauf + Messwerkzeug: `docs/HANDOFF-fototest-zuschnitt.md`
+(`scripts/pruefe-gesichtserkennung.py` nennt **alle** gefundenen Gesichter und
+den gewählten Ausschnitt — nicht nur das Ergebnis.)
+
+### Der Weg dorthin
+
 1. `AGENTS.md` + `docs/ARBEITSREGELN-ausstellungsrechner.md` lesen.
 2. Auf der Station als `SF-Tracking` anmelden, Station über den Desktop-Knopf
    starten (**nicht** über SSH — Dienste sterben mit der Sitzung).
@@ -137,6 +151,38 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
    Portraitausschnitt, Zitat, Traum und Kamerafahrt zusammen stimmen.
 5. Was auffällt, gehört in dieses Dokument — nicht in ein neues Handoff. Es
    lagen heute **elf** davon nebeneinander, acht davon erledigt.
+
+### Zwei Fallen aus der Foto-Session
+
+- Der **Sucherrahmen zeigt den Rückfallweg** (mittiger Schnitt), nicht den
+  Gesichtsweg. Wer ihn ändert, muss `kg/photos.py::_square_crop` gegenlesen.
+- Die **Vorschau kommt nur beim direkten Weg** (`100.94.47.6:8800`), nicht
+  über den Spiegel — dort entsteht das Portrait erst beim Abholen. Kein
+  Fehler.
+
+---
+
+## 5b. Was noch aufzuräumen ist
+
+Aus der Foto-Session übrig, jeweils mit Begründung warum es nicht schon
+erledigt ist:
+
+| Was | Wo | Anmerkung |
+|---|---|---|
+| Geplante Aufgabe `KgKernTest` | Ausstellungsrechner | `schtasks /delete /tn "KgKernTest" /f` — war eine Testkrücke, kein Dauerzustand. Nicht selbst entfernt: die Station lief gerade, und ein Eingriff in den Aufgabenplaner während des Betriebs ist Birks Entscheidung. |
+| Worktree `kg-app` | `$VOL/projekte/kg-app` | wird noch von der Foto-Session benutzt |
+| APK `out/kollektivgedaechtnis-foto-v6.apk` | vServer | bewusst nicht im Git (3,6 MB Binär), neu bauen nach `android/README.md` |
+
+**Erledigt am 2026-09-01:**
+
+- **Testempfang auf Port 8805 beendet** (`scripts/testempfang.py`, PID 857211
+  und Kinder). Port ist frei, nachgeprüft mit `ss -tlnp`.
+- **Doppelter `kg-start` unter `birk`** nach
+  `C:\Users\birk\station-sicherung-2026-09-01\kg-start-birk-ungenutzt\`
+  verschoben (nicht gelöscht). Vorher geprüft: alle drei Dienst-Skripte darin
+  waren bit-identisch mit denen unter `SF-Tracking`, und die Startdatei nutzt
+  `%~dp0dienste` — also ihren eigenen Ordner, nie den unter `birk`.
+- **Acht erledigte Handoffs** nach `docs/archiv/`, alle Verweise mitgezogen.
 
 ---
 
