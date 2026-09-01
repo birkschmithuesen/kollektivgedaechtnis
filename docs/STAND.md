@@ -224,6 +224,66 @@ alte APK.
 
 ---
 
+## 2e. 🔴 Der Matsch kommt NICHT von der App-Auflösung — gemessen 2026-09-01, 15:10
+
+Anlass: Birk, 2026-09-01 — *die App soll nicht so stark verkleinern, sonst sieht
+das Portrait auf der großen Projektionsfläche matschig aus.* Nachgemessen mit
+`scripts/schaerfereihe-portrait.py` über alle 7 Fotos. **Der Verdacht bestätigt
+sich nicht, und die Ursache liegt woanders — an einer Stelle, die eine höhere
+App-Auflösung sogar VERSCHLECHTERT.**
+
+### Warum die Auflösung nicht der Hebel ist
+
+Die Station schneidet **erst** zu und skaliert **dann** auf `portrait_size = 512`
+(`kg/photos.py::make_portrait`). Bei erkanntem Gesicht ist der Ausschnitt
+`2.0 × Gesichtsbreite` — er hängt an der **Gesichtsgröße**, nicht an der
+Bildgröße. Gemessen liegt der Ausschnitt bei 1024 px Lieferung schon zwischen
+550 und 1024 px, also **überall ≥ 512**. Es wird nirgends hochgerechnet:
+
+| App liefert | Fotos hochgerechnet | mittlere Schärfe |
+|---|---|---|
+| **1024 px (heute)** | **0 / 7** | **357** |
+| 1280 px | 1 / 7 | 335 (−6 %) |
+| 1600 px | 1 / 7 | 336 (−6 %) |
+| Original | 1 / 7 | 319 (−11 %) |
+
+**Mehr Auflösung bringt keine Schärfe, sie kostet welche.** Der Grund ist kein
+Bildfehler: Bei höherer Auflösung *greift die Erkennung öfter*, der Ausschnitt
+wird enger und folgt dem Kopf — und ein enger Ausschnitt hat weniger echte Pixel
+als der weite mittige Schnitt. Das ist der gewünschte Zuschnitt, aber er ist
+rechnerisch weicher.
+
+### Der wirkliche Matsch: ein kleines Gesicht wird 4,2-fach hochgerechnet
+
+`1788105156_5.jpg` ist der Fall, den Birk vermutlich gesehen hat:
+
+- Erkanntes Gesicht: **61 × 61 px** (0,4 % der Bildfläche — Person steht weit weg)
+- Ausschnitt: `61 × 2.0` = **122 px**
+- Hochgerechnet auf 512 → **Faktor 4,2**
+- Schärfe: **9,6** gegenüber 677 beim mittigen Schnitt — **1 %**
+
+🔴 **Und genau dieses Foto kippt in die Erkennung, sobald die App mehr liefert.**
+Bei 1024 px findet die Kaskade nichts, schneidet mittig, 576 px, scharf. Ab
+1280 px findet sie das kleine Gesicht — und das Portrait wird Matsch. Die
+Erhöhung von `MAX_KANTE`, die ich in §4 als Weg (b) empfohlen hatte, **erzeugt
+diesen Fall, statt ihn zu beheben.** Empfehlung zurückgezogen.
+
+### Die eigentliche Stellschraube
+
+Es fehlt eine **Untergrenze**: Ein Ausschnitt unter `portrait_size` (512 px)
+sollte gar nicht erst hochgerechnet werden. Zwei mögliche Regeln, **beide nicht
+umgesetzt**, weil sie den Zuschnitt jedes Portraits ändern (Birks Entscheidung):
+
+- **(A) Ausschnitt nie unter 512 px** — bei kleinen Gesichtern wird der
+  Ausschnitt weiter, der Kopf sitzt kleiner im Bild, bleibt aber scharf.
+- **(B) Gesichter unter ~150 px verwerfen** und mittig schneiden — dann greift
+  bewusst der Rückfallweg, der hier nachweislich das schärfere Bild liefert.
+
+Beides ist ein Dreizeiler in `_square_crop`; die Frage ist nicht technisch,
+sondern ästhetisch: **kleiner scharfer Kopf oder großer matschiger.**
+
+---
+
 ## 3. 🔴 Was NICHT geprüft ist
 
 Ehrlich getrennt: gemessen ist nur, was hier nicht steht.
@@ -247,15 +307,21 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
 
 ### 🔴 NEU 2026-09-01, aus der Testreihe (§2c) — das sind die dringenden
 
-- **Soll die App weiter auf 1024 px verkleinern?** Gemessen kostet genau dieser
-  Schritt **2 von 5** erkannten Gesichtern. Drei Wege, alle nicht umgesetzt:
-  (a) nichts tun — die Erkennung greift seltener, der mittige Schnitt fängt es
-  auf (kein Absturz, nur schlechtere Portraits); (b) `MAX_KANTE` auf 1280 oder
-  1600 heben — kostet Sendezeit am Booth, dort zählt Tempo; (c) `minSize` in
-  `kg/photos.py` von 8 % auf 4 % der kurzen Kante — brachte im Gegentest
-  4/7 statt 3/7 **ohne** Fehltreffer, ändert aber den Zuschnitt **jedes**
-  Portraits. **Empfehlung: (c) nicht am Vorabend.** Wenn überhaupt heute, dann
-  (b), weil es nur die App betrifft und die Station unangetastet lässt.
+- **Soll die App weiter auf 1024 px verkleinern? → JA, gemessen (§2e).** Zwei
+  Messungen ziehen hier gegeneinander, und die zweite gewinnt:
+  – Mehr Auflösung **findet mehr Gesichter** (5/7 statt 3/7, §2c).
+  – Mehr Auflösung **liefert unschärfere Portraits** (−6 bis −11 %, §2e) und
+    erzeugt genau den Matsch-Fall, weil dann kleine, weit entfernte Gesichter
+    erkannt und 4,2-fach hochgerechnet werden.
+  🔴 **`MAX_KANTE = 1024` bleibt.** Meine frühere Empfehlung, auf 1600 zu gehen,
+  ist durch §2e **widerlegt** — sie hätte die Bildqualität verschlechtert.
+- **Der Matsch ist ein Zuschnitt-Problem, kein Auflösungsproblem.** Zu
+  entscheiden ist stattdessen: Untergrenze für den Ausschnitt (A) oder kleine
+  Gesichter verwerfen (B) — siehe §2e. Ästhetische Frage: **kleiner scharfer
+  Kopf oder großer matschiger.** Nicht umgesetzt.
+- **`minSize` von 8 % auf 4 %** (§2c) bringt mehr Treffer — würde aber genau die
+  kleinen Gesichter finden, die den Matsch erzeugen. **Erst nach (A)/(B)
+  sinnvoll**, nicht davor.
 - **Welche APK liegt auf dem Handy?** Siehe §2d — bis das geklärt ist, misst
   jeder weitere Fototest womöglich eine andere Kette als die vom Ausstellungstag.
 - **Fotos mit mehreren Personen fehlen komplett.** Die Kernfrage („gewinnt das
