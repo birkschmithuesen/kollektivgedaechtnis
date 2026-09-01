@@ -537,7 +537,15 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
         # nicht -- besser ein 404 als eine 200, die nichts tut.
         @app.post("/api/photo")
         async def api_photo(request: Request) -> dict:
-            """Ein Foto aus der Android-App eroeffnet ein Interview.
+            """Ein Foto aus der Android-App fuer das laufende Interview.
+
+            🔴 Seit 2026-09-01 eroeffnet ein Foto KEIN Interview mehr (Birk:
+            „ein foto duerfte eigentlich kein interview mehr eroeffnen, das
+            ist ueberholt"). Laeuft gerade keins, wird das Bild nicht zu einer
+            Person -- die Route meldet das mit **409** zurueck, statt still
+            "ok" zu sagen. Am Booth ist der Unterschied alles: Wer "Gesendet"
+            liest und annimmt, es sei angekommen, merkt den Fehlgriff erst,
+            wenn die Person an der Wand fehlt.
 
             Derselbe Weg, den bisher nur Telegram ging (`TelegramSource.
             _handle_photo` -> `Core.on_photo`), nur ohne den Umweg ueber ein
@@ -569,6 +577,26 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
             # HTML-Fehlerdokument darf hier nie als .jpg auf der Platte landen.
             if not (raw[:3] == b"\xff\xd8\xff" or raw[:8] == b"\x89PNG\r\n\x1a\n"):
                 raise HTTPException(status_code=415, detail="kein JPEG/PNG")
+
+            # 🔴 VOR dem Schreiben fragen, nicht danach: Laeuft kein
+            # Interview, wird das Bild zu nichts (`SessionTracker.photo` gibt
+            # dann eine leere Liste zurueck). Das muss der Einwerfer erfahren
+            # -- und die Datei darf gar nicht erst entstehen. Ein Portraet,
+            # das zu keiner Person gehoert, waere sonst genau der wachsende
+            # Haufen unzugeordneter Gesichter, den eine Arbeit ueber
+            # Datensouveraenitaet nicht produzieren darf. Und niemand raeumt
+            # ihn auf, weil ihn niemand sieht.
+            #
+            # Gelesen wird der Store und nicht der Tracker: Der Tracker gehoert
+            # dem Worker, und ihn von hier aus zu befragen waere ein Blick in
+            # fremden Zustand. `open_person()` ist dieselbe Quelle, aus der
+            # auch `/api/state` das `interview`-Feld speist -- die App sieht
+            # damit garantiert dieselbe Wahrheit wie ihr Knopf.
+            if store.open_person() is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Kein Interview offen — zuerst Interview starten",
+                )
 
             at = time.time()
             stem = f"{int(at)}_app{int(at * 1000) % 1000:03d}"

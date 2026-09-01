@@ -52,6 +52,7 @@ def core(tmp_path):
 async def test_a_photo_creates_the_person_node_immediately(core):
     events = core.bus.subscribe()
 
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -66,6 +67,7 @@ async def test_a_photo_creates_the_person_node_immediately(core):
 
 
 async def test_a_text_message_closes_the_interview_and_runs_the_pipeline(core):
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -80,6 +82,7 @@ async def test_a_text_message_closes_the_interview_and_runs_the_pipeline(core):
 
 
 async def test_a_spoken_command_in_a_final_closes_it(core):
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -91,6 +94,7 @@ async def test_a_spoken_command_in_a_final_closes_it(core):
 
 
 async def test_the_timeout_closes_a_forgotten_interview(core):
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -101,15 +105,50 @@ async def test_the_timeout_closes_a_forgotten_interview(core):
     assert core.processed[0][2] == 1100.0
 
 
-async def test_a_new_photo_closes_the_previous_interview_and_opens_the_next(core):
+async def test_ein_foto_ohne_interview_wird_geloescht_statt_liegen_zu_bleiben(core, tmp_path):
+    """🔴 Der Weg, den `/api/photo` nicht abfangen kann.
+
+    Die HTTP-Route weist ab, BEVOR sie schreibt. Telegram kann das nicht: Dort
+    ist die Datei schon heruntergeladen und das Portraet gerechnet, wenn der
+    Core sie sieht. Ohne Aufraeumen sammelten sich Gesichter auf der Platte,
+    die zu keiner Person gehoeren -- niemand sieht sie, also raeumt sie
+    niemand auf.
+
+    Geprueft wird am Dateisystem, nicht an einem Aufrufzaehler: Ob die Datei
+    weg ist, ist die Zusage; wer sie geloescht hat, ist gleichgueltig.
+    """
+    foto = tmp_path / "waise.jpg"
+    portrait = tmp_path / "waise.png"
+    foto.write_bytes(b"jpeg")
+    portrait.write_bytes(b"png")
+
+    core.on_photo(photo_path=str(foto), portrait_path=str(portrait), at=100.0)
+    await core.drain()
+
+    assert core.store.open_person() is None, "es wurde doch ein Interview eroeffnet"
+    assert not foto.exists(), "das Foto blieb liegen"
+    assert not portrait.exists(), "das Portraet blieb liegen"
+
+
+async def test_ein_zweites_foto_ersetzt_das_bild_und_teilt_das_interview_nicht(core):
+    """🔴 Die Umstellung vom 2026-09-01 auf der Ebene des Core.
+
+    Vorher schloss das zweite Foto p1 und eroeffnete p2 -- ein Gespraech wurde
+    in zwei Personen zerschnitten, nur weil jemand nachjustiert hat. Jetzt
+    bleibt es EINE Person, die nur ihr Bild wechselt, und die Auswertung
+    laeuft entsprechend nicht an."""
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
     await core.drain()
     core.on_photo(photo_path="b.jpg", portrait_path="b.png", at=400.0)
     await core.drain()
 
-    assert core.store.get_person("p1").stop_reason == "new_photo"
-    assert core.store.open_person().id == "p2"
-    assert core.processed == [("p1", 100.0, 400.0, 400.0)]
+    person = core.store.open_person()
+    assert person is not None, "das Interview wurde geschlossen"
+    assert person.id == "p1", "es wurde eine zweite Person angelegt"
+    assert person.portrait_path == "b.png", "das neue Bild kam nicht an"
+    assert person.started_at == 100.0, "der Beginn ist mitgewandert"
+    assert core.processed == [], "die Auswertung lief mitten im Gespraech an"
 
 
 async def test_stop_signals_without_an_interview_do_nothing(core):
@@ -160,12 +199,17 @@ async def test_a_failing_pipeline_does_not_stop_the_core(tmp_path):
         settle_timeout_s=TEST_SETTLE_TIMEOUT_S,
         settle_poll_s=TEST_SETTLE_POLL_S,
     )
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
     core.on_text("stop", at=200.0)
     await core.drain()
 
-    core.on_photo(photo_path="q.jpg", portrait_path="q.png", at=300.0)
+    # Die Zusage lautet: Nach einer abgestuerzten Auswertung nimmt die Station
+    # den NAECHSTEN Besuch noch an. Belegt wird das ueber den Schalter, weil
+    # seit 2026-09-01 nur er ein Interview eroeffnet -- ein zweites Foto
+    # bewiese hier nichts mehr.
+    core.on_mic_switch(True, at=300.0)
     await core.drain()
     assert core.store.open_person().id == "p2"
     store.close()
@@ -186,6 +230,7 @@ async def test_a_restart_resumes_an_interview_left_open_by_a_crash(tmp_path):
         embedder=HashEmbedder(dim=16),
         processor=processor,
     )
+    core1.on_mic_switch(True, at=100.0)
     core1.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
     await core1.drain()
     store1.close()
@@ -202,13 +247,17 @@ async def test_a_restart_resumes_an_interview_left_open_by_a_crash(tmp_path):
         embedder=HashEmbedder(dim=16),
         processor=processor,
     )
-    core2.on_photo(photo_path="b.jpg", portrait_path="b.png", at=500.0)
+    # Der neue Prozess muss das offene Interview WEITERFUEHREN. Belegt ueber
+    # den Schalter: das Schliessen per Foto gibt es seit 2026-09-01 nicht mehr
+    # (der Test hing vorher genau daran und haette den Wiederaufnahme-Fall
+    # danach gar nicht mehr geprueft).
+    core2.on_mic_switch(False, at=500.0)
     await core2.drain()
 
     persons = {p.id: p for p in core2.store.list_persons()}
-    assert persons["p1"].stop_reason == "new_photo"
+    assert persons["p1"].stop_reason == "mic_switch"
     assert persons["p1"].stopped_at == 500.0
-    assert core2.store.open_person().id == "p2"
+    assert core2.store.open_person() is None
     assert calls == [("p1", 100.0, 500.0, 500.0)]
     store2.close()
 
@@ -217,6 +266,7 @@ async def test_a_restart_resumes_an_interview_left_open_by_a_crash(tmp_path):
 
 
 async def test_the_text_stop_captures_a_final_that_arrives_after_the_stop_marker(core):
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -240,6 +290,7 @@ async def test_the_text_stop_captures_a_final_that_arrives_after_the_stop_marker
 
 
 async def test_the_text_stop_gives_up_after_the_settle_window_with_nothing_arriving(core):
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -267,6 +318,7 @@ async def test_the_spoken_stop_does_not_wait_even_with_a_large_settle_window(tmp
         settle_timeout_s=5.0,  # any wait at all would be unmissable here
         settle_poll_s=0.1,
     )
+    instance.on_mic_switch(True, at=100.0)
     instance.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await instance.drain()
 
@@ -295,6 +347,7 @@ async def test_the_timeout_stop_does_not_wait_even_with_a_large_settle_window(tm
         settle_timeout_s=5.0,  # any wait at all would be unmissable here
         settle_poll_s=0.1,
     )
+    instance.on_mic_switch(True, at=100.0)
     instance.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await instance.drain()
 
@@ -400,6 +453,7 @@ def wake_core(tmp_path, wake_llm, **cfg_kwargs):
 async def test_a_freely_worded_stop_behind_the_name_closes_the_interview(tmp_path):
     llm = WakeLLM(is_stop=True)
     core = wake_core(tmp_path, llm)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -420,6 +474,7 @@ async def test_a_freely_worded_stop_behind_the_name_closes_the_interview(tmp_pat
 async def test_a_no_from_the_llm_keeps_the_recording_running(tmp_path):
     llm = WakeLLM(is_stop=False)
     core = wake_core(tmp_path, llm)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -438,6 +493,7 @@ async def test_a_dead_proxy_leaves_the_mechanical_way_untouched(tmp_path):
     auth_error. The station has to keep working through that."""
     llm = WakeLLM(is_stop=RuntimeError("auth_error"))
     core = wake_core(tmp_path, llm)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -458,6 +514,7 @@ async def test_a_dead_proxy_leaves_the_mechanical_way_untouched(tmp_path):
 async def test_switched_off_nothing_is_ever_asked(tmp_path):
     llm = WakeLLM(is_stop=True)
     core = wake_core(tmp_path, llm, wake_word_llm=False)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -477,6 +534,7 @@ async def test_ordinary_finals_never_reach_the_model(tmp_path):
     """The cost guarantee, measured where the money is actually spent."""
     llm = WakeLLM(is_stop=True)
     core = wake_core(tmp_path, llm)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 
@@ -498,6 +556,7 @@ async def test_a_slow_answer_neither_blocks_the_loop_nor_the_next_utterance(tmp_
     event loop and gives up after a hard, short budget."""
     llm = WakeLLM(is_stop=True, delay=30.0)
     core = wake_core(tmp_path, llm, wake_word_llm_timeout_s=0.1)
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="p.jpg", portrait_path="p.png", at=100.0)
     await core.drain()
 

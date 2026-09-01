@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from pathlib import Path
 
 from kg.pipeline import process_interview
 from kg.server import broadcast_graph, broadcast_state
@@ -167,6 +168,19 @@ class Core:
     async def _handle(self, kind: str, payload, at: float) -> None:
         if kind == "photo":
             transitions = self.tracker.photo(at)
+            if not transitions:
+                # 🔴 Ein Foto ohne laufendes Interview wird zu nichts (seit
+                # 2026-09-01). `/api/photo` weist so etwas schon vorher ab und
+                # schreibt gar nicht erst -- Telegram kann das nicht, dort
+                # liegen die Dateien bereits auf der Platte, wenn wir hier
+                # ankommen.
+                #
+                # Also hier wegraeumen, an der einen Stelle, durch die JEDER
+                # Weg laeuft. Ein Portraet, das zu keiner Person gehoert, ist
+                # ein Gesicht auf der Platte, das niemand mehr zuordnen kann
+                # und niemand aufraeumt -- bei einer Arbeit ueber
+                # Datensouveraenitaet ist das kein Schoenheitsfehler.
+                self._verwirf_foto(payload)
         elif kind == "text":
             transitions = self.tracker.text_message(at)
         elif kind == "mic_switch":
@@ -210,14 +224,32 @@ class Core:
         broadcast_graph(self.store, self.cfg, self.bus)
         broadcast_state(self.store, self.bus)
 
-    def _portrait(self, payload) -> None:
-        """A photo handed in to the interview that is already running.
+    def _verwirf_foto(self, payload) -> None:
+        """Loescht ein Bild, das zu keiner Person geworden ist.
 
-        Only ever reached for an interview the microphone switch opened and
-        that still has no portrait (`kg.session.photo` decides that, and only
-        once). The interview keeps running: same person, same started_at, same
-        transcript window — the face is merely added. No state change, so only
-        the graph is broadcast; the wall swaps the empty disc for the picture.
+        Fehler beim Loeschen werden protokolliert und verschluckt: Die Station
+        laeuft vor Publikum, und eine liegengebliebene Datei ist ein Problem
+        fuer spaeter -- ein Absturz waere eins fuer jetzt.
+        """
+        for pfad in payload or ():
+            try:
+                Path(pfad).unlink(missing_ok=True)
+            except OSError as exc:
+                log.warning("verworfenes Foto nicht loeschbar (%s): %s", pfad, exc)
+
+    def _portrait(self, payload) -> None:
+        """Ein Foto fuer das Interview, das gerade laeuft.
+
+        Seit 2026-09-01 der EINZIGE Weg, auf dem ein Foto etwas bewirkt --
+        entweder nachgereicht ("late_photo", die Person hatte noch kein Bild)
+        oder ersetzend ("replaced_photo", es gab schon eins). Welcher der
+        beiden Faelle vorliegt, entscheidet `kg.session.photo`; hier ist die
+        Wirkung dieselbe, und das ist Absicht: In beiden Faellen bleiben
+        Person, started_at und Transkriptfenster unangetastet, nur das Bild
+        wandert.
+
+        Kein Zustandswechsel, deshalb wird nur der Graph gesendet -- die Wand
+        tauscht das Bild an einer Scheibe, die schon dort haengt.
         """
         person = self.store.open_person()
         if person is None:  # closed by another path between queueing and here

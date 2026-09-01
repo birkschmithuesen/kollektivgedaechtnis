@@ -21,6 +21,44 @@ Datensouveränität und verlinkt eine Transparenzseite. Ein Portraitfoto über
 einen US-Messenger zu schicken, um es an eine EU-souveräne Pipeline zu
 übergeben, wäre der Widerspruch im eigenen Aufbau.
 
+## Interview starten und beenden (seit 2026-09-01)
+
+Unter dem Auslöser sitzt ein zweiter, flacherer Knopf: **Interview starten**
+bzw. **Interview beenden**. Er tut genau dasselbe wie der Schalter am Mikrofon
+(`POST /api/interview_switch`) — bewusst derselbe Endpunkt und kein eigener,
+damit sich die beiden Wege nicht auseinanderentwickeln.
+
+**Der Knopf rät nicht.** Die App fragt alle drei Sekunden `GET /api/state` und
+richtet Beschriftung und Freigabe danach. Das ist nötig, weil ein Interview
+auch anders enden kann — am Mikrofonschalter, durch die gesprochene
+Schlussphrase, durch den Timeout. Ohne Nachfrage stünde das Handy dann auf
+„läuft" und der nächste Druck beendete etwas längst Beendetes.
+
+Ist die Station nicht erreichbar, wird der Knopf **gesperrt** statt geraten.
+Ein Umschalter, der den Stand nicht kennt, macht im Zweifel das Gegenteil.
+
+**Nur über den direkten Weg.** Der öffentliche Spiegel nimmt Fotos entgegen
+und sonst nichts — er ist die Fassade nach draußen und darf die Station nicht
+steuern. Im Spiegel-Modus ist der Knopf deshalb aus.
+
+### 🔴 Ein Foto eröffnet kein Interview mehr
+
+Bis zum 2026-09-01 war das Foto der Anfang eines Besuchs. Heute ist der Anfang
+eine bewusste Handlung am Schalter. Ein Foto kann nur noch drei Dinge tun:
+
+| Lage | Was passiert |
+|---|---|
+| kein Interview offen | **abgewiesen** (HTTP 409), keine Datei entsteht |
+| offen, ohne Portrait | Bild wird nachgereicht (`late_photo`) |
+| offen, mit Portrait | Bild **ersetzt** das bisherige (`replaced_photo`) |
+
+Der Grund ist der Betrieb am Booth: Dort wird probiert und nachjustiert.
+Solange jedes Foto ein Interview eröffnete, erzeugte jeder Probeauslöser eine
+Person an der Wand, die nie etwas gesagt hat — und ein zweites Foto während
+eines Gesprächs zerschnitt dieses in zwei Personen.
+
+Die App zeigt bei 409 „Kein Interview offen — zuerst unten Interview starten".
+
 ## Sucherrahmen und Vorschau (für Testreihen)
 
 Die App zeigt **im Sucher** einen goldenen Kreis: so beschneidet die Station

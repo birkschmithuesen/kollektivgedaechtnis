@@ -55,16 +55,22 @@ läuft die Station nicht oder liefert falsche Daten. Alles danach ist Feinschlif
 - [ ] **Zehn leere Personen ausblenden** (aus meinen Testfotos, sie erscheinen
       sonst als leere Scheiben an der Wand). Entscheidung steht bei Birk:
       `hidden=1` statt löschen. Details: `docs/STAND.md` §2j.
-- [ ] **Erklärungstext für den Plenarsaal einsetzen** —
-      `frontend/static/plenum-hinweis.js`, Zeile 32 und 40. Steht bewusst als
-      Platzhalter da, Inhalt ist Birks Sache.
+- [x] ~~Erklärungstext für den Plenarsaal einsetzen~~ — steht seit
+      2026-09-01 (`frontend/static/plenum-hinweis.js`). Der QR-Code kommt
+      danach als zweiter Takt über die ganze Fläche; in der Ecke steht im
+      Saal keiner mehr.
 - [ ] **EU-Kette beim Traum prüfen** — der Bildweg steht in **`config2.toml`**
       (nicht `config.toml`). Auf der Station war er korrekt auf BFL/EU gesetzt;
       die mitgelieferte `config2.example.toml` steht aber auf OpenRouter.
       Sollwerte: `image_api_mode = "bfl"`, `image_model = "flux-2-pro-preview"`,
       `image_url = "https://api.eu.bfl.ai/v1"`, `image_api_key_env = "BFL_API_KEY"`.
-- [ ] **Ein echtes Interview durchspielen**: Foto → Portrait → Analyse →
-      erscheint an der Wand
+- [ ] **Ein echtes Interview durchspielen**: **Interview starten** (Schalter
+      am Mikrofon oder Knopf in der Handy-App) → Foto → Portrait → Analyse →
+      erscheint an der Wand.
+      🔴 **Seit 2026-09-01 eröffnet ein Foto KEIN Interview mehr.** Wer zuerst
+      fotografiert, bekommt „Kein Interview offen" (HTTP 409) — das ist kein
+      Fehler, sondern die neue Reihenfolge. Ein zweites Foto im laufenden
+      Gespräch ersetzt nur das Bild und teilt das Interview nicht mehr.
 - [ ] Größen am Bedienpult einstellen (Zoom, Portrait, Tempo, Begriffe) —
       **getrennt für Foyer und Saal**, die Werte werden gespeichert
 

@@ -114,6 +114,11 @@ object Uploader {
                     }
                     Ergebnis.Erfolg(name)
                 }
+                // Seit 2026-09-01: Die Station nimmt ein Foto nur zu einem
+                // LAUFENDEN Interview an. Der Satz nennt deshalb die
+                // Abhilfe und nicht den Fehler -- am Booth hilft "zuerst
+                // starten" weiter, "409 Conflict" nicht.
+                409 -> Ergebnis.Fehler("Kein Interview offen — zuerst unten Interview starten")
                 401 -> Ergebnis.Fehler("Foto-Token fehlt oder stimmt nicht")
                 413 -> Ergebnis.Fehler("Bild zu groß für die Station")
                 415 -> Ergebnis.Fehler("Station hat das Bild nicht als Foto erkannt")
@@ -136,6 +141,104 @@ object Uploader {
         } finally {
             verbindung?.disconnect()
         }
+    }
+
+    /**
+     * Startet oder beendet ein Interview — derselbe Weg wie der Schalter am
+     * Mikrofon (Birk, 2026-09-01: „analog zu dem Mikrofon an außen").
+     *
+     * Absichtlich `/api/interview_switch` und kein eigener Endpunkt: die
+     * Station hat diesen Weg schon, samt Warteschlange und
+     * `SessionTracker.mic_switch`. Ein zweiter Eingang mit derselben Wirkung
+     * wäre ein zweiter Ort, an dem sich das Verhalten auseinanderentwickelt —
+     * und der Fall „per Handy geöffnet, per Schlusssatz geschlossen" muss
+     * genauso sauber laufen wie jede andere Mischung.
+     *
+     * `source` unterscheidet in den Logs, wer geschaltet hat. Das ist keine
+     * Zierde: wenn im Nachhinein ein Interview ohne Portrait dasteht, ist die
+     * erste Frage, ob jemand am Mikrofonschalter war oder am Handy.
+     *
+     * **Nur über den Tailnet-Weg.** Der öffentliche Spiegel kennt diesen
+     * Endpunkt nicht (`mirror/receiver.py` nimmt Fotos entgegen und sonst
+     * nichts) — er ist die Fassade nach draußen und darf die Station nicht
+     * steuern können. Die App fängt das vorher ab.
+     */
+    fun schalte(
+        ziel: URL,
+        an: Boolean,
+        timeoutMs: Int = 10_000,
+        oeffne: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
+    ): Ergebnis {
+        var verbindung: HttpURLConnection? = null
+        return try {
+            val koerper = """{"on":$an,"source":"handy"}""".toByteArray()
+            verbindung = oeffne(ziel).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                setRequestProperty("Content-Type", "application/json")
+                setFixedLengthStreamingMode(koerper.size)
+            }
+            verbindung.outputStream.use { it.write(koerper) }
+            when (val code = verbindung.responseCode) {
+                in 200..299 -> Ergebnis.Erfolg()
+                404 -> Ergebnis.Fehler("Station kennt den Schalter nicht — alte Fassung?")
+                else -> Ergebnis.Fehler("Station antwortet mit $code")
+            }
+        } catch (e: java.net.SocketTimeoutException) {
+            Ergebnis.Fehler("Keine Antwort — im Tailnet? (${'$'}{ziel.host})")
+        } catch (e: java.net.ConnectException) {
+            Ergebnis.Fehler("Keine Verbindung zu ${'$'}{ziel.host}:${'$'}{ziel.port} — läuft die Station?")
+        } catch (e: Exception) {
+            Ergebnis.Fehler(e.message ?: e.javaClass.simpleName)
+        } finally {
+            verbindung?.disconnect()
+        }
+    }
+
+    /** Was die Station gerade tut. `null`-Felder heißen „nicht erreichbar". */
+    data class Zustand(val interviewLaeuft: Boolean, val mikrofonAn: Boolean)
+
+    /**
+     * Fragt die Station, ob gerade ein Interview läuft.
+     *
+     * 🔴 Der Grund, warum es das gibt: Ohne Rückmeldung wäre der Knopf am
+     * Handy ein Umschalter, der RÄT. Ein Interview kann auch per
+     * Mikrofonschalter oder per gesprochener Schlussphrase enden — dann zeigte
+     * das Handy weiter „läuft", und der nächste Druck würde beenden wollen,
+     * was längst beendet ist. Birk: „damit der Stand von Interview läuft nicht
+     * springt."
+     *
+     * Abgefragt statt zugeschickt: Die Station kann per SSE senden
+     * (`/events`), aber eine offene Verbindung über ein Handy-WLAN, das beim
+     * Sperren des Schirms wegbricht, ist der unzuverlässigere Weg — sie
+     * stirbt still, und das Handy zeigt dann einen eingefrorenen Stand, ohne
+     * es zu merken. Eine Abfrage alle paar Sekunden kann nicht still sterben:
+     * bleibt sie aus, ist das sofort sichtbar.
+     */
+    fun holeZustand(basis: String, timeoutMs: Int = 5_000): Zustand? = try {
+        val verbindung = endpunkt(basis, "/api/state").openConnection() as HttpURLConnection
+        verbindung.connectTimeout = timeoutMs
+        verbindung.readTimeout = timeoutMs
+        try {
+            if (verbindung.responseCode in 200..299) {
+                val text = verbindung.inputStream.bufferedReader().use { it.readText() }
+                val json = org.json.JSONObject(text)
+                // `interview` ist ein Objekt, solange eins laeuft, und JSON-null
+                // sonst. `isNull` statt `has`: der Schluessel ist IMMER da.
+                Zustand(
+                    interviewLaeuft = !json.isNull("interview"),
+                    mikrofonAn = json.optBoolean("mic_on", true),
+                )
+            } else {
+                null
+            }
+        } finally {
+            verbindung.disconnect()
+        }
+    } catch (e: Exception) {
+        null
     }
 
     /**

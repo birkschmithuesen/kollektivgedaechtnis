@@ -16,6 +16,21 @@
     <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>
     <string name="vorschau_beschreibung">So hat die Station das Foto zugeschnitten</string>
 
+    <!-- Interview starten/beenden. Die beiden Texte sind bewusst gleich lang
+         gehalten: der Knopf soll beim Umschalten nicht seine Breite aendern. -->
+    <string name="interview_starten">Interview starten</string>
+    <string name="interview_beenden">Interview beenden</string>
+    <string name="interview_gestartet">Interview läuft</string>
+    <string name="interview_beendet">Interview beendet</string>
+    <!-- Die Station ist nicht erreichbar. Der Knopf wird dann abgeschaltet
+         statt zu raten: ein Umschalter, der den Zustand nicht kennt, macht im
+         Zweifel das Gegenteil des Gewollten. -->
+    <string name="station_unerreichbar">Station nicht erreichbar — Knopf gesperrt</string>
+    <!-- Ueber den Spiegel geht Steuern nicht: er nimmt Fotos an und sonst
+         nichts. Das ist Absicht, keine fehlende Funktion — deshalb sagt die
+         Meldung auch, was zu tun waere. -->
+    <string name="nur_im_tailnet">Interview-Schalter braucht den direkten Weg zur Station (Einstellungen)</string>
+
     <string name="settings_title">Einstellungen</string>
     <string name="weg_label">Wohin geht das Foto?</string>
     <string name="weg_station">Direkt zur Station (Handy im Tailnet)</string>
