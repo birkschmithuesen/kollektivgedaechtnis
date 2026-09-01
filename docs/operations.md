@@ -511,21 +511,36 @@ in „manuell" nicht, weil dort die Hand des Besuchers führt.
 > dazu. Für eine sichtbare Fahrt mindestens ~1,5× (gemessen: bei 1,5× sind
 > 66 % der Knoten im Bild, bei 2× noch 37 %).
 
-**Porträtgröße** — stufenloser Regler **40 px bis 260 px**, Startwert
-**120 px**, Anzeige „höchstens 120 px". Er setzt eine **Obergrenze**, keine
-feste Größe: im Automatikbetrieb („alles zeigen", „automatisch schwenken")
-wird ein Porträtkreis nie größer als der eingestellte Wert in echten
-Bildschirmpixeln. Anlass (Birk, 2026-08-29, an der Station beobachtet): bei
-einer einzelnen Person füllte das Porträt den ganzen Schirm. Gemessen ohne
-Grenze, ein Mensch und ein Begriff auf 1920×1080: 367 px (Thema a) bzw.
-450 px (Thema b).
+**Porträtgröße** — stufenloser Regler **40 px bis 700 px**, Startwert
+**120 px**, Anzeige „höchstens 120 px". Er ist eine **Obergrenze in echten
+Bildschirmpixeln** *und* ein **Maßstab**: im Automatikbetrieb („alles zeigen",
+„automatisch schwenken") wird ein Porträtkreis nie größer als der eingestellte
+Wert — und darunter wird er im Verhältnis `Reglerwert / 120` gestreckt.
+Anlass für die Grenze (Birk, 2026-08-29, an der Station beobachtet): bei einer
+einzelnen Person füllte das Porträt den ganzen Schirm. Gemessen ohne Grenze,
+ein Mensch und ein Begriff auf 1920×1080: 367 px (Thema a) bzw. 450 px
+(Thema b).
 
-> **Meistens tut der Regler gar nichts, und das ist richtig so.** Unterhalb
-> der Grenze bleibt alles beim alten Prinzip: Modelleinheiten mal Zoom, also
-> wird jedes Gesicht kleiner, je mehr auf der Wand steht — genau wie die
-> Schrift. Gemessen (Thema b, 2026-08-30): 107,7 px bei 5 Personen, 47,5 px
-> bei 20, 28,5 px bei 50. Von der 120er-Grenze wird davon keiner berührt. Sie
-> greift erst bei einer nahezu leeren Wand oder bei stark aufgezogenem Zoom.
+> **Bei 120 px steht die Wand wie entworfen.** Dort ist der Regler ein reiner
+> Deckel, und darunter gilt das alte Prinzip: Modelleinheiten mal Zoom, jedes
+> Gesicht wird kleiner, je mehr auf der Wand steht — genau wie die Schrift.
+> Gemessen (Thema b, 2026-08-30): 107,7 px bei 5 Personen, 47,5 px bei 20,
+> 28,5 px bei 50. Von der 120er-Grenze wird davon keiner berührt.
+
+> **Der Regler wirkt auch nach oben** (Birk, 2026-09-01, vor Ort: „Der
+> Portraitgrößen-Regler hat keinen Einfluss", bei Stellung 199 — also nicht
+> am Anschlag). Als reiner Deckel tat er auf einer besetzten Wand gar nichts,
+> weil die Grenze dort nie band: an Birks Wand (Thema f, Zoom 1,55) kamen
+> 199, 260, 400 und 700 alle als dieselben 86,8 px an. Seit dem Maßstab
+> `Reglerwert / 120` bewegt jede Reglerstellung die Scheibe. Gemessen auf der
+> Prüfwand (Thema a, 20 Personen): 47,9 px bei 120, 79,5 bei 199, 103,8 bei
+> 260, 159,8 bei 400, 279,6 bei 700.
+
+> **Über 120 px kann der Regler Porträts aufeinanderschieben.** Das ist der
+> Preis dafür, dass er nach oben wirkt, und es ist Absicht: die Scheibe wird
+> dann größer, als das Layout angenommen hat (siehe „Der Regler ändert die
+> Platzierung nicht"). Zu beurteilen ist das am Bild — aufdrehen, hinsehen,
+> zurückdrehen, wenn die Gesichter die Begriffe verdecken.
 
 > **In „manuell" gilt die Grenze nicht** (Birk, 2026-08-30). Am Touchscreen ist
 > das Hineinzoomen in ein Gesicht die Geste, mit der ein Besucher sich eine
@@ -538,13 +553,14 @@ Grenze, ein Mensch und ein Begriff auf 1920×1080: 367 px (Thema a) bzw.
 
 > **Der Regler ändert die Platzierung nicht.** Das Layout rechnet unverändert
 > mit der Modellgröße des Themas (`--person-size`) und weiß nichts von der
-> Grenze. Weil die Grenze eine Scheibe nur **kleiner** machen kann als das
-> Layout angenommen hat, kann sie keine Porträts aufeinanderschieben — die
-> berührenden Paare, die die feste Größe von b803745 erzeugte (108 von 1225
-> möglichen beim 50-Personen-Netz), sind damit wieder bei 0.
+> Porträtgröße. **Bis 120 px** kann die Scheibe dadurch nur **kleiner** werden
+> als das Layout angenommen hat, und dann kann der Regler keine Porträts
+> aufeinanderschieben — die berührenden Paare, die die feste Größe von
+> b803745 erzeugte (108 von 1225 möglichen beim 50-Personen-Netz), sind damit
+> wieder bei 0. Darüber gilt diese Zusage nicht mehr, siehe oben.
 
 > **Nicht dasselbe wie Zoom.** Der Zoom wählt den Ausschnitt (wie viel vom Netz
-> auf der Wand steht), die Porträtgröße begrenzt die Gesichter darin. Ein
+> auf der Wand steht), die Porträtgröße bemisst die Gesichter darin. Ein
 > Zoomzug vergrößert die Porträts mit — aber nur bis an die Grenze; ein Zug an
 > der Porträtgröße ändert den Ausschnitt nicht.
 

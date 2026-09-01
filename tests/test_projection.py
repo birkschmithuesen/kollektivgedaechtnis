@@ -1068,6 +1068,45 @@ def test_the_operators_zoom_grows_the_portrait_only_up_to_the_ceiling(view):
     assert after["disc"] == pytest.approx(DEFAULT_PORTRAIT_PX, rel=0.02)
 
 
+def test_the_dial_grows_the_portrait_past_what_the_theme_alone_gives(view):
+    # Birk vor Ort, 2026-09-01: „Der Portraitgrößen-Regler hat keinen
+    # Einfluss." — bei Stellung 199 px, also NICHT am Anschlag.
+    #
+    # Genau dieser Fall, als Messung: ein Netz, auf dem die Obergrenze GAR
+    # NICHT bindet. Auf der theme-a-Harness (--person-size 56) kommt die
+    # Scheibe beim 20-Personen-Netz mit 47,9 px auf der Wand an, weit unter
+    # der 120er-Grenze — und unter der reinen Deckelung ergaben 120, 199, 240,
+    # 260, 400 und 700 dort alle exakt dieselben 47,925 px. Das ist der
+    # Defekt, und diese Zeile ist nachgemessen: mit `massstab = 1` scheitert
+    # der Test unten an „47.92534554065149 < 47.92534554065149".
+    #
+    # Mit dem Maßstab S/120 (gemessen am 2026-09-01): 47,9 / 79,5 / 95,9 /
+    # 103,8 / 159,8 / 279,6 px.
+    update(view, _dense_net(persons=20, terms=30))
+
+    discs = {}
+    for pixels in (120, 199, 240, 260, 400, 700):
+        view.evaluate(f"() => window.kgView.setPortraitSize({pixels})")
+        discs[pixels] = _portrait(view)["disc"]
+
+    # Der Regler wirkt nach OBEN, über den ganzen Weg und in jeder Stufe.
+    assert discs[120] < discs[199] < discs[240] < discs[260] < discs[400] < discs[700]
+    # Und zwar proportional: doppelte Stellung, doppelte Scheibe.
+    assert discs[240] == pytest.approx(2 * discs[120], rel=0.02)
+    # Er tut das dort, wo die Grenze NICHT bindet. Ohne diese Zeile bestünde
+    # den Test auch die Fassung, die den Regler zur festen GERENDERTEN Größe
+    # macht (dann wäre discs[120] genau 120) — und die hat das Mitwachsen mit
+    # dem Zoom gebrochen, siehe den Test darüber.
+    assert discs[120] < DEFAULT_PORTRAIT_PX / 2
+    # Die Scheibe wird dabei wirklich größer als die Modellgröße des Themas ...
+    view.evaluate("() => window.kgView.setPortraitSize(400)")
+    model = view.evaluate("() => Number(window.kgView.cy.nodes('.person')[0].numericStyle('width'))")
+    assert model > view.evaluate("() => window.kgView.placementPersonSize")
+    # ... und „höchstens N gezeichnete Pixel" bleibt trotzdem wahr.
+    for pixels, disc in discs.items():
+        assert disc <= pixels * 1.02
+
+
 def test_the_ring_scales_with_the_portrait_it_sits_on(view):
     # Everything that hangs on the disc optically has to follow it, or a
     # resized portrait gets a ring from a different drawing.

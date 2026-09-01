@@ -1221,8 +1221,11 @@ export function createGraphView(
   // So `portraitSize` is a CEILING, and it applies only while the camera is
   // DRIVING (modes 'fit' and 'pan'):
   //
-  //   driven:  width = min(placement size, portraitSize / zoom)
+  //   driven:  width = min(placement size × S/120, S / zoom)
   //   manual:  width = whatever it was when the visitor took over
+  //
+  // (S = `portraitSize`. Der Maßstab S/120 kam am 2026-09-01 dazu — der Grund
+  // steht ausführlich in `portraitWidth()`, hier nur die Formel.)
   //
   // Below the ceiling — anything but a nearly empty wall — the min() picks the
   // theme's own model size and the disc scales with the zoom exactly as it did
@@ -1255,11 +1258,19 @@ export function createGraphView(
   // node positions, and every measurement this repo has ever taken of the
   // placement still means what it meant.
   //
-  // The price b803745 carried is gone with the fixed size: the ceiling only
-  // ever makes a disc SMALLER than the placement assumed, so it cannot push
-  // portraits onto each other. (b803745's own measurement, for the record:
-  // 108 touching portrait pairs of 1225 at the 120px default on the seeded
-  // 50-person net, against 0 before it and 0 again now.)
+  // The price b803745 carried is gone with the fixed size: at the 120px
+  // default the ceiling only ever makes a disc SMALLER than the placement
+  // assumed, so it cannot push portraits onto each other. (b803745's own
+  // measurement, for the record: 108 touching portrait pairs of 1225 at the
+  // 120px default on the seeded 50-person net, against 0 before it and 0
+  // again now.)
+  //
+  // 🔴 Diese Zusage gilt seit dem 2026-09-01 nur noch BIS 120. Darüber
+  // streckt der Regler die Modellgröße (S/120), und dann kann eine Scheibe
+  // größer werden, als die Platzierung angenommen hat. Das ist kein
+  // Versehen, sondern die Anforderung selbst — „der Regler muss nach oben
+  // wirken" heißt „größer als das Layout annimmt". Beurteilt wird das am
+  // Bild, vor Ort; die Zahl steht deshalb an einem Regler und nicht im Code.
   const placementPersonSize = Number(cssVar('--person-size', '96'));
   // The ring is not a constant but a RATIO of the disc: the themes tune the
   // two together (theme a 5 on 56, theme c 10 on 100), so a resized portrait
@@ -1276,28 +1287,53 @@ export function createGraphView(
 
   /** The disc's model width at this zoom, under the current regime. */
   function portraitWidth(zoom) {
-    // 🔴 Kein `Math.min` mehr gegen `placementPersonSize` (Birk, 2026-09-01
-    // vor Ort: „Der Portraitgrößen-Regler hat keinen Einfluss", bei Stellung
-    // 199 px — also NICHT am Anschlag).
+    // 🔴 DER REGLER IST DECKEL **UND** MASSSTAB (Birk, 2026-09-01 vor Ort:
+    // „Der Portraitgrößen-Regler hat keinen Einfluss", bei Stellung 199 px —
+    // also NICHT am Anschlag).
     //
-    // Gemessen war der Grund eine Deckelung, die den Regler oberhalb einer
-    // schmalen Schwelle wirkungslos machte:
+    // Die reine Deckelung, die bis dahin hier stand:
     //
-    //     portraitWidth = min(--person-size, portraitSize / zoom)
-    //     theme-f: --person-size = 56, Zoom an der Wand = 1,55
-    //     -> der Regler wirkte NUR unterhalb von 56 × 1,55 = 87 px
+    //     Modellbreite = min(--person-size, S / zoom)
+    //     gezeichnet   = min(--person-size × zoom, S)
     //
-    // Über 87 gewann immer die Theme-Größe, und zwar unabhängig davon, wie
-    // weit der Regler aufgedreht wurde: 199, 260, 400 und 700 ergaben alle
-    // dieselben 56 Modellpixel. Die Obergrenze anzuheben hätte daran nichts
-    // geändert — das war mein erster, falscher Reflex.
+    // macht den Regler überall dort wirkungslos, wo die Grenze nicht bindet —
+    // und das ist der NORMALFALL, nicht der Randfall. Gemessen an Birks Wand
+    // (theme-f, --person-size 56, Zoom 1,55): gezeichnet 56 × 1,55 = 86,8 px,
+    // und 199, 260, 400 und 700 ergaben alle dieselben 86,8 px. Die Grenze
+    // anzuheben ändert daran nichts — das war mein erster, falscher Reflex.
     //
-    // Der Regler setzt die Portraitgröße jetzt in BEIDE Richtungen: unter der
-    // Theme-Größe verkleinert er (wie bisher), darüber vergrößert er. Er
-    // bleibt eine gerenderte Größe, wird also weiterhin durch den Zoom
-    // geteilt — „höchstens N Pixel auf der Wand" heißt bei jedem Zoomstand
-    // dasselbe.
-    const gewuenscht = portraitSize / zoom;
+    // Sie ersatzlos zu streichen (mein zweiter, 7e6307c) aber auch nicht:
+    // `S / zoom` hält die GEZEICHNETE Größe fest, die Scheibe wächst dann
+    // beim Hineinzoomen überhaupt nicht mehr mit. Gemessen an dem Test, der
+    // es aufdeckte (theme-a-Harness, 20 Personen): bei dreifachem Zoom stand
+    // die Scheibe unverändert auf 120 px, statt von 47,9 px auf die 120er
+    // Grenze zu STEIGEN. Vier Tests haben das gehalten, mit ihren Messwerten
+    // vom 2026-08-30.
+    //
+    // Der Regler wirkt jetzt an BEIDEN Stellen derselben Formel:
+    //
+    //     gezeichnet = min(--person-size × zoom × S/120, S)
+    //
+    // Als Maßstab (S/120) streckt er die Modellgröße, die mit dem Zoom
+    // mitwächst; als Deckel (S) begrenzt er weiterhin das Gezeichnete. Drei
+    // Eigenschaften, und zusammen sind sie genau die Anforderung:
+    //
+    //   * Bei S = 120 ist die Formel ZAHLENGLEICH mit der alten. Alles, was
+    //     am 2026-08-29/30 an der Wand gemessen wurde, gilt unverändert.
+    //   * `gezeichnet ≤ S` gilt immer — „höchstens N px" bleibt wörtlich wahr,
+    //     die Beschriftung am Regler stimmt weiter.
+    //   * `gezeichnet` ist streng monoton in S, auf JEDER Wand und bei jedem
+    //     Zoom. Genau das fehlte. NACHGEMESSEN auf der theme-a-Harness mit 20
+    //     Personen, wo die Grenze nicht bindet (natürliche Scheibe 47,9 px):
+    //     120 → 47,9 px, 199 → 79,5, 240 → 95,9, 260 → 103,8, 400 → 159,8,
+    //     700 → 279,6. Mit reiner Deckelung: sechsmal 47,9 — der Regler
+    //     bewegte dort nichts, und das war Birks ganzer Befund.
+    //
+    // Der Bezugspunkt 120 ist DEFAULT_PORTRAIT_SIZE und keine zweite Zahl:
+    // „Reglerstellung = Vorgabe" heißt „Wand wie entworfen", und der Weg nach
+    // beiden Seiten ist ein reiner Faktor darauf.
+    const massstab = portraitSize / DEFAULT_PORTRAIT_SIZE;
+    const gedeckelt = Math.min(placementPersonSize * massstab, portraitSize / zoom);
     // `camera` is assigned below this function and the very first call comes
     // from inside its constructor (a fit changes the zoom), so the fallback is
     // load-bearing, not defensive: until the camera exists the wall is in its
@@ -1305,19 +1341,19 @@ export function createGraphView(
     const blend = camera ? camera.portraitCapBlend : 1;
     if (blend >= 1) {
       freeWidth = null;
-      return gewuenscht;
+      return gedeckelt;
     }
-    if (freeWidth === null) freeWidth = appliedWidth > 0 ? appliedWidth : gewuenscht;
+    if (freeWidth === null) freeWidth = appliedWidth > 0 ? appliedWidth : gedeckelt;
     if (blend <= 0) return freeWidth;
     // Geometric, like camera.js's lerpZoom and for the same reason: this is a
     // magnification travelling by a factor of ten, and the eye reads factors.
     //
-    // 🔴 Hier stand bis 2026-09-01 `capped` — der Bezeichner, den der Commit
-    // „Beide Regler wirken wieder" (7e6307c) an den drei Stellen darüber in
-    // `gewuenscht` umbenannt und an dieser vierten übersehen hat. Der Zweig
-    // wird NUR bei laufendem Handover betreten (sonst kehrt `blend` bei 0
-    // oder 1 vorher um), weshalb es keine Testabdeckung gab, die es sofort
-    // gezeigt hätte.
+    // 🔴 VIER STELLEN, EIN BEZEICHNER — wer ihn umbenennt, muss alle vier
+    // mitnehmen. Hier stand bis 2026-09-01 `capped`, während der Commit
+    // „Beide Regler wirken wieder" (7e6307c) die drei Stellen darüber schon
+    // umbenannt hatte. Der Zweig wird NUR bei laufendem Handover betreten
+    // (sonst kehrt `blend` bei 0 oder 1 vorher um), weshalb es keine
+    // Testabdeckung gab, die es sofort gezeigt hätte.
     //
     // Der ReferenceError flog von hier durch `cy.zoom()` bis in `tick()`
     // hinauf — die Bildschleife der Wand starb dann 300 ms nach dem Beginn
@@ -1325,7 +1361,7 @@ export function createGraphView(
     // Gemessen und abgesichert in `tests/test_camera_wand_haelt_durch.py`;
     // fünf Tests in `test_projection.py` und zwei in
     // `test_projection_schwarzplan.py` standen seither rot.
-    return freeWidth * Math.pow(gewuenscht / freeWidth, blend);
+    return freeWidth * Math.pow(gedeckelt / freeWidth, blend);
   }
 
   function applyPortraitSize(force = false) {
@@ -1338,12 +1374,22 @@ export function createGraphView(
     appliedWidth = width;
     cy.batch(() => {
       const persons = cy.nodes('.person');
-      // Ohne Deckelung gibt es keinen „nicht bindenden" Fall mehr: der Regler
-      // IST die Größe, also wird sie immer geschrieben (Birk, 2026-09-01).
-      // Vorher wurde der Stil oberhalb der Theme-Größe entfernt statt gesetzt
-      // — zusammen mit dem `Math.min` in portraitWidth() war das der Grund,
-      // warum der Regler nach oben hin nichts tat.
-      persons.style({ width, height: width, 'border-width': width * ringRatio });
+      // Entfernt statt geschrieben wird der Stil nur, wenn die gewollte Breite
+      // GENAU die Modellbreite des Themas ist — dann tut die Kaskade dasselbe
+      // umsonst, ein volles Netz zahlt gar keine Stilschreibvorgänge, und ein
+      // späterer Themenwechsel greift normal durch (gleicher Grund wie bei
+      // resetLabelOffsets).
+      //
+      // 🔴 Hier stand `width >= placementPersonSize`. Das war gleichbedeutend,
+      // SOLANGE die Breite nach oben durch die Themengröße begrenzt war. Seit
+      // der Regler auch nach oben wirkt, ist es das nicht mehr — und dann ist
+      // es die zweite Hälfte von Birks Befund: bei Stellung 199 und theme-f
+      // will die Scheibe 56 × 199/120 = 92,9 Modellpixel, das ist ≥ 56, der
+      // Stil wäre entfernt worden und die Scheibe stünde wieder auf 56. Der
+      // Regler wäre also selbst mit richtig gerechneter Breite stumm
+      // geblieben.
+      if (width === placementPersonSize) persons.removeStyle('width height border-width');
+      else persons.style({ width, height: width, 'border-width': width * ringRatio });
     });
   }
 
@@ -1713,8 +1759,10 @@ export function createGraphView(
     },
     /** The largest a portrait may get on the wall in the driven camera modes,
      * in rendered pixels. Not the size it IS: below the ceiling a disc is the
-     * theme's model size times the zoom like everything else, and in 'manual'
-     * the ceiling does not apply at all. */
+     * theme's model size times the zoom times S/120 — it still grows with the
+     * zoom like everything else — and in 'manual' the ceiling does not apply
+     * at all. Der Faktor S/120 ist der Teil, mit dem der Regler auch dort
+     * wirkt, wo die Grenze nicht bindet (2026-09-01, siehe portraitWidth). */
     get portraitSize() {
       return portraitSize;
     },
