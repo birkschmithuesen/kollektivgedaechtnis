@@ -4,7 +4,12 @@ injected callable (`stop_intent`, wired to a small model in kg.core).
 
 One microphone means exactly one interview can be open at a time. Every path
 out of "open" is forgiving: a text message, a spoken command, the safety
-timeout, or the next photo. It can never leave two interviews open.
+timeout, the microphone switch, or the next photo. It can never leave two
+interviews open.
+
+Two ways IN since 2026-09-01: the photo, and the microphone switch for a
+visitor who wants no picture taken of them. The second one is why a photo is
+no longer unconditionally the next person — see `photo()`.
 """
 
 from __future__ import annotations
@@ -20,11 +25,12 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Transition:
-    kind: str  # "opened" | "closed"
+    kind: str  # "opened" | "closed" | "portrait"
     at: float
-    # opened: "photo"
+    # opened: "photo" | "mic_switch"
     # closed: "text" | "spoken" | "spoken_llm" | "timeout" | "new_photo"
     #       | "mic_switch"
+    # portrait: "late_photo"
     reason: str
 
 
@@ -36,6 +42,7 @@ class SessionTracker:
         open_since: float | None = None,
         wake_word: str | None = None,
         stop_intent: Callable[[str], bool] | None = None,
+        open_without_portrait: bool = False,
     ) -> None:
         self.timeout_s = float(timeout_s)
         self.stop_phrases = list(stop_phrases)
@@ -52,16 +59,40 @@ class SessionTracker:
         # (a restart after a crash) instead of silently forgetting it and
         # opening a second one on the next photo.
         self._open_since = open_since
+        # Whether the open interview still has no portrait — the one thing a
+        # photo needs to know to tell "this visitor is handing in their
+        # picture after all" from "this is the next visitor". Resumable for
+        # the same reason as `open_since`: after a restart the store knows the
+        # open person has no portrait, and forgetting that would turn the late
+        # photo into a second person for the same conversation.
+        self._without_portrait = open_since is not None and open_without_portrait
 
     @property
     def open_since(self) -> float | None:
         return self._open_since
 
     def photo(self, at: float) -> list[Transition]:
+        """A photo is normally the next visitor — but not always.
+
+        On an interview that was opened by the microphone switch and still has
+        no portrait, the photo belongs to the person already talking: they
+        changed their mind, or the operator got round to it late. Closing that
+        interview and opening a second one would cut one conversation in two.
+
+        Only that one case. A photo after a photo stays what it always was, a
+        new visitor with reason "new_photo" — and so does the second photo
+        after a handed-in portrait. Otherwise the next visitor would silently
+        overwrite the previous one's portrait instead of getting their own
+        node.
+        """
+        if self._open_since is not None and self._without_portrait:
+            self._without_portrait = False
+            return [Transition("portrait", at, "late_photo")]
         transitions: list[Transition] = []
         if self._open_since is not None:
             transitions.append(Transition("closed", at, "new_photo"))
         self._open_since = at
+        self._without_portrait = False
         transitions.append(Transition("opened", at, "photo"))
         return transitions
 
@@ -104,25 +135,32 @@ class SessionTracker:
     def mic_switch(self, on: bool, at: float) -> list[Transition]:
         """The physical switch on the microphone moved (STT server, 2026-08-31).
 
-        A fourth way out of "open", next to the text message, the spoken
+        OFF is a fourth way out of "open", next to the text message, the spoken
         phrase and the timeout, and the only one that is not a judgement about
         language: the microphone was switched off, so the conversation is over.
         Its own reason, "mic_switch", so store and logs keep it apart from a
         spoken goodbye afterwards.
 
-        Switching ON deliberately opens NOTHING. An interview here is a person
-        with a portrait — `photo()` is the only entrance, and `Core._open`
-        needs the photo paths to create the person at all. An interview opened
-        by a switch would have no face and no node on the wall. The ON signal
-        is still worth having (the operator page shows it, see
-        `Core.on_mic_switch`), it just cannot be a session boundary.
+        ON is a second way IN (Birk, 2026-09-01), and the reason is not
+        technical: somebody may not want a photograph taken of them, and in a
+        work about surveillance a compulsory portrait as the price of
+        admission would be a contradiction in itself. So the switch opens an
+        interview, with its own reason "mic_switch" — the person is created
+        without photo paths (the columns have always been nullable) and
+        appears on the wall as a disc without a picture. A portrait can still
+        be handed in later; `photo()` says how.
 
-        Idempotent in both directions: a repeated OFF on an already-closed
-        session returns nothing, exactly like `_close` everywhere else.
+        Idempotent in both directions: ON with an interview already open opens
+        nothing — no second one beside it, no re-opening — exactly as a
+        repeated OFF closes nothing.
         """
-        if on:
+        if not on:
+            return self._close(at, "mic_switch")
+        if self._open_since is not None:
             return []
-        return self._close(at, "mic_switch")
+        self._open_since = at
+        self._without_portrait = True
+        return [Transition("opened", at, "mic_switch")]
 
     def tick(self, now: float) -> list[Transition]:
         if self._open_since is None or now - self._open_since < self.timeout_s:
@@ -133,4 +171,5 @@ class SessionTracker:
         if self._open_since is None:
             return []
         self._open_since = None
+        self._without_portrait = False
         return [Transition("closed", at, reason)]

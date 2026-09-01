@@ -169,15 +169,52 @@ ausgesessen — genau wie ein verworfener Chunk oben.
 | | |
 |---|---|
 | `on: false` | schließt das offene Interview, `stop_reason="mic_switch"` (`SessionTracker.mic_switch` → `_close`). Die Pipeline läuft an wie nach einer gesprochenen Schlussphrase. |
-| `on: true` | öffnet **nichts**. |
+| `on: true` | eröffnet ein Interview **ohne Porträt**, wenn keines offen ist: `opened`-Grund `"mic_switch"`, `Core._open` legt die Person mit `photo_path=None, portrait_path=None` an. Ist bereits eines offen, passiert nichts. |
 | beides | setzt die Einstellung `mic_on` und meldet sie über `/events` an die Bedienseite (Abzeichen `MIC` neben `STT`). |
 
-**Warum `on: true` nichts öffnet:** ein Interview ist hier ein Mensch mit
-Porträt, und das Porträt kommt aus dem Foto — `SessionTracker.photo()` ist der
-einzige Eingang, und `Core._open` braucht die beiden Bildpfade, um die Person
-überhaupt anzulegen. Ein per Schalter geöffnetes Interview hätte kein Gesicht
-und keinen Knoten auf der Wand. Das Signal wird trotzdem geschickt und
-angezeigt, es ist nur keine Sitzungsgrenze.
+**Warum `on: true` eröffnet** (Birk, 2026-09-01; bis dahin galt hier das
+Gegenteil): „Es kann ja sein, dass irgendwer nicht will, dass ein Foto von ihm
+oder ihr gemacht wird." Der Grund ist nicht technisch. Ein Besucher, der kein
+Bild von sich möchte, muss trotzdem am Kollektivgedächtnis teilnehmen können —
+bei einer Arbeit über Datenschutz und Überwachung wäre ein Zwangsfoto als
+Eintrittskarte ein Widerspruch in sich. Technisch stand dem nie etwas im Weg:
+`photo_path` und `portrait_path` sind in `person` seit jeher nullbar, und die
+Wand verträgt einen Knoten ohne Bild.
+
+Die beiden Eingänge bleiben am `opened`-Grund unterscheidbar (`"photo"` gegen
+`"mic_switch"`), und der Schalter ist in beide Richtungen idempotent: AN bei
+offenem Interview eröffnet nichts, AUS bei geschlossenem schließt nichts.
+
+## Ein Foto, das nachkommt
+
+Wer per Schalter begonnen hat und sich mitten im Gespräch **doch**
+fotografieren lässt, bekommt sein Bild an die laufende Person nachgetragen
+(`set_person_portrait`) — das Interview läuft weiter, dieselbe `started_at`,
+derselbe Transkript-Ausschnitt. Der Tracker meldet dafür eine dritte
+Übergangsart neben `opened` und `closed`: `portrait` mit dem Grund
+`"late_photo"`.
+
+**Nur in genau diesem Fall.** Ein Foto auf ein per Foto eröffnetes Interview
+ist weiterhin der nächste Besucher und schließt das laufende mit
+`"new_photo"`; ebenso das zweite Foto nach einem bereits nachgereichten
+Porträt. Würden die beiden Fälle vermischt, überschriebe der nächste Besucher
+still das Porträt des vorigen, statt einen eigenen Knoten zu bekommen — ein
+Datenverlust, den auf der Wand niemand als solchen erkennen könnte. Der
+Tracker merkt sich dafür, ob das offene Interview noch ohne Porträt ist; nach
+einem Neustart liest `Core` diese Tatsache aus der Datenbank nach
+(`open_person().portrait_path is None`), wie schon `open_since`.
+
+## Wie ein Mensch ohne Foto auf der Wand steht
+
+Als einfarbige, ruhige Scheibe in der Farbe der ruhenden Begriffsränder
+(`--person-blank`, in theme-f `#6E6656`), sonst in nichts von den anderen
+Knoten verschieden. **Kein Platzhalter-Avatar, kein Fragezeichen, kein Icon:**
+Wer sich gegen ein Bild entscheidet, ist kein fehlendes Bild. Die eigene Farbe
+ist nötig, weil in theme-f alles, was eine Scheibe sonst trägt, aus dem PNG
+kommt — `--person-fill` ist Schwarz auf schwarzem Grund, Ring, Ringecho und
+Lichthof stehen auf 0. Am Bild gemessen war ein Knoten ohne Portrait dort
+buchstäblich nichts (247 von 28392 Pixeln nicht schwarz, und die kamen von der
+Kante zum Begriff).
 
 `mic_on` ist ausdrücklich **nicht** `stt_connected`. Das eine sagt, ob der
 Erkennungsserver erreichbar ist, das andere, ob das Mikrofon im Raum

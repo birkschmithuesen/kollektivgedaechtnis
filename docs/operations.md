@@ -413,7 +413,10 @@ Ausstellungstag", sonst öffnet Tag 2 mit den Träumen von Tag 1 im Streifen.
 4. Begriffe wachsen **nach** dem Stopp nach, nicht währenddessen.
 
 Ein neues Foto schließt ein noch laufendes Interview implizit — es kann also nie
-zwei offene Interviews geben.
+zwei offene Interviews geben. Die eine Ausnahme (2026-09-01): Wurde das
+laufende Interview per **Mikrofonschalter** ohne Foto eröffnet, wird das erste
+Foto danach als Porträt derselben Person nachgetragen, statt sie abzulösen
+(`docs/stt-contract.md`, dritter Vertrag). Auch das eröffnet nichts Zweites.
 
 ## Die Live-Regler
 

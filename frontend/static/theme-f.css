@@ -75,6 +75,21 @@
      der Alpha-Verlauf des Bildes selbst, und der laeuft stufenlos aus. */
   --person-fill: #000000;
 
+  /* Die Scheibe eines Menschen OHNE Portrait (Birk, 2026-09-01: „Es kann ja
+     sein, dass irgendwer nicht will, dass ein Foto von ihm oder ihr gemacht
+     wird"). Sie braucht eine eigene Farbe, weil in diesem Theme alles, was
+     eine Scheibe sonst traegt, aus dem PNG kommt: --person-fill ist Schwarz
+     auf schwarzem Grund, Ring, Ringecho und Lichthof stehen auf 0. Am Bild
+     gemessen waren im Kasten um so einen Knoten 247 von 28392 Pixeln nicht
+     schwarz — und die kamen von der Kante zum Begriff.
+
+     #6E6656 ist keine neue Farbe, sondern die der ruhenden Begriffsraender
+     (--term-ring-idle): entsaettigtes Gold, hell genug, um auf Schwarz
+     dazustehen, dunkel genug, um neben einem Gesicht nicht lauter zu sein
+     als das Gesicht. Eine Flaeche, keine Vertretung — kein Avatar, kein
+     Fragezeichen, kein Icon. */
+  --person-blank: #6E6656;
+
   /* KEIN Ring mehr um die Portraits (Birk, 2026-08-30: „Die goldenen Kreise
      um die Porträts sind viel zu viel. Der Glow-Fader ist schön, die dickeren
      Kreise können weg"). Der weiche Rand aus dem PNG (soft_disc_mask) und der
