@@ -25,9 +25,11 @@ Dinge an echten Sitzungen:
 keine Zitate, keine Namen -- die Transkripte enthalten Aussagen realer
 Personen.
 
-Aufruf auf der Station:
-    C:\\Users\\birk\\kollektivgedaechtnis\\.venv\\Scripts\\python.exe ^
-        pruefe-leere-extraktion.py --sitzungen 5,6,19,30,37 --laeufe 3
+Aufruf auf der Station (Mac):
+    uv run python scripts/pruefe-leere-extraktion.py --sitzungen 5,6,19,30,37 --laeufe 3
+
+Auf dem Windows-Rechner ginge auch:
+    .venv\\Scripts\\python.exe scripts\\pruefe-leere-extraktion.py ...
 """
 
 import argparse
@@ -35,12 +37,21 @@ import json
 import sys
 from pathlib import Path
 
+# 🔴 Pfade werden aus dem SPEICHERORT dieser Datei hergeleitet, nicht
+# hartkodiert (korrigiert 2026-09-02). Vorher standen hier feste
+# C:\\Users\\birk\\...-Pfade; seit dem Wechsel auf das MacBook war das Skript
+# damit genau auf dem Rechner unbrauchbar, auf dem es gebraucht wird -- und
+# das ist der Lauf, der den groessten offenen Risikopunkt klaert (STAND.md 2h).
+REPO = Path(__file__).resolve().parent.parent
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+# Die Windows-Probe gibt es nur dort; auf dem Mac faellt sie einfach weg.
 PROBE = r"C:\Users\SF-Tracking\kg-start\probe"
 if Path(PROBE).is_dir():
     sys.path.insert(0, PROBE)
-sys.path.insert(1, r"C:\Users\birk\kollektivgedaechtnis")
 
-PFAD = Path(r"C:\Users\birk\kollektivgedaechtnis\data\transcript.jsonl")
+PFAD = REPO / "data" / "transcript.jsonl"
 PAUSE = 180.0
 
 
@@ -88,7 +99,7 @@ def main() -> int:
     from kg.config import load_config
     from kg.llm import build_llm
 
-    cfg = load_config(Path(r"C:\Users\birk\kollektivgedaechtnis\config.toml"))
+    cfg = load_config(REPO / "config.toml")
     llm = build_llm(cfg)
 
     g = sitzungen(PFAD, PAUSE)
