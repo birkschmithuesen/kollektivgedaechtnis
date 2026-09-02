@@ -1,4 +1,4 @@
-# Übergabe an eine neue Session — 2026-09-02, 09:25
+# Übergabe an eine neue Session — 2026-09-02, 09:40
 
 ## Wo du bist
 
@@ -111,14 +111,50 @@ Mikrofon      http://127.0.0.1:5051/operator
 `?touch=1` ist **nicht optional** — ohne den Parameter gibt es weder Zoomregler
 noch Bedienleiste. `theme=f` ist das Layout vom 2026-09-01.
 
+## ✅ Die ganze Kette ist durchgemessen (09:35, mit Birk am Mikrofon)
+
+```
+Sprache → ElevenLabs → Kern → Datenbank (p3, 114 Zeichen)
+        → Begriffe „Hochhaus" und „Ausblick", je mit Belegstelle
+        → Graph: 5 Knoten, 2 Kanten
+        → öffentlicher Spiegel: 0,5 s alt
+```
+
+Erkannt wurde wortgenau: *„Ich würde gerne in einem Hochhaus leben, wo ich,
+ähm, mit Screens an den Fenstern einen ganz tollen Ausblick habe."*
+Es funktioniert also alles — mit ElevenLabs als Anbieter.
+
+## 🔴 Zwei Zustände, die auseinanderlaufen können — der gefährlichste Fund
+
+Beim Test trat **zweimal** dasselbe Muster auf, an zwei verschiedenen Stellen:
+
+**1. Im STT-Dienst.** `/levels` meldete `mic_gate.mic_on: true` bei gleichzeitig
+`status: "paused"`. Der Dienst verwirft im Pausenzustand alle Audiodaten
+(`sr.py`: `audio_queue.queue.clear()`). Er war also taub, während alles nach
+„an" aussah. Geholfen hat `curl -X POST http://127.0.0.1:5051/resume`.
+
+**2. Im Kern.** `/api/state` meldete `mic_on: true` bei `interview: None`.
+Sprache wurde erkannt und in `data/transcript.jsonl` geschrieben, aber keiner
+Person zugeordnet — der Kern verwirft Text ohne offenes Interview, zu Recht.
+Geholfen hat „Interview starten" im Bedienpult.
+
+**Warum es sich nicht von selbst erholt:** Das Mikrofongate handelt nur bei
+ÜBERGÄNGEN (`vad.py`). Steht sein `mic_on` schon auf `true`, schickt es nie
+wieder ein „resume" oder „Interview starten" — egal wie laut jemand spricht.
+Der Zustand ist stabil falsch.
+
+**Das ist der Fehler, der eine Ausstellung ruinieren kann**, weil er wie
+Normalbetrieb aussieht: Lampen grün, Pegel schlägt aus, und nichts wird
+aufgezeichnet. Ein Vorschlag für die nächste Session: Der Kern könnte einen
+Widerspruch selbst erkennen — kommt ein `final` herein, während `mic_on` wahr
+und kein Interview offen ist, ist das ein Beleg dafür, dass jemand spricht.
+Entweder ein Interview eröffnen oder wenigstens im Bedienpult laut werden.
+Beim STT-Dienst genügt eine Prüfung `mic_on && status == "paused"` → `/resume`.
+
 ## Offen — ehrlich, nicht beschönigt
 
-1. **Der letzte Beweis fehlt.** ElevenLabs ist direkt gegen die API geprüft
-   (perfekte Erkennung) und der Dienst verbindet sich fehlerfrei — aber seit
-   dem Umschalten hat niemand ins Mikrofon gesprochen. Die Strecke Mikrofon →
-   ElevenLabs → Kern → Datenbank ist **nicht durchgemessen**. Erste Handlung
-   einer neuen Session: einen Satz sprechen und `sqlite3 data/kg.db "select
-   id,status,length(transcript) from person;"` ansehen.
+1. **Die Zustandsdivergenz oben** ist nicht behoben, nur erkannt und von Hand
+   umgangen. Sie ist der wichtigste offene Punkt.
 
 2. **Der fremde STT-Dienst wiederholt nichts.** Im Quelltext steht wörtlich
    „Kein Retry, kein Anhalten: der Chunk ist verloren". Jeder Satz während
@@ -143,11 +179,18 @@ noch Bedienleiste. `theme=f` ist das Layout vom 2026-09-01.
    fremden STT-Dienstes (`operator.html:601`). Gemeldet, nicht behoben —
    fremdes Repo.
 
-7. **Testsuite:** Ein Lauf mit `-x -p no:randomly` hing über 15 Minuten ohne
-   Ausgabe; Verdacht auf `tests/test_operator_ui.py` (Playwright). Läuft gerade
-   getrennt zur Klärung. Die neuen und geänderten Tests sind grün:
-   `test_stt_health.py` (18), `test_server_stt.py` (5),
-   `test_spiegel_start_mac.py` + `test_abholer_start_mac.py` (19).
+7. **Testsuite ist grün.** 1429 bestanden, 3 übersprungen, dazu 51
+   Browsertests in eigener Datei. Der eine rote Test war ein echter Fund und
+   ist behoben: Mein Probelauf setzte den Infomaniak-Schlüssel in die
+   `curl`-Befehlszeile, wo ihn jeder Nutzer per `ps` lesen kann — jetzt geht er
+   über `curl --config -` durch eine Pipe (Commit `d77cb7c`, mit Gegenprobe
+   nachgemessen).
+
+   🔴 **Der vermutete Playwright-Hänger war keiner.** Die Suite ist schlicht
+   lang: `tests/test_prerender.py` rendert 1920×1080-PNGs und braucht allein
+   ~7 Minuten; `pytest -q` puffert beim Umleiten in eine Datei, was wie ein
+   Hänger aussieht. Für sichtbaren Fortschritt:
+   `script -q /dev/null uv run pytest -v …`. Ein voller Lauf dauert ~17 min.
 
 ## Arbeitsregeln, die hier gelten
 
