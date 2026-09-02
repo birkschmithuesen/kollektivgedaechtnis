@@ -572,11 +572,21 @@ function zeigeSttAufsicht(stand) {
 
   const befund = (stand && stand.infomaniak) || {};
   const gesund = befund.gesund;
-  lampe.classList.toggle('ok', gesund === true);
-  lampe.classList.toggle('unbekannt', gesund === null || gesund === undefined);
-  lampe.textContent = gesund === true ? 'Whisper ok' : gesund === false ? 'Whisper ✗' : 'Whisper ?';
-
   const anbieter = stand && stand.anbieter;
+
+  // 🔴 Ein rotes Lämpchen über einer tadellos laufenden Erkennung ist ein
+  // Fehlalarm (2026-09-02: nach dem Wechsel auf ElevenLabs stand „Whisper ✗"
+  // da, während alles verstanden wurde). Solange ein ANDERER Anbieter
+  // erkennt, ist Whispers Zustand keine Störung, sondern die Auskunft, ob der
+  // Rückweg nach Genf schon offen ist. Gedämpft statt rot — rote Lampen, die
+  // nichts bedeuten, entwerten die, die etwas bedeuten.
+  const nebensache = anbieter && anbieter !== 'infomaniak';
+  lampe.classList.toggle('ok', gesund === true);
+  lampe.classList.toggle('unbekannt', gesund !== true && (nebensache || gesund == null));
+  lampe.textContent = gesund === true
+    ? (nebensache ? 'Whisper wieder da' : 'Whisper ok')
+    : gesund === false ? 'Whisper ✗' : 'Whisper ?';
+
   // 🔴 Der fremde Anbieter wird BENANNT und hervorgehoben. Ein Wechsel in die
   // USA, den man der Seite nicht ansieht, ist derselbe stille Zustand, den
   // diese ganze Anzeige verhindern soll.
@@ -598,6 +608,11 @@ function zeigeSttAufsicht(stand) {
 
   if (!stand || stand.aufsicht === false) {
     sttMeldung('keine Aufsicht (kein API-Schlüssel)', false);
+  } else if (nebensache) {
+    // Hier ist Whispers Zustand eine Auskunft über den Rückweg, keine Störung.
+    sttMeldung(gesund === true
+      ? 'Infomaniak antwortet wieder — Rückweg offen'
+      : 'Infomaniak noch nicht zurück', false);
   } else if (gesund === false) {
     sttMeldung(befund.meldung || 'antwortet nicht', true);
   } else if (befund.geprueft_vor_s != null) {
