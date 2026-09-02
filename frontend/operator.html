@@ -124,6 +124,28 @@
        Nebenraum stattfindet, ist ohne sie nicht von einem Druck ins Leere zu
        unterscheiden. -->
   <output id="interview-meldung"></output>
+
+  <!-- 🔴 DIE ZWEITE FRAGE ZUR SPRACHERKENNUNG (2026-09-02, real passiert).
+       Das STT-Abzeichen oben beantwortet „steht die Verbindung zu 5051" — die
+       stand bei einem Whisper-Ausfall bei Infomaniak die ganze Zeit, grün.
+       Pegel schlug aus, Gate öffnete, ein Interview lief, und es kam kein
+       einziges Wort an: 26 Äußerungen, 0 Transkripte. Sichtbar war das nur im
+       Log des fremden Dienstes, unter 17.000 Zeilen `GET /levels`.
+
+       Deshalb ein ZWEITER Wert daneben statt einer Umdeutung des ersten:
+       „verstehen sie mich" ist eine andere Frage als „ist der Draht dran".
+
+       Der Wechselknopf ist bewusst kein Automatismus. ElevenLabs steht in den
+       USA; die ganze Kette ist EU-souverän gebaut (Infomaniak in Genf, BFL in
+       der EU). Ein stiller Fallback bei jedem Aussetzer würde Stimmen von
+       Menschen außerhalb der EU verarbeiten, ohne dass jemand entschieden
+       hätte. Wie beim Spiegel-Uploader gilt: gedrückt heißt entschieden. -->
+  <div id="stt-aufsicht" class="aufsicht">
+    <span id="stt-gesund" class="badge">Whisper</span>
+    <span id="stt-anbieter">Anbieter unbekannt</span>
+    <button id="stt-wechsel" type="button" disabled>Anbieter wechseln</button>
+    <output id="stt-meldung"></output>
+  </div>
 </header>
 <pre id="transcript"></pre>
 <ul id="entries"></ul>

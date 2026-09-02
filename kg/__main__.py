@@ -8,6 +8,7 @@ import logging
 import re
 import socket
 import subprocess
+import os
 from pathlib import Path
 
 import uvicorn
@@ -22,6 +23,7 @@ from kg.server import create_app
 from kg.stop_intent import build_stop_intent_llm
 from kg.store import Store
 from kg.stt_client import STTClient
+from kg.stt_health import Aufsicht as SttAufsicht
 from kg.telegram_bot import TelegramSource
 from kg.transcript import TranscriptLog
 
@@ -178,7 +180,27 @@ async def main_async(args) -> None:
 
     # Der Core wird mitgegeben, damit `/api/interview_switch` existiert: der
     # Schalter am Mikrofon des STT-Servers beendet damit ein Interview.
-    app = create_app(store, cfg, bus, core=core)
+    # Die Aufsicht ueber die Spracherkennung. Sie misst im Takt, ob Infomaniaks
+    # Whisper die GANZE Kette schafft, und traegt den Befund ins Bedienpult.
+    #
+    # 🔴 Warum das noetig ist (2026-09-02): Bei einem Ausfall dort laeuft alles
+    # weiter -- Dienst, Pegel, Gate, Interview -- und es kommt kein Wort an.
+    # Das bestehende STT-Abzeichen im Bedienpult sagt nur, dass die Verbindung
+    # zu 5051 steht; die stand die ganze Zeit.
+    #
+    # Ohne Schluessel keine Aufsicht: eine, die jede Minute „kein API-
+    # Schluessel" meldet, waere eine dauerhaft rote Lampe, die nichts bedeutet
+    # -- und rote Lampen, die immer leuchten, sieht man nach einer Stunde nicht
+    # mehr. Das Bedienpult zeigt dann ehrlich „keine Aufsicht".
+    stt_aufsicht = None
+    if not args.no_stt and os.environ.get("HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"):
+        stt_aufsicht = SttAufsicht(
+            api_key=os.environ["HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY"],
+            repo=Path(__file__).resolve().parent.parent,
+            takt_s=cfg.stt_probe_takt_s,
+        )
+
+    app = create_app(store, cfg, bus, core=core, stt_aufsicht=stt_aufsicht)
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.server_host, port=cfg.server_port, log_level="info")
     )
@@ -188,6 +210,8 @@ async def main_async(args) -> None:
         asyncio.create_task(core.run_worker()),
         asyncio.create_task(core.run_tick_loop()),
     ]
+    if stt_aufsicht is not None:
+        tasks.append(asyncio.create_task(stt_aufsicht.lauf()))
 
     if not args.no_stt:
         stt = STTClient(

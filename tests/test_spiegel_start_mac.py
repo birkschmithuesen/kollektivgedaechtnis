@@ -180,30 +180,52 @@ def test_im_skript_steht_kein_token():
 # --- Was er NICHT tun darf ---------------------------------------------------
 
 
-def test_der_uploader_haengt_nicht_am_sammelstart():
+def test_der_uploader_laeuft_nicht_ohne_schalter():
     """🔴 Birks Entscheidung, nicht unsere.
 
     `start-station.sh` startet die Station im Haus. Der Uploader schiebt
-    Interviewdaten ins ÖFFENTLICHE Netz. Wer beides in einen Knopf legt,
-    nimmt Birk die Entscheidung ab, ob heute veröffentlicht wird.
+    Interviewdaten ins ÖFFENTLICHE Netz. Wer beides in einen Knopf legt, nimmt
+    Birk die Entscheidung ab, ob heute veröffentlicht wird.
 
-    Ein HINWEIS darauf, dass es ihn gibt, ist dagegen erwünscht — sonst findet
-    ihn am Ausstellungstag niemand. Verboten ist der AUFRUF, nicht die
-    Erwähnung.
+    Seit 2026-09-02 kann man ihn mit `--mit-spiegel` MITstarten. Das ist kein
+    Bruch dieser Regel, sondern ihre Erfüllung mit weniger Fenstern: Ein
+    getippter Schalter IST die Entscheidung — ausdrücklicher sogar als ein
+    zweites Fenster, das man aufmacht und dann vergisst. Was geschützt werden
+    muss, ist nicht das Fenster, sondern dass es NIE VON SELBST passiert.
+
+    🔴 Geprüft wird durch AUSFÜHREN, nicht durch Lesen des Quelltextes. Die
+    Vorgängerfassung suchte Textmuster wie `"./scripts/spiegel-start-mac.sh &"`.
+    Als der Aufruf am 2026-09-02 seine Form änderte (er läuft jetzt über eine
+    Funktion `starte_draussen`), fand sie ihn nicht mehr und wurde still grün,
+    ohne noch irgendetwas zu belegen — die gefährlichere Hälfte des Problems,
+    das dieser Test verhindern soll.
     """
-    sammel = Path("scripts/start-station.sh").read_text(encoding="utf-8")
-    aufrufe = (
-        "./scripts/spiegel-start-mac.sh &",
-        "bash scripts/spiegel-start-mac.sh",
-        "sh scripts/spiegel-start-mac.sh",
-        "-m mirror.uploader",
+    ohne = _trocken()
+    assert "kein Uploader" in ohne, ohne
+    assert "Uploader (spiegel-start-mac.sh)" not in ohne, ohne
+
+
+def test_mit_schalter_laeuft_er_mit():
+    """Der Gegenbeweis: Ohne ihn wäre der Test oben auch dann grün, wenn der
+    Schalter gar nichts täte."""
+    mit = _trocken("--mit-spiegel")
+    assert "Uploader (spiegel-start-mac.sh)" in mit, mit
+    # Der Abholer hängt nicht mit dran: zwei Schalter, zwei Entscheidungen.
+    assert "kein Abholer" in mit, mit
+
+
+def _trocken(*schalter) -> str:
+    """`--trocken` sagt, was gestartet WÜRDE, und startet nichts.
+
+    Diesen Modus gibt es genau für diesen Test — und für den Menschen am
+    Gerät, der vor dem Drücken wissen will, was gleich nach draußen geht.
+    """
+    fertig = subprocess.run(
+        ["./scripts/start-station.sh", "--trocken", *schalter],
+        capture_output=True, text=True, cwd=Path("."), timeout=30,
     )
-    for nummer, zeile in enumerate(sammel.splitlines(), start=1):
-        blank = zeile.strip()
-        if blank.startswith("#"):
-            continue
-        for aufruf in aufrufe:
-            assert aufruf not in blank, f"Sammelstart startet den Uploader (Zeile {nummer}): {blank}"
+    assert fertig.returncode == 0, fertig.stderr
+    return fertig.stdout
 
 
 def test_er_veroeffentlicht_beim_pruefen_nichts(tmp_path):

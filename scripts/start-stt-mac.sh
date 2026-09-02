@@ -28,6 +28,17 @@ if [ ! -f "$FB/.env" ]; then
   exit 1
 fi
 
+# --- Schluessel aus der .env des Projekts -----------------------------------
+# Vor dem `cd`, denn danach ist das Arbeitsverzeichnis das FREMDE Repo.
+# `--api-key-env NAME` liest den Schluessel aus der UMGEBUNG, nicht aus einer
+# Datei -- ohne dieses Laden findet der Dienst ihn nur, wenn ihn jemand vorher
+# von Hand exportiert hat (beim Sammelstart tut das `start-station.sh`, beim
+# Einzelstart aus einem frischen Fenster niemand).
+if [ -f "$KG_REPO/.env" ]; then
+  # shellcheck disable=SC1091
+  set -a; . "$KG_REPO/.env"; set +a
+fi
+
 cd "$FB" || exit 1
 
 # --- Nur die Geraete zeigen --------------------------------------------------
@@ -103,11 +114,121 @@ if [ "${KG_MIC_GATE:-1}" = "0" ]; then
   echo "HINWEIS: Mikrofonschalter AUS (KG_MIC_GATE=0) -- es wird durchgehend erkannt."
 fi
 
+# --- Welcher Anbieter erkennt? ----------------------------------------------
+# 🔴 EU-SOUVERAENITAET IST DIE VOREINSTELLUNG, NICHT DIE AUSNAHME.
+# Die ganze Kette laeuft bewusst in Europa: Infomaniak in Genf fuer Sprache,
+# Analyse und Embeddings, BFL in der EU fuer Bilder. Der Zweig im fremden Repo
+# heisst `eu-souveraen/infomaniak-whisper`. Das ist keine Vorliebe, das ist die
+# Zusage an Menschen, die hier ihre Stimme hergeben.
+#
+# ElevenLabs sitzt in den USA. Deshalb ist der Fallback ein SCHALTER, kein
+# Automatismus:
+#   * Ein automatischer Wechsel wuerde bei jedem Aussetzer stillschweigend
+#     Stimmen ausserhalb der EU verarbeiten -- niemand haette entschieden.
+#   * Das Backend wird ausserdem beim START gewaehlt und laesst sich waehrend
+#     des Laufs gar nicht tauschen; ein "Fallback im Fehlerfall" gaebe es
+#     technisch nur als Neustart.
+# Also dieselbe Regel wie beim Spiegel-Uploader: getippt = entschieden.
+#
+# 2026-09-02, gemessen: Infomaniaks Whisper (`/1/ai/…/audio/transcriptions`)
+# antwortete ueber zehn Minuten mit 502/503 und einer HTML-Seite "service
+# unavailable"; 26 erkannte Aeusserungen, 0 Transkripte. LLM und Embeddings
+# desselben Anbieters (`/2/ai/…`) liefen dabei tadellos -- der Ausfall betraf
+# nur das Whisper-Produkt. Genau dafuer gibt es diesen Schalter.
+#
+#     KG_STT=elevenlabs ./scripts/start-stt-mac.sh
+ANBIETER="${KG_STT:-infomaniak}"
+
+case "$ANBIETER" in
+  infomaniak)
+    BACKEND=(infomaniak-whisper --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY)
+    echo "  Anbieter:  Infomaniak Whisper (Genf) — in der EU"
+    ;;
+  elevenlabs)
+    if [ -z "${ELEVENLABS_API_KEY:-}" ]; then
+      echo "FEHLER: ELEVENLABS_API_KEY fehlt." >&2
+      echo "        Schluessel holen: https://elevenlabs.io/app/settings/api-keys" >&2
+      echo "        Dann in $KG_REPO/.env eintragen:" >&2
+      echo "          ELEVENLABS_API_KEY=sk_…" >&2
+      exit 1
+    fi
+    # `scribe_v2_realtime` streamt und schneidet die Aeusserungen serverseitig
+    # selbst zu -- der VAD aus `vad.py` wird dabei nicht gebraucht. Der
+    # Mikrofonschalter dagegen schon: er sitzt in `_channel_parent`
+    # (args.py:90) und gilt fuer beide Backends gleich.
+    BACKEND=(elevenlabs-scribe --api-key-env ELEVENLABS_API_KEY)
+    echo "  Anbieter:  🔴 ElevenLabs Scribe — USA, NICHT in der EU."
+    echo "             Stimmen der Besucher verlassen damit den EU-Raum."
+    echo "             Zurueck: dieses Fenster beenden und ohne KG_STT starten."
+    ;;
+  *)
+    echo "FEHLER: KG_STT='$ANBIETER' kenne ich nicht." >&2
+    echo "        Moeglich: infomaniak (Vorgabe) oder elevenlabs" >&2
+    exit 1
+    ;;
+esac
+echo ""
+
+# --- Vorabprobe: antwortet der Anbieter ueberhaupt? --------------------------
+# 🔴 WARUM (2026-09-02, real passiert): Bei einem Whisper-Ausfall startet der
+# Dienst voellig normal. `/status` sagt "running", der Sammelstart setzt ein
+# gruenes Haekchen, der Pegel schlaegt aus, das Gate oeffnet, ein Interview
+# beginnt -- und kein einziges Wort kommt an. Der Fehler steht nur im Log, und
+# zwar unter 17.000 Zeilen `GET /levels`. Es hat eine Viertelstunde gekostet,
+# das zu finden.
+#
+# Geprueft wird die GANZE Kette, nicht nur das Absenden: der Endpunkt gibt
+# zuerst eine `batch_id` zurueck und das Ergebnis kommt erst beim Abholen.
+# Waehrend des Ausfalls lieferte das blosse Absenden zeitweise 200 -- eine
+# Probe, die dort aufhoert, haette "alles gut" gemeldet.
+#
+# Sie WARNT nur und blockiert nie: ein Anbieter, der gerade flackert, darf den
+# Start nicht verhindern. Abschalten: KG_STT_PROBE=0
+if [ "$ANBIETER" = "infomaniak" ] && [ "${KG_STT_PROBE:-1}" != "0" ]; then
+  probe_wav=$(mktemp -t kgprobe).wav
+  "$PY" - "$probe_wav" <<'PYCODE' 2>/dev/null
+import sys, wave, struct, math
+w = wave.open(sys.argv[1], "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+w.writeframes(b"".join(struct.pack("<h", int(6000 * math.sin(2*math.pi*300*i/16000))) for i in range(4800)))
+w.close()
+PYCODE
+  urteil=$(
+    antwort=$(curl -s --max-time 20 -H "Authorization: Bearer $HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY" \
+              -F "file=@$probe_wav;type=audio/wav" -F "model=whisper" -F "language=de" \
+              "https://api.infomaniak.com/1/ai/110416/openai/audio/transcriptions" 2>/dev/null)
+    batch=$(printf '%s' "$antwort" | "$PY" -c "import json,sys; print(json.load(sys.stdin).get('batch_id',''))" 2>/dev/null)
+    if [ -z "$batch" ]; then echo "kein-batch"; else
+      for _ in 1 2 3 4 5 6; do
+        st=$(curl -s --max-time 15 -H "Authorization: Bearer $HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY" \
+             "https://api.infomaniak.com/1/ai/110416/results/$batch" 2>/dev/null \
+             | "$PY" -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(str(d.get('status','')).lower())" 2>/dev/null)
+        # Kein `case`: bash 3.2 (macOS) beendet die $( )-Ersetzung an der
+        # Klammer des case-Musters -- "syntax error near unexpected token ;;".
+        if [ "$st" = "ok" ] || [ "$st" = "done" ] || [ "$st" = "success" ] || [ "$st" = "finished" ]; then
+          echo "gut"; break
+        fi
+        sleep 2
+      done
+    fi
+  )
+  rm -f "$probe_wav"
+  if [ "$urteil" != "gut" ]; then
+    echo "🔴 Infomaniak Whisper antwortet NICHT ($urteil)." >&2
+    echo "   Der Dienst startet trotzdem — Pegel, Gate und Interview laufen," >&2
+    echo "   aber es kommt KEIN Text an. Das sieht von aussen wie 'alles gut'." >&2
+    echo "" >&2
+    echo "   Ausweichen (🔴 USA, verlaesst den EU-Raum):" >&2
+    echo "     KG_STT=elevenlabs ./scripts/start-stt-mac.sh" >&2
+    echo "   Nachsehen, ob er zurueck ist:" >&2
+    echo "     ./scripts/start-stt-mac.sh --probe" >&2
+    echo "" >&2
+  fi
+fi
+
 set -o pipefail
 "$PY" -m fundusapps.stt_server \
     --language de \
-    infomaniak-whisper \
-    --api-key-env HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY \
+    "${BACKEND[@]}" \
     "${GATE[@]}" \
     "$@" 2>&1 | tee -a "$LOG"
 CODE=${PIPESTATUS[0]}

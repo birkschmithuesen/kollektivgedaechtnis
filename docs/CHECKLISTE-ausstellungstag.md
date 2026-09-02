@@ -1,4 +1,66 @@
-# Checkliste Ausstellungstag — Stand 2026-09-01, Abend
+# Checkliste Ausstellungstag — Stand 2026-09-02, Morgen
+
+---
+
+## 🔴 2026-09-02, 08:27 — ES KOMMT KEIN TEXT AN? Zuerst hier nachsehen.
+
+**Das Bild:** Alles sieht gut aus. Das STT-Abzeichen im Bedienpult ist grün,
+der Pegel schlägt aus, das Mikrofongate öffnet, ein Interview startet von
+selbst — und im Transkript steht nichts. Kein Fehler, keine rote Lampe, nichts.
+
+**Der Grund an diesem Morgen:** Infomaniaks Whisper war weg. Der ganze
+`/1/ai/…`-Baum antwortete mit 502/503 und einer HTML-Seite „service
+unavailable". Zwischen 08:27 und 08:40: **26 erkannte Äußerungen, 0
+Transkripte.** Das LLM und die Embeddings desselben Anbieters (`/2/ai/…`)
+liefen dabei tadellos — es war allein das Audio-Produkt.
+
+**Wo du es jetzt siehst:** Im Bedienpult, zweite Zeile unter den
+Interviewknöpfen.
+
+| Anzeige | Bedeutung |
+|---|---|
+| `Whisper ok` (grün) | Der Anbieter hat gerade die ganze Kette geschafft |
+| `Whisper ✗` (rot) | Er antwortet nicht — daneben steht, woran es lag |
+| `Whisper ?` (grau) | Noch nicht geprüft. **Keine Entwarnung.** |
+
+Daneben steht, wer gerade erkennt, und ein Knopf, um zu wechseln.
+
+**Warum das STT-Abzeichen daneben nichts hilft:** Es beantwortet eine andere
+Frage — „steht die Verbindung zum Dienst auf 5051". Die stand die ganze Zeit.
+
+### Was du tun kannst, in dieser Reihenfolge
+
+1. **Warten.** Der Ausfall war ein Anbieterproblem, kein Fehler an der
+   Station. Die Anzeige wird von selbst grün. Prüfen von Hand:
+   `./scripts/start-stt-mac.sh --geraete` sagt nichts darüber — nimm das
+   Bedienpult oder starte neu, die Vorabprobe meldet sich.
+
+2. **Auf ElevenLabs wechseln.** Knopf im Bedienpult, oder von Hand:
+   `KG_STT=elevenlabs ./scripts/start-stt-mac.sh`
+   🔴 **ElevenLabs steht in den USA.** Die Stimmen der Besucher verlassen
+   damit den EU-Raum. Die ganze Kette ist bewusst EU-souverän gebaut
+   (Infomaniak in Genf, BFL in der EU) — das ist die Zusage an Menschen, die
+   hier ihre Stimme hergeben. Deshalb kein automatischer Fallback: gedrückt
+   heißt entschieden.
+   **Braucht `ELEVENLABS_API_KEY` in der `.env`** (Stand 2026-09-02: nicht
+   vorhanden). Schlüssel: <https://elevenlabs.io/app/settings/api-keys>
+
+3. **Lokales Whisper.** Der fremde Dienst kann `whisper` und
+   `whisper-streaming` (faster-whisper) — nichts verlässt dann den Rechner,
+   kein Schlüssel nötig, das wäre souveräner als Infomaniak. Aber:
+   `faster_whisper` ist im venv des Dienstes **nicht installiert**, und das
+   Modell `large-v3-turbo` sind rund 1,6 GB. Auf CPU statt CUDA
+   (`--device cpu --compute_type int8`) ist die Geschwindigkeit an diesem
+   Gerät ungemessen. **Kein Weg für fünf Minuten vor der Öffnung**, aber der
+   richtige, wenn das öfter passiert.
+
+### Was während eines Ausfalls verloren geht
+
+Jeder gesprochene Satz. Der fremde STT-Dienst versucht es **nicht noch
+einmal** — im Quelltext steht wörtlich „Kein Retry, kein Anhalten: der Chunk
+ist verloren, der Server läuft weiter". Anders als beim Kern, der seit
+2026-09-01 einen Warteplan für Anbieterausfälle hat (`kg/llm.py`). Die
+STT-Seite liegt im fremden Repo und wird laut Projektregel nicht geforkt.
 
 ---
 

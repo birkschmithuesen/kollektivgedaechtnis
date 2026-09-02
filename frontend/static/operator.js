@@ -536,3 +536,120 @@ events.onmessage = (message) => {
   else if (payload.type === 'transcript') return showTranscript(payload.text);
   render(graph, state);
 };
+
+// --- Aufsicht über die Spracherkennung ---------------------------------------
+// 🔴 Zwei getrennte Fragen, zwei getrennte Anzeigen (2026-09-02):
+//   „STT" oben  = steht die Verbindung zum Dienst auf 5051?
+//   „Whisper"   = kommt beim Anbieter tatsächlich Text heraus?
+// Beim Ausfall an diesem Tag war das erste grün und das zweite tot. Wer beides
+// in ein Abzeichen legt, baut genau die Falle nach, die eine Viertelstunde
+// gekostet hat.
+//
+// Eigener Abrufstrom statt SSE: Der Befund ändert sich im Minutentakt, nicht
+// im Sekundentakt, und er hängt an einem fremden Anbieter — er gehört nicht in
+// den Zustand, den der Kern über seine eigene Welt schickt.
+const STT_TAKT_MS = 15000;
+let sttStand = null;
+let sttWechselLaeuft = false;
+
+function sttMeldung(text, fehler) {
+  const feld = document.getElementById('stt-meldung');
+  if (!feld) return;
+  feld.textContent = text;
+  feld.classList.toggle('fehler', Boolean(fehler));
+}
+
+/** Malt den Befund. Drei Lagen, absichtlich drei Farben.
+ *
+ * `gesund === null` heißt „noch nicht geprüft" und bekommt Grau. Grün wäre
+ * eine Behauptung, Rot ein Fehlalarm beim Aufschlagen der Seite — dieselbe
+ * Regel wie beim „Zustand unbekannt" der Interviewknöpfe. */
+function zeigeSttAufsicht(stand) {
+  const lampe = document.getElementById('stt-gesund');
+  const anbieterFeld = document.getElementById('stt-anbieter');
+  const knopf = document.getElementById('stt-wechsel');
+  if (!lampe || !anbieterFeld || !knopf) return;
+
+  const befund = (stand && stand.infomaniak) || {};
+  const gesund = befund.gesund;
+  lampe.classList.toggle('ok', gesund === true);
+  lampe.classList.toggle('unbekannt', gesund === null || gesund === undefined);
+  lampe.textContent = gesund === true ? 'Whisper ok' : gesund === false ? 'Whisper ✗' : 'Whisper ?';
+
+  const anbieter = stand && stand.anbieter;
+  // 🔴 Der fremde Anbieter wird BENANNT und hervorgehoben. Ein Wechsel in die
+  // USA, den man der Seite nicht ansieht, ist derselbe stille Zustand, den
+  // diese ganze Anzeige verhindern soll.
+  anbieterFeld.textContent = anbieter === 'elevenlabs'
+    ? 'läuft über ElevenLabs (USA)'
+    : anbieter === 'infomaniak'
+      ? 'läuft über Infomaniak (Genf)'
+      : 'Anbieter unbekannt';
+  anbieterFeld.classList.toggle('fremd', anbieter === 'elevenlabs');
+
+  const ziel = anbieter === 'elevenlabs' ? 'infomaniak' : 'elevenlabs';
+  knopf.textContent = ziel === 'elevenlabs'
+    ? 'auf ElevenLabs wechseln (USA)'
+    : 'zurück auf Infomaniak';
+  knopf.dataset.ziel = ziel;
+  // Gesperrt, solange niemand weiß, was läuft: Ein Wechsel „weg von unbekannt"
+  // wäre ein Neustart auf Verdacht, mitten in einem laufenden Interview.
+  knopf.disabled = sttWechselLaeuft || !anbieter;
+
+  if (!stand || stand.aufsicht === false) {
+    sttMeldung('keine Aufsicht (kein API-Schlüssel)', false);
+  } else if (gesund === false) {
+    sttMeldung(befund.meldung || 'antwortet nicht', true);
+  } else if (befund.geprueft_vor_s != null) {
+    sttMeldung(`geprüft vor ${Math.round(befund.geprueft_vor_s)} s`, false);
+  } else {
+    sttMeldung('', false);
+  }
+}
+
+function holeSttStand() {
+  return fetch('/api/stt')
+    .then((antwort) => (antwort.ok ? antwort.json() : null))
+    .then((stand) => {
+      sttStand = stand;
+      zeigeSttAufsicht(stand);
+    })
+    .catch((fehler) => {
+      // Der Kern selbst ist weg. Das sagt das STT-Abzeichen oben schon; hier
+      // nur nicht so tun, als sei der letzte Befund noch gültig.
+      console.warn('/api/stt nicht erreichbar', fehler);
+      zeigeSttAufsicht(null);
+    });
+}
+
+const sttWechselKnopf = document.getElementById('stt-wechsel');
+if (sttWechselKnopf) {
+  sttWechselKnopf.addEventListener('click', () => {
+    const ziel = sttWechselKnopf.dataset.ziel;
+    if (!ziel) return;
+    // 🔴 Rückfrage nur beim Weg NACH DRAUSSEN. Der Weg zurück nach Genf ist
+    // die Rückkehr zur Vorgabe und braucht keine Hürde.
+    if (ziel === 'elevenlabs'
+        && !window.confirm('Auf ElevenLabs (USA) wechseln?\n\n'
+          + 'Die Stimmen der Besucher verlassen damit den EU-Raum.\n'
+          + 'Die Spracherkennung startet dabei neu — etwa 10 Sekunden ohne Erkennung.')) {
+      return;
+    }
+    sttWechselLaeuft = true;
+    zeigeSttAufsicht(sttStand);
+    sttMeldung('starte neu …', false);
+    post('/api/stt/anbieter', { anbieter: ziel }).then((ergebnis) => {
+      sttWechselLaeuft = false;
+      if (ergebnis && ergebnis.ok === false) {
+        sttMeldung(`Wechsel fehlgeschlagen: ${ergebnis.fehler || ''}`, true);
+      }
+      // Nicht sofort nachfragen: Der neue Dienst braucht ein paar Sekunden,
+      // bis er den Port hält. Eine Antwort davor hiesse „Anbieter unbekannt"
+      // und sähe aus wie ein gescheiterter Wechsel.
+      window.setTimeout(holeSttStand, 6000);
+    });
+  });
+}
+
+holeSttStand();
+window.setInterval(holeSttStand, STT_TAKT_MS);

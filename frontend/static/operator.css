@@ -90,3 +90,19 @@ button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
   color: #ff9b9b;
   font-weight: 600;
 }
+
+/* --- Aufsicht über die Spracherkennung -------------------------------------
+   Eigene Zeile, nicht zwischen die Regler: Es ist keine Einstellung, sondern
+   eine Auskunft mit genau einer Handlung daran. Wer im Halbdunkel vor dem
+   Gerät steht, soll die rote Lampe finden, ohne zu lesen.
+
+   `.badge` ohne `.ok` ist rot (Zeile 4) — und das ist hier falsch für den
+   dritten Fall „noch nicht geprüft". `.unbekannt` gibt ihm ein eigenes Grau:
+   „ich weiß es nicht" ist eine andere Aussage als „es geht nicht", und wer
+   beides gleich malt, macht die rote Lampe wertlos. */
+.aufsicht { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.badge.unbekannt { background: #4a4a4a; }
+#stt-anbieter { opacity: 0.85; }
+#stt-anbieter.fremd { color: #ffb347; font-weight: bold; }
+#stt-meldung { opacity: 0.7; font-size: 0.9em; }
+#stt-meldung.fehler { color: #ff8a8a; opacity: 1; }

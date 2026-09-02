@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from kg import stt_health
 from kg.export import build_graph, write_graph_json
 from kg.photos import make_portrait
 
@@ -28,6 +29,12 @@ mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
+#: Die Wurzel des Repos -- `stt_health.wechsle` startet von hier aus
+#: `scripts/start-stt-mac.sh`. Aus dem Modulpfad abgeleitet und NICHT
+#: aus dem Arbeitsverzeichnis: der Dienst wird auch aus anderen
+#: Verzeichnissen gestartet, und ein falscher Pfad hiesse, dass der
+#: Wechselknopf ins Leere greift.
+REPO = Path(__file__).resolve().parent.parent
 
 # Obergrenze fuer ein Foto aus der App (`/api/photo`). 12 MB fasst jedes Bild,
 # das die App erzeugt (2048px lange Kante, JPEG Q85, typisch deutlich unter
@@ -336,6 +343,13 @@ class PlenumSetting(BaseModel):
     value: float | str
 
 
+class SttAnbieter(BaseModel):
+    # Freitext waere hier gefaehrlich: der Wert entscheidet, welcher Prozess
+    # gestartet wird. Geprueft wird in der Route gegen `stt_health.ANBIETER`,
+    # damit die Liste genau einmal im Code steht.
+    anbieter: str = Field(max_length=40)
+
+
 class InterviewSwitch(BaseModel):
     # Der Schalter am Mikrofon, gemeldet vom STT-Server (fundusbot,
     # `--mic-gate`). `source` ist bewusst frei und nur zur Nachvollziehbarkeit
@@ -403,7 +417,7 @@ def broadcast_state(store, bus) -> None:
     bus.publish({"type": "state", "state": current_state(store)})
 
 
-def create_app(store, cfg, bus, core=None) -> FastAPI:
+def create_app(store, cfg, bus, core=None, stt_aufsicht=None) -> FastAPI:
     app = FastAPI(title="Kollektivgedächtnis")
     app.mount("/static", StaticFiles(directory=FRONTEND / "static"), name="static")
     app.mount("/media/portraits", StaticFiles(directory=cfg.portrait_dir), name="portraits")
@@ -467,6 +481,51 @@ def create_app(store, cfg, bus, core=None) -> FastAPI:
     @app.get("/api/state")
     def api_state() -> dict:
         return current_state(store)
+
+    # --- Die Spracherkennung: läuft sie wirklich, und mit wem? ---------------
+    # 🔴 WARUM DAS INS BEDIENPULT GEHÖRT (2026-09-02, real passiert):
+    # Bei einem Whisper-Ausfall bei Infomaniak sah von außen alles gut aus --
+    # STT-Abzeichen grün, Pegel schlägt aus, Gate öffnet, Interview läuft --
+    # und es kam kein einziges Wort an. 26 Äußerungen, 0 Transkripte. Sichtbar
+    # war das nur im Log des fremden Dienstes, unter 17.000 Zeilen
+    # `GET /levels`. Am Ausstellungstag steht davor niemand.
+    #
+    # Das bestehende STT-Abzeichen beantwortet eine ANDERE Frage: „steht die
+    # Verbindung zum Dienst auf 5051". Die stand die ganze Zeit. Deshalb ein
+    # zweiter Wert daneben statt einer Umdeutung des ersten.
+    @app.get("/api/stt")
+    def api_stt() -> dict:
+        if stt_aufsicht is None:
+            # Keine Aufsicht heißt keine Auskunft -- nicht „alles gut".
+            return {
+                "anbieter": None,
+                "anbieter_moeglich": list(stt_health.ANBIETER),
+                "infomaniak": stt_health.UNGEPRUEFT.als_dict(),
+                "aufsicht": False,
+            }
+        return {**stt_aufsicht.als_dict(), "aufsicht": True}
+
+    @app.post("/api/stt/anbieter")
+    def api_stt_anbieter(payload: SttAnbieter) -> dict:
+        """Auf den anderen Anbieter wechseln -- das ist ein NEUSTART.
+
+        Das Backend ist im fremden Dienst ein Unterbefehl, kein Schalter; im
+        Lauf lässt es sich nicht tauschen. Die Seite sagt das auch, damit
+        niemand einen stillen Wechsel erwartet und dann rätselt, warum drei
+        Sekunden lang nichts geht.
+
+        🔴 ElevenLabs steht in den USA. Die Kette ist bewusst EU-souverän
+        gebaut; dieser Knopf ist die Ausnahme, die jemand drückt und
+        verantwortet -- wie der Spiegel-Uploader. Deshalb kein automatischer
+        Fallback bei Ausfall.
+        """
+        if payload.anbieter not in stt_health.ANBIETER:
+            raise HTTPException(status_code=400, detail=f"unbekannter Anbieter: {payload.anbieter}")
+        try:
+            ergebnis = stt_health.wechsle(payload.anbieter, repo=REPO)
+        except Exception as fehler:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=str(fehler)) from fehler
+        return {"ok": True, **ergebnis}
 
     @app.get("/api/plenum/regler")
     def api_plenum_regler() -> dict:

@@ -53,25 +53,38 @@ def test_er_nennt_das_token_niemals_im_klartext():
     assert not re.search(r"KG_MIRROR_TOKEN=[A-Za-z0-9_-]{8,}", text)
 
 
-def test_er_haengt_nicht_im_sammelstart():
+def test_er_laeuft_nicht_ohne_schalter():
     """Er darf beim Spiegel LOESCHEN — das geht nicht nebenbei an.
 
-    Geprueft wird der AUFRUF, nicht die Erwaehnung: `start-station.sh` NENNT
-    ihn absichtlich in einem grauen Hinweis, damit man ihn findet. Ein Test,
-    der schon das Wort verbietet, zwingt dazu, den Hinweis wegzulassen — und
-    dann sucht ihn am Ausstellungstag jemand vergeblich.
+    Anders als beim Uploader ist der Grund nicht der Datenschutz, sondern die
+    BEFUGNIS: Der Abholer braucht das starke Uploader-Token. Seit 2026-09-02
+    kann `--mit-abholer` ihn mitstarten; die Regel bleibt, dass er NIE VON
+    SELBST anlaeuft.
+
+    Geprueft wird durch Ausfuehren (`--trocken`), nicht durch Lesen des
+    Quelltextes: Die Vorgaengerfassung suchte Zeilen mit dem Dateinamen und
+    musste dafuer graue Hinweiszeilen ausnehmen — eine Regel ueber die FORM
+    des Codes, die bei jeder Umformulierung neu justiert werden muss und
+    dazwischen still grün steht.
     """
-    start = (REPO / "scripts" / "start-station.sh").read_text(encoding="utf-8")
-    aufrufe = []
-    for zeile in start.splitlines():
-        ohne_kommentar = zeile.split("#", 1)[0]
-        if "abholer-start-mac.sh" not in ohne_kommentar:
-            continue
-        # Eine Zeile, die ihn nur DRUCKT, ist kein Aufruf.
-        if ohne_kommentar.lstrip().startswith(("grau", "echo", "printf", "rot")):
-            continue
-        aufrufe.append(zeile.strip())
-    assert not aufrufe, f"der Abholer wird im Sammelstart aufgerufen: {aufrufe}"
+    ohne = _trocken()
+    assert "kein Abholer" in ohne, ohne
+    assert "Abholer (abholer-start-mac.sh)" not in ohne, ohne
+
+
+def test_mit_schalter_laeuft_er_mit():
+    mit = _trocken("--mit-abholer")
+    assert "Abholer (abholer-start-mac.sh)" in mit, mit
+    assert "kein Uploader" in mit, mit
+
+
+def _trocken(*schalter) -> str:
+    fertig = subprocess.run(
+        [str(REPO / "scripts" / "start-station.sh"), "--trocken", *schalter],
+        capture_output=True, text=True, cwd=REPO, timeout=30,
+    )
+    assert fertig.returncode == 0, fertig.stderr
+    return fertig.stdout
 
 
 def test_ohne_tokendatei_bricht_er_ab_und_sagt_wie_es_geht(tmp_path):

@@ -45,6 +45,12 @@ DEFAULT_MERGE_STYLE = (
 class Config:
     data_dir: Path
     stt_url: str = "http://127.0.0.1:5051"
+    #: Wie oft die Aufsicht Infomaniaks Whisper durchmisst (Sekunden).
+    #: 0,3 s Ton pro Probe -- bei 60 s Takt sind das 18 s Audio je Stunde.
+    #: Das ist nichts gegen den Preis, eine Ausstellung lang nicht zu merken,
+    #: dass niemand verstanden wird (2026-09-02: 26 Aeusserungen, 0 Transkripte,
+    #: eine Viertelstunde Suche).
+    stt_probe_takt_s: float = 60.0
     telegram_chat_id: int | None = None
     interview_timeout_s: int = 900
     stop_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_STOP_PHRASES))
@@ -201,6 +207,7 @@ class Config:
 
 _FIELD_NAMES = {
     "stt_url",
+    "stt_probe_takt_s",
     "telegram_chat_id",
     "interview_timeout_s",
     "stop_phrases",

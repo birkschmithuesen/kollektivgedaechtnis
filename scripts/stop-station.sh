@@ -40,7 +40,12 @@ echo "Station wird beendet"
 # --- 1. Erst die Startskripte --------------------------------------------
 # Sonst starten ihre Neustartschleifen genau das wieder, was gerade beendet
 # wurde, und der Stopp sieht aus wie ein Flackern.
-for muster in "scripts/start-station.sh" "scripts/start-mac.sh" "scripts/start-stt-mac.sh"; do
+# `spiegel-start-mac.sh` und `abholer-start-mac.sh` stehen mit in der Liste,
+# seit `start-station.sh --mit-spiegel` sie mitstarten kann. Ein Stopp, der
+# einen Uploader ins oeffentliche Netz weiterlaufen laesst, waere schlimmer
+# als gar kein Stopp: er sagt "frei" und meint es nicht.
+for muster in "scripts/start-station.sh" "scripts/start-mac.sh" "scripts/start-stt-mac.sh" \
+              "scripts/spiegel-start-mac.sh" "scripts/abholer-start-mac.sh"; do
   pkill -f "$muster" 2>/dev/null && grau "  Startskript beendet: $muster"
 done
 sleep 1
@@ -76,7 +81,8 @@ sleep 2
 # Ein Kern, dem der Port schon abgenommen wurde, kann weiterlaufen und dabei
 # weiter am Telegram-Bot haengen -- genau der Fall vom 2026-09-01. `pgrep -fi`
 # (klein i) ist hier Pflicht, siehe oben.
-for muster in "\-m kg --config" "\-m kg2 --config" "fundusapps.stt_server"; do
+for muster in "\-m kg --config" "\-m kg2 --config" "fundusapps.stt_server" \
+              "mirror\.uploader" "mirror\.abholer"; do
   pids=$(pgrep -fi "$muster" 2>/dev/null | grep -v "^$$\$")
   for p in $pids; do
     # Die eigene Shell und die Pipeline drumherum nicht mitnehmen.
@@ -91,14 +97,14 @@ offen=""
 for port in "${PORTS[@]}"; do
   lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && offen="$offen $port"
 done
-reste=$(pgrep -fi "\-m kg --config|\-m kg2 --config|fundusapps.stt_server" 2>/dev/null \
+reste=$(pgrep -fi "\-m kg --config|\-m kg2 --config|fundusapps.stt_server|mirror\.uploader|mirror\.abholer" 2>/dev/null \
         | while read -r p; do
             ps -o command= -p "$p" 2>/dev/null | grep -q "shell-snapshots\|stop-station" || echo "$p"
           done)
 
 echo ""
 if [ -z "$offen" ] && [ -z "$reste" ]; then
-  echo "  ✓ 5051, 8800, 8810 frei — keine Reste."
+  echo "  ✓ 5051, 8800, 8810 frei — keine Reste, auch nichts nach draussen."
   echo ""
   exit 0
 fi

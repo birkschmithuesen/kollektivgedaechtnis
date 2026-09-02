@@ -1,4 +1,4 @@
-# Stand vor dem End-to-End-Test — 2026-09-01, ergänzt 2026-09-02 (§2r)
+# Stand 2026-09-02, Morgen — Whisper-Ausfall und Aufsicht
 
 **Das ist das EINE Dokument, mit dem eine neue Session anfängt.** Es sagt, was
 läuft, was ungeprüft ist und was zuerst zu tun wäre. Alles Ältere liegt unter
@@ -1463,6 +1463,120 @@ Kein Agent setzt diese Werte allein — sie sind Setzungen, keine Messergebnisse
   (`docs/HANDOFF-alternativ-foto-cache.md`).
 
 ---
+
+## 4z. Der Whisper-Ausfall am 2026-09-02 und was daraus gebaut wurde
+
+### Was passiert ist
+
+08:27, kurz vor der Öffnung. Birk fragt: „der stt operator zeigt keine
+transcriptionen an. laufen sie, oder ist da ein problem?"
+
+Die Kette war bis zum letzten Schritt in Ordnung. Im Log des fremden Dienstes
+stand zu **jeder** Äußerung ein Paar:
+
+```
+08:30:48  [LATENCY turn=…08HPB… phase=vad_speech_end]   ← der VAD hat gehört
+08:30:48  ERROR - infomaniak transcription failed:       ← 98 ms später: weg
+          Response ended prematurely
+```
+
+Gemessen zwischen 08:27 und 08:40: **26 erkannte Äußerungen, 20 mit Fehler,
+0 mit Text.** Der letzte erfolgreiche Final davor war 01:08.
+
+Eingegrenzt, exakt an den konfigurierten Adressen:
+
+| Endpunkt | Antwort |
+|---|---|
+| `/1/ai/110416/openai/audio/transcriptions` (Whisper) | **502/503**, HTML „service unavailable" |
+| der ganze übrige `/1/ai/…`-Baum | ebenfalls 503 |
+| `/2/…/openai/v1/audio/speech` | 503 |
+| `/2/…/openai/v1/chat/completions` (Kimi-K2.6) | **200**, echte Antwort |
+| `/2/…/openai/v1/embeddings` | **200** |
+| infomaniak.com | 302 — die Firma lebt |
+
+Also: Infomaniaks **Audio**-Teil war weg, der Textteil lief. Kein anderer
+Endpunkt bei diesem Anbieter führte zu Whisper.
+
+### 🔴 Zwei Messfehler von mir, beide korrigiert — und beide lehrreich
+
+**1. Der falsche Pfad.** Mein erster Test des LLM ging gegen `/1/ai/…/chat/
+completions` und lieferte 503. Ich meldete „auch das LLM ist weg". Falsch: das
+LLM liegt unter `/2/`. Es lief die ganze Zeit. Wer den Ausfall diagnostiziert,
+muss die Adressen aus `config.toml` nehmen, nicht die vom Nachbarprodukt.
+
+**2. Die halbe Kette.** Danach maß ich achtmal das **Absenden** und bekam 6×
+200 — „es flappt, es ist nicht tot". Auch falsch. Das Absenden gibt nur eine
+`batch_id` zurück; der Text kommt beim **Abholen**. Der volle Durchlauf
+scheiterte ausnahmslos. Eine Prüfung, die nach dem Absenden aufhört, meldet
+in genau diesem Ausfall „alles gut".
+
+Aus dem zweiten Fehler ist der wichtigste Test der neuen Aufsicht geworden:
+`test_ein_erfolgreiches_absenden_allein_reicht_nicht`.
+
+### Was gebaut wurde
+
+**`kg/stt_health.py`** — die Aufsicht. Misst im Minutentakt die **ganze**
+Kette (0,3 s Sinuston, absenden + abholen), kennt drei Lagen (`True` /
+`False` / `None` = noch nicht geprüft), und kann den Anbieter wechseln.
+16 Tests, vier Mutationen geprüft und alle gefangen.
+
+**`/api/stt` und `/api/stt/anbieter`** im Kern, dazu eine zweite Zeile im
+Bedienpult: Lampe, laufender Anbieter, Wechselknopf. Bewusst **neben** dem
+bestehenden STT-Abzeichen und nicht darin: das beantwortet „steht der Draht
+zu 5051" und war beim Ausfall die ganze Zeit grün.
+
+**`KG_STT=elevenlabs`** in `scripts/start-stt-mac.sh`. Das fremde Repo bringt
+`elevenlabs_scribe_backend.py` bereits mit — es war **kein Fork nötig**, nur
+ein anderer Unterbefehl beim Start. `--mic-gate` liegt in `_channel_parent`
+(`args.py:90`) und gilt für beide Backends.
+
+**Eine Vorabprobe** im Startskript: Wer die Station startet, während der
+Anbieter weg ist, bekommt es auf dem Schirm gesagt statt in Zeile 14.000 des
+Logs. Sie warnt nur und blockiert nie.
+
+### 🔴 Warum der Fallback KEIN Automatismus ist
+
+ElevenLabs sitzt in den USA. Die ganze Kette ist bewusst EU-souverän gebaut —
+Infomaniak in Genf für Sprache, Analyse und Embeddings, BFL in der EU für
+Bilder; der Zweig im fremden Repo heißt `eu-souveraen/infomaniak-whisper`.
+Ein stiller Wechsel bei jedem Aussetzer würde Stimmen von Menschen außerhalb
+der EU verarbeiten, ohne dass jemand entschieden hätte. Dieselbe Regel wie
+beim Spiegel-Uploader: **gedrückt heißt entschieden.**
+
+Technisch kommt dasselbe heraus: Das Backend ist im fremden Dienst ein
+Unterbefehl, kein Schalter; im Lauf lässt es sich gar nicht tauschen. Ein
+„Fallback im Fehlerfall" gäbe es nur als Neustart.
+
+### Offen
+
+* **`ELEVENLABS_API_KEY` fehlt** (weder in `.env`, noch bei fundusbot, noch in
+  der Umgebung). Der Schalter ist gebaut und getestet, aber bis dahin nicht
+  benutzbar.
+* **Lokales Whisper wäre die bessere Antwort**: `faster_whisper` ist im venv
+  des fremden Dienstes nicht installiert, das Modell `large-v3-turbo` sind
+  ~1,6 GB, und die Geschwindigkeit auf CPU statt CUDA ist an diesem Gerät
+  ungemessen. Souveräner als Infomaniak, weil nichts den Rechner verlässt.
+  Nichts für fünf Minuten vor der Öffnung.
+* **Der fremde Dienst wiederholt nichts.** „Kein Retry, kein Anhalten: der
+  Chunk ist verloren" steht so im Quelltext. Jeder Satz während eines
+  Ausfalls ist endgültig weg — anders als beim Kern, der seit 2026-09-01
+  einen Warteplan hat (`kg/llm.py`).
+
+### Nebenher am selben Morgen
+
+* **Datenbank geleert** für den frischen Start. Nichts gelöscht: `data/` und
+  `dream-data/` liegen vollständig unter `~/kg-archiv/vor-neustart-20260902-082432/`
+  (8,1 MB, 37 Dateien), samt `mirror/mirror-uploaded.json` — ohne die hätte
+  der Uploader geglaubt, die alten Bilder lägen schon oben.
+* **Der Spiegel zeigte die Simulationsdaten** (138 Knoten, 8,7 h alt). Kein
+  Zwischenspeicher: der Uploader lief nicht. Seit 08:47 läuft er, die Seite
+  steht auf dem aktuellen Stand.
+* **`--mit-spiegel` / `--mit-abholer` / `--mit-allem` / `--trocken`** in
+  `scripts/start-station.sh`; `stop-station.sh` kennt die beiden jetzt auch,
+  sonst hätte ein „Stopp" einen Uploader ins offene Netz weiterlaufen lassen.
+  Die zwei Tests, die bisher jeden Aufruf verboten, prüfen jetzt durch
+  **Ausführen** (`--trocken`) statt durch Lesen — der Spiegel-Test war durch
+  die Umformulierung still grün geworden, ohne noch etwas zu belegen.
 
 ## 5. Wenn die nächste Session anfängt
 
