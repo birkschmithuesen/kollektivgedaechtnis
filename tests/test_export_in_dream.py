@@ -63,10 +63,15 @@ class _Person:
 
 
 class _Edge:
-    def __init__(self, id, person_id, term_id):
+    def __init__(self, id, person_id, term_id, evidence=None):
         self.id = id
         self.person_id = person_id
         self.term_id = term_id
+        # 🔴 Seit 2026-09-02 traegt eine Kante die Belegstelle aus dem
+        # Interview (kg/models.py::Edge). Die Attrappe muss dem echten Typ
+        # folgen — `kg/export.py` liest das Feld, und ein `getattr(..., None)`
+        # dort wuerde nur verdecken, dass ein Doppel abgedriftet ist.
+        self.evidence = evidence
 
 
 class _Term:

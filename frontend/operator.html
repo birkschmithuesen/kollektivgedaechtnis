@@ -85,21 +85,45 @@
     <input id="camera-speed" type="range" min="0.05" max="1" step="0.05" value="1">
     <output id="camera-speed-value">1/1</output>
   </label>
-  <span id="interview"></span>
-  <!-- Rückfall für den Mikrofonschalter (Birk, 2026-09-01: „Als Backup sollte
+  <!-- Der Interviewschalter: erst der Zustand, dann die beiden Wege.
+
+       Rückfall für den Mikrofonschalter (Birk, 2026-09-01: „Als Backup sollte
        allerdings auch noch ein Button in einem Operator UI sein für
-       Interview-Stop, falls die Interviewperson das vergisst").
+       Interview-Stop, falls die Interviewperson das vergisst"), seit dem
+       2026-09-02 in beide Richtungen („Was mir noch fehlte, ist der
+       Start-Stopp-Button im Operator-Panel, analog zur APK-App").
 
-       Den Schalter bedient eine eingewiesene Interviewperson, nicht der Gast —
-       er ist damit der verlässliche Weg, und dieser Knopf ist ausdrücklich nur
-       das Netz darunter. Deshalb steht er neben der Statusanzeige und nicht
-       bei den Reglern: Wer hier hinsieht, sieht zuerst, DASS ein Interview
-       läuft, und erst dann den Weg, es zu beenden.
+       Den Schalter am Mikrofon bedient eine eingewiesene Interviewperson,
+       nicht der Gast — er bleibt der verlässliche Weg, dieses Paar ist das
+       Netz darunter. Deshalb steht es neben der Statusanzeige und nicht bei
+       den Reglern: Wer hier hinsieht, sieht zuerst, DASS ein Interview läuft,
+       und erst dann den Weg, es zu ändern.
 
-       Er ruft denselben Endpunkt wie der Schalter (`/api/interview_switch`
-       mit `on: false`) — ein zweiter Weg zum selben Ziel, kein zweiter
-       Mechanismus, der eigene Zustände erzeugen könnte. -->
-  <button id="interview-stop" type="button" hidden>Interview beenden</button>
+       Beide rufen denselben Endpunkt wie der Schalter
+       (`/api/interview_switch`) — ein zweiter Weg zum selben Ziel, kein
+       zweiter Mechanismus, der eigene Zustände erzeugen könnte.
+
+       🔴 ZWEI KNÖPFE UND KEIN UMSCHALTER. Die App hat einen
+       (`neuerZustand = !laeuft`), dessen Beschriftung an einem gepollten
+       Zustand hängt. Stand der schief, tat er das Gegenteil: In der Nacht zum
+       2026-09-02, um 01:14:51, schickte ein Druck auf „Start" in Wahrheit
+       „Stopp" — Birks offenes Interview war zu, das vierte Foto lief in ein
+       409. Hier trägt jeder Knopf seinen absoluten Wert fest im Code; ein
+       Druck bei falschem Anzeigestand kann deshalb höchstens wirkungslos
+       sein (`SessionTracker.mic_switch` ist idempotent), nie das Gegenteil.
+
+       Beide starten GESPERRT, samt „Zustand unbekannt" daneben: Zwischen dem
+       Aufschlagen der Seite und der ersten SSE-Meldung weiß diese Seite über
+       das Interview nichts, und „kein Interview" wäre dann keine Auskunft,
+       sondern eine Vermutung — ausgerechnet die, die den Startknopf scharf
+       stellt, während im Raum vielleicht längst jemand spricht. -->
+  <span id="interview">Zustand unbekannt</span>
+  <button id="interview-start" type="button" disabled>Interview starten</button>
+  <button id="interview-stop" type="button" disabled>Interview beenden</button>
+  <!-- Die Rückmeldung, wie die App sie gibt: Ein Druck, dessen Wirkung im
+       Nebenraum stattfindet, ist ohne sie nicht von einem Druck ins Leere zu
+       unterscheiden. -->
+  <output id="interview-meldung"></output>
 </header>
 <pre id="transcript"></pre>
 <ul id="entries"></ul>

@@ -1,4 +1,4 @@
-# Stand vor dem End-to-End-Test — 2026-09-01
+# Stand vor dem End-to-End-Test — 2026-09-01, ergänzt 2026-09-02 (§2r)
 
 **Das ist das EINE Dokument, mit dem eine neue Session anfängt.** Es sagt, was
 läuft, was ungeprüft ist und was zuerst zu tun wäre. Alles Ältere liegt unter
@@ -17,11 +17,12 @@ läuft, was ungeprüft ist und was zuerst zu tun wäre. Alles Ältere liegt unte
 | | |
 |---|---|
 | Repo, Branch | `birkschmithuesen/kollektivgedaechtnis`, `master` |
-| Ausstellungsrechner | `100.94.47.6` (Tailscale), Windows, **als `SF-Tracking` einloggen** |
-| Code auf der Station | `C:\Users\birk\kollektivgedaechtnis` (absolute Pfade eingebacken — bleibt dort) |
-| Startdatei, die wirklich läuft | `C:\Users\SF-Tracking\kg-start\kollektivtraum.bat` |
-| Startknopf | Desktop von `SF-Tracking`: „Kollektivtraum START" |
-| Testsuite | `uv run pytest -q` — **1199 grün**, ~27 min |
+| **Ausstellungsrechner** | **Birks MacBook** (Tailscale `100.95.122.67`, MagicDNS `birk`) — seit 2026-09-01 |
+| Code auf der Station | `~/Projekte/kollektivgedaechtnis` |
+| **Start** | **`./scripts/start-station.sh`** — alle drei Dienste, ein Fenster, keine Browserfenster |
+| **Stopp** | **`./scripts/stop-station.sh`** (oder Strg-C im Startfenster) |
+| Testsuite | `uv run pytest -q` |
+| Windows (Vorgänger) | `100.94.47.6`, `C:\Users\birk\kollektivgedaechtnis`, Start über `kollektivtraum.bat`. Die Regeln dazu gelten weiter, falls zurückgewechselt wird. |
 
 Die Station zieht bei jedem Start selbst von GitHub (`[0/6]`) und erneuert
 dabei auch ihre eigene Startdatei. **Änderungen an der Startdatei gehören ins
@@ -1337,6 +1338,66 @@ einmal ein."
 (`{"pixels": …}`), Einstellung `camera_min_label` bzw. `plenum_camera_min_label`.
 Der alte `camera_zoom`-Eintrag bleibt unbenutzt in der Datenbank liegen — er
 wird **nicht** umgerechnet, das wäre geraten statt gemessen.
+
+---
+
+## 2r. 🔴 Die Nacht auf den Ausstellungstag (2026-09-01 22:00 – 2026-09-02 06:30)
+
+Die Station ist auf dem MacBook zum ersten Mal vollständig hochgefahren. Alles
+hier ist **gemessen**, mit der Zahl daneben.
+
+### Was ohne Eingriff nicht gestartet wäre
+
+| Fund | Beleg |
+|---|---|
+| `config.toml` liess sich gar nicht einlesen | `embedding_model`/`embedding_url` doppelt vergeben, `tomllib` bricht ab. Die Station konnte **nicht starten**. |
+| `config2.toml` fehlte ganz | Angelegt, auf BFL/EU. Stufe 1 stand auf `claude-opus-5` ohne Schlüssel — der Traum wäre komplett tot gewesen. |
+| Weckwort-Modell lief ins Leere | `anthropic` ohne `ANTHROPIC_API_KEY`. Still tot, weil ein Fehler dort nichts beendet. |
+| `cv2` war nicht installiert | Deshalb schnitt **jedes** Portrait mittig. `_gesicht_finden` steigt beim ImportError aus, **ohne Logzeile**. |
+| `dichte-umschalten.py` nicht lauffähig | Feste Windows-Pfade + PowerShell-Portwache. Beides **ohne Absturz** — es meldete plausibel „Stufe echt, keine Datenbank". |
+
+### Zwei Prompts, gemessen umgebaut
+
+**Extraktion**, Aufgabe 2 von 3484 auf 2323 Zeichen. An Birks echtem Transkript,
+8 Läufe: KI-Aspekt 4/8 → **8/8**, Naturverbundenheit 1/8 → **8/8**, Begriffe über
+vier Wörtern 3/12 → **1/12**, leere Extraktionen 0/12.
+
+**Traum**, 19.100 → 11.343 Zeichen, nach Ausgabefeld statt nach Thema geordnet.
+Der Wandsatz hielt in 0 von 4 Läufen seine Form (bis 55 Wörter, einer auf
+Englisch, einer eine Verweigerung); jetzt **5 von 5** (16, 16, 15, 10, 16 Wörter).
+Ursache war die **Feldreihenfolge**: `sentence` stand vor `image_description`,
+der Satz entstand also, bevor es ein Bild gab, und trug die ganze Last.
+
+### Die Belegstelle je Begriff — und was sie sichtbar machte
+
+`ExtractedTerm.evidence` wurde seit jeher erzeugt und **weggeworfen**. Sie liegt
+jetzt an der KANTE (je Person eine eigene) und geht in den Traum-Prompt (nur zu
+den Pflichtbegriffen) und an die Wand (Tipp auf einen Begriff).
+
+🔴 **Sie deckte sofort einen Fehler auf, den vorher niemand sehen konnte:** Der
+Merge-Richter sah nur Etiketten und legte „Lehmhaus" + „Earthship" zu „Tiny
+House Wohnen". Er bekommt jetzt beide Belegstellen. Gemessen, derselbe Fall
+5× gefahren: **1/5 → 0/5**. An den echten Interviews: 5 Begriffe in 2
+Sammelknoten → **9, jeder für sich**.
+
+**Bleibt offen:** Der Richter ist weiter unruhig (1 von 5 Läufen legt anderes
+falsch zusammen) und produziert Tippfehler in Etiketten („Mit Natur bauben und
+wohnen"), die an der Wand stehen. Birk hält Zusammenfassen grundsätzlich für
+erwünscht — die Kategorie ist also keine Störung, ihre Unzuverlässigkeit schon.
+
+### Betrieb, was du wissen musst
+
+- **Infomaniak war zweimal komplett weg** (≈5 und ≈2 Minuten, HTTP 503 auf
+  Analyse, Embeddings *und* Transkription gleichzeitig). Daran hängt alles.
+  Es gibt jetzt Wiederholung mit Wartezeit: Analyse/Embeddings 300 s, Traum
+  120 s, **Weckwort ausdrücklich 0** (6-Sekunden-Budget im heissen Pfad).
+- **Die Reglerwerte überleben ein Dichte-Umschalten nicht** — sie liegen in
+  `kg.db`, und genau die Datei wird ersetzt. Erst umschalten, dann einstellen.
+- **`0.0.0.0` allein macht nichts erreichbar**: die macOS-Firewall filtert nach
+  BINARY. Der Weg nach draussen läuft über `tailscale serve --tcp` und ist
+  damit auf das Tailnet begrenzt (`./scripts/tailscale-freigeben.sh`).
+- **Es gibt keine Ausstellungsdatenbank auf diesem Mac.** `data/` beginnt leer;
+  Birk hat das ausdrücklich so entschieden.
 
 ---
 

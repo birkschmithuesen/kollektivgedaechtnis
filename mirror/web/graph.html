@@ -41,8 +41,21 @@
       <img id="blatt-bild" alt="" hidden>
       <button class="schliessen" id="blatt-zu" aria-label="Schliessen">&times;</button>
     </div>
+    <!-- Der Name steht UEBER dem Zitat und in seinem eigenen Element, nie im
+         Zitattext: die Anfuehrungszeichen zeichnet das CSS, ein Name darin
+         staende zwischen ihnen — als haette die Person ihren eigenen Namen
+         gesagt. Dieselbe Aufteilung wie an der Wand (quote-overlay.js:
+         <figcaption> ueber <blockquote>). -->
+    <p class="name" id="blatt-name" hidden></p>
     <blockquote id="blatt-zitat"></blockquote>
     <p class="kein-zitat" id="blatt-leer" hidden>Von dieser Person ist kein Zitat hinterlegt.</p>
+  <!-- 🔴 Ein Tipp auf einen BEGRIFF (Birk, 2026-09-02: „guck mal, ob man da
+       auch auf die Nodes draufklicken kann, wie man die Zitate sieht").
+       Eine eigene Liste und nicht dasselbe <blockquote>: ein Zitat ist EIN
+       Satz einer Person, eine Begriffserklaerung sind mehrere Stellen
+       mehrerer Menschen. Dieselbe Aufteilung wie an der Wand
+       (frontend/static/quote-overlay.js: `.quote-belege`). -->
+    <ul class="belege" id="blatt-belege" hidden></ul>
   </aside>
 </main>
 
@@ -61,14 +74,57 @@
   const legende = document.getElementById('legende');
   const blatt = document.getElementById('blatt');
   const bild = document.getElementById('blatt-bild');
+  const nameEl = document.getElementById('blatt-name');
   const zitatEl = document.getElementById('blatt-zitat');
   const leerEl = document.getElementById('blatt-leer');
+  const belegeEl = document.getElementById('blatt-belege');
 
   // person_id -> Zitat. Wird bei jedem Push neu gebaut: die Zitate kommen im
   // selben Dokument wie die Knoten und können deshalb nie älter sein als das
   // Netz, das gerade zu sehen ist.
   let zitate = new Map();
   let portraits = new Map();
+  // person_id -> Name. Die meisten haben keinen (niemand hat sich vorgestellt,
+  // oder das Bedienpult hat einen verhoerten geloescht) — dann fehlt der
+  // Eintrag schlicht, und das Blatt zeigt das Zitat allein.
+  let namen = new Map();
+  // term_id -> [{ person_id, evidence }], aus den KANTEN. Nur dort steht, WER
+  // einen Begriff wie gemeint hat; derselbe Begriff kann bei zwei Menschen
+  // zwei Dinge heissen, und genau das soll man sehen koennen.
+  let belege = new Map();
+
+  /** Die Belegstellen eines Begriffs, eine Zeile je Person. */
+  function zeigeBegriff(begriffId) {
+    const eintraege = (belege.get(begriffId) || []).filter((e) => e.evidence);
+    if (!eintraege.length) {
+      // Wie bei einer Person ohne Zitat: lieber nichts als ein Blatt, das
+      // kaputt aussieht. Kanten von vor dem 2026-09-02 haben keine Stelle.
+      blatt.classList.remove('offen');
+      return;
+    }
+    bild.hidden = true;
+    nameEl.hidden = true;
+    zitatEl.hidden = true;
+    leerEl.hidden = true;
+    belegeEl.replaceChildren();
+    for (const eintrag of eintraege) {
+      const zeile = document.createElement('li');
+      const wer = (namen.get(eintrag.person_id) || '').trim();
+      if (wer) {
+        const marke = document.createElement('span');
+        marke.className = 'beleg-name';
+        marke.textContent = wer;
+        zeile.appendChild(marke);
+      }
+      const was = document.createElement('span');
+      was.className = 'beleg-text';
+      was.textContent = eintrag.evidence;
+      zeile.appendChild(was);
+      belegeEl.appendChild(zeile);
+    }
+    belegeEl.hidden = false;
+    blatt.classList.add('offen');
+  }
 
   // Ein Portrait, das noch nicht oben ist (der Uploader schickt den Graphen
   // vor der Datei), darf kein kaputtes Bildsymbol im Blatt hinterlassen.
@@ -80,9 +136,17 @@
       blatt.classList.remove('offen');
       return;
     }
+    belegeEl.hidden = true;
+    belegeEl.replaceChildren();
     const portrait = portraits.get(personId);
     bild.hidden = !portrait;
     if (portrait) bild.src = portrait;
+    // Leer UND versteckt, nicht nur leer: eine leere Zeile belegt trotzdem
+    // eine Zeilenhoehe und risse ueber dem Zitat fast jeder Person eine
+    // Luecke auf (quote-overlay.js::showName).
+    const name = (namen.get(personId) || '').trim();
+    nameEl.textContent = name;
+    nameEl.hidden = name === '';
     const zitat = zitate.get(personId);
     zitatEl.textContent = zitat || '';
     zitatEl.hidden = !zitat;
@@ -92,7 +156,10 @@
 
   document.getElementById('blatt-zu').addEventListener('click', () => zeigePerson(null));
 
-  const graph = createMobileGraph(document.getElementById('cy'), { aufPerson: zeigePerson });
+  const graph = createMobileGraph(document.getElementById('cy'), {
+    aufPerson: zeigePerson,
+    aufBegriff: zeigeBegriff,
+  });
   window.kgSpiegel = graph;
 
   verbindeSpiegel({
@@ -103,6 +170,18 @@
       zitate = new Map((daten.quotes || []).map((q) => [q.person_id, q.text]));
       portraits = new Map(
         daten.nodes.filter((n) => n.type === 'person' && n.portrait).map((n) => [n.id, n.portrait]),
+      );
+      belege = new Map();
+      for (const kante of daten.edges || []) {
+        if (!kante || !kante.evidence) continue;
+        const liste = belege.get(kante.target) || [];
+        liste.push({ person_id: kante.source, evidence: kante.evidence });
+        belege.set(kante.target, liste);
+      }
+      namen = new Map(
+        daten.nodes
+          .filter((n) => n.type === 'person' && (n.name || '').trim())
+          .map((n) => [n.id, n.name.trim()]),
       );
       // Die Zahl der Begriffe folgt dem Gerät UND dem Regler an der Station:
       // stellt der Operator die Wand auf fünf Begriffe, zeigt das Handy nicht

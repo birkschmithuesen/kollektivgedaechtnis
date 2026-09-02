@@ -2,6 +2,44 @@
 
 ---
 
+## Die Werkzeuge auf einen Blick
+
+Stand 2026-09-02. Alles unter `scripts/`, alles vom Repo-Verzeichnis aus.
+
+| Wofür | Befehl |
+|---|---|
+| **Alles starten** (STT, Kern, Traum; leise, ohne Browserfenster) | `./scripts/start-station.sh` |
+| **Alles beenden** — und nachprüfen, dass es wirklich aus ist | `./scripts/stop-station.sh` |
+| Nur die Spracherkennung, eigenes Fenster | `./scripts/start-stt-mac.sh` |
+| Kern + Traum + Browserfenster (alter Weg) | `./scripts/start-mac.sh` |
+| Mikrofonnamen auflisten | `./scripts/start-stt-mac.sh --geraete` |
+| Pegel gegen die VAD-Schwelle messen | `./scripts/pruefe-mikrofon.sh 6` |
+| Mikrofonschalter einmessen (aus/an) | `./scripts/einmessen-mikrofon.sh` |
+| Im Tailnet freigeben — und nur dort | `./scripts/tailscale-freigeben.sh` |
+| Ein gefahrenes Interview neu auswerten | `uv run python scripts/neu-analysieren.py --letzte` |
+| Zwischen Demodaten und echter DB wechseln | `uv run python scripts/dichte-umschalten.py --stufe status` |
+| Den öffentlichen Spiegel beliefern | `./scripts/spiegel-start-mac.sh --pruefen` |
+| Fotos von Handys **ohne** Tailnet abholen | `./scripts/abholer-start-mac.sh --pruefen` |
+
+🔴 **Spiegel und Abholer laufen NICHT im Sammelstart mit** — beide gehen nach
+draußen. Der Uploader schiebt Interviewdaten ins öffentliche Netz, der Abholer
+darf beim Spiegel löschen (er braucht das starke Token). Beide brauchen
+`~/.kg-mirror-token`; anlegen mit `scripts/token-verteilen.sh datei ~/.kg-mirror-token`.
+
+🔴 **Der Abholer braucht ein OFFENES Interview.** Ein Foto ohne laufendes
+Interview weist die Station mit 409 ab; die Datei bleibt im Posteingang und
+wird beim nächsten Takt erneut zugestellt. Richtig so — sieht im Log aber nach
+einer Schleife aus. `--pruefen` sagt es dir vorher.
+
+🔴 **Vor `dichte-umschalten.py` und `neu-analysieren.py` muss die Station aus
+sein.** Beide prüfen es selbst und verweigern sonst den Dienst — der laufende
+Kern hält `kg.db` offen.
+
+**Erste Einrichtung, einmalig:** `./scripts/einrichten-mac.sh`, dann
+`./scripts/einrichten-stt-mac.sh`.
+
+---
+
 ## ✅ Erster echter Start auf dem MacBook — gemessen, 2026-09-01 22:00–22:40
 
 Die Station ist auf diesem Gerät hochgefahren. Was **belegt** ist, mit dem

@@ -18,7 +18,13 @@ let lastState = {
   // Der physische Schalter am Mikrofon (STT-Server, --mic-gate). Default an:
   // eine Station ohne Schalter meldet nie etwas und hat ein offenes Mikrofon.
   mic_on: true,
-  interview: null,
+  // `interview` fehlt hier ABSICHTLICH, und das ist kein vergessenes Feld:
+  // Solange der Server nichts gemeldet hat, ist der Zustand unbekannt.
+  // `interview: null` hiesse „kein Interview" — eine Behauptung, die den
+  // Startknopf scharf stellt, waehrend im Raum vielleicht laengst jemand
+  // spricht. Der Server schickt das Feld in JEDER Zustandsmeldung
+  // (`current_state`), sein Fehlen heisst also verlaesslich „noch keine
+  // Meldung gesehen".
 };
 
 function post(url, body) {
@@ -29,6 +35,7 @@ function post(url, body) {
   })
     .then((response) => {
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return { ok: true, fehler: '' };
     })
     .catch((error) => {
       // This is the sole human control surface for the exhibition: a write
@@ -36,6 +43,12 @@ function post(url, body) {
       // at a control showing a change that did not happen.
       console.warn(`request to ${url} failed`, error);
       render(lastGraph, lastState);
+      // Der Ausgang wird ZURUECKGEGEBEN, statt nur verschluckt zu werden:
+      // Fuer Regler und Ausblenden-Knoepfe reicht das Zurueckspringen als
+      // Rueckmeldung, weil man dem Regler ansieht, wo er steht. Der
+      // Interviewschalter braucht mehr — sein Ergebnis passiert im Nebenraum
+      // — und holt sich hier den Grund fuer seine eigene Meldung.
+      return { ok: false, fehler: String(error.message || error) };
     });
 }
 
@@ -218,6 +231,134 @@ function restoreDraft(list, draft) {
   field.setSelectionRange(draft.start, draft.end);
 }
 
+// ─── Der Interviewschalter ─────────────────────────────────────────────────
+//
+// Zwei Knöpfe, kein Umschalter, und jeder trägt seinen absoluten Wert fest im
+// Code — der ganze Grund dafür steht in frontend/operator.html (der Vorfall um
+// 01:14:51 in der Nacht zum 2026-09-02). Hier steht nur, was daraus für den
+// Ablauf folgt.
+
+/** Wie lange die eigene Übernahme (siehe `schalteInterview`) einer
+ * widersprechenden Servermeldung standhält.
+ *
+ * Nicht null, weil zwischen dem Druck und dem geöffneten Interview jede
+ * beliebige andere Zustandsmeldung liegen kann — ein verschobener Regler etwa,
+ * der noch `interview: null` mitträgt, weil der Worker die Warteschlange noch
+ * nicht abgearbeitet hat. Ihr sofort zu folgen ließe den Knopf zurückspringen:
+ * genau das Flackern, das nach einem nicht angekommenen Druck aussieht.
+ *
+ * Aber auch nicht unendlich, denn das Bedienpult ZEIGT den Zustand, es besitzt
+ * ihn nicht: Es gibt einen zweiten Steuerweg (den Schalter am Mikrofon, an
+ * denselben Endpunkt). Legt den jemand um, während hier noch eine Erwartung
+ * steht, muss die Anzeige nach spätestens dieser Frist wieder dem Server
+ * folgen. Fünf Sekunden sind reichlich für eine Warteschlange, die im
+ * Normalfall im Millisekundenbereich antwortet, und kurz genug, dass ein
+ * falscher Stand nicht stehen bleibt. */
+const INTERVIEW_ERWARTUNG_MS = 5000;
+
+// Was der letzte Druck bewirken sollte (`true`/`false`), oder `null`: keine
+// offene Erwartung, es gilt allein der Server.
+let interviewErwartet = null;
+let interviewErwartetSeit = 0;
+// Solange eine Anfrage unterwegs ist, sind beide Knöpfe zu — ein zweiter Druck
+// auf einen Knopf, dessen erster noch fliegt, hilft niemandem.
+let interviewSendet = false;
+
+/** Was der Server über das Interview sagt: `true`, `false` — oder `null` für
+ * „noch nichts gesagt". Siehe den Kommentar an `lastState` oben. */
+function interviewLautServer(state) {
+  if (state.interview === undefined) return null;
+  return Boolean(state.interview);
+}
+
+function zeigeInterviewMeldung(text, fehler) {
+  const feld = document.getElementById('interview-meldung');
+  feld.textContent = text;
+  feld.classList.toggle('fehler', Boolean(fehler));
+}
+
+/** Zustandstext und die beiden Knöpfe, aus einer einzigen Quelle.
+ *
+ * Es gibt drei Lagen, und alle drei stehen sichtbar am Gerät: „Interview
+ * läuft" (beenden ist offen), „kein Interview" (starten ist offen) und
+ * „Zustand unbekannt" — dann ist beides zu, weil raten hier die eine
+ * gefährliche Handlung wäre.
+ *
+ * Gesperrt und nicht versteckt: Ein Knopf, der kommt und geht, lässt das
+ * Bedienpult im Leerlauf so aussehen, als gäbe es diesen Weg gar nicht — und
+ * genau den sucht jemand, der ihn eilig braucht. Der graue Knopf sagt beides
+ * zugleich: dass es ihn gibt, und dass er jetzt nicht dran ist. Ausprobieren
+ * lässt er sich trotzdem nicht, was der ursprüngliche Grund fürs Verstecken
+ * war (2026-09-01). */
+function zeigeInterviewSchalter(state) {
+  let laeuft = interviewLautServer(state);
+  if (interviewErwartet !== null) {
+    if (laeuft === interviewErwartet || Date.now() - interviewErwartetSeit > INTERVIEW_ERWARTUNG_MS) {
+      // Der Server sagt inzwischen dasselbe, oder die Frist ist abgelaufen:
+      // Die Erwartung hat ihren Dienst getan und tritt ab.
+      interviewErwartet = null;
+    } else {
+      laeuft = interviewErwartet;
+    }
+  }
+  document.getElementById('interview').textContent =
+    laeuft === null ? 'Zustand unbekannt' : laeuft ? 'Interview läuft' : 'kein Interview';
+  // `laeuft !== false` statt `laeuft`: Bei `null` ist NICHT „kein Interview"
+  // gemeint, sondern „unbekannt", und dann muss auch der Startknopf zu sein.
+  document.getElementById('interview-start').disabled = interviewSendet || laeuft !== false;
+  document.getElementById('interview-stop').disabled = interviewSendet || laeuft !== true;
+}
+
+/** Einen der beiden Knöpfe ausführen. `gewuenscht` ist der Wert, den der Knopf
+ * fest trägt — er wird hier nie aus dem Anzeigestand errechnet.
+ *
+ * Bewusst DERSELBE Endpunkt wie der Schalter am Mikrofon, mit demselben Grund
+ * „mic_switch": ein zweiter Weg zum selben Ziel, kein zweiter Mechanismus. Ein
+ * eigener Endpunkt hätte einen eigenen Grund erzeugt und damit zwei Arten von
+ * beendeten Interviews, die im Nachhinein auseinanderzuhalten wären, ohne dass
+ * jemand etwas davon hat.
+ *
+ * Kein Bestätigungsdialog: Der passende Knopf ist immer nur der, der zum
+ * angezeigten Zustand gehört, und ein versehentlich beendetes Interview ist an
+ * dieser Station kein Verlust — der nächste Schalterdruck oder das nächste
+ * Foto beginnt das nächste. Ein Dialog vor einem harmlosen Knopf kostet in dem
+ * Moment Zeit, in dem jemand ihn eilig braucht. */
+function schalteInterview(gewuenscht) {
+  interviewSendet = true;
+  zeigeInterviewMeldung(gewuenscht ? 'Interview wird gestartet …' : 'Interview wird beendet …', false);
+  zeigeInterviewSchalter(lastState);
+
+  post('/api/interview_switch', { on: gewuenscht }).then((ergebnis) => {
+    interviewSendet = false;
+    if (ergebnis.ok) {
+      // 🔴 Die Lehre aus der App (`MainActivity.schalteInterview`): sofort
+      // übernehmen, nicht auf die nächste Meldung warten. „Bis zu drei
+      // Sekunden Verzögerung nach einem Druck fühlen sich nach einem nicht
+      // angekommenen Knopf an, und dann drückt man noch einmal." Hier ist die
+      // Verzögerung eine andere und der Schluss derselbe: Der Server legt den
+      // Wechsel nur in die Warteschlange (`Core.on_mic_switch`), geöffnet oder
+      // geschlossen wird er im Worker, und erst danach kommt die
+      // Zustandsmeldung über /events.
+      interviewErwartet = gewuenscht;
+      interviewErwartetSeit = Date.now();
+      zeigeInterviewMeldung(gewuenscht ? 'Interview gestartet' : 'Interview beendet', false);
+    } else {
+      // Nichts übernehmen: Die Anfrage kann die Station erreicht haben und nur
+      // die Antwort verloren gegangen sein — was hier steht, bleibt deshalb
+      // das, was zuletzt vom Server kam, und der Knopf wird wieder bedienbar.
+      // Ein Fehlschlag darf das Bedienpult nicht totstellen, gerade weil beide
+      // Knöpfe absolute Werte senden und ein zweiter Druck damit höchstens
+      // wirkungslos sein kann.
+      interviewErwartet = null;
+      zeigeInterviewMeldung(`Nicht angekommen (${ergebnis.fehler}) — bitte erneut drücken`, true);
+    }
+    zeigeInterviewSchalter(lastState);
+  });
+}
+
+document.getElementById('interview-start').addEventListener('click', () => schalteInterview(true));
+document.getElementById('interview-stop').addEventListener('click', () => schalteInterview(false));
+
 function render(graph, state) {
   lastGraph = graph;
   lastState = state;
@@ -237,15 +378,7 @@ function render(graph, state) {
   // Mikrofon im Raum eingeschaltet ist. Genau die beiden auseinanderzuhalten
   // ist der Moment, in dem jemand auf diese Leiste schaut.
   document.getElementById('mic').classList.toggle('ok', state.mic_on !== false);
-  document.getElementById('interview').textContent = state.interview
-    ? 'Interview läuft'
-    : 'kein Interview';
-  // Der Knopf erscheint nur, wenn es etwas zu beenden gibt. Ein dauerhaft
-  // sichtbarer „Interview beenden"-Knopf ohne laufendes Interview lädt dazu
-  // ein, ihn auszuprobieren — und die Station steht während einer Ausstellung
-  // vor Publikum. Sichtbarkeit IST hier die Absicherung, deshalb hängt sie an
-  // derselben Zustandsquelle wie der Text daneben.
-  document.getElementById('interview-stop').hidden = !state.interview;
+  zeigeInterviewSchalter(state);
 
   const list = document.getElementById('entries');
   const draft = editingDraft(list);
@@ -315,21 +448,6 @@ function showMinLabelValue(px) {
 
 document.getElementById('max-terms').addEventListener('change', (event) =>
   post('/api/max_terms', { value: Number(event.target.value) }),
-);
-// Rückfall, wenn die Interviewperson den Schalter am Mikrofon vergisst
-// (Birk, 2026-09-01). Bewusst DERSELBE Endpunkt wie der Schalter, mit
-// demselben Grund „mic_switch": ein zweiter Weg zum selben Ziel, kein
-// zweiter Mechanismus. Ein eigener Endpunkt hätte einen eigenen Grund
-// erzeugt, und damit zwei Arten von beendeten Interviews, die im Nachhinein
-// auseinanderzuhalten wären, ohne dass jemand etwas davon hat.
-//
-// Kein Bestätigungsdialog: Der Knopf ist nur sichtbar, wenn ein Interview
-// läuft (siehe render()), und ein versehentlich beendetes Interview ist an
-// dieser Station kein Verlust — der nächste Schalterdruck oder das nächste
-// Foto beginnt das nächste. Ein Dialog vor einem harmlosen Knopf kostet in
-// dem Moment Zeit, in dem jemand ihn eilig braucht.
-document.getElementById('interview-stop').addEventListener('click', () =>
-  post('/api/interview_switch', { on: false }),
 );
 document.getElementById('camera').addEventListener('change', (event) =>
   post('/api/camera', { mode: event.target.value }),
@@ -402,7 +520,13 @@ let state = {
   // Der physische Schalter am Mikrofon (STT-Server, --mic-gate). Default an:
   // eine Station ohne Schalter meldet nie etwas und hat ein offenes Mikrofon.
   mic_on: true,
-  interview: null,
+  // `interview` fehlt hier ABSICHTLICH, und das ist kein vergessenes Feld:
+  // Solange der Server nichts gemeldet hat, ist der Zustand unbekannt.
+  // `interview: null` hiesse „kein Interview" — eine Behauptung, die den
+  // Startknopf scharf stellt, waehrend im Raum vielleicht laengst jemand
+  // spricht. Der Server schickt das Feld in JEDER Zustandsmeldung
+  // (`current_state`), sein Fehlen heisst also verlaesslich „noch keine
+  // Meldung gesehen".
 };
 const events = new EventSource('/events');
 events.onmessage = (message) => {

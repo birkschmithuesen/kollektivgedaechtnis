@@ -548,7 +548,12 @@ def test_clearing_a_misheard_name_posts_the_empty_value(ui):
     """Das Feld zu leeren ist die Aussage „hier steht kein Name" — kein
     Nichtstun, sondern eine Speicherung, die der Server als NULL ablegt."""
     ui.click("#entry-p1 .label")
-    ui.keyboard.press("Control+a")
+    # `ControlOrMeta` und nicht `Control`: Auf macOS ist Strg+A „an den
+    # Zeilenanfang" (die alte Emacs-Belegung) und markiert gar nichts -- der
+    # Test loeschte dort genau ein Zeichen und wurde rot, ohne dass an der
+    # Oberflaeche etwas fehlte. Playwright waehlt mit `ControlOrMeta` je
+    # Plattform Strg bzw. Cmd.
+    ui.keyboard.press("ControlOrMeta+a")
     ui.keyboard.press("Delete")
     ui.keyboard.press("Enter")
 
@@ -686,74 +691,248 @@ def test_a_non_ok_response_reverts_the_dial_and_camera_and_the_page_keeps_workin
     assert ui.evaluate("window.kgFetches[0]") == ["/api/hidden", {"node_id": "term:t1", "hidden": True}]
 
 
-# --- Der Rueckfall-Knopf fuer den Mikrofonschalter --------------------------
+# --- Der Interviewschalter am Bedienpult -----------------------------------
 #
 # Birk, 2026-09-01: „Als Backup sollte allerdings auch noch ein Button in einem
-# Operator UI sein für Interview-Stop, falls die Interviewperson das vergisst."
+# Operator UI sein fuer Interview-Stop, falls die Interviewperson das vergisst."
+# Birk, 2026-09-02: „Was mir noch fehlte, ist der Start-Stopp-Button im
+# Operator-Panel, analog zur APK-App."
 #
 # Den Schalter am Mikrofon bedient eine eingewiesene Interviewperson, nicht der
-# Gast. Er ist damit der verlaessliche Weg; dieser Knopf ist das Netz darunter.
+# Gast. Er bleibt der verlaessliche Weg; dieses Paar ist das Netz darunter --
+# und seit dem 2026-09-02 auch der Weg, ein Interview zu EROEFFNEN, wenn am
+# Mikrofon niemand daran denkt.
+#
+# 🔴 ZWEI KNOEPFE UND KEIN UMSCHALTER. Der Knopf der App ist einer
+# (`neuerZustand = !laeuft`), und seine Wirkung haengt damit an einem
+# Anzeigestand, der schieflaufen kann. In der Nacht zum 2026-09-02 lief er
+# schief: Um 01:14:51 schickte ein Druck auf „Start" in Wahrheit „Stopp", das
+# offene Interview war zu, und das vierte Foto lief in ein 409.
+#
+# Hier sendet jeder Knopf einen FESTEN absoluten Wert. Der schlimmste Ausgang
+# eines Drucks bei falschem Anzeigestand ist damit ein Nichts
+# (`SessionTracker.mic_switch` ist idempotent) -- nie die Gegenaktion.
+
+LAEUFT = {**STATE, "interview": {"person_id": "p1", "started_at": 100}}
+# Ein Zustand, in dem der Server ueber das Interview noch NICHTS gesagt hat.
+# Genau so sieht das Bedienpult in den Millisekunden zwischen Laden und erster
+# SSE-Meldung aus -- und `interview: None` waere dafuer die falsche Auskunft:
+# „kein Interview" ist eine Behauptung, „ich weiss es noch nicht" ist die
+# Wahrheit.
+UNBEKANNT = {schluessel: wert for schluessel, wert in STATE.items() if schluessel != "interview"}
+
+FETCH_SCHEITERT = (
+    "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+    " return Promise.resolve({ok: false, status: 503, statusText: 'Service Unavailable'}); }; void 0;"
+)
 
 
-def test_der_stop_knopf_erscheint_nur_bei_laufendem_interview(ui):
-    """Sichtbarkeit IST hier die Absicherung.
+def _gesperrt(ui, knopf):
+    return ui.eval_on_selector(f"#interview-{knopf}", "el => el.disabled")
 
-    Ein dauerhaft sichtbarer „Interview beenden"-Knopf ohne laufendes Interview
-    laedt dazu ein, ihn auszuprobieren -- und die Station steht waehrend einer
-    Ausstellung vor Publikum. Deshalb kein Bestaetigungsdialog, sondern: den
-    Knopf gibt es nur, wenn es etwas zu beenden gibt.
+
+def test_jeder_interviewknopf_sendet_einen_festen_absoluten_wert(ui):
+    """🔴 Der Kern der Absicherung gegen den Vorfall um 01:14:51.
+
+    „Interview starten" sendet immer `on: true`, „Interview beenden" immer
+    `on: false` -- unabhaengig davon, was das Bedienpult gerade zu wissen
+    glaubt. Ein Umschalter kann bei falschem Anzeigestand das Gegenteil des
+    Gewollten tun; diese beiden koennen hoechstens wirkungslos sein.
     """
-    # STATE oben hat interview=None -> kein Interview.
-    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is True
-    assert ui.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+    ui.click("#interview-start")  # STATE oben: kein Interview
+    assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/interview_switch", {"on": True}]
 
-    ui.evaluate(
-        "(args) => window.kgOperator.render(args[0], args[1])",
-        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
-    )
-    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is False
-    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
-
-    # Und wieder weg, wenn das Interview zu ist -- sonst bliebe ein Knopf
-    # stehen, der ins Leere greift.
-    ui.evaluate(
-        "(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, {**STATE, "interview": None}]
-    )
-    assert ui.eval_on_selector("#interview-stop", "el => el.hidden") is True
-
-
-def test_der_stop_knopf_ruft_denselben_endpunkt_wie_der_schalter(ui):
-    """🔴 DERSELBE Endpunkt, nicht ein eigener.
-
-    `/api/interview_switch` mit `on: false` ist genau das, was der physische
-    Schalter sendet. Ein eigener Endpunkt haette einen eigenen Grund erzeugt
-    (statt „mic_switch") und damit zwei Arten beendeter Interviews, die im
-    Nachhinein auseinanderzuhalten waeren, ohne dass jemand etwas davon hat.
-
-    `SessionTracker.mic_switch` ist ausserdem idempotent -- ein Klick, waehrend
-    der Schalter schon geschlossen hat, schliesst nichts ein zweites Mal.
-    """
-    ui.evaluate(
-        "(args) => window.kgOperator.render(args[0], args[1])",
-        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
-    )
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
     ui.click("#interview-stop")
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/interview_switch", {"on": False}]
+
+
+def test_immer_nur_der_passende_interviewknopf_ist_bedienbar(ui):
+    """Was gerade gilt, steht am Knopf selbst -- nicht nur im Text daneben.
+
+    Gesperrt statt versteckt: Ein Knopf, der kommt und geht, laesst das
+    Bedienpult im Leerlauf so aussehen, als gaebe es diesen Weg gar nicht --
+    und genau den sucht jemand, der ihn eilig braucht. Der graue Knopf sagt
+    stattdessen zugleich, dass es ihn gibt und dass er jetzt nicht dran ist.
+    Ausprobieren kann man ihn trotzdem nicht, was der urspruengliche Grund
+    fuers Verstecken war (2026-09-01).
+    """
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+    assert _gesperrt(ui, "start") is False
+    assert _gesperrt(ui, "stop") is True
+
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
+    assert _gesperrt(ui, "start") is True
+    assert _gesperrt(ui, "stop") is False
+
+
+def test_solange_der_zustand_unbekannt_ist_sind_beide_knoepfe_gesperrt(ui):
+    """Kein Raten, solange der Server nichts gesagt hat.
+
+    „Kein Interview" anzunehmen waere die gefaehrliche Annahme: Sie stellt den
+    Startknopf scharf, waehrend im Raum vielleicht laengst jemand spricht.
+    """
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, UNBEKANNT])
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Zustand unbekannt"
+    assert _gesperrt(ui, "start") is True
+    assert _gesperrt(ui, "stop") is True
+
+
+def test_beim_laden_der_seite_ist_der_schalter_gesperrt(page, static_server):
+    """Dieselbe Sperre schon im Markup, vor der ersten Zeile JavaScript.
+
+    Zwischen Aufschlagen der Seite und der ersten SSE-Meldung liegt ein
+    Moment, in dem noch kein `render()` gelaufen ist. Stuenden die Knoepfe
+    dort offen, waere ausgerechnet der erste Griff der ungesicherte.
+    """
+    page.goto(f"{static_server}/frontend/operator.html")
+    page.wait_for_function("window.kgOperator !== undefined")
+    assert page.eval_on_selector("#interview-start", "el => el.disabled") is True
+    assert page.eval_on_selector("#interview-stop", "el => el.disabled") is True
+    assert page.eval_on_selector("#interview", "el => el.textContent") == "Zustand unbekannt"
+
+
+def test_der_neue_zustand_gilt_sofort_nach_dem_druck(ui):
+    """🔴 Die Lehre aus der App (`MainActivity.schalteInterview`).
+
+    „Bis zu drei Sekunden Verzoegerung nach einem Druck fuehlen sich nach
+    einem nicht angekommenen Knopf an, und dann drueckt man noch einmal."
+
+    Hier ist die Verzoegerung eine andere und der Schluss derselbe: Der Server
+    legt den Wechsel nur in die Warteschlange (`Core.on_mic_switch`), geoeffnet
+    wird er im Worker, und erst dann kommt die Zustandsmeldung. Bis dahin
+    zeigt das Bedienpult, was es gerade veranlasst hat -- ohne dass eine
+    einzige weitere Meldung vom Server noetig waere.
+    """
+    ui.click("#interview-start")
+    ui.wait_for_function("document.getElementById('interview-stop').disabled === false")
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
+    assert _gesperrt(ui, "start") is True
+
+
+def test_erfolg_und_fehler_werden_gemeldet(ui):
+    """Rueckmeldung wie in der App: ein Satz, der sagt, was passiert ist.
+
+    Ohne sie ist ein Druck auf einen Knopf, dessen Wirkung im Nebenraum
+    stattfindet, nicht von einem Druck ins Leere zu unterscheiden.
+    """
+    ui.click("#interview-start")
+    ui.wait_for_function("document.getElementById('interview-meldung').textContent.length > 0")
+    assert ui.eval_on_selector("#interview-meldung", "el => el.textContent") == "Interview gestartet"
+    assert ui.eval_on_selector("#interview-meldung", "el => el.classList.contains('fehler')") is False
+
+    ui.evaluate(FETCH_SCHEITERT)
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    ui.click("#interview-stop")
+    ui.wait_for_function(
+        "document.getElementById('interview-meldung').classList.contains('fehler')"
+    )
+    meldung = ui.eval_on_selector("#interview-meldung", "el => el.textContent")
+    assert "503" in meldung or "nicht" in meldung.lower(), meldung
+
+
+def test_ein_fehlschlag_uebernimmt_nichts_und_laesst_es_wieder_versuchen(ui):
+    """Was nicht angekommen ist, darf am Bedienpult nicht als geschehen stehen.
+
+    Der Anzeigestand faellt auf das zurueck, was zuletzt vom Server kam, und
+    der Knopf wird wieder bedienbar -- sonst waere ein einziger Fehlschlag ein
+    totes Bedienpult, und das ausgerechnet in dem Moment, in dem jemand es
+    eilig braucht.
+    """
+    ui.evaluate(FETCH_SCHEITERT)
+    ui.click("#interview-start")
+    ui.wait_for_function(
+        "document.getElementById('interview-meldung').classList.contains('fehler')"
+    )
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+    assert _gesperrt(ui, "start") is False
+
+
+def test_eine_widersprechende_meldung_kurz_nach_dem_druck_kippt_den_knopf_nicht(ui):
+    """Der Grund, warum die Uebernahme nicht schon bei der naechsten Meldung faellt.
+
+    Zwischen Druck und geoeffnetem Interview kann jede beliebige andere
+    Zustandsmeldung liegen -- ein verschobener Regler etwa. Sie traegt noch
+    `interview: null`, weil der Worker noch nicht so weit ist. Wuerde das
+    Bedienpult ihr sofort folgen, spraenge der Knopf zurueck: genau das
+    Flackern, das nach einem nicht angekommenen Druck aussieht.
+    """
+    ui.click("#interview-start")
+    ui.wait_for_function("document.getElementById('interview-stop').disabled === false")
+    ui.evaluate(
+        "(args) => window.kgOperator.render(args[0], args[1])",
+        [GRAPH, {**STATE, "camera_speed": 0.5}],  # kein Interview, aber eine andere Aenderung
+    )
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
+
+
+def test_die_eigene_uebernahme_laeuft_nach_fuenf_sekunden_ab(page, static_server):
+    """Die andere Haelfte von „zeigen, nicht besitzen".
+
+    Die Uebernahme nach dem Druck haelt einer widersprechenden Servermeldung
+    stand (siehe den Test darueber) -- aber nicht ewig. Sonst genuegte eine
+    einzige verschluckte Bestaetigung, damit das Bedienpult bis zum Neuladen
+    einen Zustand behauptet, den nur es selbst kennt.
+
+    Die Uhr wird gestellt statt abgewartet: Fuenf Sekunden echte Wartezeit in
+    einem Test, der heute vor der Oeffnung laufen muss, sind fuenf Sekunden zu
+    viel.
+    """
+    page.clock.install()
+    page.goto(f"{static_server}/frontend/operator.html")
+    page.wait_for_function("window.kgOperator !== undefined")
+    page.evaluate("window.kgFetches = []")
+    page.evaluate(
+        "window.fetch = (url, opts) => { window.kgFetches.push([url, JSON.parse(opts.body)]);"
+        " return Promise.resolve({ok: true, json: () => Promise.resolve({})}); }; void 0;"
+    )
+    page.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
+
+    page.click("#interview-start")
+    # Kein `wait_for_function`: Die stehende Uhr laesst dessen Taktgeber
+    # ruhen. Noetig ist es auch nicht -- der nachgebildete `fetch` ist schon
+    # erfuellt, sein `then` laeuft als Microtask noch im selben Zug wie der
+    # Klick, und dieser Aufruf hier wartet dessen Ende ohnehin ab.
+    assert page.eval_on_selector("#interview", "el => el.textContent") == "Interview läuft"
+
+    page.clock.fast_forward("00:06")
+    page.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
+    assert page.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+
+
+def test_der_schalter_am_mikrofon_gewinnt_wieder(ui):
+    """🔴 Das Bedienpult ZEIGT den Zustand, es besitzt ihn nicht.
+
+    Es gibt einen zweiten Steuerweg: den Schalter am Mikrofon, der an
+    denselben Endpunkt meldet. Beendet er das Interview, das hier gestartet
+    wurde, muss das Bedienpult folgen -- sonst stuenden zwei Wahrheiten im
+    Raum, und die falsche waere die auf dem Bildschirm des Operators.
+    """
+    ui.click("#interview-start")
+    ui.wait_for_function("document.getElementById('interview-stop').disabled === false")
+    # Der Server bestaetigt: das Interview laeuft.
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    # Und jetzt legt jemand im Raum den Schalter um.
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
+    assert ui.eval_on_selector("#interview", "el => el.textContent") == "kein Interview"
+    assert _gesperrt(ui, "start") is False
+    assert _gesperrt(ui, "stop") is True
 
 
 def test_der_stop_knopf_beendet_nur_und_startet_nie(ui):
     """Er sendet ausschliesslich `on: false`.
 
-    Ein Knopf, der zwischen Start und Stop umschaltet, waere an dieser Station
-    falsch: Ein Interview beginnt am Mikrofon oder mit einem Foto, im Raum --
-    nicht am Rechner des Operators. Mehrfaches Klicken darf daher nie ein
-    Interview eroeffnen.
+    Nicht, weil ein Start vom Bedienpult verboten waere -- den gibt es seit
+    dem 2026-09-02 als eigenen Knopf daneben -- sondern weil genau diese
+    Trennung die Absicherung IST: Kein Knopf hier darf je etwas anderes
+    senden als den einen Wert, der auf ihm steht.
     """
-    ui.evaluate(
-        "(args) => window.kgOperator.render(args[0], args[1])",
-        [GRAPH, {**STATE, "interview": {"person_id": "p1", "started_at": 100}}],
-    )
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
     ui.click("#interview-stop")
+    ui.wait_for_function("document.getElementById('interview-start').disabled === false")
+    # Der Server bestaetigt das Ende, danach beginnt das naechste Interview.
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
     ui.evaluate(
         "(args) => window.kgOperator.render(args[0], args[1])",
         [GRAPH, {**STATE, "interview": {"person_id": "p2", "started_at": 200}}],

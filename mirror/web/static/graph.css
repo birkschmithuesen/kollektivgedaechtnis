@@ -86,6 +86,21 @@
   touch-action: manipulation;
 }
 
+/* Der Name ueber dem Zitat. Klein und ruhig: er ordnet zu, er ist nicht die
+   Aussage. Dieselbe Rangfolge wie an der Wand (.quote-name in base.css). */
+#blatt .name {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+#blatt .name[hidden] { display: none; }
+
+/* Steht der Name da, ruecken Name und Zitat zusammen — sie gehoeren zueinander
+   und sollen nicht wie zwei Absaetze wirken. */
+#blatt .name:not([hidden]) + blockquote { margin-top: 6px; }
+
 #blatt blockquote {
   margin-top: 14px;
   font-size: 18px;
@@ -131,3 +146,27 @@
 #legende .nachbar { color: var(--blau); }
 #legende .neu { color: var(--gelb); }
 #legende[hidden] { display: none; }
+
+
+/* 🔴 Die Belegstellen eines Begriffs (Birk, 2026-09-02). Dieselbe Aufteilung
+   wie an der Wand (frontend/static/base.css: `.quote-belege`): eine Liste,
+   je Stelle eine Zeile, Name darueber. Kein <blockquote> — dessen
+   Anfuehrungszeichen staenden sonst einmal um alle Stellen zusammen, als
+   haette eine Person das am Stueck gesagt. */
+#blatt .belege {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+#blatt .belege li { display: flex; flex-direction: column; gap: 0.15rem; }
+#blatt .beleg-name {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+#blatt .beleg-text::before { content: '\201E'; }
+#blatt .beleg-text::after { content: '\201C'; }

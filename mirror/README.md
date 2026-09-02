@@ -97,7 +97,27 @@ Die vier SSE-Zeilen in der Vorlage (`proxy_buffering off`,
 | `KG_TOOL2_URL` | `http://127.0.0.1:8810` | |
 | `KG_MIRROR_INTERVAL` | `3.0` | Sekunden zwischen zwei Runden. |
 
-PowerShell auf dem Ausstellungsrechner:
+### Auf dem MacBook (seit 2026-09-01 die Ausstellungsmaschine)
+
+```bash
+scripts/token-verteilen.sh datei ~/.kg-mirror-token   # einmalig, holt von herkules
+./scripts/spiegel-start-mac.sh --pruefen              # nachsehen, sendet nichts
+./scripts/spiegel-start-mac.sh                        # senden
+```
+
+Das Skript setzt die fünf Variablen selbst und liest das Token aus
+`~/.kg-mirror-token` — dieselbe Stelle wie `%USERPROFILE%\.kg-mirror-token`
+auf dem Windows-Rechner, nur mit Unix-Rechten. Beide Formen der Datei werden
+akzeptiert, mit und ohne `KG_MIRROR_TOKEN=`-Präfix.
+
+🔴 Es läuft **nicht** in `scripts/start-station.sh` mit. Der Sammelstart
+startet, was im Haus läuft; dieses Skript schiebt Interviewdaten ins
+öffentliche Netz, und das ist eine Entscheidung. `start-station.sh` weist am
+Ende auf den eigenen Knopf hin.
+
+### Auf dem Windows-Rechner
+
+Doppelklick auf `mirror/spiegel-start.bat`, oder von Hand in der PowerShell:
 
 ```powershell
 cd C:\kollektivgedaechtnis

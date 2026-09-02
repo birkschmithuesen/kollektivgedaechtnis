@@ -50,7 +50,7 @@ button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
   opacity: 0.85;
 }
 
-/* Rueckfall-Knopf fuer den Mikrofonschalter (Birk, 2026-09-01).
+/* Der Interviewschalter (Birk, 2026-09-01; beide Richtungen seit 2026-09-02).
 
    Derselbe Grundstil wie die Ausblenden-Knoepfe in der Liste -- das ist kein
    besonderes Bedienelement, sondern das Netz unter dem Schalter, den eine
@@ -58,11 +58,35 @@ button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
    eine Uebertreibung: Ein versehentlich beendetes Interview ist an dieser
    Station kein Verlust, der naechste Schalterdruck beginnt das naechste.
 
-   Der Abstand links trennt ihn vom Statustext daneben, damit „Interview
-   laeuft" und der Knopf nicht als ein Wort gelesen werden. */
+   Der Abstand links trennt sie vom Statustext daneben, damit „Interview
+   laeuft" und der erste Knopf nicht als ein Wort gelesen werden. */
+#interview-start,
 #interview-stop {
   font: inherit;
   padding: 0.25rem 0.75rem;
   margin-left: 0.6rem;
   cursor: pointer;
+}
+/* Der gesperrte Knopf bleibt STEHEN und wird nur blass: Er sagt damit zugleich,
+   dass es diesen Weg gibt und dass er jetzt nicht dran ist. Weg waere er
+   ehrlicher aussehend, aber unbrauchbarer -- wer ihn eilig sucht, findet dann
+   ein Bedienpult, das so tut, als koenne es nichts. */
+#interview-start:disabled,
+#interview-stop:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Die Rueckmeldung. Ruhig im Erfolgsfall (sie steht neben einem Knopf, dessen
+   Wirkung man ohnehin am Zustandstext links sieht) und deutlich im Fehlerfall:
+   Ein nicht angekommener Druck ist die eine Sache, die hier niemand uebersehen
+   darf. Feste Mindestbreite, damit die Kopfleiste beim Erscheinen der Meldung
+   nicht springt und ein zweiter Griff nicht danebengeht. */
+#interview-meldung {
+  min-width: 14em;
+  color: #8b8b96;
+}
+#interview-meldung.fehler {
+  color: #ff9b9b;
+  font-weight: 600;
 }

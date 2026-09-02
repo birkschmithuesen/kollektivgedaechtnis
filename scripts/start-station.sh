@@ -153,5 +153,17 @@ grau "  ?touch=1 ist nicht optional — ohne den Parameter gibt es weder"
 grau "  Zoomregler noch Bedienleiste. theme=f ist das Layout vom 2026-09-01."
 grau "  Beenden: Strg-C. Mitlesen: tail -f $LOGS/station.log"
 echo ""
+# 🔴 HINWEIS, KEIN AUFRUF. Beide Dienste unten gehen nach DRAUSSEN und laufen
+# deshalb bewusst nicht mit: der Uploader schiebt Interviewdaten ins
+# oeffentliche Netz, der Abholer darf beim Spiegel loeschen (er braucht das
+# starke Token). Ob das heute passiert, entscheidet Birk, nicht eine
+# Startreihenfolge. Genannt werden sie trotzdem — wer sie sucht, sucht sie
+# hier. `tests/test_spiegel_start_mac.py` und `tests/test_abholer_start_mac.py`
+# halten fest, dass sie nicht aufgerufen werden.
+grau "  Nach draussen, jeweils eigenes Fenster und eigene Entscheidung:"
+grau "    ./scripts/spiegel-start-mac.sh    Graph und Traum an den Spiegel"
+grau "    ./scripts/abholer-start-mac.sh    Fotos vom Spiegel abholen"
+grau "                                      (Handys ohne Tailnet)"
+echo ""
 
 wait $STATION_PID

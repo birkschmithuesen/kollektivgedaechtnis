@@ -15,27 +15,69 @@
 //    hineingezoomt ist. Sonst wäre sie beim Herauszoomen unlesbar oder beim
 //    Hineinzoomen plakatgross — und lesbar auf 390 px ist hier die Vorgabe.
 
-/** Zielmasse. `schrift` und `punkt` in Bildschirm-Pixeln, `personModell` in
- *  Modelleinheiten.
+/** Zielmasse. `schrift`, `tafelPolster`, `tafelRadius` und die beiden
+ *  Portraitgrenzen in Bildschirm-Pixeln, `personModell` in Modelleinheiten.
  *
  *  Der Unterschied ist Absicht. Die Beschriftung muss immer lesbar sein, also
  *  hängt sie am Schirm. Die Portraits dagegen müssen die DICHTE des Netzes
- *  tragen: die Positionen kommen aus dem Layout der Wand, wo ein Gesicht 56
- *  Einheiten misst — hier dieselbe Zahl, also dasselbe Verhältnis von Gesicht
- *  zu Abstand. Am Schirm festgenagelt wären nach sechzig Interviews sechzig
- *  44-px-Kreise auf 390 px Breite, also ein Fleck. Boden und Deckel begrenzen
- *  nur die Extreme: ein Punkt unter 10 px ist kein Gesicht mehr, über 52 px
- *  füllt eines ein Siebtel der Breite eines Telefons. */
-const ZIEL = { schrift: 13.5, punkt: 7, personModell: 56, personMin: 10, personMax: 52 };
+ *  tragen: die Positionen kommen aus dem Layout der Wand, wo ein Gesicht
+ *  `--person-size` Einheiten misst — hier dieselbe Zahl, also dasselbe
+ *  Verhältnis von Gesicht zu Abstand. Am Schirm festgenagelt wären nach
+ *  sechzig Interviews sechzig 44-px-Kreise auf 390 px Breite, also ein Fleck.
+ *
+ *  🔴 `personModell` war bis 2026-09-02 **56** — der Wert der Wand von
+ *  2026-08-29. Die Wand steht seit theme-f („Schwarzplan") auf 110, und der
+ *  Saal erbt das. Der Spiegel blieb zurück und zeichnete Gesichter halb so
+ *  gross wie ueberall sonst. Gemessen an einem echten Stand der Station
+ *  (drei Personen, 390×844, Zoom 0,345): **20,7 px**. Das ist genau Birks
+ *  „die Porträts werden gar nicht angezeigt" — das Bild war da, geladen und
+ *  gezeichnet, nur konnte man nichts darauf erkennen.
+ *
+ *  Boden und Deckel begrenzen die Extreme. 30 px ist die Untergrenze, ab der
+ *  ein Bild als Bildinhalt und nicht als Markierung gelesen wird (zum
+ *  Vergleich: `--tap` in mirror.css ist 44 px). 120 px ist derselbe Deckel,
+ *  den die Wand fuehrt (PORTRAIT_MAX_PX in projection.js) — ein Gesicht darf
+ *  bei zwei Personen im Netz nicht den halben Schirm fuellen. */
+const ZIEL = {
+  schrift: 13.5,
+  personModell: 110,
+  personMin: 30,
+  personMax: 120,
+  /* Der Ring um das Gesicht, als ANTEIL der Scheibe statt als feste Zahl:
+     eine 2-Einheiten-Kontur ist an einem 110er Gesicht ein Haar und an einem
+     30er ein Reifen. 0,045 ist das Verhaeltnis der Wand (--ring-width 5 auf
+     --person-size 110). */
+  ringAnteil: 0.045,
+  /* Das Polster der Begriffstafel, in Bildschirm-Pixeln — dasselbe Mass, in
+     dem die Schrift steht. Die Wand fuehrt --plate-pad 10 bei 26er Schrift,
+     der Saal 12 bei 34er; beides rund 0,4 der Schrifthoehe. 6 px sind das
+     bei 13,5. */
+  tafelPolster: 6,
+  /* Der Eckenradius der Tafel. Wand 18 bei 26er Schrift, Saal 24 bei 34er:
+     rund 0,7 der Schrifthoehe. */
+  tafelRadius: 9,
+  /* Umbruchbreite der Beschriftung. Unveraendert aus dem Bestand — an ihr
+     haengt LABEL_ABSTAND_PX unten, und der ist am echten Graphen eingestellt. */
+  tafelMaxBreite: 150,
+};
 
 /** Wie viel Platz eine Beschriftung auf dem Schirm braucht, damit die nächste
- *  daneben und nicht darauf liegt. Aus `text-max-width: 150px` in STIL heraus
+ *  daneben und nicht darauf liegt. Aus `tafelMaxBreite` heraus
  *  gerechnet: eine typische Beschriftung bricht auf zwei Zeilen und misst dann
  *  gut 110 px; 100 px ist der Abstand, bei dem sich zwei davon höchstens
  *  streifen — gemessen am realen Graphen (Replay 19c, 18 Begriffe auf 390 px):
  *  darüber sieht man vier Begriffe und zu wenig Netz, darunter liegen die
  *  Beschriftungen wieder ineinander. */
 const LABEL_ABSTAND_PX = 100;
+
+/** Zeilenhöhe der Tafelbeschriftung. Muss zu `line-height` im STIL passen:
+ *  zwei getrennte Zahlen machen die Tafel frueher oder spaeter kleiner als die
+ *  Schrift darin. Derselbe Wert wie an der Wand (term-plate.js). */
+const ZEILENHOEHE = 1.12;
+
+/** Die Schriftfamilie der Tafeln. Steht hier UND im STIL, weil die Messung
+ *  unten dieselbe Schrift braucht, mit der spaeter gezeichnet wird. */
+const SCHRIFTFAMILIE = 'Inter, "Helvetica Neue", system-ui, sans-serif';
 
 /** Wie weit die erste Ansicht höchstens hineinzoomt. Darüber sieht man drei
  *  Begriffe und hat kein Netz mehr vor sich, sondern eine Nahaufnahme. */
@@ -92,14 +134,101 @@ export function ansicht(graph, obergrenze) {
   return { nodes, edges };
 }
 
+/* --- Kantenbögen ----------------------------------------------------------
+   Birk, 2026-09-02: „Die Ansicht soll im Prinzip dieselbe sein wie der
+   Plenarsaal — mit geschwungenen Kanten."
+
+   Nachgebaut aus `frontend/static/term-plate.js::edgeCurve`, nicht importiert:
+   der Spiegel wird ohne `frontend/` ausgeliefert (er läuft auf herkules), ein
+   Import von dort wäre am Ausstellungstag ein 404 statt eines Netzes. Die
+   Zahlen sind absichtlich WÖRTLICH dieselben — die Positionen kommen aus dem
+   Layout der Wand, also gilt hier dasselbe Modellmass.
+
+   Der Bogen hängt an der Kanten-ID und nicht am Zufall: der Spiegel bekommt
+   alle drei Sekunden einen Push, und ein Bogen pro Frame würde das ganze Netz
+   zappeln lassen. */
+
+function hash32(text) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** {cpd, cpw} für eine Kante — zwei Kontrollpunkte mit gegenläufigem
+ *  Vorzeichen, also die flache S-Kurve der Wand und nicht ein einzelner Bauch. */
+export function kantenBogen(kantenId) {
+  const h = hash32(String(kantenId));
+  const vorzeichen = h & 1 ? 1 : -1;
+  const amp1 = 18 + ((h >>> 1) % 22); // 18..39 Modelleinheiten
+  const amp2 = 10 + ((h >>> 6) % 16); // 10..25, Gegenschwung
+  return { cpd: `${vorzeichen * amp1} ${-vorzeichen * amp2}`, cpw: '0.35 0.72' };
+}
+
+/* --- Tafelmasse -----------------------------------------------------------
+   Cytoscape kann einen Knoten NICHT auf seine Beschriftung wachsen lassen
+   (kein `width: label`), also wird der Text vorher gemessen. Ein 2D-Kontext
+   ohne DOM, gecacht — dieselbe Lösung wie an der Wand.
+
+   Der Unterschied zur Wand: dort steht die Schrift in MODELLeinheiten und die
+   Tafel damit auch, hier hängt die Schrift am SCHIRM (sie soll bei jedem Zoom
+   lesbar bleiben). Gemessen wird deshalb einmal in Bildschirm-Pixeln, und
+   `skaliere()` teilt das Ergebnis je Frame durch den Zoom. */
+
+const _messFlaeche = document.createElement('canvas').getContext('2d');
+const _messCache = new Map();
+
+/** Die Tafelgrösse einer Beschriftung in BILDSCHIRM-Pixeln, inkl. Polster. */
+export function tafelMass(text, schriftPx = ZIEL.schrift, maxBreite = ZIEL.tafelMaxBreite) {
+  const schluessel = `${text}|${schriftPx}|${maxBreite}`;
+  const treffer = _messCache.get(schluessel);
+  if (treffer) return treffer;
+
+  _messFlaeche.font = `${schriftPx}px ${SCHRIFTFAMILIE}`;
+  // Dieselbe Umbruchregel wie Cytoscapes `text-wrap: wrap`.
+  const zeilen = [];
+  let laufend = '';
+  for (const wort of String(text || '').split(/\s+/)) {
+    const probe = laufend ? `${laufend} ${wort}` : wort;
+    if (_messFlaeche.measureText(probe).width <= maxBreite || !laufend) {
+      laufend = probe;
+    } else {
+      zeilen.push(laufend);
+      laufend = wort;
+    }
+  }
+  if (laufend) zeilen.push(laufend);
+
+  let breiteste = 0;
+  for (const zeile of zeilen) {
+    breiteste = Math.max(breiteste, _messFlaeche.measureText(zeile).width);
+  }
+  const mass = {
+    w: Math.ceil(breiteste) + 2 * ZIEL.tafelPolster,
+    h: Math.ceil(Math.max(1, zeilen.length) * schriftPx * ZEILENHOEHE) + 2 * ZIEL.tafelPolster,
+  };
+  _messCache.set(schluessel, mass);
+  return mass;
+}
+
 function elemente(sicht) {
   const liste = [];
   for (const n of sicht.nodes) {
+    // Die Tafelmasse kommen schon HIER mit, nicht erst aus `skaliere()`:
+    // `cy.fit()` in der ersten Ansicht rechnet mit der Knotengroesse, und ein
+    // undefiniertes `data(boxW)` waere zu diesem Zeitpunkt ein Knoten ohne
+    // Ausdehnung — der Ausschnitt saesse dann daneben. Der Wert gilt fuer
+    // Zoom 1; `skaliere()` rechnet ihn jeden Frame auf den echten Zoom um.
+    const mass = n.type === 'term' ? tafelMass(n.label || '') : null;
     const element = {
       data: {
         id: n.id,
         label: n.type === 'term' ? n.label || '' : '',
         portrait: n.portrait || '',
+        boxW: mass ? mass.w : undefined,
+        boxH: mass ? mass.h : undefined,
       },
       classes:
         n.type === 'person'
@@ -116,63 +245,126 @@ function elemente(sicht) {
     liste.push(element);
   }
   for (const e of sicht.edges) {
-    liste.push({ data: { id: e.id, source: e.source, target: e.target }, classes: 'link' });
+    // 🔴 KEINE eigene Klasse fuer Kanten an Traumbegriffen. Der erste Entwurf
+    // hatte eine (rot, kraeftiger) und begruendete sie mit „wie an der Wand".
+    // Nachgesehen statt geglaubt: `frontend/static/graph-model.js` gibt JEDER
+    // Kante `classes: 'link'` und sonst nichts — die Regel `edge.link.in-dream`
+    // in projection.js wird nie zugewiesen. An 390 px war der Unterschied auch
+    // nicht dekorativ, sondern falsch: das Handy zeigt 20 statt 45 Begriffen,
+    // die fuenf Traumbegriffe stehen dabei IMMER (`sichtbareBegriffe`), und
+    // damit war ein Viertel des Netzes rot. Am Bild gemessen: 73 von 302
+    // Kanten des Replays 19c beruehren einen Traumbegriff.
+    liste.push({
+      data: { id: e.id, source: e.source, target: e.target, ...kantenBogen(e.id) },
+      classes: 'link',
+    });
   }
   return liste;
 }
 
+/* --- Der Stil ------------------------------------------------------------
+   Die Bildsprache des Saals, auf 390 px uebersetzt (Birk, 2026-09-02: „Die
+   Ansicht soll im Prinzip dieselbe sein wie der Plenarsaal"). Kopiert, nicht
+   geteilt: der Spiegel laeuft ohne `frontend/`, und eine geteilte Datei wuerde
+   jede Aenderung an der Wand im selben Moment auf die Handys der Besucherinnen
+   schieben.
+
+   Was uebernommen ist:
+     * Gesichter tragen einen Ring und ein leises Echo daneben (Zirkelgeometrie
+       aus theme-f), und wer kein Bild hat, bekommt eine eigene ruhige Flaeche
+       statt eines Platzhalters.
+     * Begriffe SIND Tafeln. Der Punkt daneben ist ersatzlos weg — er war
+       Kanten- und Labelanker und kostete den Blick einen Sprung.
+     * Kanten sind Boegen.
+
+   Was NICHT uebernommen ist: der Saal wirft die drei Achsenfarben weg, weil
+   dort keine Legende steht. Am Handy steht eine (`#legende` in graph.html),
+   also bleiben sie — sonst waere die Erklaerung unten ohne Gegenstand. */
 const STIL = [
   {
     selector: 'node.person',
     style: {
       shape: 'ellipse',
-      'background-color': '#242424',
-      'border-width': 2,
+      // Zwei Fuellungen, nach Datenlage — woertlich die Regel der Wand
+      // (`styleSchwarzplan()`): hinter einem Portrait bleibt der Grund dunkel
+      // und laesst die harte Knotenkante unter dem auslaufenden PNG-Alpha
+      // verschwinden. OHNE Portrait traegt die Fuellung die Scheibe allein.
+      // Eine Farbe, keine Vertretung: kein Avatar, kein Fragezeichen. Wer sich
+      // gegen ein Bild entscheidet, ist kein fehlendes Bild.
+      'background-color': (ele) => (ele.data('portrait') ? '#242424' : '#6e6656'),
       'border-color': '#d62828',
+      'border-opacity': 1,
+      'outline-color': '#d62828',
+      'outline-opacity': 0.35,
       label: '',
-      'z-index': 10,
+      'z-index': 20,
     },
   },
   {
+    // `mit-bild` nur, wenn es wirklich eins gibt: ein leeres
+    // `background-image` laesst Cytoscape eine Bildwarnung je Knoten und
+    // Frame protokollieren.
     selector: 'node.person.mit-bild',
-    style: { 'background-image': 'data(portrait)', 'background-fit': 'cover' },
+    style: {
+      'background-image': 'data(portrait)',
+      'background-fit': 'cover',
+      'background-clip': 'node',
+    },
   },
   {
     selector: 'node.term',
     style: {
-      shape: 'ellipse',
-      'background-color': 'rgba(242, 239, 233, 0.55)',
+      // Die Tafel IST der Knoten. Damit enden die Kanten an der Tafelkante
+      // statt unter der Schrift, und die Trefferflaeche fuer den Finger ist
+      // die Flaeche, die man auch sieht.
+      shape: 'round-rectangle',
+      width: 'data(boxW)',
+      height: 'data(boxH)',
+      'background-color': '#0d0e10',
+      'background-opacity': 0.55,
+      'border-color': '#6e6656',
+      'border-opacity': 0.85,
       label: 'data(label)',
       color: '#f2efe9',
       'text-valign': 'center',
       'text-halign': 'center',
-      'font-family': 'Inter, "Helvetica Neue", system-ui, sans-serif',
-      // Die Beschriftung ist am Handy die Hauptsache und muss auch dann lesbar
-      // bleiben, wenn ein Portrait dahinterliegt: eigener dunkler Grund statt
-      // eines Schattens.
-      'text-background-color': '#0d0e10',
-      'text-background-opacity': 0.82,
-      'text-background-shape': 'roundrectangle',
-      'text-max-width': '150px',
+      'text-justification': 'center',
+      'font-family': SCHRIFTFAMILIE,
+      'line-height': ZEILENHOEHE,
       'text-wrap': 'wrap',
-      'z-index': 5,
+      'z-index': 10,
     },
   },
-  { selector: 'node.dream-anchor', style: { color: '#d62828' } },
-  { selector: 'node.dream-neighbour', style: { color: '#4a7fd8' } },
-  { selector: 'node.dream-recent', style: { color: '#f4c300' } },
+  {
+    // Im Bild: die Tafel wird massiv. Muss NACH `node.term` stehen —
+    // Cytoscape gewichtet gleich spezifische Selektoren nach Reihenfolge.
+    selector: 'node.term.in-dream',
+    style: { 'background-opacity': 0.8 },
+  },
+  // Die drei Achsen tragen Punkt UND Schrift, wie an der Wand: eine farbige
+  // Kontur allein verschwindet, sobald ein Portrait dahinterliegt.
+  { selector: 'node.dream-anchor', style: { color: '#d62828', 'border-color': '#d62828' } },
+  { selector: 'node.dream-neighbour', style: { color: '#4a7fd8', 'border-color': '#4a7fd8' } },
+  { selector: 'node.dream-recent', style: { color: '#f4c300', 'border-color': '#f4c300' } },
   {
     selector: 'edge.link',
     style: {
-      'curve-style': 'straight',
-      'line-color': 'rgba(242, 239, 233, 0.18)',
+      // Der Bogen. `edge-distances: intersection` laesst ihn an der Tafel- bzw.
+      // Scheibenkante ansetzen und nicht in deren Mittelpunkt.
+      'curve-style': 'unbundled-bezier',
+      'control-point-distances': 'data(cpd)',
+      'control-point-weights': 'data(cpw)',
+      'edge-distances': 'intersection',
+      'line-cap': 'round',
+      'line-color': '#7a6a4a',
+      'line-opacity': 0.55,
       'target-arrow-shape': 'none',
       'z-index': 1,
     },
   },
 ];
 
-export function createMobileGraph(container, { aufPerson = () => {} } = {}) {
+export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff = () => {} } = {}) {
   const cy = cytoscape({
     container,
     style: STIL,
@@ -192,19 +384,38 @@ export function createMobileGraph(container, { aufPerson = () => {} } = {}) {
 
   function skaliere() {
     // Bildschirmmasse in Modelleinheiten umrechnen, damit alles beim Zoomen
-    // gleich gross bleibt.
+    // gleich gross bleibt. Alles, was hier durch `z` geteilt wird, ist am
+    // Schirm festgenagelt; was nicht geteilt wird, folgt der Dichte des Netzes.
     const z = cy.zoom() || 1;
     const person =
       Math.min(ZIEL.personMax, Math.max(ZIEL.personMin, ZIEL.personModell * z)) / z;
+    // Ring und Echo als Anteil der Scheibe, nicht als feste Zahl: sonst ist
+    // die Kontur am grossen Gesicht ein Haar und am kleinen ein Reifen.
+    const ring = person * ZIEL.ringAnteil;
     cy.batch(() => {
-      cy.nodes('.person').style({ width: person, height: person });
-      cy.nodes('.term').style({
-        width: ZIEL.punkt / z,
-        height: ZIEL.punkt / z,
-        'font-size': ZIEL.schrift / z,
-        'text-background-padding': `${3 / z}px`,
+      cy.nodes('.person').style({
+        width: person,
+        height: person,
+        'border-width': ring,
+        // Das konzentrische Echo der Wand: ein zweiter, schwacher Ring in
+        // Abstand. Bauhaus-Zirkelgeometrie, aus theme-f uebernommen.
+        'outline-width': Math.max(0.5, ring * 0.2),
+        'outline-offset': ring * 1.4,
       });
-      cy.edges().style({ width: Math.max(0.6, 1 / z) });
+      // Die Tafeln. Gemessen wird in Bildschirm-Pixeln (einmal je Beschriftung,
+      // gecacht), geteilt wird je Frame — so bleibt die Tafel exakt so gross
+      // wie ihre Schrift, bei jedem Zoom.
+      for (const knoten of cy.nodes('.term')) {
+        const mass = tafelMass(knoten.data('label') || '');
+        knoten.data({ boxW: mass.w / z, boxH: mass.h / z });
+      }
+      cy.nodes('.term').style({
+        'font-size': ZIEL.schrift / z,
+        'corner-radius': ZIEL.tafelRadius / z,
+        'border-width': (ele) => (ele.hasClass('in-dream') ? 2.5 : 1.5) / z,
+        'text-max-width': `${ZIEL.tafelMaxBreite / z}px`,
+      });
+      cy.edges().style({ width: 1.2 / z });
     });
   }
 
@@ -219,9 +430,40 @@ export function createMobileGraph(container, { aufPerson = () => {} } = {}) {
   }
   cy.on('zoom', skalierePlanen);
 
+  /** Wie oft `einpassen()` hoechstens nachrechnet. Vier reichen mit weitem
+   *  Abstand: gemessen konvergiert es nach zweien. */
+  const EINPASS_RUNDEN = 4;
+  /** Ab welcher Aenderung es sich gelohnt hat weiterzurechnen. */
+  const EINPASS_GENAUIGKEIT = 0.01;
+
+  /** Alles ins Bild — als FIXPUNKT, nicht in einem Durchgang.
+   *
+   *  🔴 Die Tafelgroesse und der Ausschnitt haengen VONEINANDER ab: eine Tafel
+   *  misst `Mass / Zoom` Modelleinheiten (die Schrift soll am Schirm gleich
+   *  gross bleiben), und `cy.fit()` bestimmt den Zoom aus eben diesen
+   *  Modelleinheiten. Ein einzelnes `fit()` beantwortet also eine Frage, die
+   *  sich durch die Antwort aendert.
+   *
+   *  Am 2026-09-02 gemessen, echter Stand der Station auf 390×844: nach dem
+   *  ersten `fit()` stand Zoom 0,345, und die damit neu gerechneten Tafeln
+   *  reichten von x = −98 bis x = 388 — links aus dem Bild heraus. Ein
+   *  zweiter Durchgang kam auf 0,226 und passte.
+   *
+   *  Die Wand hat dieses Problem nicht: dort steht die Schrift in
+   *  Modelleinheiten und waechst mit dem Zoom mit. Der Preis fuer die
+   *  Lesbarkeit am Telefon ist diese Schleife. */
   function einpassen() {
-    cy.fit(undefined, 36);
-    skaliere();
+    let vorher = 0;
+    for (let runde = 0; runde < EINPASS_RUNDEN; runde++) {
+      cy.fit(undefined, 36);
+      skaliere();
+      const jetzt = cy.zoom();
+      // Relativ vergleichen, nicht absolut: der Zoom bewegt sich je nach
+      // Netzgroesse zwischen 0,05 und 6, und eine feste Schranke waere am
+      // einen Ende blind und am anderen nie erreicht.
+      if (vorher && Math.abs(jetzt - vorher) / vorher < EINPASS_GENAUIGKEIT) break;
+      vorher = jetzt;
+    }
   }
 
   /** Der Zoom, ab dem zwei benachbarte Beschriftungen nebeneinanderpassen.
@@ -304,6 +546,11 @@ export function createMobileGraph(container, { aufPerson = () => {} } = {}) {
   // Bundle das Gegenteil seines Namens (gemessen 2026-08-26,
   // frontend/static/quote-overlay.js).
   cy.on('tap', 'node.person', (ereignis) => aufPerson(ereignis.target.id()));
+  // 🔴 Und auf einen BEGRIFF (Birk, 2026-09-02). Gemessen am echten Stand auf
+  // 390x844: Ein Fingertipp auf ein Portrait landete auf einem BEGRIFF — vier
+  // Knoten lagen an derselben Stelle uebereinander. Begriffe waren nicht
+  // anklickbar, also passierte gar nichts, und die Seite wirkte tot.
+  cy.on('tap', 'node.term', (ereignis) => aufBegriff(ereignis.target.id()));
 
   return {
     cy,
@@ -347,11 +594,12 @@ export function createMobileGraph(container, { aufPerson = () => {} } = {}) {
         cy.layout({ name: 'cose', animate: false, fit: false }).run();
       }
 
+      // Erst die Masse, dann der Ausschnitt: `ersteAnsicht()` misst die
+      // Abstaende der Tafeln, und die haengen an ihrer Groesse.
+      skaliere();
       if (ersteZeichnung && cy.nodes().length) {
         ersteZeichnung = false;
         ersteAnsicht();
-      } else {
-        skaliere();
       }
     },
   };
