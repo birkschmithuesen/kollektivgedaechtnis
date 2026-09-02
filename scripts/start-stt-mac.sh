@@ -116,6 +116,28 @@ echo ""
 if [ "$CODE" -ne 0 ]; then
   echo "🔴 Die Spracherkennung ist mit Code $CODE beendet." >&2
   echo "   Ohne sie gibt es kein Interview. Log: $LOG" >&2
+  # 🔴 DER HAEUFIGSTE FALL, und der einzige mit einer klaren Handlung:
+  # Das eingetragene Geraet ist nicht angesteckt. Der fremde Dienst sagt dazu
+  # `ValueError: Audio device '…' not found` samt Traceback — richtige
+  # Diagnose, falsche Hilfe. Wer um 09:00 vor der Station steht, braucht
+  # keinen Stacktrace, sondern die zwei Wege.
+  #
+  # Gegen die fremde MELDUNG geprueft und nicht gegen den Rueckgabecode: der
+  # ist 1 fuer alles. Aendert `meredityman/fundusbot` den Wortlaut, faellt der
+  # Hinweis weg — schlimmer als vorher wird es dadurch nicht.
+  if grep -q "Audio device .* not found" "$LOG" 2>/dev/null; then
+    GESUCHT=$(sed -n "s/.*Audio device '\([^']*\)' not found.*/\1/p" "$LOG" | tail -1)
+    echo "" >&2
+    echo "   Das eingetragene Mikrofon (${GESUCHT:-?}) ist nicht da." >&2
+    echo "   Zwei Wege:" >&2
+    echo "     1. Geraet anstecken und dieses Fenster neu starten." >&2
+    echo "        Was gerade da ist:  ./scripts/start-stt-mac.sh --geraete" >&2
+    echo "     2. Auf ein anderes umstellen — in $FB/.env:" >&2
+    echo "          SST_AUDIO_DEVICES=MacBook      (eingebautes Mikrofon)" >&2
+    echo "          STT_AUDIO_DEVICES_SR=48000     (dessen Rate)" >&2
+    echo "        Der Wert ist ein SUBSTRING des Geraetenamens." >&2
+    echo "        Danach den Pegel pruefen: ./scripts/pruefe-mikrofon.sh 6" >&2
+  fi
 else
   echo "Spracherkennung beendet."
 fi
