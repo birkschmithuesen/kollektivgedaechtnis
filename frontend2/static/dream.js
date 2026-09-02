@@ -21,6 +21,21 @@ export function createDreamView(root) {
   // ever been shown this session". Only the latter should skip the cross-fade
   // — conflating them turned a discard-then-new-dream into a cut (Finding 2).
   let everRevealed = false;
+  // 🔴 BLÄTTERN DURCH DIE REIHE (Birk, 2026-09-02: „da wo unten die kleinen
+  // Reihen entsteht, da soll man das anklicken können").
+  //
+  // `blaetterId` ist der Traum, den jemand von Hand aus dem Streifen geholt
+  // hat — null heisst „die Wand zeigt den laufenden Traum". `letzteLiveId`
+  // merkt sich, welcher Traum zuletzt von selbst kam.
+  //
+  // Warum beides: `applyState` laeuft bei JEDER Zustandsmeldung, also auch
+  // wenn der Operator nur die Streifenhoehe verstellt. Ohne die zweite
+  // Variable wuerde jede solche Meldung das Blättern abbrechen. Und ohne die
+  // erste bliebe die Wand auf einem alten Bild stehen, wenn jemand vergisst
+  // zurueckzuklicken — deshalb holt ein NEUER Traum sie von selbst zurueck.
+  let blaetterId = null;
+  let letzteLiveId = null;
+  let letzterLiveTraum = null;
   let visibleFrame = 0;
   let fading = false;
   let fadeTimer = null;
@@ -96,7 +111,44 @@ export function createDreamView(root) {
       image.src = dream.image;
       image.alt = dream.sentence || '';
       item.appendChild(image);
+      // Anklickbar, damit man einen frueheren Traum wieder gross sehen kann.
+      // `button`-Rolle und Tastaturzugang, weil ein `li` fuer sich genommen
+      // kein Bedienelement ist.
+      item.classList.add('anklickbar');
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+      item.dataset.traum = dream.id;
+      const holen = () => zeigeAusReihe(dream);
+      item.addEventListener('click', holen);
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); holen(); }
+      });
+      if (dream.id === blaetterId) item.classList.add('gewaehlt');
       strip.appendChild(item);
+    });
+  }
+
+  /** Einen Traum aus dem Streifen gross zeigen. Zweiter Klick auf denselben
+   * geht zurueck auf den laufenden. */
+  function zeigeAusReihe(dream) {
+    if (!dream || !dream.image) return;
+    if (blaetterId === dream.id) {
+      blaetterId = null;
+      if (letzterLiveTraum) {
+        currentId = letzterLiveTraum.id;
+        stopTypewriter();
+        showImage(letzterLiveTraum.image, letzterLiveTraum.sentence, false);
+        sentence.textContent = letzterLiveTraum.sentence || '';
+      }
+    } else {
+      blaetterId = dream.id;
+      currentId = dream.id;
+      stopTypewriter();
+      showImage(dream.image, dream.sentence, false);
+      sentence.textContent = dream.sentence || '';
+    }
+    strip.querySelectorAll('li').forEach((li) => {
+      li.classList.toggle('gewaehlt', li.dataset.traum === blaetterId);
     });
   }
 
@@ -131,6 +183,21 @@ export function createDreamView(root) {
         clearStage();
       }
       currentId = null;
+      return;
+    }
+    // Ein WIRKLICH neuer Traum beendet das Blättern und holt die Wand zurueck.
+    // Eine blosse Zustandsmeldung (Operator dreht an einem Regler) tut das
+    // nicht — sonst waere Blättern nach dem ersten Reglerdruck vorbei.
+    const istNeu = dream.id !== letzteLiveId;
+    letzteLiveId = dream.id;
+    letzterLiveTraum = dream;
+    if (istNeu && blaetterId !== null) {
+      blaetterId = null;
+      strip.querySelectorAll('li').forEach((li) => li.classList.remove('gewaehlt'));
+    }
+    if (blaetterId !== null) {
+      // Jemand sieht sich gerade einen frueheren Traum an: Bild und Satz
+      // bleiben, wo sie sind.
       return;
     }
     // Idempotent: the same dream re-applied is a no-op for the image, so a

@@ -121,6 +121,43 @@ function renderDreams(dreams) {
 let werkTraeume = [];
 let werkIndex = 0;
 
+/** Die Begriffe, die in ein Bild sollten — aus dem gespeicherten Stufe-1-Prompt.
+ *
+ * 🔴 GELESEN, NICHT GESPEICHERT (Birk, 2026-09-02: „die Werkstatt sollte auch
+ * die Begriffe anzeigen, die in das Bild sollten"). Eine eigene Spalte waere
+ * sauberer, aber `kg2/store.py` hat keine Nachruestung fuer neue Spalten —
+ * eine Schemaaenderung am Ausstellungstag ist das falsche Risiko. Der Prompt
+ * ist ohnehin wortwoertlich aufbewahrt (Spec §5.3, „ein Satz ohne den Prompt,
+ * der ihn erzeugt hat, laesst sich hinterher nicht erklaeren"), und die
+ * Listen darin tragen feste Ueberschriften.
+ *
+ * Scheitert das Lesen, wird NICHTS angezeigt statt etwas Falschem: Das ist
+ * eine Anzeige, kein Verhalten — ein leeres Feld kostet nichts, eine
+ * erfundene Begriffsliste waere eine Lüge ueber das Bild daneben.
+ */
+function werkBegriffe(prompt) {
+  if (typeof prompt !== 'string') return null;
+  const listeNach = (ueberschrift) => {
+    const i = prompt.indexOf(ueberschrift);
+    if (i < 0) return [];
+    // Die Liste beginnt hinter dem Doppelpunkt der Ueberschrift und endet an
+    // der ersten Leerzeile.
+    const ab = prompt.indexOf(':\n', i);
+    if (ab < 0) return [];
+    const block = prompt.slice(ab + 2).split('\n\n')[0];
+    return block
+      .split('\n')
+      .map((z) => z.trim())
+      .filter((z) => z)
+      // „Lehmhaus (1× genannt)" -> „Lehmhaus"
+      .map((z) => z.replace(/\s*\(\d+×[^)]*\)\s*$/, ''));
+  };
+  const pflicht = listeNach('DIESE BEGRIFFE MÜSSEN INS BILD');
+  const rand = listeNach('Randnotizen');
+  if (!pflicht.length && !rand.length) return null;
+  return { pflicht, rand };
+}
+
 function werkZeige(index) {
   const inhalt = document.getElementById('werk-inhalt');
   const leer = document.getElementById('werk-leer');
@@ -153,6 +190,26 @@ function werkZeige(index) {
       (traum.status !== 'ok' ? ` · ${traum.status}` : '') +
       (traum.discarded ? ' · verworfen' : ''),
   );
+  const begriffe = werkBegriffe(traum.stage1_prompt);
+  const feld = document.getElementById('werk-begriffe');
+  if (feld) {
+    feld.replaceChildren();
+    if (begriffe) {
+      const zeile = (titel, liste) => {
+        if (!liste.length) return;
+        const d = document.createElement('div');
+        const b = document.createElement('strong');
+        b.textContent = `${titel} `;
+        d.appendChild(b);
+        d.appendChild(document.createTextNode(liste.join(' · ')));
+        feld.appendChild(d);
+      };
+      zeile('Pflicht:', begriffe.pflicht);
+      zeile('Rand:', begriffe.rand);
+    } else {
+      feld.textContent = '—';
+    }
+  }
   setze('werk-motiv', traum.image_description || traum.sentence_en);
   setze('werk-widerspruch', traum.tension_source);
   setze(

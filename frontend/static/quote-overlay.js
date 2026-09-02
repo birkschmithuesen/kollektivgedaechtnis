@@ -43,6 +43,24 @@ export function attachQuoteOverlay(
   const text = document.createElement('blockquote');
   text.className = 'quote-text';
   panel.appendChild(text);
+
+  // 🔴 Der zweite Fall: ein Tipp auf einen BEGRIFF (Birk, 2026-09-02).
+  //
+  // „Wenn du pro Begriff eine kleine Erklärung machst, wie dieses Wort gemeint
+  // ist … könnte beim Anklicken angezeigt werden, ähnlich wie die Zitate bei
+  // Personen. Bei Begriffen, die von mehreren Menschen genannt wurden, der
+  // jeweilige Kontext pro Person mit dem Namen."
+  //
+  // Eine EIGENE Liste und nicht dasselbe Blockquote: Ein Zitat ist EIN Satz
+  // einer Person, eine Begriffserklärung sind mehrere Stellen mehrerer
+  // Menschen. In ein Blockquote gepresst stünden die Anführungszeichen, die
+  // `.quote-text::before/::after` zeichnet, einmal um alle zusammen — als
+  // hätte eine Person das am Stück gesagt.
+  const belegListe = document.createElement('ul');
+  belegListe.className = 'quote-belege';
+  belegListe.hidden = true;
+  panel.appendChild(belegListe);
+
   container.appendChild(panel);
 
   // person_id -> quote text, at most one per person. Rebuilt on every graph
@@ -54,6 +72,10 @@ export function attachQuoteOverlay(
   // the operator cleared a misheard one. Then the entry is simply absent and
   // the panel shows the quote alone, exactly as it did before this existed.
   let namesByPerson = new Map();
+  //: term_id -> [{ person_id, evidence }], aus den KANTEN. Je Person eine
+  //: eigene Stelle: derselbe Begriff kann bei zwei Menschen zwei Dinge
+  //: meinen, und genau das soll man sehen können.
+  let belegeByTerm = new Map();
   let timer = null;
   let shownFor = null;
 
@@ -63,6 +85,8 @@ export function attachQuoteOverlay(
     shownFor = null;
     panel.hidden = true;
     panel.classList.remove('visible');
+    belegListe.hidden = true;
+    belegListe.replaceChildren();
   }
 
   function showName(personId) {
@@ -92,7 +116,48 @@ export function attachQuoteOverlay(
     return true;
   }
 
-  view.cy.on('tap', 'node.person', (event) => show(event.target.id()));
+  /** Die Belegstellen eines Begriffs, eine Zeile je Person. */
+  function showTerm(termId) {
+    const eintraege = (belegeByTerm.get(termId) || []).filter((e) => e.evidence);
+    if (!eintraege.length) {
+      // Wie bei einer Person ohne Zitat: lieber nichts als eine Karte, die
+      // kaputt aussieht. Kanten von vor dem 2026-09-02 haben keine Stelle.
+      hide();
+      return false;
+    }
+    text.textContent = '';
+    name.hidden = true;
+    belegListe.replaceChildren();
+    for (const eintrag of eintraege) {
+      const zeile = document.createElement('li');
+      const wer = namesByPerson.get(eintrag.person_id);
+      if (wer) {
+        const marke = document.createElement('span');
+        marke.className = 'quote-beleg-name';
+        marke.textContent = wer;
+        zeile.appendChild(marke);
+      }
+      const was = document.createElement('span');
+      was.className = 'quote-beleg-text';
+      was.textContent = eintrag.evidence;
+      zeile.appendChild(was);
+      belegListe.appendChild(zeile);
+    }
+    belegListe.hidden = false;
+    shownFor = termId;
+    panel.hidden = false;
+    panel.classList.add('visible');
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(hide, visibleMs);
+    return true;
+  }
+
+  view.cy.on('tap', 'node.person', (event) => {
+    belegListe.hidden = true;
+    belegListe.replaceChildren();
+    show(event.target.id());
+  });
+  view.cy.on('tap', 'node.term', (event) => showTerm(event.target.id()));
   // Background tap = "done reading".
   //
   // Do NOT rewrite this as `cy.on('tap', 'core', …)`. Cytoscape's 'core'
@@ -128,6 +193,17 @@ export function attachQuoteOverlay(
         if (person) nextNames.set(node.id, person);
       }
       namesByPerson = nextNames;
+
+      // Die Belegstellen kommen an den KANTEN mit (kg/export.py) — nur dort
+      // steht, WER einen Begriff wie gemeint hat.
+      const nextBelege = new Map();
+      for (const edge of graph.edges || []) {
+        if (!edge || !edge.evidence) continue;
+        const liste = nextBelege.get(edge.target) || [];
+        liste.push({ person_id: edge.source, evidence: edge.evidence });
+        nextBelege.set(edge.target, liste);
+      }
+      belegeByTerm = nextBelege;
       // A name corrected by the operator has to reach a quote that is on the
       // wall right now: the correction is usually made BECAUSE the wrong name
       // is being read off the screen.
@@ -138,6 +214,7 @@ export function attachQuoteOverlay(
       if (shownFor && !next.has(shownFor)) hide();
     },
     show,
+    showTerm,
     hide,
     get visible() {
       return !panel.hidden;

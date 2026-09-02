@@ -128,9 +128,19 @@ def test_the_name_stands_above_the_quote_in_its_own_element(wall):
         "Wir bauen viel zu viel neu."
     )
     # Zuerst der Name, dann das Zitat — und beide sichtbar.
-    assert wall.eval_on_selector(
+    #
+    # 🔴 Geprueft wird die REIHENFOLGE, nicht mehr die Anzahl der Kinder
+    # (2026-09-02). Seit dem Tipp auf einen Begriff haengt in derselben Karte
+    # eine dritte Liste (`.quote-belege`), die bei einer PERSON verborgen
+    # bleibt. Die Aussage dieses Tests war nie „genau zwei Elemente", sondern
+    # „der Name steht ueber dem Zitat und nicht darin".
+    kinder = wall.eval_on_selector(
         "#quote-overlay", "el => [...el.children].map(c => c.className)"
-    ) == ["quote-name", "quote-text"]
+    )
+    assert kinder[:2] == ["quote-name", "quote-text"]
+    assert wall.eval_on_selector(
+        "#quote-overlay .quote-belege", "el => el.hidden"
+    ) is True, "die Begriffsliste darf bei einer Person nicht aufgehen"
     assert wall.eval_on_selector("#quote-overlay .quote-name", "el => el.hidden") is False
 
 
@@ -231,3 +241,208 @@ def test_a_quote_whose_person_left_the_graph_disappears(wall):
     without_p1 = {**GRAPH, "quotes": [q for q in GRAPH["quotes"] if q["person_id"] != "p1"]}
     wall.evaluate("(g) => window.kgQuotes.setGraph(g)", without_p1)
     assert wall.evaluate("window.kgQuotes.visible") is False
+
+
+# --- Die Karte darf nicht unter der Bedienleiste liegen (Birk, 2026-09-02) ---
+#
+# „Beim Touchscreen erscheinen die Zitate, wenn man sie anklickt, unter dem
+# Zoomregler." Die Karte stand auf `bottom: calc(104px * var(--quote-scale))`.
+# Bei einem Massstab von 0,4 sind das 41,6 px — die Leiste ist 88 px hoch.
+# Der Fehler war nicht die Zahl, sondern dass der Abstand, der die Leiste
+# freihalten soll, MIT DER KARTE MITSCHRUMPFT.
+#
+# Gemessen wird an der ECHTEN Seite (`projection.html?touch=1`), nicht an der
+# Harness: die Leiste entsteht nur dort, und genau ihre gemessene Hoehe ist
+# der Wert, um den es geht.
+
+
+def test_die_zitatkarte_liegt_ueber_der_bedienleiste(page, static_server):
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(f"{static_server}/frontend/projection.html?touch=1")
+    page.wait_for_selector("#touch-controls")
+
+    masse = page.evaluate(
+        """() => {
+             const karte = document.querySelector('.quote-overlay');
+             const leiste = document.getElementById('touch-controls');
+             if (!karte || !leiste) return null;
+             // Die Karte ist unsichtbar, bis jemand tippt — sie steht aber
+             // schon im Layout, und genau ihre Lage wird hier geprueft.
+             karte.classList.add('visible');
+             const k = karte.getBoundingClientRect();
+             const l = leiste.getBoundingClientRect();
+             return { karteUnten: k.bottom, leisteOben: l.top,
+                      leisteHoehe: l.height,
+                      variable: getComputedStyle(document.documentElement)
+                                  .getPropertyValue('--touch-leiste-hoehe').trim() };
+           }"""
+    )
+    assert masse is not None, "Karte oder Bedienleiste fehlen auf der Touchflaeche"
+
+    # 1. Die Leiste meldet ihre Hoehe, sonst kann das CSS nichts damit tun.
+    assert masse["variable"], "--touch-leiste-hoehe ist nicht gesetzt"
+    assert masse["variable"] != "0px"
+
+    # 2. Und die Karte endet ueber der Leiste, nicht darin.
+    assert masse["karteUnten"] <= masse["leisteOben"], (
+        f"Die Zitatkarte endet bei {masse['karteUnten']:.0f} px, die Leiste "
+        f"beginnt schon bei {masse['leisteOben']:.0f} px — sie liegt darunter."
+    )
+
+
+def test_ohne_bedienleiste_sitzt_die_karte_wie_zuvor(page, static_server):
+    """Die Gegenrichtung: Wand und Saal haben keine Leiste, dort darf sich
+    nichts verschoben haben — sonst waere der Fix eine Aenderung am Foyer."""
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(f"{static_server}/frontend/projection.html?plenum=1")
+    page.wait_for_function("window.kgView !== undefined")
+
+    masse = page.evaluate(
+        """() => {
+             const karte = document.querySelector('.quote-overlay');
+             const stil = getComputedStyle(karte);
+             return { bottom: stil.bottom,
+                      leiste: !!document.getElementById('touch-controls'),
+                      variable: getComputedStyle(document.documentElement)
+                                  .getPropertyValue('--touch-leiste-hoehe').trim() };
+           }"""
+    )
+    assert masse["leiste"] is False, "ohne ?touch=1 darf es keine Bedienleiste geben"
+    assert masse["variable"] == "", "ohne Leiste darf die Variable nicht gesetzt sein"
+    # 104 * 0.4 = 41.6 — exakt der Wert von vor der Aenderung.
+    assert masse["bottom"].startswith("41."), masse["bottom"]
+
+
+def test_die_zitatschrift_haengt_nicht_an_der_kartengroesse(page, static_server):
+    """Birk, 2026-09-02: „viel zu klein, die Schrift wesentlich groesser."
+
+    `--quote-scale` kam auf 0,4, weil die KARTE zu gross war — und nahm die
+    Schrift mit auf 13,6 px. Zwei Regler, weil es zwei Fragen sind: wieviel
+    Flaeche die Karte nimmt, und ob man den Text von dort liest, wo man steht.
+
+    Geprueft wird die ENTKOPPLUNG, nicht der Zahlenwert: Wer `--quote-scale`
+    weiter verkleinert, darf die Schrift nicht mitreissen. Sonst waere derselbe
+    Fehler beim naechsten Verkleinern wieder da.
+    """
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(f"{static_server}/frontend/projection.html?touch=1")
+    # `state="attached"`: die Karte steht von Anfang an im DOM, ist aber
+    # `hidden`, bis jemand eine Person antippt. Gemessen wird ihre BERECHNETE
+    # Schriftgroesse, und die gilt auch im verborgenen Zustand.
+    page.wait_for_selector(".quote-overlay", state="attached")
+    page.wait_for_selector(".quote-text", state="attached")
+
+    def schriftgroesse():
+        return page.evaluate(
+            """() => {
+                 const t = document.querySelector('.quote-text');
+                 const n = document.querySelector('.quote-name');
+                 return { zitat: parseFloat(getComputedStyle(t).fontSize),
+                          name: parseFloat(getComputedStyle(n).fontSize) };
+               }"""
+        )
+
+    vorher = schriftgroesse()
+    # Gross genug, um aus mehreren Metern gelesen zu werden — 13,6 px war es
+    # nicht. Untergrenze, kein Sollwert: Birk stellt den Rest vor Ort ein.
+    assert vorher["zitat"] >= 24, f"Zitat rendert mit {vorher['zitat']} px"
+    assert vorher["name"] >= 15, f"Name rendert mit {vorher['name']} px"
+
+    # Und jetzt die Karte kleiner stellen — die Schrift darf NICHT mitgehen.
+    page.evaluate(
+        "() => document.documentElement.style.setProperty('--quote-scale', '0.2')"
+    )
+    nachher = schriftgroesse()
+    assert nachher == vorher, (
+        "die Schrift ist mit der Kartengroesse geschrumpft — genau die "
+        f"Kopplung, die weg sollte ({vorher} -> {nachher})"
+    )
+
+
+# --- Ein Tipp auf einen BEGRIFF (Birk, 2026-09-02) --------------------------
+#
+# „Das könnte beim Anklicken auf diesen Begriff angezeigt werden, ähnlich wie
+# die Zitate, die bei Personen angezeigt werden. Bei Begriffen, die von
+# mehreren Menschen genannt wurden, könnte der jeweilige Kontext, in dem der
+# Begriff genannt wurde, pro Person mit dem Namen der Person dargestellt
+# werden."
+#
+# Die Stellen liegen seit dem 2026-09-02 an den KANTEN (`evidence` in
+# graph.json), je Person eine eigene.
+
+BEGRIFFS_GRAPH = {
+    "version": 1,
+    "max_terms": 99,
+    "nodes": [
+        {"id": "p1", "type": "person", "portrait": "", "hidden": False, "created_at": 1,
+         "x": 100, "y": 100, "name": "Frau Kirchner"},
+        {"id": "p2", "type": "person", "portrait": "", "hidden": False, "created_at": 2,
+         "x": 400, "y": 100, "name": None},
+        {"id": "t1", "type": "term", "label": "Genossenschaftliches Wohnen", "mentions": 2,
+         "hidden": False, "created_at": 4, "x": 250, "y": 300},
+        {"id": "t2", "type": "term", "label": "Holzbau", "mentions": 1,
+         "hidden": False, "created_at": 5, "x": 600, "y": 300},
+    ],
+    "edges": [
+        {"id": "e1", "source": "p1", "target": "t1",
+         "evidence": "Das Haus gehört allen zusammen"},
+        {"id": "e2", "source": "p2", "target": "t1",
+         "evidence": "Wir haben eine Genossenschaft gegründet"},
+        {"id": "e3", "source": "p1", "target": "t2"},
+    ],
+    "quotes": [{"id": "q1", "person_id": "p1", "text": "Wir bauen zu viel Neues."}],
+}
+
+
+@pytest.fixture()
+def wand_mit_begriffen(page, static_server):
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.wait_for_function("window.kgView !== undefined")
+    page.evaluate(
+        """async (graph) => {
+             const { attachQuoteOverlay } = await import('./quote-overlay.js');
+             window.kgQuotes = attachQuoteOverlay(window.kgView);
+             window.kgView.update(graph);
+             window.kgQuotes.setGraph(graph);
+           }""",
+        BEGRIFFS_GRAPH,
+    )
+    page.wait_for_function("window.kgView.layoutPending === false")
+    return page
+
+
+def test_ein_tipp_auf_einen_begriff_zeigt_die_belegstellen(wand_mit_begriffen):
+    _tap(wand_mit_begriffen, "t1")
+
+    karte = wand_mit_begriffen.locator(".quote-overlay")
+    assert karte.is_visible()
+    text = karte.inner_text()
+    assert "Das Haus gehört allen zusammen" in text
+    assert "Wir haben eine Genossenschaft gegründet" in text
+
+
+def test_bei_mehreren_menschen_steht_der_name_an_seiner_stelle(wand_mit_begriffen):
+    _tap(wand_mit_begriffen, "t1")
+
+    text = wand_mit_begriffen.locator(".quote-overlay").inner_text()
+    # Frau Kirchner hat sich vorgestellt, die zweite Person nicht — dort darf
+    # kein leerer Name und kein Platzhalter stehen.
+    assert "Frau Kirchner" in text
+    assert "null" not in text.lower()
+
+
+def test_ein_begriff_ohne_belegstelle_oeffnet_keine_leere_karte(wand_mit_begriffen):
+    """Wie bei einer Person ohne Zitat: lieber nichts als eine Karte, die
+    kaputt aussieht."""
+    _tap(wand_mit_begriffen, "t2")
+
+    assert not wand_mit_begriffen.locator(".quote-overlay").is_visible()
+
+
+def test_ein_tipp_auf_eine_person_zeigt_weiter_ihr_zitat(wand_mit_begriffen):
+    """Die Gegenrichtung — der bestehende Weg darf nicht kaputtgehen."""
+    _tap(wand_mit_begriffen, "p1")
+
+    text = wand_mit_begriffen.locator(".quote-overlay").inner_text()
+    assert "Wir bauen zu viel Neues." in text

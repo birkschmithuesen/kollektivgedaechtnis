@@ -677,3 +677,70 @@ def test_ein_knapp_zu_kleiner_ausschnitt_behaelt_seinen_zoom(tmp_path, monkeypat
         f"der Zoom wurde weggenommen: {ausschnitt.size[0]} statt {wunsch} px -- "
         "genau Birks Einwand"
     )
+
+
+# --- Ein Gesicht am Bildrand (Birk, 2026-09-02) -----------------------------
+#
+# „Das letzte Foto ist nicht so richtig auf mein Gesicht sortiert." Gemessen an
+# p7 (1200x1600, Gesicht 480x480 bei x=614): Der Ausschnitt von 960 px haette
+# bei x=374 beginnen muessen, um zentriert zu sein — 374+960 = 1334 liegt aber
+# 134 px hinter dem rechten Bildrand. Er wurde deshalb zurueckgeschoben, und
+# das Gesicht landete waagerecht bei 64 % statt 50 %.
+#
+# In einer runden Scheibe faellt das auf: Das Portrait ist ein Kreis, und ein
+# Gesicht ausserhalb seiner Mitte sieht nicht nach Ausschnitt aus, sondern nach
+# Fehler. Der dritte Weg ist, den Ausschnitt KLEINER zu machen statt ihn zu
+# verschieben — enger heisst hier nicht schlechter, sondern naeher dran.
+
+
+def _bild_mit_gesicht_am_rand(breite=1200, hoehe=1600, gesicht=480, mitte_x=854):
+    """Ein Foto, dessen Gesicht so weit rechts steht, dass ein zentrierter
+    Ausschnitt in voller Groesse ueber den Rand liefe."""
+    from PIL import Image
+    im = Image.new("RGB", (breite, hoehe), (90, 90, 95))
+    return im, (int(mitte_x - gesicht / 2), 786, gesicht, gesicht)
+
+
+def test_ein_gesicht_am_bildrand_bleibt_zentriert(monkeypatch):
+    im, g = _bild_mit_gesicht_am_rand()
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _: g)
+
+    crop = photos._square_crop(im)
+    gx, _, gw, _ = g
+    mitte = gx + gw / 2
+    # Wo der Ausschnitt wirklich beginnt, ergibt sich aus seiner Groesse.
+    links = max(0, min(int(round(mitte - crop.size[0] / 2)), im.size[0] - crop.size[0]))
+    anteil = (mitte - links) / crop.size[0]
+
+    assert 0.45 <= anteil <= 0.55, (
+        f"Gesicht sitzt waagerecht bei {anteil*100:.0f} % statt in der Mitte — "
+        "der Ausschnitt wurde verschoben, statt kleiner zu werden"
+    )
+
+
+def test_der_ausschnitt_wird_dafuer_nicht_beliebig_klein(monkeypatch):
+    """Die Grenze gegen zu starkes Hochrechnen gilt weiter: lieber ein leicht
+    verschobenes Gesicht als ein Portrait, das zu Brei hochgerechnet wird."""
+    # Gesicht ganz am Rand: zentriert ginge nur mit einem winzigen Ausschnitt.
+    im, g = _bild_mit_gesicht_am_rand(mitte_x=1150)
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _: g)
+
+    crop = photos._square_crop(im)
+
+    mindest = int(round(512 / photos.MAX_HOCHRECHNUNG))
+    assert crop.size[0] >= mindest, (
+        f"Ausschnitt {crop.size[0]}px liegt unter der Hochrechnungsgrenze {mindest}px"
+    )
+
+
+def test_ein_gesicht_in_der_bildmitte_bleibt_unveraendert(monkeypatch):
+    """Die Gegenrichtung: wo nichts an den Rand stoesst, darf sich nichts
+    aendern — sonst waere jedes Portrait plötzlich enger."""
+    im, g = _bild_mit_gesicht_am_rand(mitte_x=600)
+    monkeypatch.setattr(photos, "_gesicht_finden", lambda _: g)
+
+    crop = photos._square_crop(im)
+    gx, _, gw, _ = g
+    erwartet = min(int(round(gw * photos.GESICHTS_ZOOM)), *im.size)
+
+    assert crop.size[0] == erwartet

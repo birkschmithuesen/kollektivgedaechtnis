@@ -330,6 +330,37 @@ def _square_crop(image: Image.Image) -> Image.Image:
         mindest = int(round(512 / MAX_HOCHRECHNUNG))
         side = min(max(side, mindest), width, height)
 
+        # 🔴 LIEBER ENGER ALS VERSCHOBEN (Birk, 2026-09-02: „das letzte Foto
+        # ist nicht so richtig auf mein Gesicht sortiert").
+        #
+        # Steht jemand weit am Bildrand, laeuft ein zentrierter Ausschnitt in
+        # voller Groesse ueber die Kante. Bis hierher wurde er dann
+        # ZURUECKGESCHOBEN — gemessen an p7 (1200x1600, Gesicht 480x480 bei
+        # x=614): Der Ausschnitt haette bei x=374 beginnen muessen, 374+960
+        # liegt aber 134 px hinter dem rechten Rand, und das Gesicht landete
+        # waagerecht bei 64 % statt 50 %.
+        #
+        # In einer runden Scheibe faellt das auf: ein Gesicht ausserhalb der
+        # Kreismitte sieht nicht nach Ausschnitt aus, sondern nach Fehler.
+        # Also wird der Ausschnitt stattdessen KLEINER, bis er zentriert
+        # hineinpasst — enger heisst hier nicht schlechter, sondern naeher
+        # dran. Das Verschieben unten bleibt als letzte Rettung stehen, fuer
+        # den Fall, dass auch das nicht mehr reicht (naechster Absatz).
+        mitte_x = gx + gw / 2
+        mitte_y = gy + gh / 2
+        # Wieviel Platz hat die Gesichtsmitte nach beiden Seiten? Der kleinere
+        # Abstand bestimmt, wie gross ein zentrierter Ausschnitt sein darf.
+        platz_waagerecht = 2 * min(mitte_x, width - mitte_x)
+        # Senkrecht sitzt die Mitte nicht mittig, sondern bei GESICHTS_BIAS —
+        # oben bleibt weniger Luft als unten, also gelten zwei Schranken.
+        platz_oben = mitte_y / GESICHTS_BIAS if GESICHTS_BIAS else float("inf")
+        platz_unten = (height - mitte_y) / (1 - GESICHTS_BIAS)
+        passend = min(platz_waagerecht, platz_oben, platz_unten)
+        # `mindest` ist die Untergrenze gegen zu starkes Hochrechnen und wiegt
+        # schwerer: lieber ein leicht verschobenes Gesicht als ein Portrait,
+        # das zu Brei hochgerechnet wird.
+        side = int(min(side, max(passend, mindest)))
+
         # Waagerecht auf die Gesichtsmitte.
         left = int(round(gx + gw / 2 - side / 2))
         # Senkrecht so, dass der Kopf dort landet, wo GESICHTS_BIAS ihn haben

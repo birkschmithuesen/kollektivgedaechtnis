@@ -52,6 +52,23 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
   const bar = document.createElement('div');
   bar.className = 'touch-controls';
   bar.id = 'touch-controls';
+  // 🔴 Die Leiste sagt selbst, wie hoch sie ist (Birk, 2026-09-02: die
+  // Zitatkarte erschien UNTER dem Zoomregler).
+  //
+  // Die Karte stand auf `bottom: calc(104px * var(--quote-scale))`. Bei einem
+  // Massstab von 0,4 sind das 41,6 px — die Leiste ist aber 88 px hoch
+  // (12 + 64 + 12). Der Fehler ist nicht die Zahl, sondern dass der Abstand,
+  // der die Leiste freihalten soll, MIT DER KARTE MITSCHRUMPFT: je kleiner
+  // das Zitat gestellt wird, desto tiefer verschwindet es.
+  //
+  // GEMESSEN statt aus dem CSS abgeschrieben: Wer dort das Polster oder die
+  // Trefferzone aendert, soll das nicht an einer zweiten Stelle nachtragen
+  // muessen. Der ResizeObserver haelt den Wert nach, wenn sich die Leiste
+  // spaeter noch aendert (Drehung, andere Schirmbreite).
+  //
+  // Nur im Touch-Modus: `createTouchControls` wird ausschliesslich unter
+  // `?touch=1` aufgerufen (projection.html). Auf der Wand und im Saal bleibt
+  // die Variable ungesetzt, und die Karte sitzt dort unveraendert.
 
   const overview = document.createElement('button');
   overview.id = 'touch-overview';
@@ -143,6 +160,17 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
   });
 
   container.appendChild(bar);
+
+  // Erst nach dem Einhaengen messbar. `--touch-leiste-hoehe` liest base.css,
+  // damit die Zitatkarte ueber der Leiste landet statt darunter.
+  const meldeHoehe = () => {
+    const h = Math.round(bar.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--touch-leiste-hoehe', `${h}px`);
+  };
+  meldeHoehe();
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(meldeHoehe).observe(bar);
+  }
 
   return {
     element: bar,

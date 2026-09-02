@@ -171,6 +171,21 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
    `--quote-scale: 1`. */
 :root {
   --quote-scale: 0.4;
+  /* 🔴 DIE SCHRIFT HAENGT NICHT MEHR AN DER KARTENGROESSE (Birk, 2026-09-02:
+     „das Zitat im Touchscreen ist viel zu klein, die Schrift wesentlich
+     groesser").
+     `--quote-scale` kam am 2026-09-01 auf 0,4, weil die KARTE zu gross war.
+     Sie skalierte aber alles mit, auch den Text: 34 px * 0,4 = 13,6 px fuers
+     Zitat und 8,8 px fuer den Namen. Auf einem 65-Zoll-Schirm, den man aus
+     mehreren Metern liest, ist das keine Schrift mehr.
+     Zwei Regler, weil es zwei Fragen sind: Wieviel Flaeche darf die Karte
+     nehmen (`--quote-scale`) und wie gross muss der Text sein, damit man ihn
+     von dort liest, wo man steht (`--quote-schrift`). Wer die Karte kleiner
+     stellt, will selten auch schlechter lesen.
+     0,8 ergibt 27,2 px fuers Zitat und 17,6 px fuer den Namen — das Doppelte
+     von vorher. Die Karte waechst dabei nur so weit mit, wie der Text sie
+     auseinanderdrueckt; Polster und Breite bleiben an `--quote-scale`. */
+  --quote-schrift: 0.8;
 
   /* Ab hier: Stellschrauben, die die Saal-Auflage (`static/plenum.css`,
      nur bei `?plenum=1`) überschreibt. Die Vorgaben sind WÖRTLICH die Werte,
@@ -197,7 +212,14 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 .quote-overlay {
   position: fixed;
   left: 50%;
-  bottom: calc(104px * var(--quote-scale));
+  /* 🔴 Die Hoehe der Bedienleiste kommt oben drauf, sie SKALIERT NICHT mit
+     (Birk, 2026-09-02: das Zitat erschien unter dem Zoomregler). Der zweite
+     Summand ist der Abstand zum unteren Rand und darf mit der Karte kleiner
+     werden; der erste ist ein Hindernis und darf es nicht.
+     `--touch-leiste-hoehe` setzt touch-controls.js aus der GEMESSENEN Hoehe,
+     und zwar nur unter `?touch=1`. Ohne die Variable (Wand, Saal, Traum)
+     greift die 0px-Vorgabe und die Karte sitzt exakt wie vorher. */
+  bottom: calc(var(--touch-leiste-hoehe, 0px) + 104px * var(--quote-scale));
   transform: translateX(-50%) translateY(12px);
   max-width: min(calc(1100px * var(--quote-scale)), 78vw);
   margin: 0;
@@ -221,7 +243,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
    der er sie erbt. Ohne Namen ist das Element `hidden` und nimmt keinen Platz. */
 .quote-name {
   margin: 0 0 0.5em;
-  font-size: calc(22px * var(--quote-scale));
+  font-size: calc(22px * var(--quote-schrift));
   line-height: 1.3;
   color: inherit;
   opacity: 0.62;
@@ -229,7 +251,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
 }
 .quote-text {
   margin: 0;
-  font-size: calc(34px * var(--quote-scale));
+  font-size: calc(34px * var(--quote-schrift));
   line-height: 1.42;
   color: inherit;
   font-style: italic;
@@ -354,3 +376,37 @@ body:has(.touch-controls) .dream-legende { bottom: 104px; }
    wie die Legende auf der anderen Seite. Mitgewachsen mit dem Zoom-Regler
    (88 px Leiste statt 72), aus demselben Grund wie dort. */
 body:has(.touch-controls) .qr-hinweis { bottom: 106px; }
+
+
+/* 🔴 Die Belegstellen eines BEGRIFFS (Birk, 2026-09-02): „bei Begriffen, die
+   von mehreren Menschen genannt wurden, der jeweilige Kontext pro Person mit
+   dem Namen." Eine Liste und kein Blockquote — die Anführungszeichen von
+   `.quote-text` stünden sonst einmal um alle Stellen zusammen, als hätte eine
+   Person das am Stück gesagt.
+   Größen an `--quote-schrift`, wie Zitat und Name: Wer die Schrift der Karte
+   verstellt, meint die ganze Karte. */
+.quote-belege {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--quote-scale));
+}
+.quote-belege li {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--quote-scale));
+}
+.quote-beleg-name {
+  font-size: calc(22px * var(--quote-schrift));
+  opacity: 0.72;
+  font-style: normal;
+}
+.quote-beleg-text {
+  font-size: calc(34px * var(--quote-schrift));
+  line-height: 1.25;
+}
+/* Die Anführungszeichen hier je Stelle, nicht um die ganze Liste. */
+.quote-beleg-text::before { content: '\201E'; }
+.quote-beleg-text::after { content: '\201C'; }

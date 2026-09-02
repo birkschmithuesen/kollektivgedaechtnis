@@ -227,3 +227,20 @@ html, body {
 [data-strip-mode="cover"] #strip li img {
   object-fit: cover;
 }
+
+
+/* 🔴 Die Bilderreihe ist seit 2026-09-02 anklickbar (Birk: „da wo unten die
+   kleinen Reihen entsteht, da soll man das anklicken können"). Der ausgewählte
+   Traum bekommt eine Kante — sonst sieht man an der Wand nicht, dass gerade
+   ein FRUEHERES Bild gross steht und nicht das laufende. Zurueck geht es mit
+   einem zweiten Klick, und ein neuer Traum holt die Wand von selbst zurueck
+   (dream.js). */
+#strip li.anklickbar { cursor: pointer; }
+#strip li.gewaehlt img {
+  outline: 3px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -3px;
+}
+#strip li.anklickbar:focus-visible img {
+  outline: 3px solid rgba(255, 255, 255, 0.55);
+  outline-offset: -3px;
+}
