@@ -125,13 +125,26 @@ class AufnahmeLeuchte @JvmOverloads constructor(
             Zustand.UNBEKANNT -> ContextCompat.getColor(context, R.color.aufnahme_unbekannt)
         }
 
-        // Der Hof macht aus dem Punkt eine Leuchte statt eines Aufklebers. Er
-        // pulsiert mit und ist der Teil, den man aus dem Augenwinkel sieht.
-        if (zustand == Zustand.LAEUFT) {
-            hof.color = grund
-            hof.alpha = (70 * helligkeit).toInt().coerceIn(0, 255)
-            canvas.drawCircle(cx, cy, r, hof)
+        // Der Hof macht aus dem Punkt eine Leuchte statt eines Aufklebers.
+        //
+        // Auch im Ruhezustand (Birk, 2026-09-02: die LED soll gruen UND rot
+        // koennen). Haette nur Rot einen Hof, waere Gruen sichtbar schwaecher
+        // -- und der Ruhezustand ist keine halbe Anzeige, sondern die
+        // Aussage „es wird nichts aufgezeichnet". Die soll genauso deutlich
+        // dastehen wie ihr Gegenteil.
+        //
+        // Der Unterschied bleibt die BEWEGUNG, nicht die Helligkeit: Rot
+        // pulsiert, Gruen und Amber stehen still. Das ist das Zeichen, das
+        // ohne Farbwahrnehmung funktioniert -- und damit auch fuer die rund
+        // acht Prozent Maenner mit Rot-Gruen-Schwaeche lesbar, fuer die die
+        // beiden Farben allein nichts unterscheiden.
+        hof.color = grund
+        hof.alpha = if (zustand == Zustand.LAEUFT) {
+            (70 * helligkeit).toInt().coerceIn(0, 255)
+        } else {
+            55
         }
+        canvas.drawCircle(cx, cy, r, hof)
 
         farbe.color = grund
         farbe.alpha = if (zustand == Zustand.LAEUFT) {

@@ -13,10 +13,21 @@
          „laeuft" benutzt. Es soll aus dem Augenwinkel wirken. -->
     <color name="aufnahme_an">#FF2B2B</color>
     <color name="aufnahme_an_dunkel">#5A0F0F</color>
-    <!-- „Kein Interview": kein Gruen. Gruen hiesse „alles in Ordnung, du
-         kannst", gemeint ist aber „es wird gerade nichts aufgezeichnet".
-         Ein sattes Grau sagt genau das und konkurriert nicht mit dem Rot. -->
-    <color name="aufnahme_aus">#3A3A40</color>
+    <!-- „Kein Interview": GRUEN (Birk, 2026-09-02: „die led soll gruen und
+         rot koennen"). Hier stand zuerst Grau, mit der Begruendung, Gruen
+         hiesse „alles in Ordnung" statt „es wird nichts aufgezeichnet". Am
+         Geraet war das falsch herum gedacht: Grau liest sich wie „aus" im
+         Sinne von „tot" oder „noch nicht geladen", und dann sieht man der
+         Leuchte gar nichts mehr an. Ein Zustand, den man nicht bemerkt, ist
+         keine Anzeige.
+
+         Gruen und Rot sind das Paar, das jeder ohne Erklaerung liest, und
+         genau darum geht es: aus dem Augenwinkel, ohne nachzudenken.
+
+         Kein Smaragdgruen, sondern ein Signalgruen mit genug Helligkeit fuer
+         den dunklen Grund (#0B0B0D). Es leuchtet ruhig, waehrend Rot
+         blinkt: die Bewegung bleibt das Alarmzeichen. -->
+    <color name="aufnahme_aus">#22C55E</color>
     <!-- Station nicht erreichbar: der Zustand ist UNBEKANNT, und das ist
          etwas anderes als „aus". Amber, weil es weder beruhigt noch alarmiert. -->
     <color name="aufnahme_unbekannt">#C08A2E</color>

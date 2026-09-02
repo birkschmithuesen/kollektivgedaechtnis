@@ -29,8 +29,18 @@ eindeutig ist, ob gerade eine Aufnahme läuft oder nicht."
 | Leuchte | Text | Bedeutung |
 |---|---|---|
 | rot, **blinkend** | INTERVIEW RUNNING | es wird aufgezeichnet |
-| grau, ruhig | Kein Interview | es wird nicht aufgezeichnet |
+| **grün**, ruhig | KEINE AUFNAHME | es wird nicht aufgezeichnet |
 | amber, ruhig | Station nicht erreichbar | **unbekannt** — die App weiß es nicht |
+
+Hier stand zuerst Grau statt Grün, mit der Begründung, Grün hieße „alles in
+Ordnung" statt „es wird nichts aufgezeichnet". Am Gerät war das falsch herum
+gedacht (Birk, 2026-09-02): Grau liest sich wie „tot" oder „noch nicht
+geladen", und dann sieht man der Leuchte gar nichts mehr an. Ein Zustand, den
+man nicht bemerkt, ist keine Anzeige.
+
+Der Unterschied zwischen den Zuständen ist die **Bewegung**, nicht die Farbe:
+Rot pulsiert, Grün und Amber stehen still. Das bleibt lesbar, wenn jemand Rot
+und Grün nicht unterscheiden kann.
 
 🔴 **Der dritte Zustand ist kein Schönheitsfehler, sondern der Kern.** „Nicht
 erreichbar" als „aus" darzustellen wäre die gefährlichste Lüge, die diese

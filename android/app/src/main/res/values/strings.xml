@@ -21,7 +21,11 @@
          liest. Die beiden anderen Zustaende bleiben deutsch wie der Rest der
          App: sie werden gelesen, nicht erkannt. -->
     <string name="led_laeuft">INTERVIEW RUNNING</string>
-    <string name="led_aus">Kein Interview</string>
+    <!-- Gegenstueck zu INTERVIEW RUNNING, in derselben Bauart: Es soll auf
+         einen Blick als der ANDERE Zustand derselben Anzeige lesbar sein,
+         nicht als abwesende Meldung. „Kein Interview" hiess das vorher und
+         las sich wie eine Fehlanzeige. -->
+    <string name="led_aus">KEINE AUFNAHME</string>
     <string name="led_unbekannt">Station nicht erreichbar</string>
 
     <!-- Interview starten/beenden. Die beiden Texte sind bewusst gleich lang
