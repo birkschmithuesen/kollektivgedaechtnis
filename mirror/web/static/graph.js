@@ -285,17 +285,35 @@ const STIL = [
     selector: 'node.person',
     style: {
       shape: 'ellipse',
-      // Zwei Fuellungen, nach Datenlage — woertlich die Regel der Wand
-      // (`styleSchwarzplan()`): hinter einem Portrait bleibt der Grund dunkel
-      // und laesst die harte Knotenkante unter dem auslaufenden PNG-Alpha
-      // verschwinden. OHNE Portrait traegt die Fuellung die Scheibe allein.
-      // Eine Farbe, keine Vertretung: kein Avatar, kein Fragezeichen. Wer sich
-      // gegen ein Bild entscheidet, ist kein fehlendes Bild.
-      'background-color': (ele) => (ele.data('portrait') ? '#242424' : '#6e6656'),
-      'border-color': '#d62828',
-      'border-opacity': 1,
-      'outline-color': '#d62828',
-      'outline-opacity': 0.35,
+      // 🔴 WIE IM PLENARSAAL, nicht wie im Schwarzplan (Birk, 2026-09-02:
+      // „der rote Ring um die Porträts soll vom Design her so sein wie im
+      // Plenarsaal"). Der Saal erbt `theme-f.css`, und dort steht die
+      // Begruendung im Wortlaut:
+      //
+      //   `--person-fill: transparent` — „Schwarz und Nichts sehen auf
+      //   Schwarz gleich aus. Der Unterschied zeigt sich nur dort, wo etwas
+      //   dahinter ist, und dort ist er der Punkt." Ein dunkler Grund hinter
+      //   dem Portrait deckt zu, was hinter ihm liegt.
+      //
+      //   `--ring-width: 0` — „Die goldenen Kreise um die Porträts sind viel
+      //   zu viel" (2026-08-30). Der weiche Rand kommt aus dem PNG selbst
+      //   (`kg/photos.py`, `soft_disc_mask` und `ring_glow`); ein harter Ring
+      //   drumherum schneidet genau den Feather ab, den er umgibt.
+      //
+      // OHNE Portrait traegt die Fuellung die Scheibe allein. `#6e6656` ist
+      // `--person-blank`: keine neue Farbe, sondern die der ruhenden
+      // Begriffsraender. Eine Flaeche, keine Vertretung — kein Avatar, kein
+      // Fragezeichen. Wer sich gegen ein Bild entscheidet, ist kein fehlendes
+      // Bild.
+      'background-color': (ele) => (ele.data('portrait') ? 'transparent' : '#6e6656'),
+      'background-opacity': (ele) => (ele.data('portrait') ? 0 : 1),
+      // Ring und Ringecho aus. Die Farbe bleibt als warmes Gold stehen (nicht
+      // Rot), damit ein spaeteres Wiedereinschalten nicht versehentlich die
+      // Signalfarbe zurueckholt.
+      'border-color': '#c9a227',
+      'border-opacity': 0,
+      'outline-color': '#c9a227',
+      'outline-opacity': 0,
       label: '',
       'z-index': 20,
     },
@@ -341,11 +359,20 @@ const STIL = [
     selector: 'node.term.in-dream',
     style: { 'background-opacity': 0.8 },
   },
-  // Die drei Achsen tragen Punkt UND Schrift, wie an der Wand: eine farbige
-  // Kontur allein verschwindet, sobald ein Portrait dahinterliegt.
-  { selector: 'node.dream-anchor', style: { color: '#d62828', 'border-color': '#d62828' } },
-  { selector: 'node.dream-neighbour', style: { color: '#4a7fd8', 'border-color': '#4a7fd8' } },
-  { selector: 'node.dream-recent', style: { color: '#f4c300', 'border-color': '#f4c300' } },
+  // 🔴 KEIN FARBCODE (Birk, 2026-09-02: „bei dem Spiegelview soll das Color
+  // Coding weg"). Dieselbe Entscheidung wie im Plenarsaal, wo `plenum.css`
+  // alle drei Rollenfarben auf `--licht` legt und die Legende damit gegenstands-
+  // los wird.
+  //
+  // Die Rollen bleiben als KLASSEN erhalten und werden nur gleich gemalt: Sie
+  // steuern weiterhin, WAS im Traum liegt (`node.term.in-dream` hebt die Tafel
+  // an), nur nicht mehr, in welcher Farbe. Wer sie spaeter wieder auseinander-
+  // ziehen will, aendert drei Werte statt der Datenstruktur.
+  //
+  // `#BEB497` ist `--licht` aus theme-f.css, dieselbe Farbe wie im Saal.
+  { selector: 'node.dream-anchor', style: { color: '#BEB497', 'border-color': '#BEB497' } },
+  { selector: 'node.dream-neighbour', style: { color: '#BEB497', 'border-color': '#BEB497' } },
+  { selector: 'node.dream-recent', style: { color: '#BEB497', 'border-color': '#BEB497' } },
   {
     selector: 'edge.link',
     style: {
@@ -389,18 +416,17 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
     const z = cy.zoom() || 1;
     const person =
       Math.min(ZIEL.personMax, Math.max(ZIEL.personMin, ZIEL.personModell * z)) / z;
-    // Ring und Echo als Anteil der Scheibe, nicht als feste Zahl: sonst ist
-    // die Kontur am grossen Gesicht ein Haar und am kleinen ein Reifen.
-    const ring = person * ZIEL.ringAnteil;
+    // 🔴 Ring und Echo auf 0 — wie `--ring-width` und `--ring-echo-width` im
+    // Theme, das der Plenarsaal erbt. Die Breite wird trotzdem HIER gesetzt
+    // und nicht nur oben im Stilblatt weggelassen: Cytoscape behaelt sonst,
+    // was ein frueherer Frame gesetzt hat, und der Ring kaeme beim ersten
+    // Zoomen zurueck.
     cy.batch(() => {
       cy.nodes('.person').style({
         width: person,
         height: person,
-        'border-width': ring,
-        // Das konzentrische Echo der Wand: ein zweiter, schwacher Ring in
-        // Abstand. Bauhaus-Zirkelgeometrie, aus theme-f uebernommen.
-        'outline-width': Math.max(0.5, ring * 0.2),
-        'outline-offset': ring * 1.4,
+        'border-width': 0,
+        'outline-width': 0,
       });
       // Die Tafeln. Gemessen wird in Bildschirm-Pixeln (einmal je Beschriftung,
       // gecacht), geteilt wird je Frame — so bleibt die Tafel exakt so gross

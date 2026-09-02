@@ -196,7 +196,16 @@
 
       const leer = daten.nodes.length === 0;
       warten.hidden = !leer;
-      legende.hidden = leer;
+      // 🔴 Die Legende bleibt VERBORGEN (Birk, 2026-09-02: „bei dem
+      // Spiegelview soll das Color Coding weg"). Seit die drei Traumrollen
+      // gleich gemalt werden (graph.js), erklaert sie einen Unterschied, den
+      // man nicht mehr sieht — und eine Legende zu drei gleichfarbigen
+      // Punkten ist schlimmer als keine.
+      //
+      // Das Element bleibt im Markup stehen statt geloescht zu werden: Wer
+      // den Farbcode zurueckholt, aendert drei Werte in graph.js und diese
+      // eine Zeile, statt die Legende neu zu bauen.
+      legende.hidden = true;
       // Eine Person, deren Knoten gerade weggefiltert wurde, darf nicht als
       // Blatt über einem Netz stehen bleiben, in dem es sie nicht mehr gibt.
       if (blatt.classList.contains('offen') && zitate.size === 0) zeigePerson(null);

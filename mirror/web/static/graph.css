@@ -142,9 +142,12 @@
   background: currentColor;
   vertical-align: baseline;
 }
-#legende .anker { color: var(--rot); }
-#legende .nachbar { color: var(--blau); }
-#legende .neu { color: var(--gelb); }
+/* 🔴 Kein Farbcode mehr (2026-09-02). Die Regeln bleiben stehen, damit ein
+   Zurueckdrehen eine Aenderung an EINER Stelle ist — sichtbar wird die
+   Legende ohnehin nicht mehr, graph.html haelt sie verborgen. */
+#legende .anker { color: var(--licht, #BEB497); }
+#legende .nachbar { color: var(--licht, #BEB497); }
+#legende .neu { color: var(--licht, #BEB497); }
 #legende[hidden] { display: none; }
 
 
