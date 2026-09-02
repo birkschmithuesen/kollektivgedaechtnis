@@ -86,27 +86,37 @@ def schalter(page):
     )
 
 
-def test_die_wand_zeichnet_mit_den_sparschaltern(page, static_server):
-    """Ohne Parameter gilt der schnelle Weg — die Station bekommt ihn, ohne
-    dass jemand etwas an die Adresse haengen muss."""
+def test_die_wand_zeichnet_ohne_sparschalter(page, static_server):
+    """🔴 UMGEDREHT AM 2026-09-02. Vorher galt der schnelle Weg ohne Parameter.
+
+    Birk am Geraet: „Wenn ich beim Touchscreen mit der Maus das Bild bewege,
+    dann bauen sich die neuen Ausschnitte erst auf, nachdem ich die Maus
+    losgelassen hab. Ausserdem sind beim Beruehren alle Kanten verschwunden."
+
+    Genau das tun die zwei Schalter. Und die Messung im Modulkopf sagt, dass
+    sie AUSSCHLIESSLICH bei Benutzergesten greifen — ihr Preis faellt also
+    genau dort an, wo jemand die Wand anfasst, ihr Nutzen an einer Stelle, an
+    der die Wand die meiste Zeit gar nicht ist.
+    """
     wand(page, static_server)
-
-    assert schalter(page) == {"textur": True, "kantenAus": True, "pixel": None}
-
-
-def test_schnell_0_gibt_der_bibliothek_ihre_vorgaben_zurueck(page, static_server):
-    """Der Rueckweg am Ausstellungstag, ohne neuen Build."""
-    wand(page, static_server, "&schnell=0")
 
     assert schalter(page) == {"textur": False, "kantenAus": False, "pixel": None}
 
 
-def test_jeder_andere_wert_bleibt_beim_schnellen_weg(page, static_server):
-    """Nur die ausdrueckliche 0 schaltet zurueck. Ein Tippfehler in der Adresse
-    darf die Station nicht versehentlich langsam machen."""
-    wand(page, static_server, "&schnell=ja")
+def test_schnell_1_holt_die_sparschalter_zurueck(page, static_server):
+    """Der Weg fuer ein schwaecheres Geraet, ohne neuen Build."""
+    wand(page, static_server, "&schnell=1")
 
     assert schalter(page) == {"textur": True, "kantenAus": True, "pixel": None}
+
+
+def test_jeder_andere_wert_bleibt_beim_ruhigen_weg(page, static_server):
+    """Nur die ausdrueckliche 1 schaltet die Sparschalter ein. Ein Tippfehler
+    in der Adresse darf die Wand nicht versehentlich waehrend jeder Geste
+    ihre Kanten verlieren lassen — das sah am 2026-09-02 wie ein Defekt aus."""
+    wand(page, static_server, "&schnell=ja")
+
+    assert schalter(page) == {"textur": False, "kantenAus": False, "pixel": None}
 
 
 def test_pixelratio_bleibt_ungesetzt(page, static_server):
@@ -177,8 +187,16 @@ def _kantenpixel(page):
 def wand_mit_kante(page, static_server):
     """Die Wand im Modus `manual` — nur dort darf eine Hand die Ansicht
     schieben (`camera.js:_applyInteractivity`), und nur dann setzt der
-    Renderer ueberhaupt `swipePanning`."""
-    wand(page, static_server)
+    Renderer ueberhaupt `swipePanning`.
+
+    🔴 MIT `&schnell=1`, seit die Sparschalter am 2026-09-02 vorgabemaessig
+    AUS sind. Die Tests an dieser Vorrichtung messen, WIE die Schalter sich
+    verhalten — dass eine Geste sie weckt, die Kamerafahrt nicht, und dass die
+    Kanten danach von selbst zurueckkommen. Diese Messung ist die Begruendung
+    fuer die neue Vorgabe und muss deshalb weiter laufen; sie braucht die
+    Schalter nur ausdruecklich statt stillschweigend.
+    """
+    wand(page, static_server, "&schnell=1")
     page.evaluate("(g) => window.kgView.update(g)", GRAPH)
     page.evaluate("() => window.kgView.camera.setMode('manual')")
     page.wait_for_timeout(600)

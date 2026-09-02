@@ -120,14 +120,42 @@ def test_die_scheibe_ohne_portrait_bleibt_ruhig(wall):
     assert max(farbe) < 200, f"zu laut fuer eine Scheibe ohne Bild: {farbe}"
 
 
-def test_ein_portrait_liegt_weiter_auf_schwarz(wall):
-    """Die Gegenprobe zur Aenderung: Der schwarze Grund HINTER einem echten
-    Portrait bleibt schwarz. Er ist es, der in theme-f die harte Knotenkante
-    verschwinden laesst (--person-fill: #000000); ein grauer Grund unter dem
-    auslaufenden Alpha des PNG haette genau die Kante zurueckgeholt."""
+def test_hinter_einem_portrait_liegt_nichts(wall):
+    """🔴 UMGESCHRIEBEN AM 2026-09-02. Vorher hiess dieser Test
+    `test_ein_portrait_liegt_weiter_auf_schwarz` und pruefte
+    `background-color == "rgb(0,0,0)"` mit der Begruendung
+    „--person-fill: #000000".
+
+    Beides war ueberholt. In `theme-f.css` steht seit 2026-08-30
+    `--person-fill: transparent`, samt Begruendung: „Schwarz und Nichts sehen
+    auf Schwarz gleich aus. Der Unterschied zeigt sich nur dort, wo etwas
+    dahinter ist, und dort ist er der Punkt."
+
+    Der alte Test konnte den Bruch nicht sehen, weil er die FARBE prueft:
+    Cytoscape kennt das Schluesselwort `transparent` nicht und macht Schwarz
+    daraus — die Farbe stimmte also weiter, waehrend die Scheibe
+    undurchsichtig blieb. Birk hat es am Bild gesehen: „der schwarze Ring
+    hinter dem transparenten Ring ist immer noch da."
+
+    Durchsichtigkeit lebt in Cytoscape in `background-opacity`. Genau darauf
+    prueft dieser Test jetzt — auf die Eigenschaft, die der Mensch vor der
+    Wand sieht, nicht auf die, die zufaellig gleich blieb.
+    """
     zeige(wall, graph(portrait=PORTRAIT))
 
-    assert wall.evaluate("window.kgView.cy.$id('p1').style('background-color')") == "rgb(0,0,0)"
+    assert wall.evaluate("window.kgView.cy.$id('p1').style('background-opacity')") in (0, "0"), (
+        "hinter dem Portrait liegt wieder eine undurchsichtige Scheibe"
+    )
+
+
+def test_ohne_portrait_bleibt_die_scheibe_undurchsichtig(wall):
+    """Die Gegenprobe. Ohne Bild traegt die Fuellung die Person allein — in
+    theme-f traegt sie sonst nichts (Ring, Lichthof und Ringecho stehen auf
+    0). Wer die Durchsichtigkeit pauschal setzt statt nur hinter einem
+    Portrait, loescht damit jeden Menschen ohne Foto von der Wand."""
+    zeige(wall, graph(portrait=None))
+
+    assert wall.evaluate("window.kgView.cy.$id('p1').style('background-opacity')") in (1, "1")
 
 
 def test_ein_nachgereichtes_portrait_erreicht_die_wand(wall):

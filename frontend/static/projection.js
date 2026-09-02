@@ -33,6 +33,25 @@ function styleSchwarzplan() {
   const FS = cssVar('--label-size', '26');
   const PERSON_FILL = cssVar('--person-fill', '#242424');
   const PERSON_BLANK = cssVar('--person-blank', '#6E6656');
+  /* 🔴 Cytoscape kennt das Schluesselwort `transparent` NICHT und macht
+     Schwarz daraus. Am 2026-09-02 an der laufenden Wand gemessen, nicht
+     vermutet:
+
+       --person-fill      transparent    (so will es theme-f)
+       background-color   rgb(0,0,0)     (das macht Cytoscape daraus)
+       background-opacity 1              (undurchsichtig)
+
+     Die Absicht des Themes ist damit seit dem 2026-08-30 nie angekommen:
+     „Schwarz und Nichts sehen auf Schwarz gleich aus. Der Unterschied zeigt
+     sich nur dort, wo etwas dahinter ist" — und genau dort lag eine
+     undurchsichtige schwarze Scheibe. Birk hat es gesehen: „der schwarze Ring
+     hinter dem transparenten Ring ist immer noch da".
+
+     Durchsichtigkeit geht in Cytoscape ueber `background-opacity`, nicht ueber
+     die Farbe. Abgeleitet aus der Variablen statt fest verdrahtet, damit ein
+     Theme mit echter Fuellfarbe (Schwarzplan) unveraendert weiterlaeuft. */
+  const FUELLUNG_DURCHSICHTIG =
+    String(PERSON_FILL).trim().toLowerCase() === 'transparent';
 
   return [
     /* ---- PERSONEN: Portrait mit Tiefe ------------------------------------
@@ -69,6 +88,10 @@ function styleSchwarzplan() {
            Fragezeichen, kein Icon. Wer sich gegen ein Bild entscheidet, ist
            kein fehlendes Bild. */
         'background-color': (ele) => (ele.data('portrait') ? PERSON_FILL : PERSON_BLANK),
+        // Nur die Scheibe HINTER einem Portrait verschwindet. Ohne Portrait
+        // traegt die Fuellung die Person allein und muss stehen bleiben.
+        'background-opacity': (ele) =>
+          ele.data('portrait') && FUELLUNG_DURCHSICHTIG ? 0 : 1,
         // KEIN radial-gradient hinter dem Portrait mehr. Er stammte aus dem
         // ersten Entwurf und sollte „die Scheibe dort fuellen, wo das Portrait
         // durchscheinend auslaeuft" — genau diese Aufgabe hat seit 2026-08-30
@@ -232,6 +255,25 @@ function styleSchwarzplan() {
 function style() {
   const PERSON_FILL = cssVar('--person-fill', '#242424');
   const PERSON_BLANK = cssVar('--person-blank', '#6E6656');
+  /* 🔴 Cytoscape kennt das Schluesselwort `transparent` NICHT und macht
+     Schwarz daraus. Am 2026-09-02 an der laufenden Wand gemessen, nicht
+     vermutet:
+
+       --person-fill      transparent    (so will es theme-f)
+       background-color   rgb(0,0,0)     (das macht Cytoscape daraus)
+       background-opacity 1              (undurchsichtig)
+
+     Die Absicht des Themes ist damit seit dem 2026-08-30 nie angekommen:
+     „Schwarz und Nichts sehen auf Schwarz gleich aus. Der Unterschied zeigt
+     sich nur dort, wo etwas dahinter ist" — und genau dort lag eine
+     undurchsichtige schwarze Scheibe. Birk hat es gesehen: „der schwarze Ring
+     hinter dem transparenten Ring ist immer noch da".
+
+     Durchsichtigkeit geht in Cytoscape ueber `background-opacity`, nicht ueber
+     die Farbe. Abgeleitet aus der Variablen statt fest verdrahtet, damit ein
+     Theme mit echter Fuellfarbe (Schwarzplan) unveraendert weiterlaeuft. */
+  const FUELLUNG_DURCHSICHTIG =
+    String(PERSON_FILL).trim().toLowerCase() === 'transparent';
 
   return [
     {
@@ -245,6 +287,10 @@ function style() {
         // Person ohne Bild soll in allen Themes dasselbe sein und nicht in
         // dreien eine leere und in einem eine gefuellte Scheibe.
         'background-color': (ele) => (ele.data('portrait') ? PERSON_FILL : PERSON_BLANK),
+        // Nur die Scheibe HINTER einem Portrait verschwindet. Ohne Portrait
+        // traegt die Fuellung die Person allein und muss stehen bleiben.
+        'background-opacity': (ele) =>
+          ele.data('portrait') && FUELLUNG_DURCHSICHTIG ? 0 : 1,
         'background-image': (ele) => ele.data('portrait') || 'none',
         'background-fit': 'cover',
         'border-width': cssVar('--ring-width', '5'),
@@ -1193,11 +1239,29 @@ export function createGraphView(
   // der Screen, den alle sehen"). 3840x2160 sind gesetzt und nicht
   // verhandelbar — FullHD sieht sichtbar schlechter aus.
   //
-  // 🔴 Abschaltbar per `?schnell=0`, damit am Ausstellungstag ohne neuen Build
-  // zurueckgeschaltet werden kann, falls die Textur sichtbar unscharf wirkt.
-  // Das Urteil faellt am Bild, nicht an der Zahl (Birk).
+  // 🔴 SEIT 2026-09-02 STEHEN BEIDE VORGABEMAESSIG AUS. Birk am Geraet:
+  // „Wenn ich beim Touchscreen mit der Maus das Bild bewege, dann bauen sich
+  // die neuen Ausschnitte erst auf, nachdem ich die Maus losgelassen hab.
+  // Ausserdem sind beim Beruehren alle Kanten verschwunden."
+  //
+  // Das ist keine Stoerung, sondern genau das, wofuer die zwei Schalter da
+  // sind: `hideEdgesOnViewport` blendet die Kanten waehrend der Geste aus,
+  // `textureOnViewport` zeigt ein Standbild statt neu zu zeichnen — deshalb
+  // bleiben die aufgedeckten Raender leer, bis man loslaesst.
+  //
+  // Die Umkehr ist nicht Geschmack, sondern die Folge der Messung, die schon
+  // im Block darueber steht: Beide greifen AUSSCHLIESSLICH bei
+  // Benutzergesten, nie bei der automatischen Kamerafahrt. Damit steht ihr
+  // Preis genau dort, wo jemand die Wand anfasst — und ihr Nutzen an einer
+  // Stelle, an der die Wand die meiste Zeit gar nicht ist. Die gemessenen
+  // 61,4 % GPU im Dauerbetrieb `pan` ruehren sie ohnehin nicht an.
+  //
+  // Der Weg zurueck ist derselbe wie vorher, nur andersherum: `?schnell=1`
+  // schaltet die Sparschalter wieder ein, ohne neuen Build. Wer am
+  // Ausstellungstag auf einem schwaecheren Geraet ein ruckelndes Wischen
+  // sieht, hat ihn. Das Urteil faellt am Bild, nicht an der Zahl (Birk).
   const params = new URLSearchParams(window.location.search);
-  const schnell = params.get('schnell') !== '0';
+  const schnell = params.get('schnell') === '1';
   const cy = cytoscape({
     container,
     style: schwarzplan ? styleSchwarzplan() : style(),
