@@ -187,6 +187,34 @@ def test_der_ganze_ablauf_vom_handy_aus(station):
     warte_auf(lambda: store.open_person() is None, "Interview geschlossen")
     assert hole(f"{basis}/api/state")["interview"] is None
 
-    # 6. Und danach wird wieder abgewiesen -- der Kreis schliesst sich.
+    # 6. 🔴 Und JETZT geht es trotzdem noch (Birk, 2026-09-01: „auch wenn das
+    #    interview schon abgeschlossen ist und begriffe an der wand").
+    #    Das Gespraech ist vorbei, die Person haengt an der Wand -- und das
+    #    Bild laesst sich weiterhin tauschen.
+    vorher = store.latest_person().portrait_path
+    assert post(f"{basis}/api/photo", jpeg_bytes((10, 200, 10)), "image/jpeg") == 200
+    warte_auf(
+        lambda: store.latest_person().portrait_path != vorher,
+        "Portraet nach dem Gespraech getauscht",
+    )
+    nachher = store.latest_person()
+    assert nachher.id == person_id, "es wurde eine neue Person angelegt"
+    assert nachher.stopped_at is not None, "das Interview wurde wiedereroeffnet"
+    assert hole(f"{basis}/api/state")["interview"] is None, (
+        "die App saehe faelschlich ein laufendes Interview"
+    )
+    assert len(store.list_persons()) == 1
+
+
+def test_ohne_jede_person_wird_abgewiesen(station):
+    """Der einzige Fall, in dem noch 409 kommt: eine Station, an der noch nie
+    jemand war. Es gibt dann kein Ziel, zu dem das Bild gehoeren koennte --
+    und ein Portraet ohne Person ist ein Gesicht auf der Platte, das niemand
+    zuordnet und niemand aufraeumt."""
+    basis, store, cfg = station
+
+    assert store.latest_person() is None
     assert post(f"{basis}/api/photo", jpeg_bytes(), "image/jpeg") == 409
-    assert len(store.list_persons()) == 1, "die Abweisung legte doch etwas an"
+    for ordner in (cfg.photo_dir, cfg.portrait_dir):
+        if ordner.exists():
+            assert list(ordner.glob("*")) == [], f"Waise in {ordner}"

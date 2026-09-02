@@ -328,19 +328,23 @@ class MainActivity : AppCompatActivity() {
             }
             when (ergebnis) {
                 is Uploader.Ergebnis.Erfolg -> {
-                    // Ein angekommenes Foto BELEGT, dass ein Interview laeuft:
-                    // Seit 2026-09-01 nimmt die Station Fotos nur noch dazu an
-                    // und weist sie sonst mit 409 ab (`kg/server.py`). Eine
-                    // 200 ist damit die verlaesslichste Auskunft ueber den
-                    // Zustand, die die App bekommen kann -- verlaesslicher als
-                    // die letzte Abfrage, die bis zu drei Sekunden alt ist.
+                    // 🔴 Aus einem angekommenen Foto darf NICHT geschlossen
+                    // werden, dass ein Interview laeuft. Seit 2026-09-01 nimmt
+                    // die Station ein Bild auch fuer das zuletzt BEENDETE
+                    // Gespraech an (Birk: „auch wenn das interview schon
+                    // abgeschlossen ist und begriffe an der wand") -- eine 200
+                    // heisst also nur „angekommen", nicht „laeuft".
                     //
-                    // Nur auf dem direkten Weg: Der Spiegel nimmt das Foto
-                    // entgegen, ohne die Station zu fragen, seine 200 sagt
-                    // ueber das Interview also nichts.
-                    if (einstellungen.ziel == Einstellungen.Ziel.STATION) {
-                        interviewLaeuft = true
-                    }
+                    // Hier stand kurzzeitig `interviewLaeuft = true`. Das war
+                    // richtig, solange Fotos ausschliesslich zum laufenden
+                    // Interview gehoerten, und wurde mit derselben Aenderung
+                    // falsch: Der Knopf haette danach „beenden" angeboten fuer
+                    // etwas, das schon beendet ist.
+                    //
+                    // Stattdessen nachfragen. Die naechste Abfrage kommt
+                    // ohnehin binnen drei Sekunden; bis dahin bleibt der Knopf
+                    // gesperrt, was ehrlicher ist als eine falsche Zusage.
+                    interviewLaeuft = null
                     fertig(getString(R.string.gesendet), fehler = false)
                     // Die Vorschau kommt NACH der Erfolgsmeldung und blockiert
                     // den Auslöser nicht: sie ist eine Dreingabe. Über den

@@ -48,16 +48,30 @@ eine bewusste Handlung am Schalter. Ein Foto kann nur noch drei Dinge tun:
 
 | Lage | Was passiert |
 |---|---|
-| kein Interview offen | **abgewiesen** (HTTP 409), keine Datei entsteht |
-| offen, ohne Portrait | Bild wird nachgereicht (`late_photo`) |
-| offen, mit Portrait | Bild **ersetzt** das bisherige (`replaced_photo`) |
+| Interview läuft, ohne Portrait | Bild wird nachgereicht (`late_photo`) |
+| Interview läuft, mit Portrait | Bild **ersetzt** das bisherige (`replaced_photo`) |
+| Interview **beendet** | Bild geht an die **zuletzt begonnene** Person — auch wenn sie schon mit Begriffen an der Wand hängt |
+| noch **nie** ein Interview | **abgewiesen** (HTTP 409), keine Datei entsteht |
 
 Der Grund ist der Betrieb am Booth: Dort wird probiert und nachjustiert.
 Solange jedes Foto ein Interview eröffnete, erzeugte jeder Probeauslöser eine
 Person an der Wand, die nie etwas gesagt hat — und ein zweites Foto während
 eines Gesprächs zerschnitt dieses in zwei Personen.
 
-Die App zeigt bei 409 „Kein Interview offen — zuerst unten Interview starten".
+**Letzte Aufnahme gewinnt — aber immer nur beim letzten Interview.** Ein Bild
+lässt sich auch nach dem Gespräch noch tauschen (der häufige Fall: erst an der
+Wand sieht man, dass es nichts taugt). Es trifft dabei **nie** eine ältere
+Person: `Store.latest_person()` hält diese Regel, es gibt am Booth also keinen
+Weg, einem längst gegangenen Gast ein fremdes Gesicht zu geben. Das ersetzte
+Bild bleibt als Datei liegen — es ist der Vorrat, aus dem der noch ungebaute
+Auswahl-Cache einmal wählen wird (`docs/HANDOFF-alternativ-foto-cache.md`).
+
+Was dabei **nicht** passiert: Das Interview wird nicht wiedereröffnet, seine
+Begriffe werden nicht neu berechnet, `stopped_at` bleibt stehen. Und die App
+schließt aus einer angenommenen 200 **nicht** mehr, dass ein Interview läuft —
+sie fragt nach.
+
+Die App zeigt bei 409 „Noch kein Interview — zuerst unten Interview starten".
 
 ## Sucherrahmen und Vorschau (für Testreihen)
 

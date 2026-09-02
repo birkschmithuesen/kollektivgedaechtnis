@@ -169,18 +169,16 @@ class Core:
         if kind == "photo":
             transitions = self.tracker.photo(at)
             if not transitions:
-                # 🔴 Ein Foto ohne laufendes Interview wird zu nichts (seit
-                # 2026-09-01). `/api/photo` weist so etwas schon vorher ab und
-                # schreibt gar nicht erst -- Telegram kann das nicht, dort
-                # liegen die Dateien bereits auf der Platte, wenn wir hier
-                # ankommen.
+                # Kein Interview offen. Zwei Faelle, und sie sind nicht
+                # dasselbe (Birk, 2026-09-01: „kann ein interview foto auch
+                # ausgetauscht werden, wenn das interview schon abgeschlossen
+                # ist und begriffe an der wand? das waere gut. also immer nur
+                # das letzte interview kein anderes.").
                 #
-                # Also hier wegraeumen, an der einen Stelle, durch die JEDER
-                # Weg laeuft. Ein Portraet, das zu keiner Person gehoert, ist
-                # ein Gesicht auf der Platte, das niemand mehr zuordnen kann
-                # und niemand aufraeumt -- bei einer Arbeit ueber
-                # Datensouveraenitaet ist das kein Schoenheitsfehler.
-                self._verwirf_foto(payload)
+                # Der Tracker kann diese Unterscheidung nicht treffen: Er
+                # kennt nur das LAUFENDE Interview, geschlossene Personen
+                # stehen in der Datenbank. Deshalb faellt sie hier.
+                self._nachtraegliches_portrait(payload)
         elif kind == "text":
             transitions = self.tracker.text_message(at)
         elif kind == "mic_switch":
@@ -223,6 +221,49 @@ class Core:
         # The person node appears immediately; terms grow after the stop (spec 6).
         broadcast_graph(self.store, self.cfg, self.bus)
         broadcast_state(self.store, self.bus)
+
+    def _nachtraegliches_portrait(self, payload) -> None:
+        """Ein Foto, waehrend kein Interview laeuft.
+
+        Birk, 2026-09-01: „also immer nur das letzte interview kein anderes."
+
+        Der Fall aus dem Flur: Das Gespraech ist vorbei, die Person haengt
+        schon mit ihren Begriffen an der Wand -- und erst dann faellt auf,
+        dass das Bild nichts taugt oder gar keins da ist. Bis hierhin war das
+        eine Sackgasse: Das Foto wurde geloescht, und die Person blieb ohne
+        Gesicht.
+
+        🔴 NUR die zuletzt begonnene Person, nie eine aeltere. Das ist keine
+        Bequemlichkeit, sondern der Schutz: Es gibt am Booth keinen Weg, sich
+        zu vergreifen und einem fremden Gast, der laengst gegangen ist, ein
+        anderes Gesicht zu geben. `Store.latest_person()` haelt diese Regel,
+        nicht der Aufrufer.
+
+        Was NICHT passiert: Das Interview wird nicht wiedereroeffnet, seine
+        Begriffe werden nicht neu berechnet, `stopped_at` bleibt stehen. Nur
+        das Bild wandert -- die Auswertung ist gelaufen und haengt nicht am
+        Portraet.
+
+        Ist die Datenbank leer (noch nie ein Interview), bleibt es beim
+        Wegraeumen: Ein Bild ohne jede Person waere ein Gesicht auf der
+        Platte, das niemand zuordnet und niemand aufraeumt.
+        """
+        person = self.store.latest_person()
+        if person is None:
+            self._verwirf_foto(payload)
+            return
+        alt_photo, alt_portrait = person.photo_path, person.portrait_path
+        photo_path, portrait_path = payload
+        self.store.set_person_portrait(person.id, photo_path, portrait_path)
+        # Das ersetzte Bild wird NICHT geloescht -- anders als ein verworfenes.
+        # Es gehoerte zu einer echten Person und ist damit ein Beleg, kein
+        # Abfall; „letzte Aufnahme gewinnt" (Birk) sagt, welche gilt, nicht,
+        # dass die anderen zu vernichten sind. Sobald es den Auswahl-Cache
+        # gibt (docs/HANDOFF-alternativ-foto-cache.md), ist genau das der
+        # Vorrat, aus dem gewaehlt wird.
+        if alt_portrait and alt_portrait != portrait_path:
+            log.info("Portraet von %s ersetzt (vorher: %s)", person.id, alt_photo)
+        broadcast_graph(self.store, self.cfg, self.bus)
 
     def _verwirf_foto(self, payload) -> None:
         """Loescht ein Bild, das zu keiner Person geworden ist.

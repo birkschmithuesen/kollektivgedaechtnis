@@ -1184,8 +1184,29 @@ def test_the_handover_eases_the_ceiling_back_on_instead_of_snapping(view):
     view.evaluate("() => { const cy = window.kgView.cy; cy.zoom(cy.zoom() * 10); }")
     assert _portrait(view)["disc"] > 1000
 
+    # 🔴 Die Übergabe wird mit FESTEN Schritten getrieben, nicht über
+    # requestAnimationFrame (geändert 2026-09-02).
+    #
+    # Vorher hing dieser Test an der echten Frame-Uhr: `camera.step()` bekommt
+    # in `projection.js` das gemessene `dt`, und unter Last dauert ein Frame
+    # länger, also springt die Übergabe pro Frame weiter. Die Schranke unten
+    # (< 1,25 pro Schritt) reißt dann — nicht weil die Kamera ruckelt, sondern
+    # weil die Maschine beschäftigt ist. Reproduziert am 2026-09-02: allein
+    # laufend grün (5×), unter künstlicher Last auf demselben Rechner rot,
+    # und genau so fiel er im vollen Suite-Lauf, wo Browser-Tests die zwei
+    # Kerne des vServers auslasten.
+    #
+    # 40 ms sind hier keine Willkür, sondern die Zielrate der Wand (25 fps).
+    # Der Code gibt das her: `step(dt)` nimmt die Zeitspanne als Argument,
+    # ausdrücklich damit ein Test die Fahrt treiben kann ("Sharing step()'s dt
+    # also means a test can drive the handover", camera.js). Dasselbe Muster
+    # nutzt `tests/test_camera.py` durchgehend.
+    #
+    # Was der Test damit NICHT mehr prüft: dass die Wand auf einer überlasteten
+    # Maschine ruckelfrei bleibt. Das prüfte er auch vorher nicht — er meldete
+    # es nur als Fehler in der Kamera.
     trace = view.evaluate(
-        """async () => {
+        """() => {
              const cy = window.kgView.cy;
              const disc = () =>
                Number(cy.nodes('.person')[0].numericStyle('width')) * cy.zoom();
@@ -1193,7 +1214,7 @@ def test_the_handover_eases_the_ceiling_back_on_instead_of_snapping(view):
              window.kgView.camera.setMode('fit');
              out.push(disc());
              for (let i = 0; i < 400; i += 1) {
-               await new Promise((resolve) => requestAnimationFrame(resolve));
+               window.kgView.camera.step(0.04);
                out.push(disc());
                if (window.kgView.camera.handoverTarget === null) break;
              }

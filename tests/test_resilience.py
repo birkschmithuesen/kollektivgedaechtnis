@@ -141,24 +141,20 @@ async def test_a_dead_stt_server_is_visible_but_not_fatal(tmp_path):
     )
 
     core.on_stt_state(False)
-    # 🔴 Das Interview wird ausdruecklich EROEFFNET (2026-09-02 nachgezogen).
-    # Bis `d524e4e` („ein Foto eroeffnet keins mehr") legte `on_photo` selbst
-    # eine Person an; seitdem wird ein Foto ohne laufendes Interview verworfen
-    # und die Datei geloescht — mit gutem Grund (kg/core.py: „ein Portraet,
-    # das zu keiner Person gehoert, ist ein Gesicht auf der Platte, das
-    # niemand mehr zuordnen kann").
-    #
-    # Der Test blieb dabei stehen und war seither ROT. Seine Aussage aendert
-    # sich nicht: Ohne Spracherkennung laeuft die Station weiter und das
-    # Portraet landet. Nur der Weg dorthin geht jetzt ueber den Schalter.
-    core.on_mic_switch(True, at=90.0)
+    # Das Interview wird ueber den Schalter eroeffnet -- seit 2026-09-01 der
+    # einzige Weg hinein (`SessionTracker.photo` eroeffnet keins mehr). Die
+    # Zusage dieses Tests bleibt unveraendert: Auch OHNE Spracherkennung
+    # nimmt die Station einen Besuch an und das Portraet landet. Genau
+    # darum geht es hier -- ein toter STT-Server darf die Station nicht
+    # stilllegen, und der Schalter haengt nicht an ihm.
+    core.on_mic_switch(True, at=100.0)
     core.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
     await core.drain()
 
     assert store.get_setting("stt_connected", "1") == "0"
     person = store.open_person()
-    assert person is not None, "ohne STT muss ein Interview trotzdem offen sein"
-    assert store.get_person(person.id).portrait_path, "das Portraet ist nicht angekommen"
+    assert person is not None
+    assert person.portrait_path == "a.png", "das Portraet kam nicht an"
     store.close()
 
 

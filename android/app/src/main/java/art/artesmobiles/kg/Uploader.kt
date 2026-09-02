@@ -114,11 +114,13 @@ object Uploader {
                     }
                     Ergebnis.Erfolg(name)
                 }
-                // Seit 2026-09-01: Die Station nimmt ein Foto nur zu einem
-                // LAUFENDEN Interview an. Der Satz nennt deshalb die
-                // Abhilfe und nicht den Fehler -- am Booth hilft "zuerst
-                // starten" weiter, "409 Conflict" nicht.
-                409 -> Ergebnis.Fehler("Kein Interview offen — zuerst unten Interview starten")
+                // Seit 2026-09-01 gehoert ein Foto immer zu einem Gespraech,
+                // das es schon gibt -- notfalls zum zuletzt beendeten. Diese
+                // Antwort kommt deshalb nur noch an einer Station, an der
+                // ueberhaupt noch nie jemand war. Der Satz nennt die Abhilfe
+                // und nicht den Fehler: am Booth hilft "zuerst starten"
+                // weiter, "409 Conflict" nicht.
+                409 -> Ergebnis.Fehler("Noch kein Interview — zuerst unten Interview starten")
                 401 -> Ergebnis.Fehler("Foto-Token fehlt oder stimmt nicht")
                 413 -> Ergebnis.Fehler("Bild zu groß für die Station")
                 415 -> Ergebnis.Fehler("Station hat das Bild nicht als Foto erkannt")

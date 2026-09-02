@@ -105,7 +105,65 @@ async def test_the_timeout_closes_a_forgotten_interview(core):
     assert core.processed[0][2] == 1100.0
 
 
-async def test_ein_foto_ohne_interview_wird_geloescht_statt_liegen_zu_bleiben(core, tmp_path):
+async def test_ein_foto_nach_dem_gespraech_geht_an_die_letzte_person(core):
+    """🔴 Birk, 2026-09-01: „kann ein interview foto auch ausgetauscht werden,
+    wenn das interview schon abgeschlossen ist und begriffe an der wand? das
+    waere gut."
+
+    Der Fall aus dem Flur: Das Gespraech ist vorbei, die Person haengt an der
+    Wand -- und erst dann faellt auf, dass das Bild nichts taugt. Vorher war
+    das eine Sackgasse: Das Foto wurde geloescht, die Person blieb ohne
+    Gesicht.
+
+    Was dabei NICHT passieren darf, steht in den letzten beiden Zusagen: Das
+    Interview wird nicht wiedereroeffnet und die Auswertung nicht noch einmal
+    angestossen -- nur das Bild wandert."""
+    core.on_mic_switch(True, at=100.0)
+    core.on_photo(photo_path="a.jpg", portrait_path="a.png", at=100.0)
+    await core.drain()
+    core.on_mic_switch(False, at=200.0)
+    await core.drain()
+    assert core.store.open_person() is None, "das Interview laeuft noch"
+    vorher = len(core.processed)
+
+    core.on_photo(photo_path="besser.jpg", portrait_path="besser.png", at=300.0)
+    await core.drain()
+
+    person = core.store.get_person("p1")
+    assert person.portrait_path == "besser.png", "das Bild wurde nicht getauscht"
+    assert person.stopped_at == 200.0, "das Interview wurde wiedereroeffnet"
+    assert core.store.open_person() is None, "es laeuft ploetzlich wieder eins"
+    assert len(core.processed) == vorher, "die Auswertung lief erneut an"
+
+
+async def test_ein_spaetes_foto_trifft_nur_die_letzte_person_nie_eine_aeltere(core):
+    """🔴 Birk: „also immer nur das letzte interview kein anderes."
+
+    Die Schutzzusage. Am Booth darf es keinen Weg geben, versehentlich einem
+    Gast, der laengst gegangen ist, ein fremdes Gesicht zu geben."""
+    core.on_mic_switch(True, at=100.0)
+    core.on_photo(photo_path="erst.jpg", portrait_path="erst.png", at=100.0)
+    await core.drain()
+    core.on_mic_switch(False, at=200.0)
+    await core.drain()
+
+    core.on_mic_switch(True, at=300.0)
+    core.on_photo(photo_path="zweit.jpg", portrait_path="zweit.png", at=300.0)
+    await core.drain()
+    core.on_mic_switch(False, at=400.0)
+    await core.drain()
+
+    # Beide Gespraeche sind vorbei. Das Foto gehoert dem ZWEITEN.
+    core.on_photo(photo_path="neu.jpg", portrait_path="neu.png", at=500.0)
+    await core.drain()
+
+    assert core.store.get_person("p2").portrait_path == "neu.png"
+    assert core.store.get_person("p1").portrait_path == "erst.png", (
+        "das Bild des frueheren Gastes wurde ueberschrieben"
+    )
+
+
+async def test_ein_foto_ohne_jede_person_wird_geloescht_statt_liegen_zu_bleiben(core, tmp_path):
     """🔴 Der Weg, den `/api/photo` nicht abfangen kann.
 
     Die HTTP-Route weist ab, BEVOR sie schreibt. Telegram kann das nicht: Dort
