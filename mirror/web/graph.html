@@ -53,8 +53,12 @@
        auch auf die Nodes draufklicken kann, wie man die Zitate sieht").
        Eine eigene Liste und nicht dasselbe <blockquote>: ein Zitat ist EIN
        Satz einer Person, eine Begriffserklaerung sind mehrere Stellen
-       mehrerer Menschen. Dieselbe Aufteilung wie an der Wand
-       (frontend/static/quote-overlay.js: `.quote-belege`). -->
+       mehrerer Menschen. Dieselbe Aufteilung wie an der Wand, dort in
+       `quote-overlay.js` als `.quote-belege`.
+       Der Pfad dorthin steht hier bewusst NICHT ausgeschrieben: Der Spiegel
+       ist eigenstaendig, und `tests/test_mirror.py` verbietet das Wort in den
+       ausgelieferten Seiten, damit niemand aus Versehen einen echten Pfad
+       daraus macht. An der Wand wird parallel gebaut. -->
     <ul class="belege" id="blatt-belege" hidden></ul>
   </aside>
 </main>
