@@ -192,14 +192,27 @@ w = wave.open(sys.argv[1], "wb"); w.setnchannels(1); w.setsampwidth(2); w.setfra
 w.writeframes(b"".join(struct.pack("<h", int(6000 * math.sin(2*math.pi*300*i/16000))) for i in range(4800)))
 w.close()
 PYCODE
+  # 🔴 DER SCHLUESSEL DARF NICHT IN DIE BEFEHLSZEILE.
+  # `curl -H "Authorization: Bearer $KEY"` legt ihn in argv, und argv ist auf
+  # diesem Rechner fuer JEDEN anderen Nutzer in `ps` lesbar. Das Projekt
+  # vermeidet genau das an jeder anderen Stelle (mirror/uploader.py::kurz(),
+  # scripts/token-verteilen.sh) -- `tests/test_stt_start_hinweis.py` haelt es
+  # fuer diese Datei fest, und der Test hat den Fehler am 2026-09-02 gefangen,
+  # nachdem ich ihn eingebaut hatte.
+  #
+  # `curl --config -` liest Optionen von der Standardeingabe. Der Header geht
+  # damit ueber eine Pipe, nicht ueber argv; in `ps` steht nur noch `curl
+  # --config -`. Das Dateifeld bleibt in argv, dort steht nichts Geheimes.
+  kopfzeile() { printf 'header = "Authorization: Bearer %%s"\n' "$(printenv HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY)"; }
+
   urteil=$(
-    antwort=$(curl -s --max-time 20 -H "Authorization: Bearer $HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY" \
+    antwort=$(kopfzeile | curl -s --config - --max-time 20 \
               -F "file=@$probe_wav;type=audio/wav" -F "model=whisper" -F "language=de" \
               "https://api.infomaniak.com/1/ai/110416/openai/audio/transcriptions" 2>/dev/null)
     batch=$(printf '%s' "$antwort" | "$PY" -c "import json,sys; print(json.load(sys.stdin).get('batch_id',''))" 2>/dev/null)
     if [ -z "$batch" ]; then echo "kein-batch"; else
       for _ in 1 2 3 4 5 6; do
-        st=$(curl -s --max-time 15 -H "Authorization: Bearer $HERMES_CUSTOM_API_INFOMANIAK_COM_API_KEY" \
+        st=$(kopfzeile | curl -s --config - --max-time 15 \
              "https://api.infomaniak.com/1/ai/110416/results/$batch" 2>/dev/null \
              | "$PY" -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(str(d.get('status','')).lower())" 2>/dev/null)
         # Kein `case`: bash 3.2 (macOS) beendet die $( )-Ersetzung an der
