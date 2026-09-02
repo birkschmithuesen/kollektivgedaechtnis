@@ -154,6 +154,21 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
     regler.value = String(Math.min(1, Math.max(0, weg)));
   };
 
+  /* 🔴 Solange eine Hand am Griff ist, schreibt niemand sonst hinein.
+     Der Regler ist seit dem 2026-09-02 auch ein ANZEIGER: Er laeuft mit,
+     wenn die Kamera von selbst faehrt (Birk: „Der Zoomregler soll sich
+     dynamisch mitbewegen"). Ohne diese Sperre kaempfte die Nachfuehrung
+     gegen die ziehende Hand — der Griff spraenge unter dem Finger zurueck,
+     etwa zehnmal je Sekunde. */
+  let amGriff = false;
+  const griffAn = () => { amGriff = true; };
+  const griffAus = () => { amGriff = false; };
+  regler.addEventListener('pointerdown', griffAn);
+  regler.addEventListener('touchstart', griffAn, { passive: true });
+  window.addEventListener('pointerup', griffAus);
+  window.addEventListener('pointercancel', griffAus);
+  window.addEventListener('touchend', griffAus);
+
   overview.addEventListener('click', () => {
     reglerZuruecksetzen();
     if (onOverview) onOverview();
@@ -177,5 +192,8 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
     zoom: regler,
     resetZoom: reglerZuruecksetzen,
     showZoom: reglerAnzeigen,
+    /** Ob gerade jemand am Griff zieht. Die Nachfuehrung fragt das, bevor sie
+     *  schreibt. */
+    amGriff: () => amGriff,
   };
 }

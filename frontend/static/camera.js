@@ -679,6 +679,56 @@ export class Camera {
    * Hand am Regler darf nirgends im Leeren landen. Nebenbei ist das der
    * Rückweg für einen Besucher, der sich weggeschoben hat — der Regler holt
    * den Ausschnitt auf das Netz zurück. */
+  /** „Übersicht": das GANZE Netz, sofort — auch wenn die Schrift zu klein wird.
+   *
+   * 🔴 Birk, 2026-09-02, am Gerät: „Übersicht soll bedeuten, ich sehe alles,
+   * das komplette Netz, auch wenn die Schrift zu klein ist. Zoom ganz raus
+   * genauso. Übersicht scheint also falsch definiert zu sein."
+   *
+   * Gemessen, bevor das hier entstand: Nach `focusDream` stand die Wand auf
+   * Zoom 2,296. Ein Druck auf „Übersicht" wechselte den Modus auf `fit` und
+   * liess den Zoom bei 2,296 — die Vollansicht waere 1,520 gewesen. Der Grund
+   * steht in `setMode`: `fit` faehrt bei geltendem Traumgebiet DORTHIN, nicht
+   * aufs Netz. Der Knopf tat also nicht, was er verspricht.
+   *
+   * 🔴 DER TRAUMAUSSCHNITT WIRD DABEI VERWORFEN, und das ist der Kern der
+   * Sache. Ohne dieses Vergessen zoege `_automaticView()` in derselben
+   * Sekunde zurueck — der Knopf waere ein Blinzeln. Bestaetigt am 2026-09-02:
+   * „Übersicht schlägt den laufenden Traum, der nächste Traum zieht wieder."
+   * Ein NEUER Traum ruft `focusDream()` und holt die Kamera erneut; was hier
+   * verworfen wird, ist allein das gerade geltende Gebiet.
+   *
+   * Gefahren und nicht gesprungen: `_startHandover()` ist die 5-Sekunden-
+   * Etappe, mit der diese Datei an sechs Stellen den Ruck vermeidet. Aus dem
+   * Traumausschnitt heraus waere ein hartes `_frame()` genau der 45-%-Sprung,
+   * der am 2026-09-01 gemessen und abgeschafft wurde. */
+  uebersicht() {
+    // 🔴 REIHENFOLGE. Der Modus zuerst, SOLANGE das Traumgebiet noch gilt:
+    // `setMode('fit')` startet dann eine Etappe (weil `_dreamNodes()` noch
+    // etwas liefert) statt hart zu rahmen. Waere das Gebiet schon vergessen,
+    // rahmte `setMode` sofort — aus einem Traumausschnitt heraus ist das der
+    // 45-%-Sprung, der am 2026-09-01 gemessen und abgeschafft wurde.
+    const capVon = this._mode === 'manual' ? 0 : 1;
+    if (this._mode !== 'fit') this.setMode('fit');
+    this._dream = null;
+    // Der Bezug wechselt vom Traumgebiet zurueck auf das ganze Netz.
+    this._fahrtZustandPruefen();
+    // 🔴 `_automaticView()` und KEINE zweite Rechnung. Es liegt nahe, hier die
+    // Vollansicht selbst zu messen — „Übersicht heisst alles, auch wenn die
+    // Schrift zu klein ist", und die Fahransicht ist bei einem grossen Netz
+    // enger als das Netz. Genau das habe ich am 2026-09-02 zuerst gebaut
+    // (`_vollansicht()`), und der Mutationstest hat es widerlegt: Weil oben
+    // schon der Modus auf `fit` steht UND das Traumgebiet verworfen ist,
+    // liefert `_automaticView()` bereits die Vollansicht. Beide Wege waren
+    // Bild fuer Bild gleich.
+    //
+    // Eine zweite Implementierung derselben Zahl ist genau das, wovor der
+    // Kommentar an `_automaticView()` warnt: Sie kann abdriften, und dann
+    // laendet der Knopf woanders als jeder andere Weg in dieselbe Ansicht.
+    if (this._handover) this._handover.to = this._automaticView();
+    else this._startHandover(capVon);
+  }
+
   setVisitorZoom(faktor, { renderedPosition = null } = {}) {
     const alle = this.cy.elements();
     if (typeof alle?.boundingBox !== 'function') return;

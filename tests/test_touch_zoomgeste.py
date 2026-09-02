@@ -460,11 +460,28 @@ def test_der_griff_des_reglers_folgt_der_geste(flaeche):
 
 
 def test_uebersicht_holt_auch_aus_einer_geste_zurueck(flaeche):
-    """Der Rückweg muss für beide Bedienwege derselbe sein."""
+    """Der Rückweg muss für beide Bedienwege derselbe sein.
+
+    🔴 ANGEPASST AM 2026-09-02. Vorher stand hier `value == "0"` DIREKT nach
+    dem Druck. Seit der Regler ein Anzeiger ist (Birk: „Der Zoomregler soll
+    sich dynamisch mitbewegen"), zeigt er, wo die Kamera IST — und die gleitet
+    fünf Sekunden lang zur Übersicht, statt zu springen. Gemessen unmittelbar
+    nach dem Druck: 0,87.
+
+    Die alte Sofortstellung auf 0 war während dieser Fahrt eine Falschangabe:
+    Der Griff stand am linken Anschlag, während die Wand noch nah dran war.
+    Genau der Fehler, gegen den `showZoom` ursprünglich gebaut wurde, nur
+    andersherum.
+
+    Geprüft wird jetzt das Ende der Fahrt — dort muss der Griff wirklich unten
+    stehen, sonst reißt die nächste Hand das Bild um Stufen zurück."""
     _pinch(flaeche, dy=-200)
     flaeche.click("#touch-overview")
     assert flaeche.evaluate("window.kgView.camera.mode") == "fit"
-    assert flaeche.evaluate("document.getElementById('touch-zoom').value") == "0"
+    # Die Etappe ist 5 s, die Nachführung läuft mit 10 Hz.
+    flaeche.wait_for_timeout(6500)
+    griff = float(flaeche.evaluate("document.getElementById('touch-zoom').value"))
+    assert griff < 0.02, f"der Griff steht nach der Fahrt nicht unten: {griff}"
     assert flaeche.evaluate("window.kgFetches") == []
 
 

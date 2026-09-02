@@ -231,13 +231,22 @@
           // Two things at once, because "Übersicht" means one thing to the
           // visitor: leave my manual zoom AND show the whole net.
           autonomy.releaseNow();
-          // Nur der Modus, und NICHT mehr auch der Regler: `fit` zeigt seit
-          // dem 2026-09-02 wörtlich das ganze Netz, ohne dass etwas darauf
-          // gerechnet würde. Ein `setMinLabel(…)` hier würfe zusätzlich die
-          // Kalibrierung des Operators weg — auf allen Flächen, weil eine
-          // Besucherhand sonst über den geteilten Zustand in den Saal
-          // durchschlüge.
-          view.camera.setMode('fit');
+          // 🔴 `uebersicht()` und nicht `setMode('fit')` (Birk, 2026-09-02:
+          // „Übersicht scheint also falsch definiert zu sein. Übersicht soll
+          // bedeuten, ich sehe alles, das komplette Netz, auch wenn die
+          // Schrift zu klein ist").
+          //
+          // Gemessen, warum das noetig war: Nach `focusDream` stand die Wand
+          // auf Zoom 2,296; ein Druck auf diesen Knopf wechselte den Modus und
+          // liess den Zoom dort — die Vollansicht waere 1,520 gewesen. `fit`
+          // faehrt bei geltendem Traumgebiet naemlich dorthin, nicht aufs
+          // Netz. `uebersicht()` verwirft das Gebiet und faehrt die
+          // Vollansicht; der naechste neue Traum zieht wieder hin.
+          //
+          // Weiterhin KEIN `setMinLabel(…)` hier: das ist die Kalibrierung des
+          // Operators und gilt auf allen Flaechen — eine Besucherhand wuerde
+          // sonst ueber den geteilten Zustand in den Saal durchschlagen.
+          view.camera.uebersicht();
         },
         // Der Ersatz für die Zweifingergeste. Rein lokal: `setVisitorZoom`
         // schreibt in den Viewport DIESER Seite, genau wie ein Pinch es täte,
@@ -262,6 +271,33 @@
         // Damit der Griff nicht etwas anderes anzeigt als das Bild.
         onZoom: (faktor) => controls && controls.showZoom(faktor),
       });
+      // 🔴 DER REGLER LAEUFT MIT (Birk, 2026-09-02: „Der Zoomregler soll sich
+      // dynamisch mitbewegen. So wie die Kamera gerade steht, die ja
+      // entsprechend der minimalen Pixelgroesse der Schrift definiert ist").
+      //
+      // Vorher war er ein reines Eingabefeld: Er stand auf dem linken
+      // Anschlag, waehrend die Wand 2,3x zeigte. Die naechste Hand bewegte ihn
+      // um eine Kleinigkeit und das Bild sprang um zwei Stufen — derselbe
+      // Fehler, gegen den es `resetZoom` und `showZoom` schon gibt, nur fuer
+      // die automatische Fahrt statt fuer Knopf und Geste.
+      //
+      // `camera.visitorZoom` ist genau die Einheit des Reglers: 1 = das ganze
+      // Netz im Bild. Gelesen und nicht gemerkt (siehe den Getter), also kann
+      // die Anzeige nicht vom Bild abdriften.
+      //
+      // 10 Hz und kein `requestAnimationFrame`: Der Griff soll dem Auge
+      // folgen, nicht dem Bildtakt. Ein Schreiben je Frame waere 60-mal je
+      // Sekunde eine Layoutaenderung am DOM fuer eine Bewegung, die man bei
+      // 10 Hz nicht von 60 unterscheidet — und `visitorZoom` misst dafuer
+      // jedes Mal die Bounding-Box des ganzen Netzes.
+      //
+      // `amGriff()` schuetzt die ziehende Hand: Ohne die Sperre spraenge der
+      // Griff unter dem Finger zurueck.
+      window.setInterval(() => {
+        if (!controls || controls.amGriff()) return;
+        controls.showZoom(view.camera.visitorZoom);
+      }, 100);
+
       window.kgTouch = { autonomy, controls, geste };
     }
 
