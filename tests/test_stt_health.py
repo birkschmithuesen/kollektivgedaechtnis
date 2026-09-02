@@ -295,3 +295,33 @@ def test_eine_werfende_probe_reisst_die_aufsicht_nicht_um():
     asyncio.run(eine_runde())
     assert aufsicht.befund.gesund is False
     assert "Netz weg" in aufsicht.befund.meldung
+
+
+def test_eine_unerwartete_antwortform_bringt_die_aufsicht_nicht_um():
+    """🔴 Real passiert, 2026-09-02 09:20: Unter `data` kam ein STRING zurueck.
+
+    `daten.get(...)` warf `'str' object has no attribute 'get'`, die Ausnahme
+    verliess `pruefe_infomaniak`, und im Bedienpult stand daraufhin ein Fehler,
+    der nicht der des Anbieters war — die Aufsicht meldete ihre eigene Panne
+    als dessen Ausfall. Genau dann, wenn der Anbieter sich seltsam verhaelt,
+    darf die Messung nicht mitgehen.
+    """
+    for kaputt in ({"data": "processing"}, "einfach ein String", None, {"data": None}, []):
+        befund = stt_health.pruefe_infomaniak(
+            api_key="k",
+            absenden=_absender({"batch_id": "b1"}),
+            abholen=_abholer(kaputt),
+            versuche=1, warten_s=0.0,
+            schlafen=lambda _s: None, jetzt=_uhr(),
+        )
+        assert befund.gesund is False, kaputt
+        assert "object has no attribute" not in befund.meldung, kaputt
+
+
+def test_auch_eine_html_antwort_beim_absenden_wirft_nicht():
+    """Kein `batch_id`, weil die Antwort gar kein Objekt ist."""
+    befund = stt_health.pruefe_infomaniak(
+        api_key="k", absenden=_absender("<!DOCTYPE html>"), abholen=_abholer({}), jetzt=_uhr()
+    )
+    assert befund.gesund is False
+    assert "DOCTYPE" in befund.meldung

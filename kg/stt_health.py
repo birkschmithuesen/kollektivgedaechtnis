@@ -142,7 +142,7 @@ def pruefe_infomaniak(
     except Exception as fehler:  # noqa: BLE001 — jede Netzstörung ist hier ein Befund
         return Befund(False, f"Absenden scheiterte: {_kurz(fehler)}", jetzt(), jetzt() - start)
 
-    batch = (antwort or {}).get("batch_id")
+    batch = _feld(antwort, "batch_id")
     if not batch:
         # 🔴 Genau der Fall vom 2026-09-02: Infomaniak antwortete mit einer
         # HTML-Seite „service unavailable" statt mit JSON. Ohne diese Zeile
@@ -160,8 +160,15 @@ def pruefe_infomaniak(
             ergebnis = abholen(url=url, headers={"Authorization": f"Bearer {api_key}"})
         except Exception as fehler:  # noqa: BLE001
             return Befund(False, f"Abholen scheiterte: {_kurz(fehler)}", jetzt(), jetzt() - start)
-        daten = (ergebnis or {}).get("data", ergebnis) or {}
-        status = str(daten.get("status", "")).lower()
+        # 🔴 Nicht `ergebnis["data"].get(...)`. Am 2026-09-02 kam von diesem
+        # Endpunkt unter `data` ein STRING zurück, und die Aufsicht flog mit
+        # `'str' object has no attribute 'get'` -- die Anzeige im Bedienpult
+        # meldete daraufhin einen Fehler, der nicht der des Anbieters war.
+        # Eine Aufsicht, die an einer unerwarteten Antwortform zerbricht,
+        # misst genau dann nicht mehr, wenn der Anbieter sich seltsam verhält.
+        innen = _feld(ergebnis, "data")
+        daten = innen if isinstance(innen, dict) else ergebnis
+        status = str(_feld(daten, "status") or "").lower()
         if status in FERTIG:
             return Befund(True, "antwortet", jetzt(), jetzt() - start)
         schlafen(warten_s)
@@ -172,6 +179,16 @@ def pruefe_infomaniak(
         jetzt(),
         jetzt() - start,
     )
+
+
+def _feld(wert, name: str):
+    """Ein Feld lesen, ohne anzunehmen, dass es ein Objekt ist.
+
+    Der Endpunkt hat schon HTML, Strings und verschachtelte Objekte geliefert.
+    Eine Auskunft über einen wackelnden Dienst darf an dessen Wackeln nicht
+    selbst zerbrechen.
+    """
+    return wert.get(name) if isinstance(wert, dict) else None
 
 
 def _kurz(wert, laenge: int = 120) -> str:
