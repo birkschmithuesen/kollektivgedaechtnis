@@ -1,5 +1,14 @@
 body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #16161a; color: #eee; }
-header { display: flex; gap: 1.5rem; align-items: center; padding: 0.75rem 1rem; background: #1f1f26; }
+/* 🔴 `flex-wrap: wrap` ist hier keine Kosmetik (Birk, 2026-09-02, am Gerät):
+   Ohne sie stehen alle Bedienelemente in EINER Zeile und laufen rechts aus dem
+   Fenster. Was hinausläuft, ist unsichtbar UND unerreichbar — am
+   Ausstellungstag sucht dann jemand einen Knopf, den es gibt, den er aber
+   weder sieht noch drücken kann. `row-gap` hält die umgebrochenen Zeilen
+   auseinander; ohne sie kleben sie aneinander, sobald es zwei werden. */
+header {
+  display: flex; flex-wrap: wrap; gap: 1.5rem; row-gap: 0.5rem;
+  align-items: center; padding: 0.75rem 1rem; background: #1f1f26;
+}
 select { font: inherit; padding: 0.2rem; }
 .badge { padding: 0.15rem 0.5rem; border-radius: 3px; background: #7a2626; }
 .badge.ok { background: #2c6e3f; }
@@ -100,9 +109,22 @@ button.hide { font: inherit; padding: 0.25rem 0.75rem; cursor: pointer; }
    dritten Fall „noch nicht geprüft". `.unbekannt` gibt ihm ein eigenes Grau:
    „ich weiß es nicht" ist eine andere Aussage als „es geht nicht", und wer
    beides gleich malt, macht die rote Lampe wertlos. */
-.aufsicht { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+/* Eigene Zeile über die volle Breite (`flex: 1 0 100%`), nicht als vierter
+   Knopf zwischen die anderen: Es ist eine Auskunft mit genau einer Handlung
+   daran, und die Meldung darunter kann lang werden — beim Ausfall am
+   2026-09-02 stand dort eine ganze Fehlerzeile des Anbieters. */
+.aufsicht {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 0.5rem; row-gap: 0.3rem; margin-top: 0.4rem; flex: 1 0 100%;
+}
 .badge.unbekannt { background: #4a4a4a; }
 #stt-anbieter { opacity: 0.85; }
 #stt-anbieter.fremd { color: #ffb347; font-weight: bold; }
-#stt-meldung { opacity: 0.7; font-size: 0.9em; }
+/* `overflow-wrap: anywhere` statt normalem Umbruch: Die Meldung des Anbieters
+   ist oft eine URL oder ein langer Bezeichner ohne Leerzeichen, und der
+   sprengt sonst die Zeile trotz Umbruch. */
+#stt-meldung {
+  opacity: 0.7; font-size: 0.9em;
+  flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere;
+}
 #stt-meldung.fehler { color: #ff8a8a; opacity: 1; }
