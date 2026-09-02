@@ -11,11 +11,47 @@
     android:layout_height="match_parent"
     android:background="@color/hintergrund">
 
+    <!--
+      Die Aufnahme-Leiste GANZ OBEN (Birk, 2026-09-02: „eine rot blinkende
+      'interview running' LED ganz oben").
+
+      Über dem Sucher und nicht darüberliegend: Sie darf nie vom Portrait
+      verdeckt werden, das formatfüllend über dem Sucher erscheint — genau
+      während man ein Foto beurteilt, will man wissen, ob noch aufgezeichnet
+      wird. Deshalb bekommt sie eigene Höhe und der Sucher beginnt darunter.
+
+      Der Einstellungen-Knopf sitzt daneben in derselben Zeile.
+    -->
+    <art.artesmobiles.kg.AufnahmeLeuchte
+        android:id="@+id/leuchte"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_marginStart="16dp"
+        app:layout_constraintTop_toTopOf="@id/leiste"
+        app:layout_constraintBottom_toBottomOf="@id/leiste"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/leiste"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="8dp"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.08"
+        android:text="@string/led_unbekannt"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toEndOf="@id/leuchte"
+        app:layout_constraintEnd_toStartOf="@id/einstellungen" />
+
     <androidx.camera.view.PreviewView
         android:id="@+id/sucher"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/leiste"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/status" />
@@ -65,15 +101,19 @@
         app:layout_constraintEnd_toEndOf="@id/sucher"
         app:layout_constraintBottom_toBottomOf="@id/sucher" />
 
+    <!-- Auf einer Linie mit der Aufnahme-Leiste, nicht am Rand des Fensters:
+         Beide teilen sich seit 2026-09-02 die oberste Zeile, und ein Knopf,
+         der zwei Pixel danebensteht, sieht nach Fehler aus. -->
     <ImageButton
         android:id="@+id/einstellungen"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_margin="12dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_marginEnd="6dp"
         android:background="@android:color/transparent"
         android:src="@android:drawable/ic_menu_preferences"
         android:contentDescription="@string/settings_title"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toTopOf="@id/leiste"
+        app:layout_constraintBottom_toBottomOf="@id/leiste"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView

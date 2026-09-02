@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sucher: PreviewView
     private lateinit var vorschau: ImageView
     private lateinit var interviewKnopf: Button
+    private lateinit var leuchte: AufnahmeLeuchte
+    private lateinit var leiste: TextView
     private var aufnahme: ImageCapture? = null
 
     /** Verhindert, dass ein zweiter Druck ein zweites Interview eröffnet. */
@@ -98,6 +100,8 @@ class MainActivity : AppCompatActivity() {
         ausloeser.setOnClickListener { schiesse() }
         interviewKnopf = findViewById(R.id.interview)
         interviewKnopf.setOnClickListener { schalteInterview() }
+        leuchte = findViewById(R.id.leuchte)
+        leiste = findViewById(R.id.leiste)
         findViewById<ImageButton>(R.id.einstellungen).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -173,9 +177,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Bringt Knopfbeschriftung und Freigabe auf den zuletzt bekannten Stand. */
+    /** Bringt Leuchte, Knopfbeschriftung und Freigabe auf den zuletzt
+     * bekannten Stand.
+     *
+     * 🔴 Leuchte und Knopf lesen DIESELBE Variable (Birk, 2026-09-02: „so,
+     * dass es ganz eindeutig ist"). Zwei Quellen waeren der Weg, auf dem
+     * beide irgendwann Verschiedenes behaupten -- und dann glaubt man dem
+     * Falschen. Deshalb steht hier eine Funktion und nicht zwei.
+     */
     private fun zeigeZustand() {
         val laeuft = interviewLaeuft
+        zeigeLeuchte(laeuft)
         when {
             einstellungen.ziel != Einstellungen.Ziel.STATION -> {
                 interviewKnopf.isEnabled = false
@@ -193,6 +205,50 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Die Leuchte ganz oben: rot blinkend, wenn aufgezeichnet wird.
+     *
+     * Dreiwertig und ausdruecklich nicht an/aus. „Station nicht erreichbar"
+     * als „aus" darzustellen waere die gefaehrlichste Luege, die diese
+     * Anzeige erzaehlen koennte: Jemand verliesse sich darauf, dass nichts
+     * aufgezeichnet wird, obwohl die App es schlicht nicht weiss.
+     *
+     * Der Text steht NEBEN der Leuchte, nicht statt ihrer. Die Leuchte wirkt
+     * aus dem Augenwinkel, waehrend man mit einem Gast redet; das Wort ist
+     * fuer den Moment, in dem jemand tatsaechlich hinsieht -- und fuer alle,
+     * die Rot und Grau nicht sicher unterscheiden.
+     */
+    private fun zeigeLeuchte(laeuft: Boolean?) {
+        // Ueber den Spiegel gibt es keinen Interview-Zustand: Der Spiegel
+        // nimmt Fotos an und kennt `/api/state` nicht. „Unbekannt" ist dort
+        // also nicht die Ausnahme, sondern die Wahrheit.
+        val zustand = when {
+            einstellungen.ziel != Einstellungen.Ziel.STATION ->
+                AufnahmeLeuchte.Zustand.UNBEKANNT
+            laeuft == null -> AufnahmeLeuchte.Zustand.UNBEKANNT
+            laeuft -> AufnahmeLeuchte.Zustand.LAEUFT
+            else -> AufnahmeLeuchte.Zustand.AUS
+        }
+        leuchte.setZustand(zustand)
+        leiste.text = getString(
+            when (zustand) {
+                AufnahmeLeuchte.Zustand.LAEUFT -> R.string.led_laeuft
+                AufnahmeLeuchte.Zustand.AUS -> R.string.led_aus
+                AufnahmeLeuchte.Zustand.UNBEKANNT -> R.string.led_unbekannt
+            }
+        )
+        leiste.setTextColor(
+            ContextCompat.getColor(
+                this,
+                when (zustand) {
+                    AufnahmeLeuchte.Zustand.LAEUFT -> R.color.aufnahme_an
+                    AufnahmeLeuchte.Zustand.AUS -> R.color.aufnahme_aus
+                    AufnahmeLeuchte.Zustand.UNBEKANNT -> R.color.aufnahme_unbekannt
+                },
+            )
+        )
     }
 
     /**

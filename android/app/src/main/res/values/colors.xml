@@ -5,6 +5,21 @@
          im Raum sichtbar und soll zur Station gehören, nicht wie ein
          Fremdkörper wirken. -->
     <color name="hintergrund">#0B0B0D</color>
+
+    <!-- Die Aufnahme-Leuchte (Birk, 2026-09-02: „eine rot blinkende
+         'interview running' LED ganz oben"). Rot ist hier NICHT die
+         Fehlerfarbe aus der Statuszeile (#E2705F, entsaettigt und zurueck-
+         genommen), sondern das Signalrot, das jede Kamera der Welt fuer
+         „laeuft" benutzt. Es soll aus dem Augenwinkel wirken. -->
+    <color name="aufnahme_an">#FF2B2B</color>
+    <color name="aufnahme_an_dunkel">#5A0F0F</color>
+    <!-- „Kein Interview": kein Gruen. Gruen hiesse „alles in Ordnung, du
+         kannst", gemeint ist aber „es wird gerade nichts aufgezeichnet".
+         Ein sattes Grau sagt genau das und konkurriert nicht mit dem Rot. -->
+    <color name="aufnahme_aus">#3A3A40</color>
+    <!-- Station nicht erreichbar: der Zustand ist UNBEKANNT, und das ist
+         etwas anderes als „aus". Amber, weil es weder beruhigt noch alarmiert. -->
+    <color name="aufnahme_unbekannt">#C08A2E</color>
     <color name="gut">#D8B15A</color>
     <color name="fehler">#E2705F</color>
 </resources>

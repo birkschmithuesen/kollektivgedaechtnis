@@ -21,6 +21,34 @@ Datensouveränität und verlinkt eine Transparenzseite. Ein Portraitfoto über
 einen US-Messenger zu schicken, um es an eine EU-souveräne Pipeline zu
 übergeben, wäre der Widerspruch im eigenen Aufbau.
 
+## Die Aufnahme-Leuchte (seit 2026-09-02)
+
+Ganz oben, über dem Sucher: ein Punkt und ein Wort. Birk: „so, dass es ganz
+eindeutig ist, ob gerade eine Aufnahme läuft oder nicht."
+
+| Leuchte | Text | Bedeutung |
+|---|---|---|
+| rot, **blinkend** | INTERVIEW RUNNING | es wird aufgezeichnet |
+| grau, ruhig | Kein Interview | es wird nicht aufgezeichnet |
+| amber, ruhig | Station nicht erreichbar | **unbekannt** — die App weiß es nicht |
+
+🔴 **Der dritte Zustand ist kein Schönheitsfehler, sondern der Kern.** „Nicht
+erreichbar" als „aus" darzustellen wäre die gefährlichste Lüge, die diese
+Anzeige erzählen kann: Jemand verließe sich darauf, dass nichts aufgezeichnet
+wird, obwohl die App es schlicht nicht weiß. Deshalb amber und ein eigenes
+Wort — und deshalb ist auch der Interview-Knopf in diesem Zustand gesperrt.
+
+Leuchte und Knopf lesen **dieselbe** Variable (`MainActivity.zeigeZustand`).
+Zwei Quellen wären der Weg, auf dem beide irgendwann Verschiedenes behaupten.
+
+Die Leiste sitzt **über** dem Sucher, nicht darüberliegend: Die formatfüllende
+Portrait-Vorschau darf sie nie verdecken — genau während man ein Foto
+beurteilt, will man wissen, ob noch aufgezeichnet wird.
+
+Das Blinken (1,1 s je Richtung) hält an, sobald die App weggeschaltet wird;
+sonst liefe der Animator in der Tasche weiter und weckte stundenlang den
+Bildschirm-Compositor. Ein Test hält das fest.
+
 ## Interview starten und beenden (seit 2026-09-01)
 
 Unter dem Auslöser sitzt ein zweiter, flacherer Knopf: **Interview starten**

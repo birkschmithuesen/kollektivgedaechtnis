@@ -16,6 +16,14 @@
     <string name="keine_kamera_freigabe">Ohne Kamerafreigabe kann die App nichts tun.</string>
     <string name="vorschau_beschreibung">So hat die Station das Foto zugeschnitten</string>
 
+    <!-- Die Leuchte ganz oben. Englisch auf Birks Ansage („interview
+         running"), und es ist ohnehin das Wort, das man auf jeder Kamera
+         liest. Die beiden anderen Zustaende bleiben deutsch wie der Rest der
+         App: sie werden gelesen, nicht erkannt. -->
+    <string name="led_laeuft">INTERVIEW RUNNING</string>
+    <string name="led_aus">Kein Interview</string>
+    <string name="led_unbekannt">Station nicht erreichbar</string>
+
     <!-- Interview starten/beenden. Die beiden Texte sind bewusst gleich lang
          gehalten: der Knopf soll beim Umschalten nicht seine Breite aendern. -->
     <string name="interview_starten">Interview starten</string>
