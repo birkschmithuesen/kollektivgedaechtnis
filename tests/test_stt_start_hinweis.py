@@ -29,15 +29,35 @@ def test_das_skript_ist_gueltig():
     assert fertig.returncode == 0, fertig.stderr
 
 
+def _ohne_kommentare(text: str) -> str:
+    """Nur die Zeilen, die wirklich laufen.
+
+    🔴 Die erste Fassung dieses Tests prueft den ganzen Dateitext — und war
+    damit wertlos: Eine Mutationsprobe, die den Hinweiszweig abschaltete,
+    liess ihn GRUEN, weil die gesuchte Zeichenkette auch im Kommentar
+    darueber steht. Eine Wache, die ein Kommentar erfuellt, bewacht nichts.
+    """
+    zeilen = []
+    for zeile in text.splitlines():
+        ohne = zeile.split("#", 1)[0]
+        if ohne.strip():
+            zeilen.append(ohne)
+    return "\n".join(zeilen)
+
+
 def test_bei_fehlendem_geraet_nennt_es_beide_wege():
-    text = SKRIPT.read_text(encoding="utf-8")
+    code = _ohne_kommentare(SKRIPT.read_text(encoding="utf-8"))
     # Der Zweig, der auf die fremde Fehlermeldung reagiert.
-    assert "not found" in text, "das Skript erkennt den Fall gar nicht"
+    assert "Audio device" in code and "not found" in code, (
+        "das Skript erkennt den Fall gar nicht"
+    )
     # Weg 1: das Geraet auflisten, um zu sehen, was wirklich da ist.
-    assert "--geraete" in text
+    assert "--geraete" in code
     # Weg 2: umstellen, und zwar mit dem Ort, an dem es steht.
-    assert "SST_AUDIO_DEVICES" in text
-    assert ".env" in text
+    assert "SST_AUDIO_DEVICES" in code
+    assert "STT_AUDIO_DEVICES_SR" in code
+    # Und der Weg, mit dem man danach nachsieht, ob es traegt.
+    assert "pruefe-mikrofon.sh" in code
 
 
 def test_es_verrät_dabei_keinen_schluessel():
