@@ -73,7 +73,14 @@ FERN
     umask 077
     { printf 'KG_MIRROR_TOKEN='; token_holen; } > "$ziel"
     chmod 600 "$ziel"
-    echo "geschrieben: $ziel ($(stat -c '%a' "$ziel"), $(wc -c < "$ziel") Bytes)"
+    # 🔴 Beide stat-Formen (korrigiert 2026-09-02). `stat -c` ist GNU; macOS
+    # bringt BSD-stat mit und antwortet mit „illegal option -- c". `set -e`
+    # greift dabei NICHT, weil der Aufruf in einer Kommandosubstitution
+    # steckt: Das Skript lief durch und meldete „geschrieben: … (,  39
+    # Bytes)" mit einer Fehlermeldung davor. Die Datei lag richtig da, nur
+    # glaubte es niemand — bei einem Geheimnis die schlechteste Auskunft.
+    rechte=$(stat -c '%a' "$ziel" 2>/dev/null || stat -f '%Lp' "$ziel" 2>/dev/null || echo '?')
+    echo "geschrieben: $ziel ($rechte, $(wc -c < "$ziel" | tr -d ' ') Bytes)"
     ;;
 
   *)
