@@ -31,15 +31,36 @@ body {
 
 /* ---- Kopf ----------------------------------------------------------- */
 
+/* Bauhaus-Formensprache (Birk, 2026-09-01): geometrisch, flächig, die drei
+   Grundfarben als Zeichen und nicht als Dekor. Keine weichen Ecken, keine
+   Verläufe, keine Schatten — Kanten und Flächen. Der dunkle Grund bleibt:
+   die Seite wird im abgedunkelten Haus aufs Telefon geholt. */
+
 h1 {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  /* Trennt „Kollektiv-gedächtnis" auf schmalen Schirmen an der Stelle, an der
+     das Wort ohnehin gefügt ist (&shy; im Markup). */
+  hyphens: manual;
 }
 
+/* Rot, Gelb, Blau als Balken: dieselbe Zuordnung wie an der Wand. */
+.bauhaus-band {
+  display: flex;
+  gap: 0;
+  height: 8px;
+  margin-top: 14px;
+}
+.bauhaus-band span { flex: 1 1 0; }
+.bauhaus-band span:nth-child(1) { background: var(--rot); }
+.bauhaus-band span:nth-child(2) { background: var(--gelb); }
+.bauhaus-band span:nth-child(3) { background: var(--blau); }
+
 .willkommen {
-  margin-top: 16px;
+  margin-top: 20px;
   font-size: 16px;
   line-height: 1.55;
   color: var(--ink);
@@ -61,48 +82,70 @@ h1 {
 .knoepfe {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 24px;
 }
 
+/* Flächen, keine Kästchen: rechteckig, mit einer breiten Farbkante links.
+   Die Farbe ist dieselbe wie die des zugehörigen Elements an der Wand. */
 .knopf {
+  position: relative;
   flex: 1 1 15em;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-height: var(--tap);
-  padding: 16px 18px;
+  padding: 18px 18px 18px 22px;
   color: var(--ink);
   text-decoration: none;
-  background: #17181c;
-  border: 1px solid var(--linie);
-  border-radius: 10px;
-  /* Dieselbe rote Unterkante wie beim aktiven Reiter der Live-Seiten
-     (mirror.css) — kein neues Zeichen, nur dasselbe eine Stufe grösser. */
-  box-shadow: inset 0 -2px 0 var(--rot);
+  background: #16171b;
+  border: 0;
+  border-left: 8px solid var(--linie);
+  border-radius: 0;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
+.knopf-blau { border-left-color: var(--blau); }
+.knopf-rot  { border-left-color: var(--rot); }
+
+/* Das geometrische Grundzeichen oben rechts: Kreis für den Traum (das Bild),
+   Quadrat für den Graphen (die Ordnung). Ein Zeichen, keine Illustration. */
+.knopf-marke {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 16px;
+  height: 16px;
+}
+.knopf-blau .knopf-marke { background: var(--blau); }
+.knopf-rot  .knopf-marke { background: var(--gelb); border-radius: 50%; }
+
 .knopf-titel {
   font-size: 20px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  /* Platz für das Zeichen rechts, damit ein langer Titel nicht darunter
+     durchläuft. */
+  padding-right: 28px;
 }
 
 .knopf-zeile {
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--dim);
 }
 
 /* ---- Fliesstext, Abschnitte ----------------------------------------- */
 
 .seite h2 {
-  margin-top: 26px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.35;
+  margin-top: 30px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink);
 }
 
@@ -141,14 +184,53 @@ h1 {
 .seite .knopf { text-decoration: none; }
 
 /* Der kurze Datenschutzabsatz auf der Startseite: er darf unter den Knöpfen
-   liegen (Auftrag), also bekommt er Abstand und eine dünne Trennlinie statt
-   eines Kastens. */
+   liegen (Auftrag), also bekommt er Abstand und eine Trennkante statt eines
+   Kastens. Die Kante ist gelb: dasselbe Signalgelb wie der Altershinweis an
+   der Wand, hier als Merker für „lies das noch". */
 .hinweis {
-  margin-top: 30px;
-  padding-top: 18px;
-  border-top: 1px solid var(--linie);
+  margin-top: 34px;
+  padding-top: 20px;
+  border-top: 3px solid var(--gelb);
 }
 .hinweis h2 { margin-top: 0; }
+
+/* Der Beratungs-Block auf der Transparenzseite: eigene Fläche, damit er nicht
+   im Fliesstext untergeht (Birk, 2026-09-01). Blaue Kante links wie bei den
+   Knöpfen — dieselbe Formensprache, eine Stufe ruhiger. */
+.angebot {
+  margin-top: 30px;
+  padding: 18px 18px 18px 22px;
+  background: #16171b;
+  border-left: 8px solid var(--blau);
+}
+.angebot h2 { margin-top: 0; }
+.angebot p { margin-top: 10px; }
+
+.angebot-link a {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 10px 16px;
+  min-height: var(--tap);
+  line-height: 24px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0d0e10;
+  background: var(--gelb);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Der Kontaktblock am Ende der Transparenzseite: rote Kante, weil es die
+   einzige Stelle ist, an der ein Mensch statt eines Dienstes steht. */
+.kontakt {
+  margin-top: 34px;
+  padding: 18px 18px 18px 22px;
+  background: #16171b;
+  border-left: 8px solid var(--rot);
+}
+.kontakt h2 { margin-top: 0; }
+.kontakt a { color: var(--ink); }
 
 /* ---- Zurück und Fusszeile ------------------------------------------- */
 

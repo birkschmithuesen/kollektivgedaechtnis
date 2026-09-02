@@ -316,7 +316,18 @@ def create_app(
     app = FastAPI(title="Kollektivgedächtnis — mobiler Spiegel", docs_url=None, redoc_url=None)
     app.state.spiegel = spiegel
     app.state.posteingang = posteingang
-    app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
+    # Auch die Stilblätter und Skripte werden waehrend der Konferenz noch
+    # angefasst; ein Browser, der die alte `seite.css` behaelt, zeigt die neue
+    # Seite im alten Gewand. StaticFiles setzt selbst kein `Cache-Control`,
+    # also wird der Kopf hier nachgereicht — dieselbe Regel wie bei den
+    # Seiten, an genau einer Stelle daneben.
+    class _StatischOhneCache(StaticFiles):
+        def file_response(self, *args, **kwargs):  # type: ignore[override]
+            antwort = super().file_response(*args, **kwargs)
+            antwort.headers["Cache-Control"] = "no-cache, must-revalidate"
+            return antwort
+
+    app.mount("/static", _StatischOhneCache(directory=WEB / "static"), name="static")
 
     def pruefe_token(request: Request) -> None:
         kopf = request.headers.get("authorization", "")
@@ -450,21 +461,41 @@ def create_app(
         pruefe_token(request)
         return {"ok": posteingang.quittiere(name)}
 
+    # Die vier Seiten und ihre Stilblätter sind Text, der sich waehrend der
+    # Konferenz noch aendert (Birk, 2026-09-01: Textaenderung war deployt, der
+    # Browser zeigte weiter die alte Seite). Ohne `Cache-Control` cacht ein
+    # Browser heuristisch — bei einem `last-modified` von vor Stunden also
+    # gern stundenlang. Deshalb: jedes Mal beim Server rueckfragen.
+    #
+    # Gemessen am 2026-09-01: Starlettes FileResponse wertet `If-None-Match`
+    # und `If-Modified-Since` NICHT aus, die Rueckfrage endet also immer in
+    # einem vollen 200 und nicht in einem 304. Bei 3,6 kB pro Seite ist das
+    # der Preis, den wir hier bezahlen — bewusst, weil eine veraltete
+    # Datenschutzzusage teurer ist als ein paar Kilobyte.
+    #
+    # Bewusst NICHT `no-store`: das verboete auch das Zurueckblaettern.
+    # Und bewusst auf ALLE Seiten, nicht nur die geaenderten: eine Regel, die
+    # man beim naechsten Text erst wieder anfassen muss, wird vergessen.
+    KEIN_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
+    def _seite(datei: str) -> FileResponse:
+        return FileResponse(WEB / datei, headers=KEIN_CACHE)
+
     @app.get("/")
     def seite_start() -> FileResponse:
-        return FileResponse(WEB / "start.html")
+        return _seite("start.html")
 
     @app.get("/graph")
     def seite_graph() -> FileResponse:
-        return FileResponse(WEB / "graph.html")
+        return _seite("graph.html")
 
     @app.get("/traum")
     def seite_traum() -> FileResponse:
-        return FileResponse(WEB / "traum.html")
+        return _seite("traum.html")
 
     @app.get("/transparenz")
     def seite_transparenz() -> FileResponse:
-        return FileResponse(WEB / "transparenz.html")
+        return _seite("transparenz.html")
 
     @app.get("/favicon.ico")
     def favicon() -> Response:

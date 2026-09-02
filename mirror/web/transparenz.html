@@ -23,16 +23,36 @@
 
   <h1>Was wo läuft</h1>
 
-  <p>Diese Installation verhandelt Künstliche Intelligenz als
-    gesellschaftliches Thema. Sie dabei auf den Rechenzentren amerikanischer
-    Konzerne laufen zu lassen, wäre ein stiller Widerspruch. <strong>Kein
-    Wort aus diesen Gesprächen verlässt Europa.</strong> Das Sprachmodell, das
-    die Interviews auswertet, und die Spracherkennung, die sie überhaupt erst
-    zu Text macht, laufen auf europäischer Infrastruktur — mit offen
-    verfügbaren Modellen, nicht mit den geschlossenen Systemen amerikanischer
-    Anbieter. Beratung dazu:
-    <a href="https://yourmodelyourrules.ai" target="_blank" rel="noopener">Your
-    Model, Your Rules</a>.</p>
+  <!-- Der Einstieg benennt das Thema der Arbeit, nicht das Werkzeug (Birk,
+       2026-09-01): Es geht um das Neue Europäische Bauhaus, also ums Bauen,
+       um Architektur und Stadtplanung. Dass dabei auch über KI verhandelt
+       wird, stimmt und darf stehen bleiben, ist aber nicht der Gegenstand. -->
+  <p>Diese Installation gehört zum Neuen Europäischen Bauhaus: Es geht um das
+    Bauen, um Architektur und Stadtentwicklung, und darum, was die Menschen
+    hier dazu sagen. Künstliche Intelligenz ist dabei das Werkzeug, mit dem aus
+    den Interviews ein Netz und ein Bild werden. Ein Werkzeug, das man sich
+    aussuchen kann: Es auf den Rechenzentren amerikanischer Konzerne laufen zu
+    lassen, wäre eine Entscheidung gegen alles, was wir sonst über
+    Gemeingüter sagen.
+    <strong>Kein Wort aus diesen Gesprächen verlässt Europa.</strong>
+    Das Sprachmodell, das die Interviews auswertet, und die
+    Spracherkennung, die sie überhaupt erst zu Text macht, laufen auf
+    europäischer Infrastruktur — mit offen verfügbaren Modellen, nicht mit den
+    geschlossenen Systemen amerikanischer Anbieter.</p>
+
+  <!-- Eigener Block statt Nebensatz (Birk, 2026-09-01): Wer die Seite bis
+       hierhin liest, ist genau die Person, die das auch für sich selbst
+       wissen will. -->
+  <aside class="angebot">
+    <h2>Wir machen das auch für andere</h2>
+    <p>Dieselben Leute, die diese Installation gebaut haben, beraten
+      Einzelpersonen, Institutionen und Unternehmen dabei, KI ohne
+      amerikanische Cloud einzusetzen: Auswahl der Modelle, Betrieb in Europa
+      oder im eigenen Haus, DSGVO.</p>
+    <p class="angebot-link">
+      <a href="https://yourmodelyourrules.ai" target="_blank" rel="noopener">Your
+      Model, Your Rules</a></p>
+  </aside>
 
   <h2>Die Auswertung der Interviews</h2>
 
@@ -42,15 +62,20 @@
        geänderte Zeile und kein Umbau der Seite.
        Reihenfolge nach Wichtigkeit, nicht nach Ablauf (Birk, 2026-08-31):
        das Sprachmodell zuerst.
+       Das benutzte Modell steht in Klammern dahinter (Birk, 2026-09-01) —
+       der Anbieter allein sagt nicht, WAS da rechnet. Werte nach
+       `docs/operations.md`; wer den Stack umstellt, ändert beides zusammen.
        Nichts dazuschreiben, was nicht geklärt ist. Insbesondere steht hier
        bewusst NICHT, dass der Anbieter der Bildgenerierung nicht mit den
        Eingaben trainiert — das ist ungeklärt. -->
   <ul>
     <li>Auswertung der Gespräche — offen verfügbares Sprachmodell bei
-      Infomaniak, Schweiz</li>
-    <li>Spracherkennung — Infomaniak, Schweiz</li>
-    <li>Ähnlichkeitsvergleich der Begriffe — Infomaniak, Schweiz</li>
-    <li>Erzeugung der Traumbilder — Black Forest Labs, Deutschland</li>
+      Infomaniak, Schweiz (Kimi K2.6)</li>
+    <li>Spracherkennung — Infomaniak, Schweiz (Whisper)</li>
+    <li>Ähnlichkeitsvergleich der Begriffe — Infomaniak, Schweiz
+      (BGE Multilingual Gemma 2)</li>
+    <li>Erzeugung der Traumbilder — Black Forest Labs, Deutschland
+      (FLUX 1.1 Pro)</li>
   </ul>
   <!-- ==== Ende der Dienste =========================================== -->
 
@@ -99,8 +124,17 @@
     Wer ein KI-System baut, wählt damit auch, wem er die Daten anderer
     Menschen anvertraut.</p>
 
+  <!-- Ein Mensch mit Namen und Adresse, keine Firmen-Fussnote (Birk,
+       2026-09-01): Wer hier eine Frage hat, soll ihn ansprechen können und
+       nicht auf jemanden am Stand verwiesen werden. -->
+  <section class="kontakt">
+    <h2>Fragen dazu?</h2>
+    <p>Sprechen Sie mich an, hier im Haus oder später per Mail:
+      Birk Schmithüsen,
+      <a href="mailto:contact@birkschmithuesen.com">contact@birkschmithuesen.com</a>.</p>
+  </section>
+
   <footer class="fuss">
-    <span>Fragen dazu:</span>
     <a href="https://artesmobiles.art" target="_blank" rel="noopener">artesmobiles.art</a>
     <a href="https://flashclash.de" target="_blank" rel="noopener">flashclash.de</a>
   </footer>

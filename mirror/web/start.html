@@ -18,23 +18,37 @@
 <link rel="stylesheet" href="/static/seite.css">
 
 <main class="seite">
-  <h1>Kollektivgedächtnis</h1>
+  <h1>Kollektiv&shy;gedächtnis</h1>
+  <!-- Rot, Gelb, Blau als Balken unter dem Titel: dieselben drei Farben, die
+       an der Wand die Knoten sortieren (mirror.css). Bauhaus-Zeichen und
+       Legende in einem. -->
+  <div class="bauhaus-band" aria-hidden="true"><span></span><span></span><span></span></div>
 
   <p class="willkommen">Während der Konferenz führen wir Interviews. Aus dem,
-    was gesagt wird, wächst hier live ein gemeinsamer Graph — und daraus
-    entsteht in Runden ein Traumbild. Beides läuft im Haus auf den Projektionen
-    und ist auf dieser Seite auch von Ihrem Telefon aus zu sehen.</p>
+    was gesagt wird, wächst live ein gemeinsames Netz aus Begriffen. Nach jedem
+    Interview erzeugt eine Bild-KI daraus ein neues Bild. Beides ist auf dieser
+    Seite von Ihrem Telefon aus zu sehen.</p>
 
-  <p class="urheber">Eine Arbeit von ArtesMobiles und FlashClash.</p>
+  <p class="urheber">Eine Arbeit von
+    <a href="https://artesmobiles.art" target="_blank" rel="noopener">ArtesMobiles</a>
+    und
+    <a href="https://flashclash.de" target="_blank" rel="noopener">FlashClash</a>.</p>
 
+  <!-- Die Werke heissen so, wie sie im Haus angeschrieben sind. „Der Graph"
+       und „Der Traum" waren Arbeitstitel und standen als einzige Stelle
+       neben dem Werktitel (Birk, 2026-09-01). -->
   <nav class="knoepfe">
-    <a class="knopf" href="/graph">
-      <span class="knopf-titel">Der Graph</span>
-      <span class="knopf-zeile">Wer was gesagt hat, und wie es zusammenhängt.</span>
+    <a class="knopf knopf-blau" href="/graph">
+      <span class="knopf-marke" aria-hidden="true"></span>
+      <span class="knopf-titel">Das Kollektivgedächtnis</span>
+      <span class="knopf-zeile">Der Begriffsgraph aus allen Interviews, live
+        erweitert.</span>
     </a>
-    <a class="knopf" href="/traum">
-      <span class="knopf-titel">Der Traum</span>
-      <span class="knopf-zeile">Was die Maschine daraus gerade träumt.</span>
+    <a class="knopf knopf-rot" href="/traum">
+      <span class="knopf-marke" aria-hidden="true"></span>
+      <span class="knopf-titel">Der Kollektivtraum</span>
+      <span class="knopf-zeile">Ein KI-erzeugtes Bild, das den Graphen nach
+        jedem Interview neu verdichtet.</span>
     </a>
   </nav>
 
