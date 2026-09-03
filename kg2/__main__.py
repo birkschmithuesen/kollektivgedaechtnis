@@ -170,6 +170,26 @@ async def main_async(args) -> None:
         retry_budget_s=cfg.condense_retry_budget_s,
     )
 
+    # 🔴 EIGENER CLIENT FUERS HAIKU (Birk, 2026-09-02). Nicht derselbe wie
+    # oben: Kimi K2.6 braucht `reasoning_effort = "none"` und kann damit keine
+    # Silben zaehlen — 3 von 32 Versuchen. Gemma kennt das Feld nicht, braucht
+    # es nicht, und trifft mit der Silbenschleife 19–20 von 20.
+    #
+    # Gleiche URL, gleicher Schluessel, gleicher Anbieter: die Kette bleibt
+    # EU-souveraen. `haiku_model` leer schaltet das Haiku ab.
+    haiku_llm = None
+    if cfg.haiku_model:
+        haiku_llm = LLMClient(
+            model=cfg.haiku_model,
+            effort=cfg.condense_effort,
+            max_tokens=cfg.condense_max_tokens,
+            api_key=cfg.condense_api_key,
+            api_mode=cfg.condense_api_mode,
+            url=cfg.condense_url or None,
+            reasoning_effort=cfg.haiku_reasoning_effort or None,
+            retry_budget_s=cfg.condense_retry_budget_s,
+        )
+
     app = create_dream_app(store, cfg, bus)
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.server_host, port=cfg.server_port, log_level="info")
@@ -177,7 +197,7 @@ async def main_async(args) -> None:
 
     tasks = [asyncio.create_task(server.serve())]
     if not args.no_watch:
-        watcher = DreamWatcher(cfg, store, bus, llm)
+        watcher = DreamWatcher(cfg, store, bus, llm, haiku_llm=haiku_llm)
         tasks.append(asyncio.create_task(watcher.run()))
 
     shown = resolved_host(cfg.server_host)

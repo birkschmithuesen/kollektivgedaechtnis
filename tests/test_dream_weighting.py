@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 
 from kg2.weighting import (
     Material,
@@ -317,19 +318,72 @@ def _persons_for_shared(n: int) -> list[dict]:
     return [person(f"p{i}") for i in range(2 * n)]
 
 
-def test_all_shared_terms_are_never_capped():
-    """Unlike the wall, the dream has no space problem — a term two people
-    said must never be dropped."""
+def test_nur_die_haeufigsten_geteilten_begriffe_stehen_im_material():
+    """🔴 UMGEDREHT am 2026-09-02 (Birk, am Ausstellungstag): „bau es so, dass
+    wir mehr Spitze haben und weniger Breite, damit die Bilder
+    abwechslungsreicher werden."
+
+    Vorher hiess dieser Test `test_all_shared_terms_are_never_capped` und hielt
+    fest: „Unlike the wall, the dream has no space problem — a term two people
+    said must never be dropped." Das Platzargument stimmt weiterhin. Was nicht
+    stimmte, war die stillschweigende Annahme, dass mehr Material auch mehr
+    Vielfalt ergibt.
+
+    Gemessen an den ersten zehn Traeumen des Ausstellungstags: „Lehmbau" wurde
+    von genau ZWEI Menschen genannt, stand aber in NEUN von zehn Prompts und
+    erschien in SIEBEN von neun Bildern — sechsmal davon nur, weil es als
+    Zeile „2× Lehmbau" in dieser ungedeckelten Liste stand. Eine Liste, die
+    sich ueber Stunden kaum aendert, ist der statische Teil des Prompts; das
+    Modell greift daraus jedes Mal dasselbe konkreteste Wort.
+
+    Die alte Regel war nicht falsch, sondern ueberholt: Sie entstand, als die
+    Pflichtliste STATISCH war und Breite das einzige Mittel gegen Wiederholung.
+    Seit demselben Tag wandert die Pflichtliste mit der zuletzt befragten
+    Person (`select_required`) und wechselt bei jedem Interview.
+    """
+    # Gestaffelte Nennungen statt gleicher: Nur so prueft der Test wirklich
+    # „die SPITZE" und nicht bloss „irgendwelche acht". Bei durchweg 2×
+    # entschiede das Label, und der Test bewiese nur alphabetische Ordnung.
+    nodes = [person(f"p{i}") for i in range(12)]
+    nodes += [term(f"s{i}", f"shared-{i}", i + 2) for i in range(10)]
+    edges = []
+    for i in range(10):
+        for j in range(i + 2):
+            edges.append((f"p{j}", f"s{i}"))
+
+    text = render_material(build_material(graph(nodes, edges)), shared_terms_max=4)
+
+    # Genau vier Zeilen im Block der geteilten Begriffe — das Format „  N× …“
+    # kommt nur dort vor.
+    zeilen = [z for z in text.splitlines() if re.match(r"\s+\d+× shared-", z)]
+    assert len(zeilen) == 4, zeilen
+
+    # Und es sind die haeufigsten: shared-9 (11×) bis shared-6 (8×).
+    for i in (9, 8, 7, 6):
+        assert any(f"× shared-{i}" in z for z in zeilen), (i, zeilen)
+    for i in range(6):
+        assert not any(f"× shared-{i}" in z for z in zeilen), (i, zeilen)
+
+
+def test_der_deckel_wirft_nichts_weg_was_pflicht_ist():
+    """Die Grenze des Deckels: Er kuerzt die HINTERGRUNDLISTE, nicht die
+    Pflichtbegriffe. Ein Begriff, den `select_required` gewaehlt hat, steht im
+    Material — auch wenn er nicht zur Spitze der geteilten Liste gehoert.
+
+    Ohne diesen Test koennte der Deckel unbemerkt einen Pflichtbegriff aus dem
+    Prompt schneiden, und das Modell bekaeme die Anweisung, etwas ins Bild zu
+    setzen, das es nirgends findet."""
     shared_count = 40
     material = build_material(
         graph(_persons_for_shared(shared_count) + _shared_terms(shared_count),
               _shared_edges(shared_count))
     )
+    text = render_material(material, shared_terms_max=3)
 
-    text = render_material(material)
+    from kg2.weighting import select_required
 
-    for i in range(shared_count):
-        assert f"shared-{i}" in text
+    for w in select_required(material):
+        assert w.label in text, f"Pflichtbegriff {w.label!r} fehlt im Material"
 
 
 def test_select_marginal_follows_the_gliding_formula():
@@ -819,3 +873,227 @@ def test_belegstellen_gibt_es_nur_zu_den_pflichtbegriffen():
             assert f"Randstelle {i}" not in text, (
                 f"Randbegriff {i} ist keine Pflicht, seine Belegstelle steht trotzdem drin"
             )
+
+
+def test_die_letzte_person_ohne_begriffe_verankert_nichts():
+    """🔴 Birk am Ausstellungstag, 2026-09-02, zum Traum nach Robert Ritzows
+    Interview: „Ich verstehe nicht, warum die Traumbegriffe gewählt wurden.
+    ‚Vor kurzem gesagt' müssten doch seine Begriffe sein. Dem ist aber nicht so."
+
+    Gemessen: Von fünf Pflichtbegriffen stammte genau EINER von ihm. Der Anker
+    war „KI nimmt Routinearbeit ab" — ein Begriff von vier ANDEREN Menschen.
+
+    Die Ursache ist ein Wettlauf: `last_person_id` war die zuletzt BEGONNENE
+    Person, und das war bereits die nächste, deren Interview noch lief. Die hat
+    naturgemäss noch keine Begriffe. Damit war `von_ihr` in `select_required`
+    leer, der Anker fiel auf den Tagessieger zurück, und die ganze Verankerung
+    am letzten Gespräch — der Sinn der Übung — war wirkungslos.
+
+    Das ist kein Randfall: Ein Traum entsteht alle 240 s, ein Interview dauert
+    5-10 Minuten. Der Zustand „die jüngste Person redet noch" ist der
+    Normalfall, nicht die Ausnahme.
+    """
+    nodes = [
+        person("p1"), person("p2"),
+        # p3 hat gerade erst angefangen: neuester Zeitstempel, keine Kante.
+        {"id": "p3", "type": "person", "portrait": None, "created_at": 99.0,
+         "hidden": False, "x": None, "y": None},
+        term("t1", "Ihr Begriff", 1), term("t2", "Fremder Begriff", 1),
+    ]
+    edges = [("p2", "t1"), ("p1", "t2")]
+
+    material = build_material(graph(nodes, edges))
+
+    assert material.last_person_id == "p2", (
+        f"die noch sprechende p3 verankert den Bildausschnitt: {material.last_person_id}"
+    )
+
+
+def test_hat_die_juengste_person_begriffe_bleibt_sie_der_anker():
+    """Die Gegenprobe: Der Rückgriff darf nur greifen, wenn er muss — sonst
+    zeigte das Bild dauerhaft auf das vorletzte Gespräch."""
+    nodes = [person("p1"), person("p2"), term("t1", "A", 1), term("t2", "B", 1)]
+    nodes[1]["created_at"] = 99.0
+    edges = [("p2", "t1"), ("p1", "t2")]
+
+    material = build_material(graph(nodes, edges))
+
+    assert material.last_person_id == "p2"
+
+
+def test_zuletzt_gesagt_meint_die_letzte_NENNUNG_nicht_den_neuen_begriff():
+    """🔴 Birk, 2026-09-02: „‚Vor kurzem gesagt' müssten doch seine Begriffe
+    sein. Dem ist aber nicht so."
+
+    Gemessen am Graphen der Station: Der Block „Zuletzt gesagt" enthielt FÜNF
+    von fünf Begriffen, die NICHT von der zuletzt befragten Person stammten —
+    und der Prompt verlangt, dass mindestens zwei davon ins Bild gehen. Es
+    wurden also fremde Begriffe erzwungen, mit derselben Verbindlichkeit wie
+    die Pflichtliste.
+
+    Die Ursache war ein Missverständnis im Zeitbegriff: Sortiert wurde nach
+    `created_at` des BEGRIFFS — also wann er zum ersten Mal überhaupt im
+    Graphen auftauchte. Die Begriffe der letzten Person sind aber meist ALT:
+    „Mehr Grün in Städten" gab es seit dem Mittag, Lena hat ihn nur AUCH
+    gesagt. Ihre Kante ist neu, der Knoten nicht.
+
+    „Zuletzt gesagt" hiess damit „heute zum ersten Mal gefallen" statt „gerade
+    eben geäussert".
+    """
+    nodes = [
+        person("p1"), person("p2"),
+        # Der alte Begriff: existiert seit p1, wurde aber gerade von p2 (der
+        # juengsten Person) noch einmal gesagt.
+        term("t_alt", "Alter Begriff, gerade gesagt", 2, created_at=1.0),
+        # Der neue Begriff: heute zum ersten Mal — aber von der frueheren p1.
+        term("t_neu", "Neuer Begriff, alte Person", 1, created_at=500.0),
+    ]
+    nodes[1]["created_at"] = 900.0  # p2 ist die juengste Person
+    edges = [("p1", "t_alt"), ("p2", "t_alt"), ("p1", "t_neu")]
+
+    material = build_material(graph(nodes, edges))
+    juengste = [w.label for w in select_recent(material, count=1)]
+
+    assert juengste == ["Alter Begriff, gerade gesagt"], juengste
+
+
+def test_ohne_sprecherzeit_zaehlt_die_entstehung_des_begriffs():
+    """Die Gegenprobe — und sie musste nachgeschaerft werden.
+
+    Ist von keinem Sprecher eine Zeit bekannt (hier: eine Person, deren
+    `created_at` der Graph nicht als Zahl liefert), darf `zuletzt_gesagt`
+    nicht auf 0 fallen. Sonst stuende so ein Begriff fuer immer am ENDE der
+    Achse — auch wenn er der juengste im ganzen Graphen ist.
+
+    Die erste Fassung dieses Tests hatte nur EINEN Begriff im Graphen; dort
+    ist jede Sortierung richtig, und der Rueckfall liess sich ersatzlos
+    streichen, ohne dass ein Test rot wurde (Mutationsprobe 2026-09-02).
+    """
+    nodes = [
+        # p_kaputt hat keine brauchbare Zeit: sie zaehlt als Sprecherin, geht
+        # aber nicht in `personen_zeit` ein.
+        {"id": "p_kaputt", "type": "person", "portrait": None,
+         "created_at": "keine Zahl", "hidden": False, "x": None, "y": None},
+        person("p_alt"),
+        # Der juengste Begriff im Graphen — aber nur von der Person ohne Zeit.
+        term("t_neu", "Neu, Sprecherzeit unbekannt", 1, created_at=900.0),
+        term("t_alt", "Alt, Sprecherzeit bekannt", 1, created_at=1.0),
+    ]
+    edges = [("p_kaputt", "t_neu"), ("p_alt", "t_alt")]
+
+    material = build_material(graph(nodes, edges))
+    juengste = [w.label for w in select_recent(material, count=1)]
+
+    assert juengste == ["Neu, Sprecherzeit unbekannt"], (
+        f"ohne Sprecherzeit ist der Begriff ans Ende gefallen: {juengste}"
+    )
+
+
+# --- Nur das letzte Interview (Birk, 2026-09-03) ---------------------------
+
+
+def _tag_mit_vielen():
+    """Ein Tag, an dem viel geredet wurde — und ein letztes Interview mittendrin.
+
+    Der springende Punkt: Die haeufigsten Begriffe des Tages (Wohnraum,
+    Verkehrswende, Begruenung) hat die letzte Person NICHT gesagt; ihre eigenen
+    sind seltener. Bis zum 2026-09-03 gewannen genau deshalb die anderen.
+
+    `p9` steht zuletzt in der Liste — `build_material` nimmt die zuletzt
+    hinzugekommene Person mit Begriffen als `last_person_id`.
+    """
+    nodes = [person(f"p{i}") for i in range(1, 10)] + [
+        term("t1", "Wohnraum fuer alle", 6),
+        term("t2", "Verkehrswende", 5),
+        term("t3", "Begruenung", 4),
+        term("t4", "Lehmbau", 2),
+        term("t5", "Dachgarten", 2),
+        term("t6", "Werkstatt im Hof", 2),
+        term("t7", "Solarzaun", 1),
+    ]
+    edges = (
+        [(f"p{i}", "t1") for i in range(1, 7)]
+        + [(f"p{i}", "t2") for i in range(1, 6)]
+        + [(f"p{i}", "t3") for i in range(2, 6)]
+        + [("p9", "t4"), ("p1", "t4")]
+        + [("p9", "t5"), ("p2", "t5")]
+        + [("p9", "t6"), ("p3", "t6")]
+        + [("p9", "t7")]
+    )
+    return build_material(graph(nodes, edges))
+
+
+def test_die_pflichtbegriffe_kommen_aus_dem_letzten_interview():
+    """🔴 BIRK, 2026-09-03: „ändere die auswahl der begriffe für den traum
+    prompt so, dass nur das letzte interview visualisiert wird."
+
+    Bis dahin waren die drei Stufen ein VORRANG, kein Filter: Gab es zu wenige
+    eigene Begriffe, fuellte die Auswahl aus dem ganzen Tag auf — und weil die
+    Tagesspitze immer mehr Nennungen hat, stand sie regelmaessig im Bild.
+    """
+    material = _tag_mit_vielen()
+    # 🔴 MEHR verlangen, als sie gesagt hat (sie hat vier Begriffe, verlangt
+    # sind sechs). Genau hier trennen sich Vorrang und Filter: Der alte Code
+    # fuellte die fehlenden zwei aus dem Tag auf — mit der Tagesspitze, weil
+    # die am haeufigsten genannt ist. Mit `count=4` waere der Test blind, denn
+    # dann reichen ihre eigenen ohnehin (Mutationsprobe, 2026-09-03).
+    gewaehlt = select_required(material, count=6, last_person_id="p9")
+
+    fremd = [w.label for w in gewaehlt if "p9" not in w.person_ids]
+    assert not fremd, f"Begriffe ohne die letzte Person im Bild: {fremd}"
+    # Lieber weniger Begriffe als fremde: Das ist der Sinn der Aenderung.
+    assert len(gewaehlt) == 4, (
+        f"aufgefuellt statt begrenzt: {[w.label for w in gewaehlt]}"
+    )
+
+
+def test_bei_zu_wenig_eigenem_material_wird_weiter_aufgefuellt():
+    """Der Rueckfall, und er ist kein Sicherheitsnetz auf Verdacht.
+
+    Ein Interview, aus dem nur ein einziger Begriff entstand (Abbruch, kurze
+    Antwort, Verstaendigungsproblem), gaebe sonst ein Bild aus einem Wort.
+    """
+    nodes = [person(f"p{i}") for i in range(1, 10)] + [
+        term("t1", "Wohnraum fuer alle", 3),
+        term("t2", "Verkehrswende", 2),
+        term("t3", "Begruenung", 2),
+        term("t4", "Lehmbau", 2),
+    ]
+    edges = [("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p1", "t2"), ("p2", "t2"),
+             ("p2", "t3"), ("p3", "t3"), ("p9", "t4"), ("p1", "t4")]
+    material = build_material(graph(nodes, edges))
+
+    gewaehlt = select_required(material, count=4, last_person_id="p9")
+
+    # Ihr einziger Begriff reicht nicht (Schwelle: die Haelfte von `count`),
+    # also fuellt die alte Reihenfolge auf — und das MUSS sie hier auch.
+    assert len(gewaehlt) == 4, f"das Bild bekommt zu wenig Material: {gewaehlt}"
+    assert any("p9" in w.person_ids for w in gewaehlt), "die letzte Person fehlt ganz"
+    fremde = [w.label for w in gewaehlt if "p9" not in w.person_ids]
+    assert fremde, (
+        "hier soll aufgefuellt werden — steht nur ihr einer Begriff da, ist die "
+        "Schwelle wirkungslos und ein abgebrochenes Interview ergaebe ein Bild "
+        "aus einem Wort"
+    )
+
+
+def test_der_materialblock_zeigt_die_begriffe_der_letzten_person():
+    """Derselbe Schnitt eine Ebene hoeher: Auch der Block „Geteilte Begriffe"
+    zeigte bisher die Tagesspitze — unabhaengig davon, ob die gerade befragte
+    Person auch nur einen davon gesagt hat."""
+    text = render_material(_tag_mit_vielen(), last_person_id="p9")
+
+    block = text.split("Geteilte Begriffe")[1].split("\n\n")[0]
+    assert "Lehmbau" in block
+    assert "Wohnraum fuer alle" not in block, (
+        "die Tagesspitze steht weiter im Materialblock, obwohl die letzte "
+        f"Person sie nie gesagt hat:\n{block}"
+    )
+
+
+def test_ohne_letzte_person_bleibt_der_ganze_tag():
+    """Frueh am Tag, vor dem ersten Interview, und in jedem Aufruf ohne Anker:
+    Dann ist der ganze Tag das Material — sonst waere der Block leer."""
+    text = render_material(_tag_mit_vielen(), last_person_id=None)
+
+    assert "Wohnraum fuer alle" in text

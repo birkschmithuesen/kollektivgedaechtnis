@@ -109,6 +109,26 @@ class DreamConfig:
     condense_api_key_env: str = ""
     condense_reasoning_effort: str = ""
 
+    #: Das Modell fuer das HAIKU unter dem Bild (`kg2.haiku`). Leer = kein
+    #: Haiku, dann bleibt der Prosasatz aus Stufe 1.
+    #:
+    #: 🔴 EIN ANDERES MODELL ALS `condense_model`, und das ist der Kern
+    #: (gemessen 2026-09-02): Kimi K2.6 braucht `reasoning_effort = "none"`,
+    #: sonst kommt kein valides JSON — und ohne schrittweises Nachdenken traf
+    #: es 3 von 32 Versuchen. Gemma kennt das Feld gar nicht, braucht es nicht,
+    #: lieferte in allen Laeufen 100 % valides JSON und antwortet im Median in
+    #: 0,9 s. Mit der Silbenschleife: 19–20 von 20.
+    #:
+    #: Qwen 3.5 (beide Groessen) trifft ebenfalls sicher, braucht aber 77–172 s
+    #: je Traum und scheidet damit aus — ein Traum entsteht alle 240 s.
+    #:
+    #: URL und Schluessel bleiben die von `condense_*`: gleicher Anbieter,
+    #: gleiches Konto, gleiche EU-Souveraenitaet.
+    haiku_model: str = ""
+    #: Absichtlich LEER lassen. Gemma kennt `reasoning_effort` nicht; `kg.llm`
+    #: sendet das Feld nur, wenn es gesetzt ist.
+    haiku_reasoning_effort: str = ""
+
     # -- stage 2 (spec §5.2; the endpoint shape is verified at Task 8) ------
     image_model: str = "google/gemini-3-pro-image"
     image_url: str = "https://openrouter.ai/api/v1/chat/completions"
@@ -150,6 +170,13 @@ class DreamConfig:
     # ab hier nur noch die N NEUESTEN, der Rest bleibt in dreams.sqlite3.
     default_strip_max: int = 10
     default_typewriter: bool = False  # spec §6: Birk decides visually on site
+    # Das automatische Blättern durch die Träume des Tages (dream.js).
+    # Standard AN: Am Abend, wenn keine Interviews mehr kommen, stünde die Wand
+    # sonst stundenlang auf einem Bild — genau der Anlass, aus dem die
+    # Slideshow gebaut wurde. Wer sie ausschalten will (eine Aufnahme, eine
+    # Präsentation, ein einzelnes Bild), tut das jetzt am Bedienpult statt über
+    # `?slideshow=0` an jeder Fläche einzeln (Birk, 2026-09-03).
+    default_slideshow: bool = True
 
     # -- Tool 2's own server ------------------------------------------------
     server_host: str = "127.0.0.1"
@@ -221,6 +248,8 @@ _FIELD_NAMES = {
     "condense_url",
     "condense_api_key_env",
     "condense_reasoning_effort",
+    "haiku_model",
+    "haiku_reasoning_effort",
     "image_model",
     "image_url",
     "image_aspect_ratio",
@@ -233,6 +262,7 @@ _FIELD_NAMES = {
     "default_strip_ratio",
     "default_strip_max",
     "default_typewriter",
+    "default_slideshow",
     "server_host",
     "server_port",
 }

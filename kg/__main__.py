@@ -13,6 +13,7 @@ from pathlib import Path
 
 import uvicorn
 
+from kg import vad_satzende
 from kg.bus import EventBus
 from kg.config import load_config
 from kg.core import Core
@@ -162,6 +163,18 @@ async def main_async(args) -> None:
     # Same contract for the camera: a fresh station opens roaming (2026-08-26),
     # a restarted one comes back exactly as the operator left it.
     store.set_setting_default("camera_mode", cfg.default_camera_mode)
+    # 🔴 Steht die VAD-Schwelle des Spracherkenners steckengeblieben oben,
+    # hat ein frueherer Lauf sie beim Satzende-Ausloesen nicht zurueckgesetzt
+    # (`kg.vad_satzende`). Dann ist das Mikrofon taub — und zwar so, dass es
+    # auf JEDEM Bildschirm gesund aussieht: Der Pegel schlaegt aus, das
+    # STT-Abzeichen bleibt gruen, und es kommt kein Wort an. Genau dieses
+    # Fehlerbild hat am 2026-09-02 einen halben Vormittag gekostet.
+    #
+    # Deshalb wird hier nachgesehen und nicht darauf vertraut, dass der letzte
+    # Lauf sauber endete. Ein gesunder Wert wird nicht angefasst; der Aufruf
+    # wirft nie und blockiert den Start hoechstens um seinen Timeout.
+    await vad_satzende.pruefe_und_repariere(cfg.stt_url)
+
     bus = EventBus()
     transcript_log = TranscriptLog(cfg.transcript_log_path)
     # Anthropic oder ein OpenAI-kompatibler Endpunkt — entschieden allein von

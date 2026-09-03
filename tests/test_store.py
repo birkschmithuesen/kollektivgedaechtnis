@@ -492,3 +492,64 @@ def test_eine_kante_ohne_belegstelle_bleibt_zulaessig(store):
     kante = store.add_edge(p.id, t.id, created_at=2.0)
 
     assert kante.evidence is None or kante.evidence == ""
+
+
+def test_fold_term_nimmt_die_belegstellen_mit(tmp_path):
+    """🔴 GEFUNDEN IM BETRIEB am 2026-09-02, beim Zusammenlegen von Hand.
+
+    `fold_term` las beim Umhaengen der Kanten nur `person_id` und
+    `created_at` — die `evidence` blieb liegen und war danach weg. Drei echte
+    Belegstellen sind so verlorengegangen, darunter Peter Steins „dass die
+    Natur belassen wird. Ich wohne auf einem ganz kleinen Dorf"; sie liessen
+    sich nur aus der Sicherung zurueckholen.
+
+    Das trifft nicht nur Merges von Hand: `kg.merging.apply_merges` ruft
+    dieselbe Methode nach JEDEM Interview. Und die Belegstelle ist kein
+    Beiwerk — sie geht in den Traum-Prompt und an die Wand (Tipp auf einen
+    Begriff), und sie war es, die den Merge-Richter ueberhaupt erst
+    zuverlaessig gemacht hat (docs/STAND.md §2r).
+
+    Drei Faelle, alle drei hier geprueft, weil sie sich verschieden verhalten.
+    """
+    store = Store.open(tmp_path / "kg.db")
+    p1 = store.create_person(started_at=1.0).id
+    p2 = store.create_person(started_at=2.0).id
+    gewinner = store.get_or_create_term("Naturrespekt", created_at=1.0)
+    verlierer = store.get_or_create_term("Natur belassen", created_at=1.0)
+
+    # Fall 1: Die Person hatte NUR den Verlierer — die Kante wandert samt Beleg.
+    store.add_edge(p1, verlierer.id, created_at=3.0, evidence="die Natur belassen")
+    # Fall 2: Die Person hatte BEIDE, mit je eigenem Beleg.
+    store.add_edge(p2, gewinner.id, created_at=4.0, evidence="nachhaltig leben")
+    store.add_edge(p2, verlierer.id, created_at=5.0, evidence="auf dem Dorf")
+
+    store.fold_term(verlierer.id, gewinner.id)
+
+    belege = {
+        e.person_id: (e.evidence or "")
+        for e in store.list_edges()
+        if e.term_id == gewinner.id
+    }
+    assert "die Natur belassen" in belege[p1], belege
+    # Beide Stellen stuetzen den Begriff jetzt bei dieser Person — keine darf
+    # die andere verdraengen.
+    assert "nachhaltig leben" in belege[p2], belege
+    assert "auf dem Dorf" in belege[p2], belege
+    store.close()
+
+
+def test_fold_term_erfindet_keine_belegstelle(tmp_path):
+    """Die Gegenprobe: Hatte der Verlierer keine, entsteht auch keine — und
+    eine vorhandene wird nicht mit Leerzeichen oder Trennern verunstaltet."""
+    store = Store.open(tmp_path / "kg.db")
+    p1 = store.create_person(started_at=1.0).id
+    gewinner = store.get_or_create_term("A", created_at=1.0)
+    verlierer = store.get_or_create_term("B", created_at=1.0)
+    store.add_edge(p1, gewinner.id, created_at=3.0, evidence="steht schon da")
+    store.add_edge(p1, verlierer.id, created_at=4.0)  # ohne Beleg
+
+    store.fold_term(verlierer.id, gewinner.id)
+
+    kante = [e for e in store.list_edges() if e.term_id == gewinner.id][0]
+    assert kante.evidence == "steht schon da", kante.evidence
+    store.close()

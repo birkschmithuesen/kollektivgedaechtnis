@@ -41,12 +41,15 @@ as much as to an automatic cycle.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import logging
 
 from kg2.condense import condense as _condense
 from kg2.imagegen import build_image_prompt, render_image as _render_image, save_image
 from kg2.models import Dream
 from kg2.trigger import absorbed_persons
+from kg2.haiku import erzeuge_haiku
 from kg2.weighting import build_material
 
 log = logging.getLogger(__name__)
@@ -62,6 +65,7 @@ def run_dream(
     condense_fn=_condense,
     render_fn=_render_image,
     on_sentence=None,
+    haiku_llm=None,
 ) -> Dream | None:
     """Run one full cycle. Returns the finished Dream, or None if it failed."""
     try:
@@ -122,13 +126,48 @@ def run_dream(
         # Zitate: die woertlichen Saetze der zuletzt Befragten gehen mit in
         # Stufe 1 (Birk, 2026-09-01). `condense_quote_persons=0` schaltet sie
         # ab, ohne dass jemand Code anfassen muss.
+        # 🔴 Das Gedaechtnis gegen die Wiederholung (Birk, 2026-09-02: „Lehm
+        # kam in jedem Bild vor"). Stufe 1 ist ein einzelner Aufruf ohne jede
+        # Kenntnis der vorigen -- bei aehnlichem Material traf sie darum jedes
+        # Mal dieselbe naheliegende Wahl. `history()` steht schon da (sie
+        # speist den Streifen an der Wand), sie wurde nur nie gefragt.
+        #
+        # Die DREI letzten und nicht alle: Es ist ein Hinweis, kein zweites
+        # Materialverzeichnis.
+        #
+        # 🔴 `visible_dreams()` und NICHT `history()`, obwohl der Name dort
+        # passender klingt. `history()` ist der Streifen an der Wand und
+        # schneidet mit `[:-1]` den neuesten Traum ab, damit er nicht doppelt
+        # neben dem grossen Bild steht. Hier waere das falsch: Der laufende
+        # Traum ist noch `running` und steht ohnehin in keiner der beiden
+        # Listen -- `history()` haette also den letzten FERTIGEN weggeschnitten,
+        # und ausgerechnet der ist der wichtigste. Gefangen von
+        # `test_die_vorigen_wandsaetze_gehen_an_stufe_1`.
+        vorher = [d.sentence for d in store.visible_dreams()[-3:] if d.sentence]
         result = condense_fn(
             llm,
             material,
             last_person_id=material.last_person_id,
             include_quotes=cfg.condense_include_quotes and cfg.condense_quote_persons > 0,
             quote_persons=cfg.condense_quote_persons,
+            zuletzt_gezeigt=vorher,
         )
+        # 🔴 DAS HAIKU (Birk, 2026-09-02). Es ersetzt den Prosasatz unter dem
+        # Bild — aber erst, wenn es wirklich zustande gekommen ist.
+        #
+        # Ein EIGENER Aufruf mit EIGENEM Modell, und beides aus Messung: Das
+        # Modell von Stufe 1 (Kimi K2.6) muss mit `reasoning_effort = "none"`
+        # fahren und kann damit keine Silben zaehlen — 3 von 32 Versuchen, dazu
+        # kaputtes Deutsch. Gemma mit der Silbenschleife: 19–20 von 20.
+        #
+        # `erzeuge_haiku` wirft nie und gibt im Zweifel `None` zurueck; dann
+        # bleibt `result.sentence` stehen. Die Wand zeigt also entweder ein
+        # geprueftes Haiku oder den Satz, der ohne diesen Schritt dort stuende
+        # — nie nichts und nie eine halbe Form.
+        if haiku_llm is not None:
+            gedicht = erzeuge_haiku(haiku_llm, result.image_description or "")
+            if gedicht:
+                result = replace(result, sentence=gedicht)
         store.set_stage1(
             dream.id,
             prompt=result.prompt,

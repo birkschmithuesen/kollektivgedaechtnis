@@ -11,13 +11,129 @@ import os
 import time
 from pathlib import Path
 
+from kg.semantik import eigenster_ort, entzerre, semantische_lage, verwandte
+
+
+#: Zwischenspeicher fuer die semantische Lage: {Begriffsmenge -> Lage}.
+#:
+#: t-SNE ueber 54 Begriffe kostet rund eine Sekunde. `graph.json` wird bei
+#: jedem Zustandswechsel neu gebaut und vom Spiegel-Uploader alle 3 s
+#: abgeholt — ohne diesen Speicher liefe die Rechnung im Sekundentakt und
+#: blockierte den Kern. Der Schluessel ist die MENGE der Begriffe: Solange
+#: keiner dazukommt oder verschwindet, aendert sich die Karte nicht.
+def _neben_der_datenbank(store) -> Path:
+    """Wo der Embedding-Cache liegt: neben der Hauptdatenbank (spec 6.2).
+
+    `cfg.embedding_cache_path` führt dorthin, aber `build_graph` bekommt keine
+    cfg — es wird an vielen Stellen aufgerufen, auch aus Werkzeugen und Tests.
+
+    🔴 Defensiv, weil hier auch STUBS ankommen: `tests/test_export_in_dream.py`
+    reicht einen `_FakeStore` herein, der nur `list_terms` und Verwandtes kann.
+    Ein `store.conn` darauf warf, und damit fiel `graph.json` aus — an dem die
+    ganze Wand hängt. Ohne Datenbankpfad gibt es eben keine semantische
+    Ansicht; das ist genau der Zustand, den ein Stub abbilden soll.
+    """
+    conn = getattr(store, "conn", None)
+    if conn is None:
+        return Path("data") / "embeddings.sqlite3"
+    try:
+        zeile = conn.execute("PRAGMA database_list").fetchone()
+    except Exception:  # noqa: BLE001 — ein Stub darf alles Mögliche sein
+        return Path("data") / "embeddings.sqlite3"
+    haupt = Path(zeile[2]) if zeile and zeile[2] else Path("data/kg.db")
+    return haupt.parent / "embeddings.sqlite3"
+
+
+_SEMANTIK_CACHE: tuple[frozenset[str], dict[str, tuple[float, float]]] | None = None
+_VERWANDT_CACHE: tuple[frozenset[str], dict[str, list[str]]] | None = None
+
+
+def _verwandte(store, labels: list[str]) -> dict[str, list[str]]:
+    """Wie `_semantische_lage`: gecacht ueber die Begriffsmenge, weil das
+    Skalarprodukt ueber 54x3584 Zahlen sonst bei jedem Abruf liefe."""
+    global _VERWANDT_CACHE
+    schluessel = frozenset(labels)
+    if _VERWANDT_CACHE is not None and _VERWANDT_CACHE[0] == schluessel:
+        return _VERWANDT_CACHE[1]
+    raus = verwandte(_neben_der_datenbank(store), labels)
+    _VERWANDT_CACHE = (schluessel, raus)
+    return raus
+
+
+def _semantische_lage(store, labels: list[str]) -> dict[str, tuple[float, float]]:
+    global _SEMANTIK_CACHE
+    db = _neben_der_datenbank(store)
+    # 🔴 DER EMBEDDING-BESTAND GEHOERT IN DEN SCHLUESSEL (gemessen 2026-09-03).
+    #
+    # Vorher hing der Cache allein an der Menge der Etiketten. Werden Begriffe
+    # UMBENANNT und die Vektoren dazu nachtraeglich geholt, aendert sich die
+    # Menge danach nicht mehr — der Cache lieferte weiter die alte Rechnung,
+    # in der die neun umbenannten Begriffe gar keine Lage hatten. An der Wand
+    # blieben sie an ihrer SOZIALEN Position stehen und zogen die
+    # Bedeutungsansicht auf das Doppelte auseinander (Birk: „einige begriffe
+    # sind ganz weit aussen und machen den graphen unnoetig gross").
+    #
+    # Die Aenderungszeit der Cache-Datei genuegt: Sie springt bei jedem neuen
+    # Vektor, und ein Vergleich kostet einen `stat`.
+    try:
+        stand = db.stat().st_mtime_ns if db.exists() else 0
+    except OSError:
+        stand = 0
+    schluessel = (frozenset(labels), stand)
+    if _SEMANTIK_CACHE is not None and _SEMANTIK_CACHE[0] == schluessel:
+        return _SEMANTIK_CACHE[1]
+    # Der Pfad neben der Hauptdatenbank — `cfg.embedding_cache_path` fuehrt
+    # dorthin, aber `build_graph` bekommt keine cfg (es wird an vielen Stellen
+    # aufgerufen, auch aus Werkzeugen). `PRAGMA database_list` liefert den
+    # Ort der geoeffneten Datei, und der Cache liegt per Spec daneben.
+    lage = semantische_lage(db, labels)
+    _SEMANTIK_CACHE = (schluessel, lage)
+    return lage
+
 
 def build_graph(store) -> dict:
     positions = store.get_positions()
     nodes: list[dict] = []
 
+    # 🔴 Die ZWEITE Anordnung (Birk, 2026-09-02): `sx`/`sy` liegen neben
+    # `x`/`y` und ordnen nach BEDEUTUNG statt nach gemeinsamen Sprechern. Die
+    # Wand blendet auf Knopfdruck zwischen beiden ueber (kg.semantik).
+    # Fehlt sie — keine Embeddings, zu wenige Begriffe, Rechnung gescheitert —
+    # bleiben die Felder weg und die Wand bietet den Umschalter nicht an.
+    alle_labels = [t.label for t in store.list_terms() if not t.hidden]
+    sem = _semantische_lage(store, alle_labels)
+    # Was inhaltlich nebeneinanderliegt, auch wenn es niemand zusammen gesagt
+    # hat — die Information, die der Graph selbst nicht hat.
+    nachbarn = _verwandte(store, alle_labels)
+    begriffe_je_person: dict[str, list[str]] = {}
+    if sem:
+        etikett = {t.id: t.label for t in store.list_terms()}
+        for kante in store.list_edges():
+            label = etikett.get(kante.term_id)
+            if label:
+                begriffe_je_person.setdefault(kante.person_id, []).append(label)
+
+    # Wie viele Menschen jeden Begriff gesagt haben — daraus ergibt sich der
+    # EIGENSTE Begriff einer Person (kg.semantik.eigenster_ort).
+    sprecherzahl: dict[str, int] = {}
+    for labels in begriffe_je_person.values():
+        for label in set(labels):
+            sprecherzahl[label] = sprecherzahl.get(label, 0) + 1
+
+    # Erst alle Orte bestimmen, dann in EINEM Durchgang entzerren: Ein
+    # Verdraengen je Person waere von der Reihenfolge abhaengig und ergaebe
+    # bei jedem Abruf ein anderes Bild.
+    roh = {}
+    if sem:
+        for person in store.list_persons():
+            ort = eigenster_ort(sem, begriffe_je_person.get(person.id, []), sprecherzahl)
+            if ort is not None:
+                roh[person.id] = ort
+    person_orte = entzerre(roh) if roh else {}
+
     for person in store.list_persons():
         x, y = positions.get(person.id, (None, None))
+        sp = person_orte.get(person.id)
         nodes.append(
             {
                 "id": person.id,
@@ -31,6 +147,13 @@ def build_graph(store) -> dict:
                 "hidden": person.hidden,
                 "x": x,
                 "y": y,
+                # 🔴 Nur DA, wenn es sie gibt — nicht als `null`. Ohne
+                # Embeddings, mit zu wenigen Begriffen oder nach einer
+                # gescheiterten Rechnung fehlen die Felder ganz, und der
+                # Vertrag mit Tool 2 ist derselbe wie vor dieser Ansicht
+                # (`tests/test_dream_contract.py` haelt das fest). Die Wand
+                # prueft ohnehin auf `typeof === 'number'`.
+                **({"sx": sp[0], "sy": sp[1]} if sp else {}),
             }
         )
 
@@ -46,6 +169,12 @@ def build_graph(store) -> dict:
                 "hidden": term.hidden,
                 "x": x,
                 "y": y,
+                **(
+                    {"sx": sem[term.label][0], "sy": sem[term.label][1]}
+                    if term.label in sem
+                    else {}
+                ),
+                **({"verwandt": nachbarn[term.label]} if nachbarn.get(term.label) else {}),
             }
         )
 
@@ -114,7 +243,30 @@ def build_graph(store) -> dict:
         "nodes": nodes,
         "edges": edges,
         "quotes": _quotes(store),
+        # 🔴 Die Widersprüche des Tages (Birk, 2026-09-02). Sie entstehen nach
+        # jedem Interview in `kg.pipeline` und liegen als JSON in `setting` —
+        # hier werden sie nur durchgereicht, damit die Wand sie zeigen kann,
+        # ohne einen zweiten Weg zum Kern zu brauchen.
+        # Ebenso: kein leeres Feld, wenn es nichts zu zeigen gibt.
+        **({"widersprueche": wsp} if (wsp := _widersprueche(store)) else {}),
     }
+
+
+def _widersprueche(store) -> list[dict]:
+    """Was in `setting` steht, oder eine leere Liste.
+
+    Defensiv gelesen: Ein halb geschriebener Eintrag darf `graph.json` nicht
+    kosten — daran hängt die ganze Wand."""
+    if not hasattr(store, "get_setting"):
+        return []
+    roh = store.get_setting("widersprueche", "")
+    if not roh:
+        return []
+    try:
+        werte = json.loads(roh)
+    except (TypeError, ValueError):
+        return []
+    return werte if isinstance(werte, list) else []
 
 
 def _quotes(store) -> list[dict]:

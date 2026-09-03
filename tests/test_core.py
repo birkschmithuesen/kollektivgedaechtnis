@@ -126,7 +126,11 @@ async def test_ein_foto_nach_dem_gespraech_geht_an_die_letzte_person(core):
     assert core.store.open_person() is None, "das Interview laeuft noch"
     vorher = len(core.processed)
 
-    core.on_photo(photo_path="besser.jpg", portrait_path="besser.png", at=300.0)
+    # 30 s nach dem Stop — innerhalb von `NACHREICH_FENSTER_S`, also noch
+    # ihres. Vor dem 2026-09-02 stand hier 300.0 (100 s); seither gehoerte
+    # ein so spaetes Foto dem naechsten Interview, und der Test pruefte
+    # unbemerkt die andere Regel.
+    core.on_photo(photo_path="besser.jpg", portrait_path="besser.png", at=230.0)
     await core.drain()
 
     person = core.store.get_person("p1")
@@ -153,8 +157,9 @@ async def test_ein_spaetes_foto_trifft_nur_die_letzte_person_nie_eine_aeltere(co
     core.on_mic_switch(False, at=400.0)
     await core.drain()
 
-    # Beide Gespraeche sind vorbei. Das Foto gehoert dem ZWEITEN.
-    core.on_photo(photo_path="neu.jpg", portrait_path="neu.png", at=500.0)
+    # Beide Gespraeche sind vorbei. Das Foto gehoert dem ZWEITEN — und kommt
+    # dicht genug hinter dessen Ende (30 s), um noch eine Verbesserung zu sein.
+    core.on_photo(photo_path="neu.jpg", portrait_path="neu.png", at=430.0)
     await core.drain()
 
     assert core.store.get_person("p2").portrait_path == "neu.png"
@@ -644,3 +649,91 @@ async def test_a_slow_answer_neither_blocks_the_loop_nor_the_next_utterance(tmp_
     assert ticks > 3  # …and the rest of the station kept running meanwhile
     assert core.store.open_person().id == "p1"  # a lost answer never closes
     core.store.close()
+
+
+# --- Das Foto der NAECHSTEN Person (Birk, 2026-09-02) ------------------------
+
+
+async def test_ein_foto_lange_nach_dem_stop_gehoert_dem_naechsten_interview(core):
+    """🔴 Dreimal an einem Nachmittag von Hand repariert (2026-09-02).
+
+    Am Booth wird ERST fotografiert und DANN das Interview gestartet. Das Foto
+    trifft also zuverlaessig in dem Fenster ein, in dem noch die VORIGE Person
+    die „letzte" ist — gemessen lagen zwischen Foto und Start 5 bzw. 6
+    Sekunden. Vorher ersetzte jedes neue Gesicht das der Vorgaengerin: p4/p5,
+    p16/p17, p17/p18.
+
+    Birks Regel: „Wenn ein Foto spaeter als 60 sec nach Interview-Stop
+    geschossen wurde, dann gehoert es zum naechsten Interview."
+    """
+    core.on_mic_switch(True, at=100.0)
+    core.on_photo(photo_path="ihres.jpg", portrait_path="ihres.png", at=100.0)
+    await core.drain()
+    core.on_mic_switch(False, at=200.0)
+    await core.drain()
+
+    # 100 s nach ihrem Ende — das ist das Gesicht des naechsten Gastes.
+    core.on_photo(photo_path="naechster.jpg", portrait_path="naechster.png", at=300.0)
+    await core.drain()
+
+    assert core.store.get_person("p1").portrait_path == "ihres.png", (
+        "das Bild der vorigen Person wurde ueberschrieben"
+    )
+
+    # Und es ist nicht verloren: Das naechste Interview bekommt es.
+    core.on_mic_switch(True, at=310.0)
+    await core.drain()
+    assert core.store.get_person("p2").portrait_path == "naechster.png", (
+        "das geparkte Foto wurde nicht eingeloest"
+    )
+
+
+async def test_von_mehreren_geparkten_fotos_gewinnt_das_letzte(core):
+    """Am Booth entstehen drei, vier Aufnahmen hintereinander, bis eine sitzt
+    (gemessen: 12:44:27, 12:44:50, 12:44:55). „Letzte Aufnahme gewinnt" gilt
+    auch fuer das geparkte Bild."""
+    core.on_mic_switch(True, at=100.0)
+    core.on_photo(photo_path="ihres.jpg", portrait_path="ihres.png", at=100.0)
+    await core.drain()
+    core.on_mic_switch(False, at=200.0)
+    await core.drain()
+
+    core.on_photo(photo_path="v1.jpg", portrait_path="v1.png", at=300.0)
+    core.on_photo(photo_path="v2.jpg", portrait_path="v2.png", at=305.0)
+    core.on_photo(photo_path="v3.jpg", portrait_path="v3.png", at=310.0)
+    await core.drain()
+    core.on_mic_switch(True, at=320.0)
+    await core.drain()
+
+    assert core.store.get_person("p2").portrait_path == "v3.png"
+
+
+async def test_ein_foto_im_laufenden_interview_schlaegt_das_geparkte(core):
+    """Das geparkte Bild ist nur der Startwert, nicht das letzte Wort.
+
+    Der reale Ablauf: Es wird fotografiert, dann der Schalter gedrueckt — die
+    Person bekommt das geparkte Bild. Faellt danach auf, dass es nichts taugt,
+    wird waehrend des Gespraechs neu geschossen, und DAS gilt.
+
+    (Ein Foto eroeffnet uebrigens kein Interview; das tut allein der
+    Mikrofonschalter. Eine erste Fassung dieses Tests nahm das an und lief ins
+    Leere.)"""
+    core.on_mic_switch(True, at=100.0)
+    core.on_photo(photo_path="ihres.jpg", portrait_path="ihres.png", at=100.0)
+    await core.drain()
+    core.on_mic_switch(False, at=200.0)
+    await core.drain()
+
+    core.on_photo(photo_path="geparkt.jpg", portrait_path="geparkt.png", at=300.0)
+    await core.drain()
+    core.on_mic_switch(True, at=310.0)
+    await core.drain()
+    assert core.store.get_person("p2").portrait_path == "geparkt.png"
+
+    core.on_photo(photo_path="besser.jpg", portrait_path="besser.png", at=340.0)
+    await core.drain()
+
+    assert core.store.get_person("p2").portrait_path == "besser.png"
+    assert core.store.get_person("p1").portrait_path == "ihres.png", (
+        "das Bild der vorigen Person wurde angefasst"
+    )

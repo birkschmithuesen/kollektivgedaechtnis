@@ -23,11 +23,14 @@ log = logging.getLogger(__name__)
 
 class DreamWatcher:
     def __init__(self, cfg, store, bus, llm, *, fetch=fetch_graph, cycle=run_dream,
-                 clock=time.time) -> None:
+                 clock=time.time, haiku_llm=None) -> None:
         self.cfg = cfg
         self.store = store
         self.bus = bus
         self.llm = llm
+        # Eigener Client fuer das Haiku unter dem Bild; `None` = kein Haiku,
+        # dann bleibt der Prosasatz aus Stufe 1 (kg2/haiku.py).
+        self.haiku_llm = haiku_llm
         self.fetch = fetch
         self.cycle = cycle
         self.clock = clock
@@ -82,6 +85,7 @@ class DreamWatcher:
                 self.cycle,
                 self.store, self.cfg, self.llm, graph, decision.started_at,
                 on_sentence=announce,
+                haiku_llm=self.haiku_llm,
             )
         except Exception as exc:  # run_dream does not raise; a stub might
             log.error("dream cycle raised: %s", exc)

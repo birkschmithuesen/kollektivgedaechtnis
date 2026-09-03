@@ -165,10 +165,14 @@ der Menschen, die einen Begriff genannt haben, und dem Zeitpunkt, an dem er \
 zuerst fiel. Jeder davon steht in der Bildbeschreibung, als das was er meint, \
 nicht nur als sein Wort.
 Das ist die halbe Antwort. Die andere ist deine, und dafür gelten drei Dinge:
-- BREITE, NICHT NUR DIE SPITZE. Die meistgenannten Begriffe stehen oft den \
-ganzen Tag oben, weil sie früh fielen. Wer nur sie nimmt, träumt bei zehn \
-Interviews dasselbe wie bei sechzig. Nimm deshalb auch aus der Mitte und dem \
-unteren Teil der Liste, was das Bild konkret macht.
+- DIE PFLICHTLISTE TRÄGT DAS BILD. Sie wandert mit den Gesprächen: Sie \
+enthält, was die zuletzt befragte Person gesagt hat, und was ihr im Graphen \
+am nächsten liegt. Sie ist damit bei jedem Bild eine andere. Die Liste der \
+geteilten Begriffe darunter ist HINTERGRUND — sie sagt, worum es an diesem \
+Tag insgesamt ging, und ändert sich stundenlang kaum. Nimm daraus nur, was \
+die Pflichtbegriffe in eine Umgebung setzt, und nie das tragende Motiv. Ein \
+Material oder ein Gegenstand, der nur dort steht und nicht in der \
+Pflichtliste, gehört nicht in den Vordergrund.
 - DU WÄHLST DAS TRAGENDE MOTIV. Die Pflichtliste sagt, WAS vorkommt, nicht \
 was im Mittelpunkt steht. Nimm als tragendes Motiv den Begriff, der die \
 stärkste Szene hergibt, und stelle die übrigen daneben: als Gegenstand am \
@@ -205,11 +209,29 @@ Haltung, in der man arbeitet, wartet, zeigt oder sich abwendet. Gesichter \
 müssen nicht erkennbar sein, aber ein Mensch im Bild ist ganz im Bild und \
 nicht am Rand angeschnitten.
 
+WAS die Menschen im Bild TUN, steht in den Belegstellen und nirgendwo sonst. \
+Erfinde keine Beziehungen zwischen ihnen: keine Familienszene, keine Eltern \
+mit Kindern, keine Großmutter am Rand, solange das Material sie nicht nennt. \
+Solche Szenen sind nicht das, was jemand gesagt hat, sondern das \
+Naheliegendste, das dir einfällt — und dann zeigt jedes Bild des Tages \
+dieselbe Familie bei wechselnder Arbeit.
+
+WER sie sind, ist damit NICHT beantwortet, und du sollst es auch nicht \
+offenlassen. Die Menschen, die hier über das Bauen und Wohnen sprechen, sind \
+so verschieden wie das Land, in dem sie leben, und die Bilder sollen das \
+zeigen: Menschen mit unterschiedlicher Hautfarbe, unterschiedlicher Herkunft, \
+jede und jeder in einem anderen Alter, Menschen mit Behinderung, queere \
+Menschen, Alleinlebende, Wohngemeinschaften, Paare, Menschen, denen man ihre \
+Lebensform nicht ansieht. Nicht als Aufzählung, nicht als Thema und nie als \
+Etikett am Rand — sie tun einfach, was sie tun, und sehen dabei verschieden \
+aus. Eine weiße Kleinfamilie mit zwei Kindern ist EINE mögliche Szene unter \
+vielen, nicht die Voreinstellung.
+
 BEIDE MASSSTÄBE IN DERSELBEN AUFNAHME. Was die Menschen erzählen, betrifft \
 Straßenzüge, Ortschaften, Landschaften, nicht nur eine Wand; ein Bild, das \
 ausschließlich einen Ausschnitt zeigt, macht aus einer Zukunftsvorstellung \
 eine Baustellennotiz.
-- NAH: was Menschen konkret tun, mit den Händen, an einem bestimmten Ding.
+- NAH: was konkret getan wird, an einem bestimmten Ding.
 - WEIT: dahinter oder darüber sichtbar, wie weit das reicht — Dächer bis zum \
 Ortsrand, ein Straßenzug, eine Talseite, ein Stadtrand.
 Der weite Teil ist kein Hintergrundschmuck: An ihm muss man ABLESEN können, \
@@ -317,7 +339,12 @@ etwas ändern lässt; zähle sie als das. Negativ ist Material erst, wenn die \
 Menschen keinen Weg mehr sehen: wenn sie resignieren, andere für unbelehrbar \
 halten oder erwarten, dass alles so bleibt. Wäge ab, statt den lautesten \
 Begriff entscheiden zu lassen: Wie viele Aussagen benennen einen Weg, wie \
-viele nur einen Missstand? Bei ungefähr gleich vielen ist 3 richtig.
+viele nur einen Missstand? ZÄHLE sie, und nimm die Zahl, zu der das Ergebnis \
+zeigt — 2 oder 4 sind die Regel, nicht die Ausnahme. Die 3 ist NICHT der \
+sichere Mittelweg, sondern eine eigene Aussage: „hier halten sich Zuversicht \
+und Resignation wirklich die Waage." Vergib sie nur, wenn du beide Seiten \
+zählen konntest und sie gleich schwer waren; sonst entscheide dich für die \
+Richtung, die überwiegt.
 
 tension: Wie weit liegen die Aussagen auseinander? 1 = einig, 5 = unvereinbar.\
 """
@@ -402,6 +429,7 @@ def build_condense_prompt(
     required_terms: int = REQUIRED_TERMS,
     recency_share: float = RECENCY_SHARE,
     last_person_id: str | None = None,
+    zuletzt_gezeigt: list[str] | None = None,
 ) -> str:
     """`single_mention_budget`/`shared_terms_saturation`/`recent_terms` only
     exist so `sim.dream_calibrate terms`/`recency` can try other values
@@ -425,6 +453,7 @@ def build_condense_prompt(
         required_terms=required_terms,
         recency_share=recency_share,
         last_person_id=last_person_id,
+        zuletzt_gezeigt=zuletzt_gezeigt,
     )
     return f"{rendered}\n\n--- ENDE MATERIAL ---\n\nAntworte mit genau einem Satz."
 
@@ -553,6 +582,7 @@ def condense(
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
     recent_terms: int = RECENT_TERMS,
     last_person_id: str | None = None,
+    zuletzt_gezeigt: list[str] | None = None,
 ) -> CondenseResult:
     """One call. Errors propagate — `kg2.cycle` owns the failure policy (§8).
 
@@ -571,6 +601,7 @@ def condense(
         shared_terms_saturation=shared_terms_saturation,
         recent_terms=recent_terms,
         last_person_id=last_person_id,
+        zuletzt_gezeigt=zuletzt_gezeigt,
     )
 
     def _form_stimmt(satz: str) -> bool:

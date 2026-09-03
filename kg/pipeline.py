@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+
 import logging
 from dataclasses import dataclass, field
 
 from kg.export import write_graph_json
+from kg.widerspruch import finde_widersprueche
 from kg.extraction import extract
 from kg.merging import apply_merges, build_candidates, decide_merges, split_known
 from kg.segmentation import strip_stop_phrases
@@ -19,6 +22,49 @@ class ProcessResult:
     status: str
     term_ids: list[str] = field(default_factory=list)
     transcript: str = ""
+
+
+def _aktualisiere_widersprueche(store, llm) -> None:
+    """Die Widerspruchsliste neu bestimmen und ablegen.
+
+    Wirft nie und schreibt nur bei Erfolg: Eine leere Antwort — das Modell hat
+    keinen gefunden, der Anbieter war weg — darf die Liste nicht löschen, die
+    seit dem letzten Mal an der Wand steht.
+    """
+    # 🔴 FESTGENAGELT (Birk, 2026-09-03, gegen Ende des zweiten Tages: „die
+    # drei widersprüche vorher fand ich besser. bringe sie zurück. fixiere sie.
+    # es werden keine neuen interviews mehr kommen").
+    #
+    # Der Aufruf sucht bei jedem Interview neu, und das Ergebnis fällt jedes
+    # Mal etwas anders aus — an einem laufenden Tag ist das richtig, am Ende
+    # nicht mehr: Dann steht eine Auswahl an der Wand, die jemand angesehen und
+    # für gut befunden hat, und die soll bleiben.
+    #
+    # Ein Schalter in den Einstellungen und keine auskommentierte Zeile: Wer
+    # ihn auf 0 setzt, bekommt das alte Verhalten zurück, ohne Code anzufassen.
+    if store.get_setting("widersprueche_fixiert", "0") == "1":
+        log.info("Widersprüche sind festgenagelt — keine Neuberechnung")
+        return
+    try:
+        etikett = {t.id: t.label for t in store.list_terms() if not t.hidden}
+        namen = {p.id: (p.name or "") for p in store.list_persons() if not p.hidden}
+        stimmen: dict[str, list[tuple[str, str]]] = {}
+        for kante in store.list_edges():
+            if kante.term_id not in etikett or kante.person_id not in namen:
+                continue
+            if kante.evidence:
+                stimmen.setdefault(kante.term_id, []).append(
+                    (namen[kante.person_id], kante.evidence)
+                )
+        begriffe = [
+            {"label": etikett[tid], "stimmen": liste} for tid, liste in stimmen.items()
+        ]
+        paare = finde_widersprueche(llm, begriffe)
+        if paare:
+            store.set_setting("widersprueche", json.dumps(paare, ensure_ascii=False))
+            log.info("Widersprüche aktualisiert: %d Paare", len(paare))
+    except Exception as fehler:  # noqa: BLE001 — siehe Docstring
+        log.warning("Widersprüche nicht aktualisierbar: %s", fehler)
 
 
 def process_interview(
@@ -58,7 +104,25 @@ def process_interview(
     try:
         # 2.+3. Find the real end and extract, in one call.
         result = extract(llm, text, cfg.terms_per_interview)
-        transcript = text[: result.interview_end_index].strip() or text.strip()
+        # 🔴 DER VOLLE TEXT WIRD GESPEICHERT (Birk, 2026-09-02). Vorher stand
+        # hier `text[: result.interview_end_index]` — das gespeicherte
+        # Transkript endete also dort, wo das Modell das Gespraech fuer beendet
+        # hielt.
+        #
+        # Was das kostete, zeigt Steffen (p3): Sein Transkript bricht mitten im
+        # Wort ab („also aus historischer Sicht tatsä"), 1490 Zeichen fuer ein
+        # fuenfminuetiges Gespraech, davon die Haelfte Foto-Gefummel. Seine
+        # Antworten sind darin gar nicht mehr enthalten — obwohl die Auswertung
+        # sie gesehen und ihre Begriffe daraus gezogen hat. Von 91 Belegstellen
+        # liessen sich 26 im gespeicherten Transkript nicht wiederfinden, und
+        # das war der Grund.
+        #
+        # Der Index bleibt wirksam, wo er hingehoert: `extract()` wendet ihn
+        # INTERN an — Begriffe und Zitat kommen nur von davor. Diese Zeile
+        # betraf allein den BELEG, und ein Beleg, der die Aussage nicht mehr
+        # enthaelt, ist keiner. `interview_end_index` ist ausserdem instabil
+        # (docs/STAND.md §2h), also raten wir hier nicht mit.
+        transcript = text.strip()
         labels = [t.label.strip() for t in result.terms if t.label.strip()]
         # 🔴 Die Belegstelle je Begriff aufheben (Birk, 2026-09-02). Das Modell
         # liefert sie laengst -- `ExtractedTerm.evidence`, im Prompt verlangt
@@ -119,6 +183,19 @@ def process_interview(
 
         # 5. Persist.
         store.set_person_transcript(person_id, transcript)
+
+        # 🔴 DIE WIDERSPRÜCHE, nach JEDEM Interview (Birk, 2026-09-02: „der
+        # extra LLM-Call soll nach jedem Interview passieren").
+        #
+        # Hier und nicht in `extract`: Die Extraktion sieht EIN Interview, ein
+        # Widerspruch braucht zwei — und zwar zwei von verschiedenen Menschen.
+        # Er entsteht beim Vergleichen, nicht beim Zuhören, also erst wenn
+        # beide Seiten im Graphen stehen.
+        #
+        # Der Aufruf kostet nichts, was das Interview braucht: Die Begriffe
+        # sind geschrieben, die Person hängt an der Wand. Fällt er aus, bleibt
+        # die Liste, die zuletzt galt.
+        _aktualisiere_widersprueche(store, llm)
         for term_id in term_ids:
             store.add_edge(
                 person_id, term_id, created_at=stopped_at,

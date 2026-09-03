@@ -73,7 +73,33 @@ def test_er_laeuft_nicht_ohne_schalter():
 
 
 def test_mit_schalter_laeuft_er_mit():
+    """🔴 Die zweite Zusage hat sich am 2026-09-02 UMGEDREHT.
+
+    Sie lautete „kein Uploader" und hielt fest, dass der Abholer-Schalter den
+    Spiegel nicht mitzieht. Der Spiegel läuft seit diesem Tag als VORGABE mit
+    (Birk, am Ausstellungstag: „baue ihn auch in die start routine ein") —
+    „kein Uploader" prüfte danach nicht mehr die Trennung der beiden
+    Schalter, sondern nur noch, dass die alte Vorgabe noch gilt. Sie galt
+    nicht mehr, und der Test war rot.
+
+    Was er weiterhin prüfen SOLL, ist die Trennung: Der Abholer darf beim
+    Spiegel löschen und braucht das starke Token — er hängt an einem eigenen
+    Schalter und wird von keinem anderen mitgezogen. Das steht jetzt als
+    Gegenprobe unten, mit `--ohne-spiegel`.
+    """
     mit = _trocken("--mit-abholer")
+    assert "Abholer (abholer-start-mac.sh)" in mit, mit
+
+
+def test_der_abholer_haengt_an_seinem_eigenen_schalter():
+    """Die eigentliche Zusage: zwei Dienste nach draussen, zwei Entscheidungen.
+
+    Der Abholer ist der schärfere von beiden — er darf beim Spiegel LÖSCHEN.
+    Weder die Vorgabe noch `--mit-spiegel` zieht ihn mit, und `--ohne-spiegel`
+    nimmt ihn nicht weg."""
+    assert "kein Abholer" in _trocken(), "der Abholer laeuft ungefragt mit"
+    assert "kein Abholer" in _trocken("--mit-spiegel"), "--mit-spiegel zieht ihn mit"
+    mit = _trocken("--mit-abholer", "--ohne-spiegel")
     assert "Abholer (abholer-start-mac.sh)" in mit, mit
     assert "kein Uploader" in mit, mit
 

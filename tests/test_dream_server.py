@@ -138,6 +138,7 @@ def test_every_display_setting_can_be_changed(app):
             "strip_ratio": 0.2,
             "strip_max": 7,
             "typewriter": True,
+            "slideshow": False,
         },
     )
 
@@ -147,6 +148,7 @@ def test_every_display_setting_can_be_changed(app):
     assert state["strip_ratio"] == 0.2
     assert state["strip_max"] == 7
     assert state["typewriter"] is True
+    assert state["slideshow"] is False
 
 
 def test_a_partial_display_update_leaves_the_rest_alone(app):
@@ -460,3 +462,32 @@ async def test_closing_the_stream_unsubscribes_from_the_bus(app):
     await response.body_iterator.aclose()
 
     assert len(bus._subscribers) == before
+
+
+def test_die_slideshow_ist_an_bis_jemand_sie_abschaltet(app):
+    """🔴 BIRK, 2026-09-03: „der traum operator braucht noch einen button um die
+    automatische slideshow an/aus zu setzen."
+
+    Bisher liess sie sich nur ueber `?slideshow=0` an JEDER Flaeche einzeln
+    abstellen — am Bedienpult gab es sie nicht.
+
+    Vorgabe AN, anders als bei der Schreibmaschine: Am Abend, wenn keine
+    Interviews mehr kommen, stuende die Wand sonst stundenlang auf einem Bild.
+    Genau dafuer wurde die Slideshow gebaut; sie auszuschalten ist die
+    Ausnahme (eine Aufnahme, eine Praesentation).
+    """
+    client, store, cfg, _ = app
+
+    assert client.get("/api/state").json()["slideshow"] is True
+    assert cfg.default_slideshow is True
+
+    client.post("/api/display", json={"slideshow": False})
+    assert client.get("/api/state").json()["slideshow"] is False
+
+    # Ein Neustart darf die Hand am Pult nicht ueberstimmen — dieselbe Regel
+    # wie fuer jeden anderen Anzeigeregler.
+    seed_display_settings(store, cfg)
+    assert client.get("/api/state").json()["slideshow"] is False
+
+    client.post("/api/display", json={"slideshow": True})
+    assert client.get("/api/state").json()["slideshow"] is True

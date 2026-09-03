@@ -836,3 +836,48 @@ def test_der_beste_versuch_gewinnt_nicht_der_letzte():
     llm = _LLMMitFolge(_antwort(mittel), _antwort(sehr_lang), _antwort(sehr_lang))
 
     assert condense(llm, material()).sentence == mittel
+
+
+# --- Das Gedaechtnis gegen die Wiederholung (Birk, 2026-09-02) ---------------
+
+
+def test_die_zuletzt_gezeigten_bilder_stehen_im_prompt():
+    """🔴 Birk am Ausstellungstag: „Ich habe das Gefühl, dass zum Beispiel Lehm
+    in jedem Bild vorkam. Wurde das wirklich in jedem Interview genannt?"
+
+    Gemessen an den ersten zehn Träumen: „Lehmbau" wurde von genau ZWEI
+    Menschen genannt, stand aber in NEUN von zehn Prompts — in dreien als
+    Pflichtbegriff, in sechs weiteren nur als Zeile „2× Lehmbau" in der Liste
+    der geteilten Begriffe. Im Bild erschien es sieben Mal.
+
+    Die Ursache ist keine Panne, sondern eine Anweisung: „BREITE, NICHT NUR DIE
+    SPITZE — nimm auch aus der Mitte und dem unteren Teil der Liste, was das
+    Bild KONKRET macht." Lehm ist das konkreteste Material der ganzen Liste.
+    Das Modell tut also genau das Richtige und kommt jedes Mal zum selben
+    Ergebnis, weil jeder Traum für sich entsteht: Es weiß nicht, was zehn
+    Minuten vorher an der Wand hing.
+
+    Deshalb bekommt es das jetzt gesagt. Kein neuer Mechanismus, nur die
+    fehlende Information.
+    """
+    from kg2.condense import build_condense_prompt
+
+    mat = material()
+    prompt = build_condense_prompt(
+        mat,
+        zuletzt_gezeigt=["Kinder pressen Lehm gegen Bretter an einer Wand"],
+    )
+    assert "Kinder pressen Lehm gegen Bretter an einer Wand" in prompt, prompt[-2000:]
+    assert "zuletzt" in prompt.lower()
+
+
+def test_ohne_vorgeschichte_bleibt_der_prompt_wie_er_war():
+    """Der erste Traum eines Tages hat keine Vorgeschichte — dann darf auch
+    kein leerer Block dastehen, der so aussieht, als sei etwas verlorengegangen."""
+    from kg2.condense import build_condense_prompt
+
+    mat = material()
+    ohne = build_condense_prompt(mat)
+    leer = build_condense_prompt(mat, zuletzt_gezeigt=[])
+    assert ohne == leer
+    assert "Zuletzt gezeigt" not in ohne

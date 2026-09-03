@@ -65,6 +65,7 @@ class DisplaySettings(BaseModel):
     # 2026-08-26 on the rendered comparisons).
     strip_max: int | None = Field(default=None, ge=1, le=40)
     typewriter: bool | None = None
+    slideshow: bool | None = None
 
 
 class PauseFlag(BaseModel):
@@ -81,6 +82,7 @@ _DEFAULTS = {
     "strip_ratio": ("default_strip_ratio", float),
     "strip_max": ("default_strip_max", int),
     "typewriter": ("default_typewriter", bool),
+    "slideshow": ("default_slideshow", bool),
 }
 
 
@@ -128,6 +130,9 @@ def dream_state(store, cfg) -> dict:
         # oldest-first, this only slices what goes out over the wire.
         "strip_max": strip_max,
         "typewriter": store.get_setting("typewriter", "0") == "1",
+        # Vorgabe "1": Die Slideshow ist an, solange niemand sie abschaltet —
+        # anders als die Schreibmaschine, die aus ist, bis jemand sie will.
+        "slideshow": store.get_setting("slideshow", "1") == "1",
         "paused": store.get_setting("paused", "0") == "1",
         "current": dream_payload(store.current_dream()),
         "history": [dream_payload(dream) for dream in store.history()[-strip_max:]],

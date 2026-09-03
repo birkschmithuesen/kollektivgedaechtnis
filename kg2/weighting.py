@@ -57,6 +57,8 @@ voice weighting the dream they were pulled out of.
 from __future__ import annotations
 
 from collections.abc import Iterable
+import math
+
 from dataclasses import dataclass, field
 
 
@@ -74,6 +76,36 @@ class TermWeight:
     #: Zahl nicht — man braucht die Mengen selbst. Ein `frozenset`, weil
     #: `TermWeight` frozen ist und ein `set` das Hashing bräche.
     person_ids: frozenset[str] = frozenset()
+    #: Wo der Knoten im Layout LIEGT, in Modellpixeln — `None`, solange kein
+    #: Layout gelaufen ist (frischer Graph) oder der Knoten neu ist.
+    #:
+    #: 🔴 Seit 2026-09-02 (Birk an der Wand): „Die blauen / Nachbarn sind
+    #: oftmals ueber eine andere Person verbunden und erscheinen daher im
+    #: Graphen sehr weit auseinander." Die Nachbarschaftsachse rechnete bis
+    #: dahin mit geteilter Sprecherschaft und begruendete das so:
+    #: „Bildschirmnaehe IST geteilte Sprecherschaft, nur als Ergebnis statt
+    #: als Ursache." Die Annahme traegt nicht — zwei Begriffe teilen eine
+    #: Person, aber diese Person hat zwanzig weitere genannt, und das Layout
+    #: zieht sie auseinander. Gemessen am Graphen der Station (36 Begriffe,
+    #: Feld 2694 x 1553 px): mittlerer Abstand der gewaehlten Begriffe
+    #: 695 px ueber Sprecher, 482 px ueber die Lage.
+    x: float | None = None
+    y: float | None = None
+    #: Wann dieser Begriff ZULETZT von jemandem gesagt wurde — die Startzeit
+    #: der juengsten Person, die ihn genannt hat.
+    #:
+    #: 🔴 Nicht dasselbe wie `created_at` (Birk, 2026-09-02): Das ist die
+    #: Entstehung des BEGRIFFS, also wann er zum ersten Mal ueberhaupt fiel.
+    #: Die Begriffe der zuletzt befragten Person sind meist ALT — „Mehr Gruen
+    #: in Staedten" gab es seit dem Mittag, sie hat ihn nur AUCH gesagt. Der
+    #: Block „Zuletzt gesagt" zeigte deshalb fuenf von fuenf Begriffen, die
+    #: NICHT von ihr stammten, und der Prompt erzwingt, dass zwei davon ins
+    #: Bild gehen.
+    #:
+    #: Die Sprecherzeit und nicht die Kantenzeit, weil `graph.json` an den
+    #: Kanten keinen Zeitstempel fuehrt (nur id, source, target, evidence) —
+    #: die Startzeit der Person IST der Zeitpunkt, an dem sie sprach.
+    zuletzt_gesagt: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -126,6 +158,33 @@ SHARED_TERMS_SATURATION = 25  # X
 #: docstring). Deliberately small: an accent, not a second theme list — too
 #: many and it competes with the weighting it is not meant to override.
 RECENT_TERMS = 5
+
+#: Wie viele der HAEUFIGSTEN geteilten Begriffe in den Materialblock gehen.
+#:
+#: 🔴 NEU am 2026-09-02 (Birk, am Ausstellungstag): „bau es auch so, dass wir
+#: mehr Spitze haben und weniger Breite, damit die Bilder abwechslungsreicher
+#: werden." Vorher war die Liste UNGEDECKELT -- `shared_terms_saturation`
+#: steuert nur das Budget der Einmal-Nennungen, nie diese Liste.
+#:
+#: Gemessen, warum das noetig war: „Lehmbau" wurde von genau ZWEI Menschen
+#: genannt, stand aber in NEUN von zehn Prompts und erschien in SIEBEN von
+#: neun Bildern. Sechsmal davon nur, weil es als Zeile „2× Lehmbau" in dieser
+#: Liste stand. Der Prompt bat ausdruecklich darum, sich dort zu bedienen
+#: („nimm auch aus der Mitte und dem unteren Teil, was das Bild KONKRET
+#: macht") -- und Lehm ist das konkreteste Material der ganzen Liste.
+#:
+#: 🔴 Die alte Regel war nicht falsch, sie ist ueberholt: Sie entstand, als
+#: die Pflichtliste STATISCH war (der Tagessieger stand den ganzen Tag oben)
+#: und Breite das einzige Mittel gegen Wiederholung. Seit dem 2026-09-02
+#: wandert die Pflichtliste mit der zuletzt befragten Person
+#: (`select_required`), wechselt also bei jedem Interview -- und die breite
+#: Liste ist jetzt der statische Teil, der die Wiederholung TRAEGT.
+#:
+#: 8 ist gesetzt, nicht gemessen: gross genug, dass an einem vollen Tag noch
+#: ein Feld statt einer Spitze dasteht, klein genug, dass ein zweimal
+#: genannter Begriff nicht mehr automatisch dabei ist. Nachpruefbar mit
+#: `scripts/miss-bildmotive.py`.
+SHARED_TERMS_MAX = 8
 
 #: Von wie vielen der ZULETZT befragten Personen die Zitate in den Prompt
 #: gehen (Birk, 2026-09-01: „zitat: nur von der letzten person mit rein
@@ -195,6 +254,18 @@ def build_material(graph: dict | None) -> Material:
         and isinstance(node.get("id"), str)
         and isinstance(node.get("label"), str)
     }
+    # Die Lage im Layout, sofern schon eine gelaufen ist. `x`/`y` sind `None`,
+    # solange der Graph frisch ist — dann faellt die Nachbarschaftsachse auf
+    # die Sprechernaehe zurueck (`_naehe`), und zwar ganz, nicht halb.
+    lage = {
+        node.get("id"): (node.get("x"), node.get("y"))
+        for node in nodes
+        if isinstance(node, dict)
+        and node.get("type") == "term"
+        and isinstance(node.get("id"), str)
+        and isinstance(node.get("x"), (int, float))
+        and isinstance(node.get("y"), (int, float))
+    }
 
     letzte_person = None
     letzte_zeit = None
@@ -247,13 +318,46 @@ def build_material(graph: dict | None) -> Material:
                 belege.setdefault(target, []).append((source, beleg.strip()))
             edge_count += 1
 
+    # 🔴 DIE LETZTE PERSON MIT BEGRIFFEN, nicht die zuletzt begonnene
+    # (Birk, 2026-09-02, zum Traum nach Robert Ritzows Interview: „Ich verstehe
+    # nicht, warum die Traumbegriffe gewaehlt wurden. ‚Vor kurzem gesagt'
+    # muessten doch seine Begriffe sein. Dem ist aber nicht so.").
+    #
+    # Gemessen: Von fuenf Pflichtbegriffen stammte genau EINER von ihm, der
+    # Anker gehoerte vier anderen Menschen. Grund war ein Wettlauf — als der
+    # Traum entstand, hatte laengst die naechste Person angefangen, und die
+    # hat naturgemaess noch keine Kante. `von_ihr` in `select_required` war
+    # damit leer, der Anker fiel auf den Tagessieger zurueck, und die ganze
+    # Verankerung am letzten Gespraech war wirkungslos.
+    #
+    # Kein Randfall: Ein Traum entsteht alle 240 s, ein Interview dauert fuenf
+    # bis zehn Minuten. „Die juengste Person redet noch" ist der Normalfall.
+    #
+    # Der Rueckgriff greift NUR, wenn er muss — hat die juengste Person
+    # Begriffe, bleibt sie der Anker (`test_hat_die_juengste_person_begriffe_
+    # bleibt_sie_der_anker`), sonst zeigte das Bild dauerhaft auf das
+    # vorletzte Gespraech.
+    mit_begriffen = {pid for menge in sprecher.values() for pid in menge}
+    if letzte_person is not None and letzte_person not in mit_begriffen:
+        kandidaten = [
+            (zeit, pid) for pid, zeit in personen_zeit.items() if pid in mit_begriffen
+        ]
+        if kandidaten:
+            letzte_zeit, letzte_person = max(kandidaten)
+
     weights = []
     for tid, count in counts.items():
         label, created_at = terms[tid]
         if not isinstance(created_at, (int, float)):
             created_at = 0.0
+        x, y = lage.get(tid, (None, None))
+        redner = sprecher.get(tid, set())
+        # Ohne bekannte Sprecherzeit auf die Entstehung zurueckfallen, statt
+        # auf 0 — sonst stuende so ein Begriff fuer immer am Ende der Achse.
+        zuletzt = max((personen_zeit[p] for p in redner if p in personen_zeit),
+                      default=created_at)
         weights.append(
-            TermWeight(label, count, created_at, frozenset(sprecher.get(tid, ())))
+            TermWeight(label, count, created_at, frozenset(redner), x, y, zuletzt)
         )
     # Descending by count, then by label: two runs over the same graph must
     # produce the same prompt, or the record in spec §5.3 explains nothing.
@@ -336,8 +440,20 @@ def select_recent(material: Material, *, count: int = RECENT_TERMS) -> list[Term
     """
     if count <= 0:
         return []
+    # 🔴 `zuletzt_gesagt` statt `created_at` (Birk, 2026-09-02). „Zuletzt
+    # gesagt" soll heissen: gerade eben von jemandem GEAEUSSERT — nicht: heute
+    # zum ersten Mal im Graphen aufgetaucht. Damit gehoert dieser Block fast
+    # immer der zuletzt befragten Person, und der Zwang im Prompt
+    # („mindestens zwei davon gehoeren ins Bild") arbeitet FUER die
+    # Verankerung statt dagegen.
+    #
+    # Was das kostet: Ein wirklich neuer Begriff einer FRUEHEREN Person
+    # rutscht seltener ins Bild. Die Achse heisst jetzt „was wurde gerade
+    # gesagt", nicht „was ist neu im Graphen" — bewusst, weil das Bild an das
+    # letzte Gespraech gebunden sein soll.
     newest_first = sorted(
-        material.shared + material.marginal, key=lambda w: (-w.created_at, w.label)
+        material.shared + material.marginal,
+        key=lambda w: (-w.zuletzt_gesagt, -w.created_at, w.label),
     )
     return newest_first[:count]
 
@@ -385,6 +501,20 @@ def _mitsprecher(material: Material) -> dict[str, set[str]]:
     gehören inhaltlich zusammen, auch wenn kein Wort sie verbindet.
     """
     return {w.label: set(w.person_ids) for w in material.shared + material.marginal}
+
+
+def _hat_lage(w: TermWeight) -> bool:
+    return w.x is not None and w.y is not None
+
+
+def _abstand(a: TermWeight, b: TermWeight) -> float:
+    """Der Abstand zweier Begriffe im Layout, in Modellpixeln.
+
+    `inf`, wenn einer von beiden keine Lage hat — dann steht er in jedem
+    `min()` hinten an, statt eine erfundene Null beizusteuern."""
+    if not (_hat_lage(a) and _hat_lage(b)):
+        return float("inf")
+    return math.hypot(a.x - b.x, a.y - b.y)
 
 
 def _naehe(a: str, b: str, sprecher: dict[str, set[str]]) -> float:
@@ -492,6 +622,31 @@ def select_required(
     if not alle:
         return []
 
+    # 🔴 NUR DAS LETZTE INTERVIEW (Birk, 2026-09-03: „ändere die auswahl der
+    # begriffe für den traum prompt so, dass nur das letzte interview
+    # visualisiert wird").
+    #
+    # 🔴 UND ZWAR HIER, VOR `haeufigste`/`juengste`: Der erste Versuch stand
+    # weiter unten bei den Stufen und war wirkungslos — beide Listen sind dort
+    # längst aus dem vollen `alle` gebaut, und die Auffüllzweige am Ende ziehen
+    # aus ihnen. Gemessen: „Wohnraum fuer alle" und „Begruenung" standen weiter
+    # im Bild, obwohl die letzte Person sie nie gesagt hatte.
+    #
+    # Bis dahin waren die drei Stufen weiter unten ein VORRANG: Gab es zu wenige
+    # eigene Begriffe, füllte die Auswahl aus dem ganzen Tag auf — und weil die
+    # Tagesspitze immer mehr Nennungen hat, stand sie regelmäßig im Bild.
+    #
+    # Der Rückfall bleibt, und er ist keine Vorsicht auf Verdacht: Ein
+    # Interview, aus dem nur ein einziger Begriff entstand (Abbruch, kurze
+    # Antwort, Verständigungsproblem), gäbe sonst ein Bild aus einem Wort. Die
+    # Schwelle ist die Hälfte der verlangten Menge; darunter gilt wieder der
+    # ganze Tag, und die Stufen unten sorgen dafür, dass das Nächste zuerst
+    # kommt.
+    if last_person_id is not None:
+        nur_ihre = [w for w in alle if last_person_id in w.person_ids]
+        if len(nur_ihre) >= max(2, count // 2):
+            alle = nur_ihre
+
     plaetze = count - 1  # der Anker belegt den ersten
     aus_neuheit = round(plaetze * max(0.0, min(1.0, recency_share)))
     aus_naehe = min(
@@ -519,11 +674,79 @@ def select_required(
     gewaehlt: list[TermWeight] = [anker]
     schon = {anker.label}
 
+    # 🔴 VERBUNDENHEIT SCHLAEGT HAEUFIGKEIT (Birk, 2026-09-02, am
+    # Ausstellungstag): „alle Begriffe, die genommen werden, sollen sehr eng an
+    # der letzten interviewten Person dran sein, am besten mit ihr direkt
+    # connected. Da wuerde ich eher Begriffe nehmen, die im Zweifelsfall ein,
+    # zwei Personen weniger genannt haben."
+    #
+    # Warum das noetig war, obwohl der Anker schon bei ihr sitzt: `_naehe` ist
+    # ein Jaccard ueber Sprechermengen und liefert **exakt 0**, sobald zwei
+    # Begriffe keine einzige Person teilen. Eine gerade befragte Person bringt
+    # aber frische Begriffe mit, die sonst niemand gesagt hat — die Naehe zu
+    # allem war also 0, und in `max(key=(naehe, mentions, label))` entschied
+    # der ZWEITE Schluessel. Damit gewann der meistgenannte Begriff des ganzen
+    # Tages, Bild fuer Bild. Am echten Graphen gemessen (10 Personen, 29
+    # Begriffe): 1 von 5 Pflichtbegriffen stammte von der letzten Person.
+    #
+    # Drei Stufen, alle aus dem Graphen und keine geschaetzt:
+    #   0  sie hat den Begriff selbst genannt
+    #   1  jemand, der einen Begriff MIT ihr teilt, hat ihn genannt
+    #      (im Graphen zwei Kanten entfernt — „direkt connected")
+    #   2  der weite Rest
+    #
+    # Die Stufe steht VOR der Naehe und vor der Haeufigkeit. Sie ist aber kein
+    # Filter, sondern nur ein Vorrang: Gibt es keine verbundenen Begriffe,
+    # laeuft die Auswahl weiter wie vorher und fuellt mit den haeufigsten auf
+    # (`test_ohne_verbundene_begriffe_gilt_weiter_die_haeufigkeit`).
+    ihre_labels: set[str] = set()
+    nachbar_personen: set[str] = set()
+    if last_person_id is not None:
+        for w in alle:
+            if last_person_id in w.person_ids:
+                ihre_labels.add(w.label)
+                nachbar_personen |= set(w.person_ids)
+        nachbar_personen.discard(last_person_id)
+
+    def _stufe(w: TermWeight) -> int:
+        if w.label in ihre_labels:
+            return 0
+        if nachbar_personen & set(w.person_ids):
+            return 1
+        return 2
+
+
     # Die Nachbarschaft wächst um die bisherige Auswahl herum: Bewertet wird
     # gegen ALLE schon Gewählten, nicht nur gegen den Anker. Bei Gleichstand
     # (etwa ganz am Anfang, wenn noch niemand zwei Begriffe zusammen genannt
     # hat) entscheidet die Häufigkeit — sonst hinge die Auswahl an der
     # zufälligen Reihenfolge der Liste.
+    # 🔴 NAEHE HEISST SEIT 2026-09-02 ABSTAND IM LAYOUT, nicht mehr geteilte
+    # Sprecherschaft (Birk an der Wand: „Die blauen / Nachbarn sind oftmals
+    # ueber eine andere Person verbunden und erscheinen daher im Graphen sehr
+    # weit auseinander").
+    #
+    # Der alte Weg war begruendet — „Bildschirmnaehe IST geteilte
+    # Sprecherschaft, nur als Ergebnis statt als Ursache" — und die Begruendung
+    # ist widerlegt, nicht vergessen: Zwei Begriffe teilen eine Person, aber
+    # diese Person hat zwanzig weitere genannt, und das Layout zieht sie
+    # auseinander. Gemessen am Graphen der Station (36 Begriffe, Feld
+    # 2694 x 1553 px), letzte ausgewertete Person: mittlerer Abstand der
+    # gewaehlten Begriffe 695 px ueber Sprecher, 482 px ueber die Lage; der
+    # weiteste 1153 -> 882 px.
+    #
+    # Der Einwand von damals bleibt gueltig: Positionen haengen am Layoutlauf.
+    # Deshalb der vollstaendige Rueckfall unten — kein Mischen zweier Skalen
+    # (Jaccard 0..1 gegen Pixel 0..3000), sondern entweder oder.
+    raeumlich = sum(1 for w in alle if _hat_lage(w)) >= 2
+
+    def naehe_rang(w: TermWeight) -> float:
+        """Groesser ist besser, damit `max` unten in beiden Faellen stimmt."""
+        if raeumlich:
+            naechster = min((_abstand(w, g) for g in gewaehlt), default=float("inf"))
+            return -naechster  # naeher dran = groesserer Wert
+        return sum(_naehe(w.label, g.label, sprecher) for g in gewaehlt)
+
     for _ in range(aus_naehe):
         kandidaten = [w for w in alle if w.label not in schon]
         if not kandidaten:
@@ -531,7 +754,11 @@ def select_required(
         bester = max(
             kandidaten,
             key=lambda w: (
-                sum(_naehe(w.label, g.label, sprecher) for g in gewaehlt),
+                # `-stufe`, weil `max` das GROESSTE Tupel nimmt und Stufe 0 die
+                # beste ist. Erst danach zaehlen Naehe und Haeufigkeit wie
+                # bisher — innerhalb einer Stufe ist der Entwurf unveraendert.
+                -_stufe(w),
+                naehe_rang(w),
                 w.mentions,
                 w.label,
             ),
@@ -547,7 +774,11 @@ def select_required(
     # schlicht nichts, und das ist genau die Sorte stiller Wirkungslosigkeit,
     # gegen die die mechanische Auswahl gebaut wurde.
     vergeben = 0
-    for w in juengste:
+    # `sorted` ist stabil: innerhalb einer Stufe bleibt die Reihenfolge nach
+    # Jugend erhalten. Die Achse behaelt also ihren Zweck („was gerade gesagt
+    # wurde, gehoert ins Bild"), bevorzugt darin aber das Verbundene. Gibt es
+    # keine verbundenen jungen Begriffe, greift sie unveraendert weiter.
+    for w in sorted(juengste, key=_stufe):
         if len(gewaehlt) >= count or vergeben >= aus_neuheit:
             break
         if w.label not in schon:
@@ -557,7 +788,7 @@ def select_required(
 
     # Bleiben Plätze frei (weil eine Achse nur Duplikate lieferte), fülle mit
     # den nächsten häufigsten auf — die Liste soll `count` lang sein.
-    for w in haeufigste:
+    for w in sorted(haeufigste, key=_stufe):
         if len(gewaehlt) >= count:
             break
         if w.label not in schon:
@@ -573,10 +804,12 @@ def render_material(
     quote_persons: int = QUOTE_PERSONS,
     single_mention_budget: int = SINGLE_MENTION_BUDGET,
     shared_terms_saturation: int = SHARED_TERMS_SATURATION,
+    shared_terms_max: int = SHARED_TERMS_MAX,
     recent_terms: int = RECENT_TERMS,
     required_terms: int = REQUIRED_TERMS,
     recency_share: float = RECENCY_SHARE,
     last_person_id: str | None = None,
+    zuletzt_gezeigt: list[str] | None = None,
 ) -> str:
     """The German block that goes into stage 1's user message.
 
@@ -643,8 +876,28 @@ def render_material(
                 + "\n".join(zeilen)
             )
 
-    if material.shared:
-        lines = "\n".join(f"  {w.mentions}× {w.label}" for w in material.shared)
+    # 🔴 NUR DIE BEGRIFFE DES LETZTEN INTERVIEWS (Birk, 2026-09-03: „ändere die
+    # auswahl der begriffe für den traum prompt so, dass nur das letzte
+    # interview visualisiert wird").
+    #
+    # Bis hierher standen hier die häufigsten geteilten Begriffe des GANZEN
+    # TAGES — unabhängig davon, ob die gerade befragte Person auch nur einen
+    # davon gesagt hat. Das Bild entstand damit aus dem Tagesdurchschnitt, und
+    # genau das sollte es nicht: Es soll zeigen, was eben gesagt wurde.
+    #
+    # Der Rückfall auf alle geteilten Begriffe bleibt und ist kein
+    # Sicherheitsnetz auf Verdacht: Am Vormittag hat noch niemand einen Begriff
+    # zweimal gesagt, `shared` ist dann für die letzte Person leer — und ein
+    # leerer Block wäre schlechter als ein weiter gefasster.
+    geteilte = material.shared
+    if last_person_id is not None:
+        ihre = [w for w in material.shared if last_person_id in w.person_ids]
+        if ihre:
+            geteilte = ihre
+    if geteilte:
+        # Nur die Spitze: `material.shared` ist bereits nach Haeufigkeit
+        # sortiert (`build_material`), der Schnitt nimmt also die haeufigsten.
+        lines = "\n".join(f"  {w.mentions}× {w.label}" for w in geteilte[:shared_terms_max])
         blocks.append(
             "Geteilte Begriffe — die Zahl sagt, wie viele Menschen sie genannt "
             "haben. Was oft genannt wurde, beherrscht das Bild:\n" + lines
@@ -714,5 +967,25 @@ def render_material(
                 "Das ist das Einzige, was die Menschen selbst gesagt haben -- "
                 "die Begriffe oben sind bereits Verdichtungen davon:\n" + lines
             )
+
+    if zuletzt_gezeigt:
+        # 🔴 Das Gedaechtnis, das Stufe 1 bisher NICHT hatte (Birk, 2026-09-02:
+        # „Lehm kam in jedem Bild vor"). Jeder Traum entsteht als eigener
+        # Aufruf, ohne jede Kenntnis der vorigen -- also traf das Modell bei
+        # gleichem Material jedes Mal dieselbe naheliegende Wahl. Das ist kein
+        # Fehler des Modells, sondern eine fehlende Information.
+        #
+        # Der WANDSATZ und nicht die Bildbeschreibung: Er ist die Verdichtung
+        # desselben Bildes auf 15 Woerter und traegt das Motiv, waehrend drei
+        # Bildbeschreibungen zu je 130-180 Woertern den Materialblock
+        # verdoppeln wuerden -- genau der Ballast, wegen dem die Zitate schon
+        # einmal ganz abgeschaltet waren (`QUOTE_PERSONS`).
+        lines = "\n".join(f"  {satz}" for satz in zuletzt_gezeigt)
+        blocks.append(
+            "Zuletzt gezeigt -- diese Bilder hingen gerade an der Wand. "
+            "Nimm ein ANDERES tragendes Motiv und ein anderes Material als "
+            "sie; was hier schon steht, gehoert hoechstens an den Rand:\n"
+            + lines
+        )
 
     return "\n\n".join(blocks)

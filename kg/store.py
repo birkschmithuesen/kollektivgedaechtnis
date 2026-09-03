@@ -364,11 +364,50 @@ class Store:
                 "INSERT OR REPLACE INTO term_alias(surface, term_id) VALUES (?,?)",
                 (loser.label, winner_id),
             )
+            # 🔴 `evidence` MIT auslesen (2026-09-02, im Betrieb verloren
+            # gegangen): Vorher stand hier nur `person_id, created_at`, und
+            # die Belegstelle des Verlierers war nach dem Falten weg. Drei
+            # echte gingen so verloren, darunter „dass die Natur belassen
+            # wird. Ich wohne auf einem ganz kleinen Dorf" — sie liessen sich
+            # nur aus einer Sicherung zurueckholen.
+            #
+            # Das betraf nicht nur Merges von Hand: `kg.merging.apply_merges`
+            # ruft diese Methode nach JEDEM Interview. Und die Belegstelle ist
+            # kein Beiwerk — sie geht in den Traum-Prompt und an die Wand, und
+            # sie ist es, die den Merge-Richter zuverlaessig gemacht hat
+            # (docs/STAND.md §2r).
             loser_edges = self.conn.execute(
-                "SELECT person_id, created_at FROM edge WHERE term_id=?", (loser_id,)
+                "SELECT person_id, created_at, evidence FROM edge WHERE term_id=?",
+                (loser_id,),
             ).fetchall()
             for row in loser_edges:
-                self.add_edge(row["person_id"], winner_id, created_at=row["created_at"])
+                beleg = (row["evidence"] or "").strip()
+                # `add_edge` ist idempotent und laesst eine BESTEHENDE Kante
+                # unangetastet — dort muesste der Beleg sonst verschwinden.
+                vorhanden = self.conn.execute(
+                    "SELECT id, evidence FROM edge WHERE person_id=? AND term_id=?",
+                    (row["person_id"], winner_id),
+                ).fetchone()
+                if vorhanden is None:
+                    self.add_edge(
+                        row["person_id"],
+                        winner_id,
+                        created_at=row["created_at"],
+                        evidence=beleg or None,
+                    )
+                    continue
+                if not beleg:
+                    continue
+                bisher = (vorhanden["evidence"] or "").strip()
+                if beleg in bisher:
+                    continue
+                # Beide Stellen stuetzen den Begriff bei dieser Person jetzt
+                # gemeinsam — keine darf die andere verdraengen. Der Trenner
+                # macht im Prompt sichtbar, dass es zwei Aeusserungen sind.
+                zusammen = f"{bisher} […] {beleg}" if bisher else beleg
+                self.conn.execute(
+                    "UPDATE edge SET evidence=? WHERE id=?", (zusammen, vorhanden["id"])
+                )
             self.conn.execute("DELETE FROM edge WHERE term_id=?", (loser_id,))
             # The loser's position row would otherwise point at a deleted node.
             self.conn.execute("DELETE FROM position WHERE node_id=?", (f"term:{loser_id}",))

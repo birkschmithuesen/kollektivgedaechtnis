@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from kg import stt_health
+from kg import stt_health, vad_satzende
 from kg.export import build_graph, write_graph_json
 from kg.photos import make_portrait
 
@@ -504,6 +504,29 @@ def create_app(store, cfg, bus, core=None, stt_aufsicht=None) -> FastAPI:
                 "aufsicht": False,
             }
         return {**stt_aufsicht.als_dict(), "aufsicht": True}
+
+    @app.post("/api/stt/satzende")
+    async def api_stt_satzende() -> dict:
+        """Den laufenden Sprach-Chunk abschliessen lassen, ohne auf Stille zu warten.
+
+        🔴 Birk, 2026-09-02: „Fuer die STT hat das mit den 8 sec Wartezeit
+        nicht gereicht. Das Problem ist der VAD. Wenn keine Stille kommt, weil
+        weiter geredet wird, wird das Letztgesagte trotzdem nicht genommen."
+
+        Das Bedienpult ruft das zu Beginn seines Nachlaufs, BEVOR es das
+        Interview beendet: erst das Satzende ausloesen, dann warten, dann
+        stoppen. Sonst faellt der letzte Satz zwischen die Interviews — genau
+        so sind am 2026-09-02 drei Begriffe von Martin Kranz bei der naechsten
+        Person gelandet.
+
+        Warum im Kern und nicht im Browser: Der benutzte Endpunkt des fremden
+        Dienstes schreibt die VAD-Schwelle in dessen Settings-Datei. Bleibt das
+        Zuruecksetzen aus, ist das Mikrofon dauerhaft taub. Ein Browser, den
+        jemand in der falschen Sekunde schliesst, kann das nicht zusagen —
+        `kg.vad_satzende` kann es (finally, zweiter Anlauf, Startpruefung).
+        """
+        ok = await vad_satzende.satzende_ausloesen(cfg.stt_url)
+        return {"ok": ok}
 
     @app.post("/api/stt/anbieter")
     def api_stt_anbieter(payload: SttAnbieter) -> dict:

@@ -14,6 +14,27 @@ from kg.stop_intent import make_stop_intent
 
 log = logging.getLogger(__name__)
 
+
+#: Wie lange nach dem Interviewende ein Foto noch der GERADE beendeten Person
+#: gehoert. Danach gehoert es der naechsten.
+#:
+#: 🔴 Birk, 2026-09-02, nach dem dritten Vorfall an einem Tag: „Wenn ein Foto
+#: spaeter als 60 sec nach Interview-Stop geschossen wurde, dann gehoert es
+#: zum naechsten Interview. Kurz nach Interview-Stop kann immer noch eine
+#: Verbesserung kommen."
+#:
+#: Warum es das braucht: Am Booth wird ERST fotografiert und DANN das
+#: Interview gestartet. Das Foto trifft also zuverlaessig in dem Fenster ein,
+#: in dem noch die vorige Person die „letzte" ist — gemessen am 2026-09-02
+#: lagen zwischen Foto und Interviewstart 5 bzw. 6 Sekunden. Ohne diese Regel
+#: ersetzte jedes neue Gesicht das der Vorgaengerin: p4/p5, p16/p17 und
+#: p17/p18 an einem einzigen Nachmittag, jedes Mal von Hand repariert.
+#:
+#: Die 60 s sind Birks Zahl und halten den Gegenfall offen, fuer den
+#: `_nachtraegliches_portrait` ueberhaupt gebaut wurde: Das Bild taugt nichts,
+#: man merkt es direkt nach dem Gespraech und schiesst gleich ein besseres.
+NACHREICH_FENSTER_S = 60.0
+
 SETTLE_TIMEOUT_S = 3.0
 SETTLE_POLL_S = 0.1
 
@@ -96,6 +117,11 @@ class Core:
             # this across a restart.
             open_without_portrait=open_person is not None and open_person.portrait_path is None,
         )
+        # Ein Foto, das nach dem letzten Interviewende ankam und deshalb dem
+        # NAECHSTEN gehoert (siehe `NACHREICH_FENSTER_S`). Absichtlich im
+        # Arbeitsspeicher: eine Erwartung von Sekunden, keine Zusage — sie
+        # darf keinen Neustart ueberleben.
+        self._geparktes_foto = None
         self._queue: asyncio.Queue = asyncio.Queue()
         self._tasks: set[asyncio.Task] = set()
 
@@ -178,7 +204,7 @@ class Core:
                 # Der Tracker kann diese Unterscheidung nicht treffen: Er
                 # kennt nur das LAUFENDE Interview, geschlossene Personen
                 # stehen in der Datenbank. Deshalb faellt sie hier.
-                self._nachtraegliches_portrait(payload)
+                self._nachtraegliches_portrait(payload, at)
         elif kind == "text":
             transitions = self.tracker.text_message(at)
         elif kind == "mic_switch":
@@ -215,6 +241,14 @@ class Core:
         # to unpack whatever arrived keeps the photo path exactly as it was —
         # a photo without both paths stays a bug, not a person without a face.
         photo_path, portrait_path = payload if transition.reason == "photo" else (None, None)
+        # Das geparkte Foto einloesen: Es wurde nach dem letzten Interview
+        # geschossen und gehoert damit genau diesem hier. Nur, wenn nicht
+        # ohnehin eines mitkommt — ein Foto, das dieses Interview EROEFFNET,
+        # ist naeher dran als eines von vorhin.
+        if photo_path is None and self._geparktes_foto is not None:
+            photo_path, portrait_path = self._geparktes_foto
+            log.info("geparktes Foto dem neuen Interview zugeordnet")
+        self._geparktes_foto = None
         self.store.create_person(
             started_at=transition.at, photo_path=photo_path, portrait_path=portrait_path
         )
@@ -222,7 +256,7 @@ class Core:
         broadcast_graph(self.store, self.cfg, self.bus)
         broadcast_state(self.store, self.bus)
 
-    def _nachtraegliches_portrait(self, payload) -> None:
+    def _nachtraegliches_portrait(self, payload, at: float) -> None:
         """Ein Foto, waehrend kein Interview laeuft.
 
         Birk, 2026-09-01: „also immer nur das letzte interview kein anderes."
@@ -252,6 +286,17 @@ class Core:
         if person is None:
             self._verwirf_foto(payload)
             return
+        # 🔴 Gehoert das Foto ueberhaupt noch IHR? Liegt es mehr als
+        # `NACHREICH_FENSTER_S` hinter ihrem Interviewende, ist es das Bild
+        # der NAECHSTEN Person — am Booth wird erst fotografiert und dann
+        # gestartet. Es wird geparkt, nicht verworfen: `_open` setzt es der
+        # Person auf, die als naechstes beginnt.
+        if (
+            person.stopped_at is not None
+            and at - person.stopped_at > NACHREICH_FENSTER_S
+        ):
+            self._parke_foto(payload, at)
+            return
         alt_photo, alt_portrait = person.photo_path, person.portrait_path
         photo_path, portrait_path = payload
         self.store.set_person_portrait(person.id, photo_path, portrait_path)
@@ -264,6 +309,24 @@ class Core:
         if alt_portrait and alt_portrait != portrait_path:
             log.info("Portraet von %s ersetzt (vorher: %s)", person.id, alt_photo)
         broadcast_graph(self.store, self.cfg, self.bus)
+
+    def _parke_foto(self, payload, at: float) -> None:
+        """Ein Foto fuer das Interview, das gleich beginnt.
+
+        Nur EINES wird gehalten, und das neueste gewinnt: Am Booth entstehen
+        regelmaessig drei, vier Aufnahmen hintereinander, bis eine sitzt
+        (gemessen am 2026-09-02: 12:44:27, 12:44:50, 12:44:55). „Letzte
+        Aufnahme gewinnt" gilt hier genauso wie ueberall sonst.
+
+        Im Arbeitsspeicher und nicht in der Datenbank: Ein geparktes Foto ist
+        eine Erwartung von Sekunden, keine Zusage. Ueberlebte es einen
+        Neustart, bekaeme irgendwann jemand das Gesicht eines Menschen, der
+        laengst gegangen ist — und niemand koennte sich erklaeren, woher es
+        kommt. Bleibt das naechste Interview aus, verfaellt es still; die
+        Datei bleibt liegen und ist ueber den Operator weiter erreichbar.
+        """
+        self._geparktes_foto = payload
+        log.info("Foto %.0fs nach Interviewende: fuer das naechste geparkt", at)
 
     def _verwirf_foto(self, payload) -> None:
         """Loescht ein Bild, das zu keiner Person geworden ist.

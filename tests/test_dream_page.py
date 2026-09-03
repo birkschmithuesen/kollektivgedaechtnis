@@ -581,3 +581,101 @@ def test_there_is_no_counter_no_progress_bar_and_no_spinner(view):
     for forbidden in ("progress", "spinner", "loading", "generiert", "Traum 3 von"):
         assert forbidden not in html.lower()
     assert view.locator("progress").count() == 0
+
+
+# -- die Slideshow, an und aus vom Bedienpult (2026-09-03) -------------------
+
+
+def test_die_wand_blaettert_von_selbst_wenn_es_etwas_zu_blaettern_gibt(view):
+    """Der Anlass (dream.js): Am Abend kommen keine Interviews mehr, es
+    entsteht also kein neuer Traum — die Wand zeigte dann stundenlang EIN Bild.
+    """
+    apply(view, state(current=dream(3), history=[dream(1), dream(2), dream(3)]))
+
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is True
+
+
+def test_der_schalter_am_pult_haelt_die_wand_an(view):
+    """🔴 BIRK, 2026-09-03: „der traum operator braucht noch einen button um die
+    automatische slideshow an/aus zu setzen."
+
+    Bis dahin ging das nur ueber `?slideshow=0` — an jeder Flaeche einzeln und
+    nur beim Laden. Wer waehrend der Ausstellung ein Bild festhalten will (eine
+    Aufnahme, eine Praesentation), kam nicht heran.
+
+    Und es muss SOFORT wirken, nicht erst beim naechsten Traum: Wer den Haken
+    wegnimmt, will das Bild halten, das gerade zu sehen ist.
+    """
+    apply(view, state(current=dream(3), history=[dream(1), dream(2), dream(3)]))
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is True
+
+    apply(view, state(current=dream(3), history=[dream(1), dream(2), dream(3)],
+                      slideshow=False))
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is False, (
+        "die Wand blaettert weiter, obwohl der Haken weg ist"
+    )
+
+    apply(view, state(current=dream(3), history=[dream(1), dream(2), dream(3)],
+                      slideshow=True))
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is True
+
+
+def test_ohne_das_feld_blaettert_die_wand_wie_bisher(view):
+    """Ein aelterer Kern schickt `slideshow` nicht mit — dann bleibt es beim
+    Verhalten von vor diesem Schalter. Ein fehlendes Feld darf nie zu einer
+    stillstehenden Wand fuehren."""
+    ohne = state(current=dream(3), history=[dream(1), dream(2), dream(3)])
+    assert "slideshow" not in ohne
+    apply(view, ohne)
+
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is True
+
+
+def test_unter_zwei_bildern_gibt_es_nichts_zu_blaettern(view):
+    """Sonst liefe eine Uhr, die alle acht Sekunden dasselbe Bild einblendet —
+    auf einer Wand ein sichtbares Flackern ohne Sinn."""
+    apply(view, state(current=dream(1), history=[dream(1)], slideshow=True))
+
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is False
+
+
+def test_der_laufende_traum_steht_nur_einmal_in_der_reihe(view):
+    """🔴 GEFUNDEN 2026-09-03 ueber den Test darueber.
+
+    `history` enthaelt den laufenden Traum bereits — `dream_state()` schneidet
+    sie aus derselben Tabelle. Angehaengt stand er zweimal in der Reihe: Die
+    Wand blieb sechzehn statt acht Sekunden auf demselben Bild.
+
+    Geprueft am sichtbaren Ergebnis: Bei DREI Traeumen sind drei Stationen zu
+    blaettern, nicht vier.
+    """
+    apply(view, state(current=dream(3), history=[dream(1), dream(2), dream(3)]))
+
+    assert view.evaluate("() => window.kgDream.slideshowStationen") == 3
+
+
+def test_abschalten_holt_die_wand_zum_juengsten_traum(view):
+    """🔴 BIRK, 2026-09-03: „wenn ich beim traum slideshow deaktiviere, soll es
+    automatisch zum letzten (aktuellsten) bild gehen."
+
+    Zuerst hielt das Abschalten die Wand dort an, wo die Schleife gerade stand —
+    also auf einem beliebigen Traum von irgendwann am Tag. Wer den Haken
+    wegnimmt, will aber das AKTUELLE Bild: den Traum des zuletzt gefuehrten
+    Gespraechs.
+    """
+    voll = dict(current=dream(3), history=[dream(1), dream(2), dream(3)])
+    apply(view, state(**voll))
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is True
+
+    # Die Schleife steht auf einem frueheren Traum — so, wie sie es nach
+    # einigen Runden von selbst tut.
+    view.evaluate("() => window.kgDream.blaettereFuerDenTest(0)")
+    assert view.evaluate("() => window.kgDream.current") == "d1"
+
+    apply(view, state(**voll, slideshow=False))
+
+    assert view.evaluate("() => window.kgDream.current") == "d3", (
+        "die Wand bleibt auf dem geblaetterten Traum stehen statt zum juengsten "
+        "zurueckzugehen"
+    )
+    assert view.evaluate("() => window.kgDream.slideshowLaeuft") is False

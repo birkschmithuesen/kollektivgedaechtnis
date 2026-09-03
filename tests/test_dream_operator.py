@@ -12,6 +12,7 @@ def state(**overrides):
         "fade_ms": 1200,
         "strip_ratio": 0.22,
         "typewriter": False,
+        "slideshow": True,
         "paused": False,
         "current": None,
         "history": [],
@@ -85,7 +86,7 @@ def posts(page):
 def test_every_display_control_is_present(ui):
     render(ui, state())
 
-    for control in ("#fade-ms", "#strip-ratio", "#typewriter"):
+    for control in ("#fade-ms", "#strip-ratio", "#typewriter", "#slideshow"):
         assert ui.locator(control).count() == 1
 
 
@@ -112,6 +113,41 @@ def test_toggling_the_typewriter_posts_it(ui):
     ui.locator("#typewriter").click()
 
     assert posts(ui)[-1] == ["/api/display", {"typewriter": True}]
+
+
+def test_die_slideshow_laesst_sich_am_pult_abschalten(ui):
+    """🔴 BIRK, 2026-09-03: „der traum operator braucht noch einen button um die
+    automatische slideshow an/aus zu setzen."
+
+    Bis dahin ging das nur ueber `?slideshow=0` an jeder Flaeche einzeln — also
+    nicht waehrend die Ausstellung laeuft, und nicht fuer alle zugleich.
+    """
+    render(ui, state())
+    assert ui.locator("#slideshow").is_checked() is True
+
+    ui.locator("#slideshow").click()
+
+    assert posts(ui)[-1] == ["/api/display", {"slideshow": False}]
+
+
+def test_der_haken_zeigt_was_der_server_sagt(ui):
+    """Ein Schalter, der etwas anderes anzeigt als das, was gilt, ist schlimmer
+    als keiner — dieselbe Regel wie beim Zoomregler an der Wand."""
+    render(ui, state(slideshow=False))
+    assert ui.locator("#slideshow").is_checked() is False
+
+    render(ui, state(slideshow=True))
+    assert ui.locator("#slideshow").is_checked() is True
+
+
+def test_ohne_das_feld_steht_der_haken_auf_an(ui):
+    """Ein aelterer Kern schickt `slideshow` nicht mit. Dann soll der Haken
+    zeigen, was die Wand in diesem Fall TUT — und die blaettert."""
+    ohne = state()
+    del ohne["slideshow"]
+    render(ui, ohne)
+
+    assert ui.locator("#slideshow").is_checked() is True
 
 
 # `test_switching_the_question_off_posts_it` und
@@ -243,6 +279,11 @@ def test_there_is_no_control_for_the_register_or_the_weighting(ui):
     assert writable == sorted(
         [
             "fade-ms",
+            # Das automatische Blaettern durch die Traeume des Tages (Birk,
+            # 2026-09-03). Ein ANZEIGE-Regler wie die anderen hier: Er
+            # entscheidet, was die Wand ZEIGT, nicht was sie erzeugt — und
+            # genau darin liegt die Grenze, die dieser Test bewacht.
+            "slideshow",
             "strip-max",
             "strip-ratio",
             "typewriter",

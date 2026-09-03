@@ -199,7 +199,7 @@ def test_the_bots_name_never_reaches_the_llm_with_the_command(env):
     assert "Holzbau ist gut." in llm.prompts[0]
 
 
-def test_the_settled_cut_end_is_handed_to_the_llm_but_transcript_stops_at_the_detected_end(env):
+def test_das_transkript_haelt_den_ganzen_text_nicht_nur_bis_zum_erkannten_ende(env):
     cfg, store, log = env
     # A final at 150.9 lands just inside a plausible 3s settle window after a
     # stop marker at 150.0 (kg.core.settle_cut_end handles the actual wait;
@@ -219,8 +219,21 @@ def test_the_settled_cut_end_is_handed_to_the_llm_but_transcript_stops_at_the_de
 
     # The settled final was offered to the model...
     assert "Wo ist der Kaffee?" in llm.prompts[0]
-    # ...but the stored transcript stops where the interview really ended.
-    assert store.get_person(person.id).transcript == "Bodenpreise sind das Problem."
+    # 🔴 UMGEDREHT am 2026-09-02. Vorher hielt dieser Test fest, dass das
+    # Transkript bei `interview_end_index` endet. Genau das hat Steffens
+    # Transkript (p3) mitten im Wort abgeschnitten und 26 von 91 Belegstellen
+    # unauffindbar gemacht — die Auswertung sah den vollen Text, der
+    # gespeicherte Beleg nicht.
+    #
+    # Der Index wirkt weiter, nur an der richtigen Stelle: `extract()` wendet
+    # ihn intern an, Begriffe und Zitat kommen nur von davor. Der BELEG ist
+    # jetzt vollstaendig.
+    person_danach = store.get_person(person.id)
+    assert "Bodenpreise sind das Problem." in person_danach.transcript
+    assert "Wo ist der Kaffee?" in person_danach.transcript, (
+        "das Transkript wurde beschnitten — dann fehlt der Beleg fuer das, "
+        "was die Auswertung gesehen hat"
+    )
 
 
 def test_without_cut_end_the_cut_stops_at_stopped_at(env):

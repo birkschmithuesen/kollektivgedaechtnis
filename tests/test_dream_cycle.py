@@ -580,3 +580,124 @@ def test_a_dream_over_the_real_replay_graph(real_graph):
         assert len(dream.absorbed_persons) == 60
         assert dream.contradiction is False
         store.close()
+
+
+# -- das Gedaechtnis gegen die Wiederholung (Birk, 2026-09-02) ---------------
+
+
+def test_die_vorigen_wandsaetze_gehen_an_stufe_1(tmp_path):
+    """🔴 Diese Lücke fand eine MUTATIONSPROBE, nicht ein Fehlerbild.
+
+    `kg2.weighting.render_material` hängt den Block „Zuletzt gezeigt" an, und
+    `test_dream_condense` prüft das. Aber niemand prüfte, ob `run_dream` die
+    Sätze überhaupt LIEFERT. Man konnte `zuletzt_gezeigt=vorher` durch
+    `zuletzt_gezeigt=[]` ersetzen: Der ganze Mechanismus wäre tot, der Prompt
+    sähe aus wie vorher, und alle Tests blieben grün — genau die stille
+    Wirkungslosigkeit, an der das Bild dann wieder jedes Mal Lehm zeigt.
+
+    Warum es das Gedächtnis gibt: Jeder Traum ist ein eigener Aufruf ohne
+    Kenntnis der vorigen. Bei ähnlichem Material traf Stufe 1 darum jedes Mal
+    dieselbe naheliegende Wahl — „Lehmbau", von zwei Menschen genannt, stand in
+    9 von 10 Prompts und erschien in 7 von 9 Bildern.
+    """
+    cfg, store = setup(tmp_path)
+    gesehen = {}
+
+    def merkendes_condense(llm, material, **kwargs):
+        gesehen["zuletzt"] = kwargs.get("zuletzt_gezeigt")
+        return good_condense()(llm, material)
+
+    # Zwei Träume vor dem eigentlichen: Der erste hat nichts zu erinnern.
+    run_dream(store, cfg, llm=object(), graph=graph(), now=1000.0,
+              condense_fn=good_condense(sentence="Der Beton träumt von Wald."),
+              render_fn=good_render())
+    run_dream(store, cfg, llm=object(), graph=graph(), now=2000.0,
+              condense_fn=good_condense(sentence="Lehm trocknet an einer Wand."),
+              render_fn=good_render())
+
+    run_dream(store, cfg, llm=object(), graph=graph(), now=3000.0,
+              condense_fn=merkendes_condense, render_fn=good_render())
+
+    assert gesehen["zuletzt"] == [
+        "Der Beton träumt von Wald.",
+        "Lehm trocknet an einer Wand.",
+    ], gesehen["zuletzt"]
+
+
+def test_der_erste_traum_bekommt_eine_leere_vorgeschichte(tmp_path):
+    """Die Gegenprobe: Ohne sie wäre der Test oben auch dann grün, wenn immer
+    irgendetwas übergeben würde. Und der laufende Traum darf nicht sich selbst
+    als Vorgeschichte bekommen — `history()` schneidet den letzten ab."""
+    cfg, store = setup(tmp_path)
+    gesehen = {}
+
+    def merkendes_condense(llm, material, **kwargs):
+        gesehen["zuletzt"] = kwargs.get("zuletzt_gezeigt")
+        return good_condense()(llm, material)
+
+    run_dream(store, cfg, llm=object(), graph=graph(), now=1000.0,
+              condense_fn=merkendes_condense, render_fn=good_render())
+
+    assert gesehen["zuletzt"] == [], gesehen["zuletzt"]
+
+
+# -- Das Haiku ersetzt den Prosasatz (Birk, 2026-09-02) ----------------------
+
+
+def test_das_haiku_ersetzt_den_wandsatz(tmp_path):
+    """🔴 Ein eigener Aufruf mit eigenem Modell, aus Messung: Das Modell von
+    Stufe 1 (Kimi K2.6) muss `reasoning_effort = "none"` fahren und kann damit
+    keine Silben zaehlen — 3 von 32 Versuchen. Gemma mit der Silbenschleife aus
+    `kg2.haiku`: 19–20 von 20."""
+    cfg, store = setup(tmp_path)
+
+    class HaikuModell:
+        def parse(self, *, system, user, output_model):
+            if "Lektor" in system:
+                return output_model(beanstandet=[], heil=True)
+            return output_model(
+                zeile1="Hand an kühlem Lehm",
+                zeile2="rote Dächer tief im Tal",
+                zeile3="Wege führen fort",
+            )
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=5000.0,
+        condense_fn=good_condense(sentence="Der Beton träumt von Wald."),
+        render_fn=good_render(), haiku_llm=HaikuModell(),
+    )
+
+    assert dream.sentence == "Hand an kühlem Lehm\nrote Dächer tief im Tal\nWege führen fort"
+
+
+def test_ohne_haiku_modell_bleibt_der_prosasatz(tmp_path):
+    """`haiku_model = ""` in der config schaltet es ab — und die Wand zeigt
+    wieder das, was sie ohne diesen Schritt zeigen wuerde."""
+    cfg, store = setup(tmp_path)
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=5000.0,
+        condense_fn=good_condense(sentence="Der Beton träumt von Wald."),
+        render_fn=good_render(),
+    )
+
+    assert dream.sentence == "Der Beton träumt von Wald."
+
+
+def test_ein_misslungenes_haiku_kostet_keinen_traum(tmp_path):
+    """🔴 Die Wand zeigt entweder ein geprueftes Haiku oder den Prosasatz —
+    nie nichts und nie eine halbe Form."""
+    cfg, store = setup(tmp_path)
+
+    class KaputtesModell:
+        def parse(self, *, system, user, output_model):
+            raise RuntimeError("Anbieter weg")
+
+    dream = run_dream(
+        store, cfg, llm=object(), graph=graph(), now=5000.0,
+        condense_fn=good_condense(sentence="Der Beton träumt von Wald."),
+        render_fn=good_render(), haiku_llm=KaputtesModell(),
+    )
+
+    assert dream is not None, "ein misslungenes Haiku hat den Traum gekostet"
+    assert dream.sentence == "Der Beton träumt von Wald."

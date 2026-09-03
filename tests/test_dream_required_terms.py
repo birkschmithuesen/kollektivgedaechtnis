@@ -13,7 +13,7 @@ from __future__ import annotations
 from kg2.weighting import Material, TermWeight, select_required
 
 
-def _material(*paare, last_person_id=None) -> Material:
+def _material(*paare, last_person_id=None, positionen=None) -> Material:
     """Jedes Paar ist (label, mentions, created_at), optional gefolgt von einer
     Sprechermenge.
 
@@ -30,7 +30,8 @@ def _material(*paare, last_person_id=None) -> Material:
             if len(eintrag) > 3
             else frozenset(f"p{i}" for i in range(mentions))
         )
-        weights.append(TermWeight(label, mentions, created, frozenset(sprecher)))
+        x, y = (positionen or {}).get(label, (None, None))
+        weights.append(TermWeight(label, mentions, created, frozenset(sprecher), x, y))
     return Material(
         person_count=0,
         term_count=len(weights),
@@ -177,3 +178,174 @@ def test_die_nachbarn_teilen_sprecher_mit_dem_anker():
     anker_sprecher = set(gewaehlt[0].person_ids)
     for w in nachbarn:
         assert anker_sprecher & set(w.person_ids), f"{w.label} hängt nicht am Anker"
+
+
+# --- Nähe schlägt Häufigkeit (Birk, 2026-09-02, am Ausstellungstag) ----------
+
+
+def test_ein_verbundener_begriff_schlaegt_den_haeufigeren_fremden():
+    """🔴 Birks Einwand am laufenden Betrieb: „alle Begriffe, die genommen
+    werden, sollen sehr eng an der letzten interviewten Person dran sein, am
+    besten mit ihr direkt connected. Da würde ich eher Begriffe nehmen, die im
+    Zweifelsfall ein, zwei Personen weniger genannt haben."
+
+    Gemessen, warum es vorher wegdriftete: `_naehe` ist ein Jaccard über
+    Sprechermengen und liefert **exakt 0**, sobald zwei Begriffe keine einzige
+    Person teilen. Eine gerade befragte Person bringt aber frische Begriffe
+    mit, die noch niemand sonst gesagt hat — also war die Nähe zu allem 0, und
+    in `max(key=(naehe, mentions, label))` entschied der ZWEITE Schlüssel.
+    Damit gewann der meistgenannte Begriff des ganzen Tages, Bild für Bild.
+
+    Am echten Graphen der Station gemessen (10 Personen, 29 Begriffe): 1 von 5
+    Pflichtbegriffen stammte von der zuletzt befragten Person.
+    """
+    material = _material(
+        # Der Tagessieger — von Menschen, die mit p9 nichts zu tun haben.
+        ("Tagessieger fremd", 4, 100.0, {"p1", "p2", "p3", "p4"}),
+        # Ihr eigener Begriff: der Anker.
+        ("Ihr eigener", 2, 200.0, {"p9", "p8"}),
+        # p8 hat einen Begriff MIT ihr geteilt, ist also verbunden — dieser
+        # Begriff hier liegt zwei Kanten entfernt und hat WENIGER Nennungen.
+        ("Verbunden ueber p8", 2, 150.0, {"p8", "p7"}),
+    )
+    gewaehlt = select_required(material, count=2, last_person_id="p9")
+    labels = [w.label for w in gewaehlt]
+
+    assert labels[0] == "Ihr eigener", labels
+    assert "Verbunden ueber p8" in labels, (
+        f"der verbundene Begriff (2x) muss den fremden Tagessieger (4x) schlagen: {labels}"
+    )
+    assert "Tagessieger fremd" not in labels, labels
+
+
+def test_ohne_verbundene_begriffe_gilt_weiter_die_haeufigkeit():
+    """Die Gegenprobe: Die Stufe darf nicht zur Sperre werden.
+
+    Hat die letzte Person mit niemandem etwas gemeinsam, gibt es keine Stufe 1
+    — dann muss die Auswahl weiterlaufen wie vorher und die Plätze mit den
+    häufigsten Begriffen füllen, statt leer zu bleiben."""
+    material = _material(
+        ("Fremd haeufig", 4, 100.0, {"p1", "p2", "p3", "p4"}),
+        ("Fremd selten", 1, 110.0, {"p1"}),
+        ("Ihr eigener", 1, 200.0, {"p9"}),
+    )
+    gewaehlt = select_required(material, count=3, last_person_id="p9")
+    labels = [w.label for w in gewaehlt]
+
+    assert labels[0] == "Ihr eigener", labels
+    assert len(gewaehlt) == 3, f"die Liste muss voll werden: {labels}"
+    assert "Fremd haeufig" in labels, labels
+
+
+def test_die_nachbarschaftsachse_nimmt_ihren_begriff_auch_bei_geringerer_naehe():
+    """🔴 Nachgeschärft nach einer FEHLGESCHLAGENEN Mutationsprobe (2026-09-02).
+
+    Die erste Fassung dieses Tests belegte nichts: Man konnte den Vorrang in
+    der Nachbarschaftsachse ersatzlos streichen und alle Tests blieben grün.
+    Der Grund ist lehrreich — ein Begriff, der über eine gemeinsame Person mit
+    der letzten Befragten verbunden ist, hat zu deren Anker meist ohnehin eine
+    Jaccard-Nähe über 0. Die Nähe erledigte den Fall also allein, und der
+    Vorrang lief mit, ohne je den Ausschlag zu geben.
+
+    Wirksam wird er genau dort, wo die beiden Kräfte GEGENEINANDER stehen: ein
+    Begriff der letzten Person mit GERINGERER Nähe zum Anker als ein fremder.
+    Ohne Vorrang gewinnt der fremde, mit Vorrang ihrer — und das ist Birks
+    Anforderung („im Zweifelsfall ein, zwei Personen weniger, dafür verbunden").
+    """
+    material = _material(
+        # Ihr häufigster Begriff wird der Anker.
+        ("Anker von ihr", 2, 500.0, {"p9", "p1"}),
+        # Ihr zweiter: Nähe zum Anker = |{p9}| / |{p9,p1,p30}| = 1/3.
+        ("Ihr zweiter", 1, 400.0, {"p9", "p30"}),
+        # Ein Fremder, der dem Anker NÄHER ist: |{p1}| / |{p9,p1}| = 1/2.
+        # Ohne den Vorrang gewinnt er den einen Nachbarschaftsplatz.
+        ("Fremd aber naeher", 1, 300.0, {"p1"}),
+    )
+    # count=3 ergibt genau EINEN Nachbarschaftsplatz — sonst kämen beide
+    # hinein und der Test bewiese nur, dass die Liste voll wird.
+    gewaehlt = select_required(material, count=3, last_person_id="p9")
+    labels = [w.label for w in gewaehlt]
+
+    assert labels[0] == "Anker von ihr", labels
+    assert labels[1] == "Ihr zweiter", (
+        f"der Nachbarschaftsplatz gehoert ihrem Begriff, obwohl der fremde "
+        f"naeher am Anker liegt: {labels}"
+    )
+
+
+def test_die_nachbarn_liegen_raeumlich_beieinander_wenn_positionen_da_sind():
+    """🔴 Birk an der Wand, 2026-09-02: „Die blauen / Nachbarn sind oftmals
+    über eine andere Person verbunden und erscheinen daher im Graphen sehr weit
+    auseinander."
+
+    Der Code hatte diesen Einwand vorweggenommen und anders entschieden:
+    „Bildschirmnähe IST geteilte Sprecherschaft, nur als Ergebnis statt als
+    Ursache." Die Annahme trägt nicht. Gemessen am Graphen der Station
+    (36 Begriffe, Feld 2694 × 1553 px), letzte ausgewertete Person p15:
+
+        Jaccard über Sprecher:  Abstände min 220, max 1153, Mittel 695 px
+        räumlich:               Abstände min 191, max  882, Mittel 482 px
+
+    Der Grund ist mechanisch: Zwei Begriffe teilen eine Person, aber diese
+    Person hat zwanzig weitere Begriffe genannt — das Layout zieht sie
+    auseinander, die Jaccard-Zahl weiss davon nichts.
+
+    Die Sorge aus dem alten Kommentar bleibt gültig und wird nicht widerlegt:
+    Positionen hängen am Layoutlauf. Deshalb der Rückfall im Test darunter.
+    """
+    # Beide Kandidaten stehen auf DERSELBEN Stufe (sie teilen p1 mit dem
+    # Anker) — sonst pruefte der Test den Personenvorrang statt die Lage.
+    # Was sie unterscheidet, ist genau der Streitpunkt: Der eine ist ueber
+    # gemeinsame Sprecher naeher, der andere im Bild.
+    paare = (
+        ("Anker", 3, 500.0, {"p9", "p1", "p2"}),
+        ("Weit weg, mehr geteilte Sprecher", 3, 400.0, {"p1", "p2", "p3"}),
+        ("Direkt daneben, kaum geteilt", 3, 300.0, {"p1", "p20", "p21"}),
+        # Fuer die Neuheitsachse, damit sie nicht in den Nachbarschaftsplatz
+        # hineinregiert.
+        ("Juengster Begriff", 2, 900.0, {"p30", "p31"}),
+    )
+    lagen = {
+        "Anker": (0.0, 0.0),
+        "Weit weg, mehr geteilte Sprecher": (2000.0, 1500.0),
+        "Direkt daneben, kaum geteilt": (60.0, 40.0),
+        "Juengster Begriff": (900.0, 900.0),
+    }
+    # count=3 ergibt genau EINEN Nachbarschaftsplatz — bei 2 kaeme die Auswahl
+    # aus der Auffuellschleife und der Test bewiese nichts ueber diese Achse.
+    labels = [
+        w.label
+        for w in select_required(
+            _material(*paare, positionen=lagen), count=3, last_person_id="p9"
+        )
+    ]
+
+    assert labels[0] == "Anker", labels
+    assert labels[1] == "Direkt daneben, kaum geteilt", (
+        f"der raeumlich nahe Begriff muss den gewinnen, der ueber gemeinsame "
+        f"Sprecher naeher ist, aber am anderen Ende des Feldes liegt: {labels}"
+    )
+
+
+def test_ohne_positionen_gilt_weiter_die_sprechernaehe():
+    """Der Rückfall, und er ist keine Formsache.
+
+    Ein frischer Graph hat noch kein Layout: `x`/`y` sind dann `None`, und
+    zwar für ALLE Knoten. Eine Auswahl, die darauf rechnet, verglich sonst
+    lauter Unendlichkeiten und fiele auf die Reihenfolge der Liste zurück —
+    die Nachbarschaftsachse bedeutete nichts mehr, ohne dass es auffiele."""
+    paare = (
+        ("Anker", 3, 500.0, {"p9", "p1", "p2"}),
+        ("Weit weg, mehr geteilte Sprecher", 3, 400.0, {"p1", "p2", "p3"}),
+        ("Direkt daneben, kaum geteilt", 3, 300.0, {"p1", "p20", "p21"}),
+        ("Juengster Begriff", 2, 900.0, {"p30", "p31"}),
+    )
+    labels = [
+        w.label
+        for w in select_required(_material(*paare), count=3, last_person_id="p9")
+    ]
+
+    # Dasselbe Material, nur ohne Lagen: jetzt gewinnt wieder der Begriff mit
+    # den meisten gemeinsamen Sprechern — und damit ist auch der Test darueber
+    # ein echter Beleg und kein Zufall der Reihenfolge.
+    assert labels[1] == "Weit weg, mehr geteilte Sprecher", labels

@@ -157,3 +157,54 @@ def test_eine_kante_ohne_belegstelle_traegt_kein_leeres_feld(store):
     kante = build_graph(store)["edges"][0]
 
     assert "evidence" not in kante
+
+
+def test_neue_embeddings_machen_die_semantische_lage_neu(tmp_path, monkeypatch):
+    """🔴 GEMESSEN 2026-09-03: Der Cache hing allein an der Menge der Etiketten.
+
+    Werden Begriffe UMBENANNT und die Vektoren dazu nachtraeglich geholt,
+    aendert sich die Menge danach nicht mehr — der Cache lieferte weiter die
+    alte Rechnung, in der die umbenannten Begriffe gar keine Lage hatten. An
+    der Wand blieben sie an ihrer SOZIALEN Position stehen und zogen die
+    Bedeutungsansicht auf das Doppelte auseinander (Birk: „einige begriffe
+    sind ganz weit aussen und machen den graphen unnoetig gross").
+
+    Neun von 66 Begriffen waren betroffen — alle, die an dem Tag von Hand
+    umbenannt worden waren.
+    """
+    import kg.export as export
+
+    gerufen = []
+
+    def falsche_lage(db, labels, **kw):
+        gerufen.append(sorted(labels))
+        return {label: (1.0, 2.0) for label in labels}
+
+    monkeypatch.setattr(export, "semantische_lage", falsche_lage)
+    monkeypatch.setattr(export, "_SEMANTIK_CACHE", None)
+
+    cache = tmp_path / "embeddings.sqlite3"
+    cache.write_bytes(b"eins")
+    monkeypatch.setattr(export, "_neben_der_datenbank", lambda store: cache)
+
+    labels = ["Begriff A", "Begriff B"]
+    export._semantische_lage(object(), labels)
+    assert len(gerufen) == 1
+
+    # Dieselben Etiketten noch einmal: Der Cache greift, es wird nicht gerechnet.
+    export._semantische_lage(object(), labels)
+    assert len(gerufen) == 1, "der Cache greift nicht mehr"
+
+    # Jetzt kommen Vektoren dazu — dieselben Etiketten, neuer Bestand.
+    import os
+    import time
+
+    time.sleep(0.01)
+    cache.write_bytes(b"eins und zwei")
+    os.utime(cache, None)
+
+    export._semantische_lage(object(), labels)
+    assert len(gerufen) == 2, (
+        "neue Embeddings machen die Rechnung nicht neu — genau der Fehler vom "
+        "2026-09-03"
+    )
