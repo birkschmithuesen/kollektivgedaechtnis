@@ -5,9 +5,18 @@
  *   blau  → „nachbarn"
  *   gelb  → „vor kurzem gesagt"
  *
- * Diese Wörter sind fachlich richtig, nicht nur eine Vereinfachung: In
- * `kg2/weighting.py:select_required` ist der Anker der meistgenannte Begriff
- * (`haeufigste[0]`), danach kommt seine Nachbarschaft, dazu das Jüngste. Die
+ * 🔴 „oft genannt" stimmte am 2026-09-01, als der Anker der meistgenannte
+ * Begriff des ganzen Tages war (`haeufigste[0]`). Seit dem 2026-09-02 ist er
+ * der meistgenannte Begriff DER ZULETZT BEFRAGTEN PERSON — das Bild ist an
+ * das letzte Gespräch gebunden. Das Wort bleibt trotzdem stehen: Es ist
+ * Birks eigene Formulierung, und für den Besucher vor der Wand bedeutet Rot
+ * weiterhin „das ist hier das Wichtige". Wer es genau wissen will, liest
+ * `select_required`.
+ *
+ * Die Häufigkeit hat seit dem 2026-09-02 einen EIGENEN Kanal: die GRÖSSE des
+ * Punktes (`mapData(mentions …)` in projection.js). Deshalb steht sie unten
+ * als vierter Eintrag — ohne ihn erklärte die Legende drei von vier
+ * Bedeutungen, die auf der Wand zu sehen sind. Die
  * Farben stehen in `theme-f.css` als `--dream-anchor-color` (Bauhaus-Rot),
  * `--dream-neighbour-color` (Blau) und `--dream-recent-color` (Gelb).
  *
@@ -37,6 +46,10 @@ const ACHSEN = [
   { variable: '--dream-neighbour-color', wort: 'Nachbarn' },
   { variable: '--dream-recent-color', wort: 'vor Kurzem gesagt' },
 ];
+
+/** Der vierte Eintrag: kein Farbpunkt, sondern zwei verschieden grosse.
+ *  Er erklaert den Kanal, den die drei Farben NICHT tragen. */
+const GROESSE = { wort: 'öfter gesagt' };
 
 function cssWert(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();

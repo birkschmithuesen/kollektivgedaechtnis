@@ -42,7 +42,17 @@ GRAPH_1_PLACED = {
 
 @pytest.fixture()
 def view(page, static_server):
-    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    # 🔴 `?deterministisch=1` (seit 2026-09-02): Die Wand laeuft seit diesem
+    # Tag mit `randomize: true` — Birk hat die neu gewuerfelte Anordnung
+    # gesehen und behalten. Zwei Laeufe ergeben dort naturgemaess verschiedene
+    # Positionen, und `test_declutter_and_placement_are_deterministic`
+    # vergleicht genau die.
+    #
+    # Der Parameter gibt dem Test die alte Zusage zurueck, ohne die Wand
+    # anzufassen. Geprueft wird damit weiterhin, was der Test pruefen soll:
+    # dass die AUFRAEUM-Durchgaenge bei gleicher Ausgangslage gleich enden —
+    # nicht, dass fcose nicht wuerfelt.
+    page.goto(f"{static_server}/frontend/static/render-harness.html?deterministisch=1")
     page.wait_for_function("window.kgView !== undefined")
     return page
 
@@ -419,7 +429,7 @@ def test_count_label_overlaps_detects_overlapping_labels_and_person_collisions(p
     # layout: two identical labels 5px apart must overlap (1 pair), a third
     # label placed exactly on a person disc must count against that person,
     # and a label far from everything must not pollute either count.
-    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.goto(f"{static_server}/frontend/static/render-harness.html?deterministisch=1")
     page.wait_for_function("window.kgView !== undefined")
     result = page.evaluate(
         """async () => {
@@ -443,7 +453,7 @@ def test_count_label_overlaps_also_counts_person_discs_sitting_on_each_other(pag
     # defect in its own right and had never been measured. Same hand-placed
     # geometry as above: two discs half a diameter apart must count as one
     # pair, a third far away must not.
-    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.goto(f"{static_server}/frontend/static/render-harness.html?deterministisch=1")
     page.wait_for_function("window.kgView !== undefined")
     result = page.evaluate(
         """async () => {
@@ -517,7 +527,7 @@ def test_declutter_and_placement_are_deterministic(page, static_server):
     graph = _dense_net()
 
     def run_once():
-        page.goto(f"{static_server}/frontend/static/render-harness.html")
+        page.goto(f"{static_server}/frontend/static/render-harness.html?deterministisch=1")
         page.wait_for_function("window.kgView !== undefined")
         update(page, graph)
         return page.evaluate(
@@ -776,7 +786,18 @@ def test_the_kept_passes_still_beat_fcoses_own_label_handling(page, static_serve
     # measurably the easier one (6 pairs / 3 on discs / 71% width, same date).
     # What is asserted is therefore the direction and the fact that fcose does
     # not get there alone — the margin belongs to the seeded graph.
-    page.goto(f"{static_server}/frontend/projection.html?theme=b")
+    #
+    # 🔴 `?deterministisch=1` (2026-09-02): Die Wand laeuft seit diesem Tag mit
+    # `randomize: true`. Dieser Test stellt absichtlich eine SCHLECHTE
+    # Ausgangslage her — alle Knoten auf einer Spirale — und misst, was fcose
+    # allein daraus macht. Mit `randomize: true` verwirft fcose die Spirale und
+    # wuerfelt neu; gemessen kamen dann 0 Ueberlappungen statt der erwarteten
+    # mindestens 3, und die Praemisse des Tests war weg.
+    #
+    # Das ist ein Befund, kein Defekt: Das Wuerfeln raeumt selbst schon auf.
+    # Was dieser Test belegen soll, sind aber die AUFRAEUM-DURCHGAENGE — und
+    # die zeigen sich nur an einer Ausgangslage, die fcose so stehen laesst.
+    page.goto(f"{static_server}/frontend/projection.html?theme=b&deterministisch=1")
     page.wait_for_function("window.kgView !== undefined")
     graph = _dense_net()
     update(page, graph)
@@ -1330,7 +1351,7 @@ def touch_view(browser, static_server):
     Chromium only routes touch events at all when the context declares it, so
     this cannot be folded into the plain `view` fixture."""
     page = browser.new_page(viewport={"width": 1920, "height": 1080}, has_touch=True)
-    page.goto(f"{static_server}/frontend/static/render-harness.html")
+    page.goto(f"{static_server}/frontend/static/render-harness.html?deterministisch=1")
     page.wait_for_function("window.kgView !== undefined")
     yield page
     page.close()
@@ -1504,3 +1525,104 @@ def test_people_who_named_the_same_term_end_up_closer_together(view, real_graph)
     # "it is exactly this strong".
     assert statistics.median(sharing) < 0.9 * statistics.median(strangers)
     assert statistics.mean(sharing) < 0.9 * statistics.mean(strangers)
+
+
+# --- Was sich an einem BESTEHENDEN Knoten ändert (Birk, 2026-09-03) ---------
+
+
+def test_ein_umbenannter_begriff_zeigt_am_knoten_das_neue_wort(page, static_server):
+    """🔴 AN DER WAND GEFUNDEN (Birk, 2026-09-03): „Der Node existiert jetzt
+    nicht mehr. Er war vorher von Maxi Schäffe und hat sich nun mit René
+    Gabriel connected und dabei ein neues Label bekommen. Dieses neue Label war
+    aber noch nicht im Node."
+
+    Am Knoten stand das alte Wort, während die Tafel daneben schon das neue
+    zeigte — zwei Anzeigen desselben Begriffs, die sich widersprechen.
+
+    Die Ursache: `toCytoscape` setzt `label` nur beim ANLEGEN, und der
+    Aktualisierungszweig filtert alles heraus, was es schon gibt. Ein Begriff
+    ändert sein Etikett aber jedes Mal, wenn zwei zusammengelegt werden — also
+    mehrmals am Tag.
+    """
+    page.goto(f"{static_server}/frontend/projection.html?theme=f&deterministisch=1")
+    page.wait_for_function("window.kgView !== undefined", timeout=30000)
+
+    vorher = {
+        "version": 1, "generated_at": 1000.0, "max_terms": 99,
+        "nodes": [
+            {"id": "p1", "type": "person", "name": "Maxi", "portrait": None,
+             "created_at": 1.0, "hidden": False, "x": -200, "y": 0},
+            {"id": "t1", "type": "term", "label": "Funktionsseite zum Wohnen",
+             "mentions": 1, "created_at": 2.0, "hidden": False, "x": 200, "y": 0},
+        ],
+        "edges": [{"id": "e1", "source": "p1", "target": "t1", "evidence": "was auch immer"}],
+        "quotes": [],
+    }
+    page.evaluate("(g) => window.kgView.update(g, 99)", vorher)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+    assert page.evaluate("() => window.kgView.cy.$id('t1').data('label')") == (
+        "Funktionsseite zum Wohnen"
+    )
+
+    # Zwei Menschen meinten dasselbe: derselbe Knoten, neues Wort, mehr Stimmen.
+    nachher = {
+        **vorher,
+        "nodes": [
+            vorher["nodes"][0],
+            {"id": "p2", "type": "person", "name": "René", "portrait": None,
+             "created_at": 3.0, "hidden": False, "x": 0, "y": 200},
+            {"id": "t1", "type": "term", "label": "Wohnzentren statt Einzelwohnungen",
+             "mentions": 2, "created_at": 2.0, "hidden": False, "x": 200, "y": 0},
+        ],
+        "edges": vorher["edges"] + [
+            {"id": "e2", "source": "p2", "target": "t1", "evidence": "und noch was"}
+        ],
+    }
+    page.evaluate("(g) => window.kgView.update(g, 99)", nachher)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+
+    assert page.evaluate("() => window.kgView.cy.$id('t1').data('label')") == (
+        "Wohnzentren statt Einzelwohnungen"
+    ), "am Knoten steht weiter das alte Wort"
+
+
+def test_ein_haeufiger_werdender_begriff_waechst_auch_mit(page, static_server):
+    """🔴 Dieselbe Ursache, andere Folge — und sie ist die stillere.
+
+    Größe und Randstärke einer Begriffstafel hängen an `mentions` (Birk,
+    2026-09-02: „Begriffe, die oft genannt werden, sollen farbig markiert
+    werden"). Wurde das Feld nie nachgezogen, fror ein Begriff auf der
+    Häufigkeit ein, die er beim ersten Erscheinen hatte: Am Ende des Tages
+    sähe ein von zehn Menschen genannter Begriff aus wie eine Einmal-Nennung.
+    """
+    page.goto(f"{static_server}/frontend/projection.html?theme=f&deterministisch=1")
+    page.wait_for_function("window.kgView !== undefined", timeout=30000)
+
+    def stand(mentions, personen):
+        return {
+            "version": 1, "generated_at": 1000.0, "max_terms": 99,
+            "nodes": [
+                {"id": f"p{i}", "type": "person", "name": f"P{i}", "portrait": None,
+                 "created_at": float(i), "hidden": False, "x": -200 * i, "y": 0}
+                for i in range(1, personen + 1)
+            ] + [
+                {"id": "t1", "type": "term", "label": "Geteilter Begriff",
+                 "mentions": mentions, "created_at": 2.0, "hidden": False, "x": 200, "y": 0}
+            ],
+            "edges": [
+                {"id": f"e{i}", "source": f"p{i}", "target": "t1", "evidence": f"Beleg {i}"}
+                for i in range(1, personen + 1)
+            ],
+            "quotes": [],
+        }
+
+    page.evaluate("(g) => window.kgView.update(g, 99)", stand(1, 1))
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+    assert page.evaluate("() => window.kgView.cy.$id('t1').data('mentions')") == 1
+
+    page.evaluate("(g) => window.kgView.update(g, 99)", stand(5, 5))
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+
+    assert page.evaluate("() => window.kgView.cy.$id('t1').data('mentions')") == 5, (
+        "der Begriff friert auf seiner ersten Häufigkeit ein und wächst nie mit"
+    )

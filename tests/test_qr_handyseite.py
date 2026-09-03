@@ -157,13 +157,22 @@ def test_der_code_haengt_sichtbar_an_der_wand(wand):
     assert masse["pointer"] == "none", "der Code faengt Beruehrungen ab"
 
 
-def test_der_code_haengt_ohne_kasten_und_ohne_text(wand):
+def test_der_code_haengt_ohne_kasten(wand):
     """Birk, 2026-09-01: „Der qr code ohne Text so unauffaellig wie moeglich.
     Ecke ist OK. Hintergrund mit transparenz."
 
-    Geprueft wird beides: keine Beschriftung, und die Flaeche darum traegt
-    keinen eigenen Hintergrund mehr (die alte Fassung hatte eine helle Karte
-    mit Schatten und dem Text „Am eigenen Telefon mitlesen")."""
+    Geprueft wird, dass die Flaeche darum keinen eigenen Hintergrund traegt
+    (die alte Fassung hatte eine helle Karte mit Schatten und dem Text „Am
+    eigenen Telefon mitlesen").
+
+    🔴 „OHNE TEXT" GILT SEIT DEM 2026-09-03 NICHT MEHR, und zwar auf Birks
+    eigene Ansage: „der sollte oben links ins bild mit der website klein
+    drunter." Unter dem Code steht jetzt die Adresse — sonst nichts. Der Kasten
+    bleibt verboten; das war der eigentliche Punkt von damals.
+
+    Der Test prueft deshalb nicht mehr „kein Text", sondern „nichts ausser der
+    Adresse": Eine Beschriftung wie die alte („Am eigenen Telefon mitlesen")
+    faellt weiterhin auf."""
     befund = wand.evaluate(
         """() => {
              const kasten = document.querySelector('.qr-hinweis');
@@ -174,8 +183,10 @@ def test_der_code_haengt_ohne_kasten_und_ohne_text(wand):
                      kindElemente: kasten.children.length};
            }"""
     )
-    assert befund["text"] == "", f"der Code traegt noch Text: {befund['text']!r}"
-    assert befund["kindElemente"] == 1, "neben dem Bild haengt noch etwas daran"
+    assert befund["text"] == "kollektivgedaechtnis.flashclash.de", (
+        f"unter dem Code steht etwas anderes als die Adresse: {befund['text']!r}"
+    )
+    assert befund["kindElemente"] == 2, "neben Bild und Adresse haengt noch etwas daran"
     # rgba(0,0,0,0) = transparent; alles andere waere wieder ein Kasten.
     assert "rgba(0, 0, 0, 0)" in befund["hintergrund"] or befund["hintergrund"] == "transparent", (
         f"die Flaeche hat wieder einen Hintergrund: {befund['hintergrund']}"

@@ -1,5 +1,257 @@
 html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
-#cy { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+/* 🔴 GETEILTE FLAECHE (Birk, 2026-09-02, abends): „Bei Einblendung von Zitaten
+   soll dafuer ein eigener Bereich auf dem Monitor sein, wo das Netz nicht
+   angezeigt wird, da aktuell gehighlightete Knoten von dem Zitatfenster
+   ueberdeckt werden. Also sowas wie ein vertikaler Split Screen."
+
+   Das Netz weicht also aus, statt ueberdeckt zu werden. `--tafel-breite` ist
+   0, solange nichts ausgewaehlt ist — dann ist die Flaeche exakt so gross wie
+   vorher, und alles darauf steht, wo es stand.
+
+   `width` und nicht `right`: Cytoscape muss die Aenderung als Groesse sehen
+   (`cy.resize()`), sonst rechnet es weiter mit dem alten Rahmen und die
+   Kamera fasst daneben. */
+#cy {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: calc(100vw - var(--tafel-breite, 0px));
+  transition: width 420ms ease;
+}
+
+/* ---------------------------------------------------------------------------
+   Die Tafel: der eigene Bereich rechts
+   ---------------------------------------------------------------------------
+   Sie liegt NEBEN dem Netz, nicht darauf. Deshalb hat sie keinen Schatten und
+   keine abgerundeten Ecken zum Rand hin — sie ist eine zweite Flaeche, keine
+   Karte, die schwebt. */
+#tafel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: var(--tafel-breite, 0px);
+  overflow: hidden;
+  background: #f4f1ea;
+  color: #14120f;
+  /* Eine Linie statt eines Schattens: Die Kante trennt zwei Flaechen, sie
+     hebt keine ab. */
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.25);
+  transition: width 420ms ease;
+  z-index: 8;
+}
+#tafel[hidden] { display: none; }
+
+/* Der Inhalt rollt, die Tafel selbst nicht — sonst wanderte die Ueberschrift
+   beim Lesen mit. `padding-right` haelt die Rollleiste vom Text weg. */
+#tafel-inhalt {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4vh 2.2vw 4vh 2.4vw;
+  /* Nicht mit der Tafel schrumpfen: Waehrend sie aufgeht, soll der Text schon
+     in seiner Endbreite stehen und nicht mitgezogen werden. */
+  width: var(--tafel-breite, 0px);
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+   Die Tafel — Typografie und Aufbau
+   ---------------------------------------------------------------------------
+   🔴 Sie ist eine gedruckte Seite, kein Bedienfeld (Birk: „mache das design
+   dafür richtig gut"). Also: eine Spalte, eine Leserichtung, viel Weissraum,
+   und Hierarchie aus GROESSE und ABSTAND statt aus Rahmen und Kaesten. Nichts
+   auf dieser Flaeche laedt zum Klicken ein — sie wird gelesen.
+
+   🔴 ZWEI REGLER, wie bei der Karte — und zuerst stand hier nur einer.
+   Gemessen am laufenden Kern (2026-09-02, 1920 px): Die Wand ist auf
+   `camera_min_label` = 14 kalibriert, ihre Knoten standen also bei 14,6 px auf
+   dem Schirm. Die Belegstellen auf der Tafel standen bei 6,8 px und die
+   Abschnittsmarken bei 5,2 px — weniger als die Haelfte dessen, was auf
+   derselben Flaeche als Lesbarkeitsgrenze gilt.
+
+   Die Ursache war dieselbe wie am 2026-09-02 bei der Karte („das Zitat im
+   Touchscreen ist viel zu klein, die Schrift wesentlich groesser"): Alles hing
+   an `--quote-scale`, und der steht auf 0,4, weil die KARTE zu viel Flaeche
+   nahm. Die Tafel nimmt niemandem Flaeche weg — sie hat ihre eigene.
+
+   Also hier dieselbe Trennung: Die SCHRIFT haengt an `--quote-schrift`,
+   Polster, Portraits und Breiten bleiben an `--quote-scale`. Und die zwei
+   kleinsten Grade sind angehoben (13 -> 18 fuer die Marken, 17 -> 19 fuer die
+   Belege), damit auch der kleinste Text ueber der Grenze der Wand bleibt.
+   `tests/test_tafel.py` misst das im Browser nach, statt es zu behaupten.
+
+   Die Farben sind die des Bauhaus-Themes: gebrochenes Weiss als Grund, fast
+   Schwarz als Schrift, und die drei Grundfarben nur dort, wo sie etwas
+   bedeuten (die zwei Seiten eines Widerspruchs). */
+
+/* --- Der Kopf: Portrait und Name --------------------------------------- */
+.tafel-kopf {
+  display: flex;
+  align-items: center;
+  gap: 1.1em;
+  margin-bottom: 1.2em;
+}
+.tafel-portrait,
+.tafel-portrait-klein {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  /* Der schmale Ring holt das Portrait vom hellen Grund ab, ohne es zu
+     rahmen — dasselbe Mittel wie der Goldring im PNG. */
+  box-shadow: 0 0 0 2px rgba(20, 18, 15, 0.16);
+}
+/* An der SCHRIFT und nicht an der Flaeche: Diese Portraits stehen im Lesefluss
+   der Tafel, nicht auf dem Bild — ein Kopf, dessen Bild kleiner ist als der
+   Name daneben, kippt. Am Netz gilt weiter `--quote-scale`, dort nehmen die
+   Scheiben tatsaechlich Flaeche. */
+.tafel-portrait { width: calc(96px * var(--quote-schrift, 1)); height: calc(96px * var(--quote-schrift, 1)); }
+.tafel-portrait-klein { width: calc(46px * var(--quote-schrift, 1)); height: calc(46px * var(--quote-schrift, 1)); }
+/* Wer sich gegen ein Foto entschieden hat, ist kein FEHLENDES Foto: eine
+   ruhige Flaeche, kein Fragezeichen, kein Umriss. */
+.tafel-portrait.ohne-bild,
+.tafel-portrait-klein.ohne-bild { background: rgba(20, 18, 15, 0.10); }
+
+#tafel h2 {
+  margin: 0;
+  font-size: calc(34px * var(--quote-schrift, 1));
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --- Das Zitat: die Stimme ---------------------------------------------- */
+#tafel .tafel-zitat {
+  margin: 0 0 1.8em;
+  font-size: calc(27px * var(--quote-schrift, 1));
+  line-height: 1.42;
+  font-style: italic;
+  /* Keine Anfuehrungszeichen — sie sind seit dem 2026-09-02 auch am Netz weg:
+     Das Zitat ist geglaettet, nicht wortwoertlich, und Zeichen behaupteten
+     Wortlaut. */
+}
+
+/* --- Abschnittsmarken --------------------------------------------------- */
+#tafel .tafel-abschnitt {
+  margin: 2em 0 0.8em;
+  font-size: calc(18px * var(--quote-schrift, 1));
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.45;
+  /* Die feine Linie darunter ordnet die Seite, ohne einen Kasten zu bauen. */
+  border-bottom: 1px solid rgba(20, 18, 15, 0.14);
+  padding-bottom: 0.5em;
+}
+#tafel .tafel-abschnitt:first-child { margin-top: 0; }
+
+/* --- Listen: Begriff und Belegstelle ------------------------------------ */
+#tafel ul { margin: 0; padding: 0; list-style: none; }
+#tafel li {
+  margin: 0 0 1.2em;
+  font-size: calc(20px * var(--quote-schrift, 1));
+  line-height: 1.38;
+}
+#tafel li b { font-weight: 600; }
+/* Die Belegstelle gehoert zum Eintrag darueber: eingerueckt, kleiner, mit
+   einer Linie, die sie als Zitat ausweist statt als eigenen Punkt. */
+#tafel li span {
+  display: block;
+  margin-top: 0.3em;
+  padding-left: 0.9em;
+  border-left: 2px solid rgba(20, 18, 15, 0.2);
+  font-size: calc(19px * var(--quote-schrift, 1));
+  line-height: 1.4;
+  opacity: 0.72;
+  font-style: italic;
+}
+
+/* --- Die Stimmen zu einem Begriff --------------------------------------- */
+/* Mit Portrait, weil hier der Unterschied zwischen den Menschen die Aussage
+   ist: dieselbe Sache, andere Worte. */
+#tafel .tafel-stimmen li {
+  display: flex;
+  gap: 0.9em;
+  align-items: flex-start;
+}
+#tafel .tafel-stimme-text { min-width: 0; }
+#tafel .tafel-stimme-text b { display: block; margin-bottom: 0.15em; }
+
+/* --- „Teilt Themen mit" -------------------------------------------------- */
+.tafel-nahe { display: flex; flex-direction: column; gap: 1em; }
+.tafel-nahe-eintrag { display: flex; gap: 0.9em; align-items: center; }
+.tafel-nahe-text { min-width: 0; font-size: calc(19px * var(--quote-schrift, 1)); }
+.tafel-nahe-text b { display: block; }
+.tafel-nahe-text span {
+  display: block;
+  margin-top: 0.15em;
+  font-size: calc(18px * var(--quote-schrift, 1));
+  opacity: 0.6;
+}
+
+/* --- Verwandte Begriffe -------------------------------------------------- */
+/* Als lose Marken, nicht als Liste: Sie sind ein Hinweis, keine Aufzaehlung,
+   und sollen nicht so schwer wiegen wie die Stimmen darueber. */
+.tafel-verwandt { display: flex; flex-wrap: wrap; gap: 0.5em; }
+.tafel-chip {
+  padding: 0.34em 0.8em;
+  border: 1px solid rgba(20, 18, 15, 0.22);
+  border-radius: 100px;
+  font-size: calc(18px * var(--quote-schrift, 1));
+  line-height: 1.3;
+  opacity: 0.8;
+}
+
+/* --- Der Widerspruch: der Ruhezustand ------------------------------------ */
+/* 🔴 Zwei Seiten NEBENEINANDER. Ein Widerspruch ist eine Gegenueberstellung,
+   und die Form soll das sagen, bevor jemand liest. Die senkrechte Linie in
+   der Mitte ist der Bruch. */
+.tafel-widerspruch { margin: 0 0 2.4em; }
+/* Der erste Block braucht Luft zur Ueberschrift: `#tafel h2` hat `margin: 0`,
+   damit der Kopf einer Person dicht am Portrait steht — im Ruhezustand folgt
+   aber sofort eine Rubrik, und die klebte an der Zeile darueber. */
+#tafel h2 + .tafel-widerspruch { margin-top: 1.5em; }
+.tafel-widerspruch-titel {
+  margin: 0 0 0.9em;
+  font-size: calc(21px * var(--quote-schrift, 1));
+  line-height: 1.3;
+  font-weight: 600;
+}
+.tafel-gegen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.3em;
+  position: relative;
+}
+.tafel-gegen::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 1px;
+  background: rgba(20, 18, 15, 0.18);
+}
+.tafel-seite b {
+  display: block;
+  margin-bottom: 0.35em;
+  font-size: calc(19px * var(--quote-schrift, 1));
+  line-height: 1.25;
+  font-weight: 600;
+}
+.tafel-seite span {
+  display: block;
+  font-size: calc(18px * var(--quote-schrift, 1));
+  line-height: 1.4;
+  opacity: 0.7;
+  font-style: italic;
+}
+/* Die zwei Bauhaus-Grundfarben tragen die beiden Seiten. Auf der Tafel liegt
+   kein Netz, also gibt es hier keinen Bedeutungskonflikt mit den Traumrollen —
+   ein duenner Balken genuegt, die Schrift bleibt schwarz und lesbar. */
+.tafel-seite-eine { border-left: 3px solid var(--bauhaus-rot, #D62828); padding-left: 0.7em; }
+.tafel-seite-andere { border-left: 3px solid var(--bauhaus-blau, #1D3557); padding-left: 0.7em; }
 
 /* Visitor controls, surface A only (`?touch=1`). Sized for a finger on a 65"
    panel at arm's length, not for a mouse. The iiyama is an IR touchscreen —
@@ -70,13 +322,36 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
    Die Breite ist gedeckelt: über den ganzen 65-Zoll-Schirm gezogen wäre der
    Weg länger als ein Arm, und der linke Anschlag („Übersicht zeigen") läge
    außer Reichweite, wenn man rechts steht. */
+/* 🔴 AN DEN LINKEN RAND, SENKRECHT (Birk, 2026-09-03: „den regler doch wieder
+   einblenden, aber dezenter am linken rand und vertikal unter dem qr code über
+   den buttons").
+   Vorgeschichte in einem Satz: Am selben Tag erst ausgeblendet, dann so
+   zurueckgeholt. Er lag vorher rechts in der Bedienleiste — dort, wo seit der
+   Tafel kein Platz mehr ist.
+
+   `position: fixed` und kein Umbau am Markup: Die Huelle bleibt ein Kind der
+   Leiste (dort haengen `dataset.autonomie` und die Ereignisse), wird aber aus
+   deren Fluss genommen. Oben und unten sind an QR-Code und Knoepfen
+   ausgerichtet, damit sich die drei Dinge am linken Rand nicht beruehren. */
 .touch-zoom {
   display: flex;
+  /* `column-reverse` dreht die DOM-Reihenfolge (− Regler +) so, dass PLUS oben
+     steht und MINUS unten — die Richtung, die eine Hand erwartet. */
+  flex-direction: column-reverse;
   align-items: center;
-  gap: 14px;
-  /* Schiebt den Regler an das andere Ende der Leiste, ohne die Ausrichtung
-     der Leiste selbst zu ändern (siehe Kommentar bei .touch-controls). */
-  margin-left: auto;
+  gap: 10px;
+  position: fixed;
+  left: 30px;
+  /* Unter dem QR-Code (26 px Rand + Code + Adresszeile) … */
+  top: 230px;
+  /* … und ueber der Bedienleiste, damit die Knoepfe frei bleiben. */
+  bottom: 116px;
+  z-index: 11;
+  /* Dezenter als vorher: Er soll da sein, ohne die Wand zu beanspruchen.
+     Beim Anfassen geht er auf volle Deckkraft — siehe unten. */
+  opacity: 0.5;
+  transition: opacity 200ms ease;
+  margin-left: 0;
   flex: 1 1 auto;
   max-width: 620px;
 }
@@ -91,10 +366,25 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   user-select: none;
   -webkit-user-select: none;
 }
+/* Wer ihn anfasst, sieht ihn ganz. `:focus-within` faengt auch den Zug mit
+   dem Finger, weil der Regler dabei den Fokus bekommt. */
+.touch-zoom:hover,
+.touch-zoom:focus-within {
+  opacity: 1;
+}
+
 .touch-zoom-regler {
+  /* 🔴 SENKRECHT. `writing-mode: vertical-lr` mit `direction: rtl` ist der
+     Weg, der in diesem Chromium wirklich greift — `appearance:
+     slider-vertical` ist abgekuendigt und in neueren Fassungen wirkungslos.
+     `rtl` sorgt dafuer, dass UNTEN das Minimum liegt und oben das Maximum. */
+  writing-mode: vertical-lr;
+  direction: rtl;
   flex: 1 1 auto;
-  width: 100%;
-  height: 64px; /* Trefferzone, nicht Sichtfläche */
+  /* Die Achsen sind getauscht: Die BREITE ist jetzt die Trefferzone, die
+     HOEHE der Weg. 48 px ist dasselbe Mindestziel wie vorher fuer die Hoehe. */
+  width: 48px;
+  height: auto;
   margin: 0;
   background: transparent;
   -webkit-appearance: none;
@@ -108,22 +398,33 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   -webkit-user-select: none;
 }
 .touch-zoom-regler::-webkit-slider-runnable-track {
-  height: 10px;
+  /* Senkrecht ist die Bahn schmal und lang — Breite statt Hoehe. Duenner als
+     die 10 px von vorher: „dezenter" heisst hier vor allem weniger Flaeche. */
+  width: 7px;
+  height: auto;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.22);
 }
 .touch-zoom-regler::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 56px;
-  height: 56px;
+  /* Kleiner als die 56 px von vorher, aber immer noch ein Fingerziel. */
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
-  /* Mittig auf der 12 px hohen Schiene (10 px plus 1 px Rand oben und unten):
-     6 − 28 = −22. */
-  margin-top: -22px;
+  /* 🔴 SENKRECHT WIRD QUER ZENTRIERT (Birk, 2026-09-03: „der kreis sitzt nicht
+     richtig auf dem slider"). Waagerecht lag der Griff über einer 12 px hohen
+     Schiene und wurde mit `margin-top` hochgezogen. Senkrecht ist die Schiene
+     9 px BREIT (7 px plus 1 px Rand je Seite) — verschoben werden muss also
+     quer, und `margin-top` schob ihn stattdessen die Bahn entlang: Er saß
+     nicht daneben, sondern verschoben.
+
+     (9 − 38) / 2 = −14,5. */
+  margin-top: 0;
+  margin-left: -14.5px;
 }
 /* Firefox zeichnet dieselbe Sache über eigene Pseudo-Elemente. Die Station
    fährt Chromium, aber die Diagnose passiert auch mal am nächstbesten
@@ -232,7 +533,22 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--quote-ring);
   opacity: 0;
   transition: opacity 600ms ease, transform 600ms ease;
-  pointer-events: none; /* never steals a tap meant for the graph */
+  /* 🔴 GEAENDERT von `none` (Birk, 2026-09-02): „ein klick auf den graphen
+     dahinter bringt zurück, aber ein scrollen in der karte scrollt eben."
+     Der alte Kommentar hier lautete „never steals a tap meant for the graph" —
+     der Grund gilt weiter, nur ist er jetzt anders geloest: Die Karte nimmt
+     Zeigereignisse an (sonst kann man nicht scrollen), und `quote-overlay.js`
+     laesst einen TIPP darauf trotzdem an den Graphen durch. Nur das Ziehen
+     bleibt bei der Karte.
+     Ohne das war die Karte nicht scrollbar und wuchs statt zu rollen — bei
+     mehreren Zitaten pro Person (seit dem Zusammenlegen zweier Interviews am
+     selben Tag) lief sie aus dem Bild. */
+  pointer-events: auto;
+  /* Hoechstens die halbe Schirmhoehe, dann rollt es. `overscroll-behavior`
+     haelt das Rollen in der Karte, statt am Ende die Seite mitzuziehen. */
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 9;
 }
 .quote-overlay.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -255,12 +571,18 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: var(--bg); }
   line-height: 1.42;
   color: inherit;
   font-style: italic;
-  /* Hanging opening quote: the mark sits in the margin so the first letter
-     still lines up with the rest of the paragraph. */
-  text-indent: -0.42em;
 }
-.quote-text::before { content: '\201E'; }
-.quote-text::after { content: '\201C'; }
+/* 🔴 KEINE Anführungszeichen (Birk, 2026-09-02): „Die Zitate an den Personen
+   sollen keine haben, denn sie sind nicht 1:1 zitiert."
+
+   Und das stimmt: Was hier steht, hat `kg/extraction.py` aus dem Transkript
+   gezogen und dabei geglättet — Füllwörter fallen weg, abgebrochene Sätze
+   werden ganz. Anführungszeichen behaupten Wortlaut. Die Kursive trägt
+   weiterhin, dass hier jemand spricht, ohne es zu versprechen.
+
+   Die BELEGSTELLE am Begriff (`.quote-beleg-text` weiter unten) behält ihre:
+   sie ist die unveränderte Stelle aus dem Transkript, dort ist die Behauptung
+   also wahr. Das ist der ganze Unterschied zwischen den beiden. */
 
 /* Legende der drei Auswahlfarben (Birk, 2026-09-01).
 
@@ -350,8 +672,12 @@ body:has(.touch-controls) .dream-legende { bottom: 104px; }
    Optimum, das sie ausdruecklich als lesbar ausweist. */
 .qr-hinweis {
   position: fixed;
-  right: 30px;
-  bottom: 26px;
+  /* 🔴 OBEN LINKS seit dem 2026-09-03 (Birk: „die widerspruchsseite überdeckt
+     den qr code. der sollte oben links ins bild mit der website klein
+     drunter"). Rechts unten lag er unter der Tafel, seit die den rechten
+     Rand belegt — und ein QR-Code, den niemand sieht, ist keiner. */
+  left: 30px;
+  top: 26px;
   /* Im Foyer steht der Code dauerhaft in der Ecke — dort steht jemand davor
      und kann ihn aus zwei Metern erfassen. Die Saal-Auflage setzt die
      Variable auf `none` (siehe plenum.css): aus zwoelf Metern ist eine Ecke
@@ -372,10 +698,30 @@ body:has(.touch-controls) .dream-legende { bottom: 104px; }
      selben Verhaeltnis. Genau das hat die Messung oben geprueft. */
   opacity: var(--qr-opacity);
 }
-/* Auf der Touchflaeche sitzt unten die Bedienleiste — der Code rueckt darueber,
-   wie die Legende auf der anderen Seite. Mitgewachsen mit dem Zoom-Regler
-   (88 px Leiste statt 72), aus demselben Grund wie dort. */
-body:has(.touch-controls) .qr-hinweis { bottom: 106px; }
+/* Die Adresse unter dem Code — klein, in derselben Deckkraft.
+   Sie steht dort fuer alle, die den Code nicht scannen wollen oder koennen;
+   `.qr-bild` bringt seine eigene Ruhezone mit, deshalb hier nur ein knapper
+   Abstand. Die Breite des Codes gibt die Zeile vor, damit sie mittig darunter
+   sitzt und nicht in die Flaeche hinauslaeuft. */
+.qr-adresse {
+  display: block;
+  margin-top: 7px;
+  font-family: var(--label-font, Georgia, serif);
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--label-color, #FFFFFF);
+  opacity: var(--qr-opacity);
+  /* 🔴 NICHT UMBRECHEN und NICHT auf die Codebreite zwingen (gemessen am Bild,
+     2026-09-03): Auf die Breite des Codes gezwungen brach die Zeile mitten im
+     Wort — „kollektivgedaechtnis.fl / ashclash.de". Eine Adresse, die man
+     abtippen soll, darf keine erfundene Silbengrenze zeigen.
+     Oben links ist rechts daneben Platz; die paar Pixel, die sie über den Code
+     hinausragt, nimmt ihr niemand übel. */
+  white-space: nowrap;
+}
+
+/* Oben links liegt auf der Touchflaeche nichts im Weg — die Bedienleiste sitzt
+   unten. Die frueher noetige Ausweichregel entfaellt damit. */
 
 
 /* 🔴 Die Belegstellen eines BEGRIFFS (Birk, 2026-09-02): „bei Begriffen, die

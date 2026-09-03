@@ -71,9 +71,13 @@ export const LINE_HEIGHT = 1.12;
 
 /** Box eines Begriffs-Knotens inkl. Tafelrand. An toCytoscape() hängen:
  *  data.boxW / data.boxH je Begriff setzen, wenn das Label feststeht. */
-export function termBox(label) {
+export function termBox(label, schriftPx) {
   const pad = parseFloat(cssVar('--plate-pad', '10'));
-  const fs = parseFloat(cssVar('--label-size', '26'));
+  // 🔴 Die Groesse kommt seit dem 2026-09-03 von aussen (Birk: „ändere die
+  // hervorhebung von oft genannten begriffen zu größe der schrift"). Ohne das
+  // masse die Tafel weiter mit 26 px, waehrend der Text darin groesser steht —
+  // und ragte hinaus. Ohne Angabe gilt weiter der Wert aus dem Theme.
+  const fs = schriftPx || parseFloat(cssVar('--label-size', '26'));
   const ff = cssVar('--label-font', 'Georgia, serif');
   const maxw = parseFloat(cssVar('--label-max-width', '220px'));
   const m = measureLabel(label, fs, ff, maxw);

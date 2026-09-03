@@ -83,9 +83,9 @@ export function visibleGraph(graph, maxTerms, keepTermIds = new Set()) {
 }
 
 /** Tafelmasse, defensiv: Ein Messfehler darf die Wand nicht kosten. */
-function boxDaten(label) {
+export function boxDaten(label, schriftPx) {
   try {
-    const box = termBox(label || '');
+    const box = termBox(label || '', schriftPx);
     return { boxW: box.w, boxH: box.h };
   } catch (error) {
     console.warn('konnte die Tafel nicht messen', error);
@@ -93,7 +93,7 @@ function boxDaten(label) {
   }
 }
 
-export function toCytoscape(view) {
+export function toCytoscape(view, { schriftFuer } = {}) {
   const elements = [];
   for (const node of view.nodes) {
     const element = {
@@ -108,6 +108,13 @@ export function toCytoscape(view) {
         // stylt, das Feld überlebt einen Klassenwechsel und lässt sich
         // abfragen, ohne den Stil zu lesen.
         in_dream: node.in_dream === true,
+        // 🔴 Die ZWEITE Anordnung (Birk, 2026-09-02): Position nach BEDEUTUNG
+        // statt nach gemeinsamen Sprechern (kg/semantik.py). Liegt als Feld
+        // am Knoten, damit der Umschalter nur zwischen zwei Zahlenpaaren
+        // wechselt — die vorhandene Migration bringt ihn dann zur Geltung.
+        // `null`, wenn der Begriff noch kein Embedding hat.
+        sx: typeof node.sx === 'number' ? node.sx : null,
+        sy: typeof node.sy === 'number' ? node.sy : null,
         // anchor | neighbour | recent — welche der drei Auswahlachsen den
         // Begriff ins Bild geholt hat. Das Bauhaus-Theme faerbt danach.
         dream_role: node.dream_role || '',
@@ -115,7 +122,13 @@ export function toCytoscape(view) {
         // und fcose muss mit ihrer echten Groesse rechnen — sonst legt das
         // Layout Tafeln uebereinander, die es fuer 14px-Punkte haelt. Die
         // uebrigen Themes ignorieren die beiden Felder schlicht.
-        ...(node.type === 'term' ? boxDaten(node.label) : {}),
+        // 🔴 Die Tafel wird MIT der Schrift gemessen, die sie tragen wird
+        // (seit 2026-09-03): Traegt die Haeufigkeit die Schriftgroesse, passt
+        // eine mit 26 px gemessene Tafel nicht mehr um einen 52-px-Text.
+        // `schriftFuer` reicht projection.js herein — dort steht die Regel.
+        ...(node.type === 'term'
+          ? boxDaten(node.label, schriftFuer ? schriftFuer(node) : undefined)
+          : {}),
       },
       classes:
         node.in_dream === true

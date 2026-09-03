@@ -17,6 +17,10 @@
      Die Deckkraft steht in base.css und ist gemessen, nicht geschaetzt. -->
 <aside class="qr-hinweis" aria-hidden="true">
   <img src="static/qr-handyseite.svg" alt="" class="qr-bild">
+  <!-- Die Adresse ausgeschrieben (Birk, 2026-09-03: „mit der website klein
+       drunter"). Ohne `https://` und ohne Pfad: Was man abtippen soll, soll so
+       kurz wie moeglich sein, und jeder Browser ergaenzt beides selbst. -->
+  <span class="qr-adresse">kollektivgedaechtnis.flashclash.de</span>
 </aside>
 <!-- Order matters: these UMD bundles resolve each other off `window`, and the
      two extensions self-register against the `cytoscape` global. See
@@ -27,11 +31,14 @@
 <script src="static/vendor/cytoscape-fcose.js"></script>
 <script src="static/vendor/cytoscape-layout-utilities.js"></script>
 <script type="module">
-  import { createGraphView } from './static/projection.js';
+  import { createGraphView, hatSemantischeLage, setzeAnordnung, settlePlacement, separateOverlappingNodes } from './static/projection.js';
   import { attachTouchAutonomy } from './static/touch-autonomy.js';
   import { createTouchControls } from './static/touch-controls.js';
   import { attachZoomGeste } from './static/touch-zoom-geste.js';
   import { attachQuoteOverlay } from './static/quote-overlay.js';
+  import { attachNachbarschaft } from './static/nachbarschaft.js';
+  import { attachTafel } from './static/tafel.js';
+  import { createTafelDaten } from './static/tafel-daten.js';
   import { attachLegende } from './static/legende.js';
   import { attachPlenumHinweis } from './static/plenum-hinweis.js';
 
@@ -187,7 +194,62 @@
     // surface, not just the touchscreen: surface C gets no visitors, so it
     // simply never fires there, and keeping one code path avoids a second
     // page that drifts from this one.
-    const quotes = attachQuoteOverlay(view);
+    // 🔴 ENTWEDER Karte ODER Tafel, nie beides (2026-09-02, beim Durchsehen
+    // gefunden): Beide hängen am selben Tipp. Ohne diese Trennung erschiene
+    // die Zitatkarte ÜBER dem Netz, während die Tafel dasselbe Zitat daneben
+    // zeigt — und die Karte läge wieder über dem hervorgehobenen Knoten,
+    // also genau der Fehler, gegen den die Tafel gebaut wurde.
+    //
+    // Die Tafel braucht Platz neben dem Netz. Den hat die Wand und die
+    // Touchfläche; im Plenarsaal steht niemand, der antippen könnte, und auf
+    // einem Handy wäre ein Drittel Breite kein Bereich, sondern ein Streifen.
+    // Dort bleibt es bei der Karte.
+    const tafelMoeglich = !istPlenum;
+    // Die Karte wird immer aufgebaut — sie steht im Layout, ihre Masse gelten
+    // weiter (`tests/test_quote_overlay.py` misst sie gegen die Bedienleiste),
+    // und im Plenarsaal ist sie weiterhin der Weg. Nur ihre Tipp-Handler
+    // bleiben aus, wo die Tafel die Aufgabe uebernimmt.
+    const quotes = attachQuoteOverlay(view, { stumm: tafelMoeglich });
+    // Hervorheben, was zusammenhaengt (Birk, 2026-09-02). Haengt sich an
+    // dieselbe Tipp-Mechanik wie das Zitat: Knoten hebt hervor, freier Bereich
+    // loest wieder. Reine Ansichtssache — es fasst weder Daten noch Positionen
+    // an und kann die Anordnung deshalb nie stoeren.
+    attachNachbarschaft(view);
+
+    // 🔴 DIE TAFEL (Birk, 2026-09-02, abends): „Bei Einblendung von Zitaten
+    // soll dafür ein eigener Bereich auf dem Monitor sein, wo das Netz nicht
+    // angezeigt wird, da aktuell gehighlightete Knoten von dem Zitatfenster
+    // überdeckt werden."
+    //
+    // Genau der Fehler, den das Hervorheben von oben erzeugt hat: Seit die
+    // Nachbarschaft aufleuchtet, liegt die Zitatkarte ausgerechnet über dem,
+    // was sie erklärt. Die Tafel weicht aus, statt zu überdecken — das Netz
+    // wird schmaler und die Kamera fasst neu.
+    //
+    // NUR auf der Touchfläche und der Wand, nicht im Plenarsaal: Dort steht
+    // niemand, der antippen könnte, und eine Fläche, die nie aufgeht, ist
+    // nur eine Zeile mehr im Aufbau.
+    const tafelDaten = createTafelDaten();
+    const tafel = tafelMoeglich
+      ? attachTafel(view, { holeText: tafelDaten })
+      : { istOffen: () => false, zeigeWidersprueche: () => false, schliesse() {}, aktualisiere() {} };
+    // Prüfnaht, wie `window.kgView` eine Zeile weiter oben: Die Tests füttern
+    // die Tafel direkt, weil es dort keinen Kern und damit keinen SSE-Strom
+    // gibt. Keine Bedienfläche — nichts an der Wand ruft das.
+    // Pruefnaht:  ist sonst nur modulintern erreichbar.
+    window.__settle = settlePlacement;
+    window.__trenne = separateOverlappingNodes;
+    window.__tafelDaten = tafelDaten;
+    window.__tafel = tafel;
+    // Der Ruhezustand: Sobald Widersprüche da sind, steht die Tafel von selbst
+    // offen und zeigt sie. Ohne Auswahl ist das die Fläche, die den TAG
+    // zusammenfasst statt eine einzelne Person — und sie erklärt zugleich,
+    // wofür der Bereich da ist, bevor jemand etwas antippt.
+    //
+    // Am 2026-09-03 mittags entfernt und am Nachmittag zurückgeholt (Birk:
+    // „ich will das zurückgestellte Widerspruch im Idle-Mode wieder
+    // hochholen").
+    let ruheGezeigt = false;
     window.kgQuotes = quotes;
 
     // Die Deutung des Farbcodes (Birk, 2026-09-01). Nach dem Theme-`load`,
@@ -199,7 +261,15 @@
     // Farbcode, den die Saal-Auflage bewusst abschaltet — sie hätte dort drei
     // gleichfarbige Punkte mit drei verschiedenen Wörtern gezeigt und damit
     // etwas behauptet, was auf der Fläche nicht mehr stimmt.
-    window.kgLegende = istPlenum ? null : attachLegende();
+    // 🔴 KEINE LEGENDE MEHR (Birk, 2026-09-03: „die farbige markierung
+    // (rot/blau/gelb) soll jetzt weg und auch die dazugehörige legende").
+    //
+    // Sie erklärte die drei Traumachsen. Die gibt es als Farbe nicht mehr, und
+    // was jetzt farbig ist — oft Gesagtes — erklärt sich beim Hinsehen: Eine
+    // Legende zu einer einzigen Farbe sagt nichts, was der Blick nicht schon
+    // sieht. `attachLegende` bleibt im Repo; wer den Farbcode zurückholt,
+    // braucht sie wieder.
+    window.kgLegende = null;
 
     // Der Erklärungstext, nur im Saal (Birk, 2026-09-01). Sein Takt kommt
     // gleich aus dem Zustand; bis der erste Push da ist, laufen die Vorgaben
@@ -222,8 +292,22 @@
         // wieder wandert. Über den Rückgabewert und nicht über einen zweiten
         // Zugriff auf das DOM, damit es genau einen Ort gibt, der weiß, wo der
         // linke Anschlag liegt (touch-controls.js).
-        onRelease: () => controls && controls.resetZoom(),
+        onRelease: () => {
+          if (controls) controls.resetZoom();
+          // 🔴 Die Wand nimmt sich zurück — dann darf keine AUSWAHL stehen
+          // bleiben. Ab hier fährt die Kamera wieder von selbst; eine Tafel,
+          // die weiter einen bestimmten Knoten erklärt, zeigt binnen Sekunden
+          // auf etwas, das aus dem Bild gefahren ist (dieselbe Trennung wie in
+          // tafel.js: was erklärt wird, muss zu sehen sein). Der Ruhezustand
+          // meint den ganzen Tag und hält eine fahrende Kamera aus; gibt es
+          // noch keine Widersprüche, geht die Tafel zu.
+          if (tafel.istOffen() && !tafel.zeigeWidersprueche()) tafel.schliesse();
+        },
       });
+      // Prüfnaht wie `window.__tafel` eine Seite weiter oben: Der Rückfall in
+      // den Automatikbetrieb passiert an der Wand nach 30 s Ruhe — im Test ist
+      // das keine Wartezeit, sondern ein Aufruf. Keine Bedienfläche ruft das.
+      window.__autonomy = autonomy;
       // Nothing wired in here may post: whatever a visitor presses on surface A
       // must stay on surface A (see touch-controls.js and touch-autonomy.js).
       controls = createTouchControls(document.body, {
@@ -254,6 +338,57 @@
         // und gilt auf allen Flächen.
         onZoom: (faktor) => view.camera.setVisitorZoom(faktor),
       });
+
+      // ---------------------------------------------------------------------
+      // Soziale <-> semantische Anordnung (Birk, 2026-09-02)
+      // ---------------------------------------------------------------------
+      // Der Knopf erscheint nur, wenn der Kern eine semantische Lage liefert.
+      // Der Wechsel ist die vorhandene Migration: dieselbe 2,5-Sekunden-Fahrt,
+      // mit der ein neues Interview ins Netz gleitet. Was man dabei sieht, IST
+      // die Aussage — welche Begriffe sich aus der sozialen Ordnung loesen.
+      // 🔴 AUS, vorerst (Birk, 2026-09-02, abends): „nimm den Bedeutungs-Button
+      // wieder raus für jetzt … machen dann später weiter."
+      //
+      // Der Grund ist nicht die Mechanik — die läuft (75 von 76 Knoten wandern,
+      // 76 von 76 kommen exakt zurück) —, sondern die Darstellung: In der
+      // semantischen Ansicht klumpen die Portraits in der Bildmitte, weil eine
+      // Person auf dem SCHWERPUNKT ihrer Begriffe sitzt und wer über vieles
+      // spricht damit zwangsläufig in die Mitte fällt. Dazu läuft nach dem
+      // Umschalten kein Aufräum-Durchgang, also überlappen die Beschriftungen.
+      //
+      // 🔴 WIEDER AN, am selben Abend: Beide Gründe sind behoben.
+      //   – Eine Person steht jetzt bei ihrem EIGENSTEN Begriff statt im
+      //     Mittel ihrer Begriffe, und die Portraits werden auseinander-
+      //     geschoben (`kg/semantik.py`). Gemessen: Personenfeld 459x559 ->
+      //     939x931, kein Paar mehr näher als eine Portraitbreite.
+      //   – Nach dem Umschalten läuft `settlePlacement`, das die
+      //     Beschriftungen auseinanderschiebt — dieselben Durchgänge, die die
+      //     soziale Ansicht nach jedem Layoutlauf bekommt.
+      // Auf `false` setzen nimmt den Knopf wieder weg, ohne sonst etwas zu
+      // ändern; der Kern liefert `sx`/`sy` unabhängig davon.
+      const SEMANTIK_ANZEIGEN = true;
+
+      let semantisch = false;
+      const naeheKnopf = controls.naeheKnopf;
+      const knopfNachfuehren = () => {
+        naeheKnopf.hidden = !SEMANTIK_ANZEIGEN || !hatSemantischeLage(view.cy);
+        naeheKnopf.textContent = semantisch ? 'Gespräche' : 'Bedeutung';
+      };
+      naeheKnopf.addEventListener('click', async () => {
+        semantisch = !semantisch;
+        knopfNachfuehren();
+        setzeAnordnung(view.cy, semantisch);
+        // Nach dem Umsetzen die Kamera neu fassen: Die semantische Wolke hat
+        // einen anderen Zuschnitt, und ohne das laege sie halb ausserhalb.
+        view.camera.uebersicht();
+      });
+      knopfNachfuehren();
+      // Frueh am Tag gibt es noch keine semantische Lage (zu wenige Begriffe),
+      // spaeter schon — also bei jedem hinzukommenden Knoten neu pruefen.
+      // `add` ist das Ereignis, das Cytoscape dabei ohnehin feuert; ein
+      // eigener Haken am Renderpfad waere eine zweite Stelle, die man beim
+      // naechsten Umbau vergisst.
+      view.cy.on('add', knopfNachfuehren);
       // Die Zwei-Finger-Geste (Nachtrag Birk, 2026-09-01: „wir müssen dort
       // auch das Zoom hinbekommen … ich würde gerne das Zoom haben"). Sie ist
       // seit dem Umzug auf das MacBook der Hauptweg, der Regler darüber der
@@ -307,6 +442,16 @@
       if (payload.type === 'graph') {
         view.update(payload.graph);
         quotes.setGraph(payload.graph);
+        tafelDaten.setGraph(payload.graph);
+        // Steht eine Tafel offen, bekommt sie den neuen Stand — ohne die
+        // Rollposition zu verlieren und ohne Kamerafahrt (tafel.js).
+        tafel.aktualisiere();
+        // Einmal beim ersten Graphen mit Widersprüchen — danach nie wieder von
+        // selbst, sonst risse jede Zustandsmeldung eine Auswahl weg, die
+        // gerade jemand liest.
+        if (!ruheGezeigt && !tafel.istOffen() && tafel.zeigeWidersprueche()) {
+          ruheGezeigt = true;
+        }
         window.kgReady = true;
       } else if (payload.type === 'state') {
         // 🔴 WELCHE Regler diese Fläche liest — die eine Zeile, an der die

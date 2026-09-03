@@ -106,38 +106,37 @@ def test_die_tafel_folgt_der_laenge_des_begriffs(wall):
     assert breiten["lang"] > breiten["kurz"], breiten
 
 
-def test_die_achsenfarben_faerben_den_ring_und_nicht_die_schrift(wall):
-    """Zweite Fassung, nach Birks echtem Rendering (2026-08-30).
+def test_die_achsenfarben_sind_weg(wall):
+    """🔴 Der Nachfolger des Tests, der hier stand (2026-09-03).
 
-    Die erste Fassung füllte die Tafel mit der Achsenfarbe und musste dafür
-    die Schriftfarbe pro Fläche nachrechnen (weiß auf Gelb = 1.66:1,
-    unlesbar → schwarz). Mit dem RING entfällt das Problem an der Wurzel: Die
-    Schrift steht wieder auf schwarzem Grund, also überall 21:1, und die
-    Farbe sitzt dort, wo sie im Rendering sitzt — in der Kontur.
+    Er pruefte, dass die drei Traumachsen den RING faerben und nicht die
+    Schrift — eine Regel, die genau so lange galt, wie es die drei Farben gab.
+    Birk hat sie am Nachmittag abbestellt („die farbige markierung
+    (rot/blau/gelb) soll jetzt weg"), und die Hervorhebung steht seither in der
+    Schriftgroesse.
+
+    Was bleibt, ist die Aussage dahinter: Die Schrift der Begriffe traegt auf
+    dieser Flaeche die Beschriftungsfarbe des Themes — nichts faerbt sie um.
+    Das war der eigentliche Punkt von damals (eine eingefaerbte Beschriftung
+    war auf der Wand schlechter zu lesen), und er gilt weiter.
     """
     zeige(wall)
-
     farben = wall.evaluate(
         """() => {
-             const f = (id) => {
-               const n = window.kgView.cy.$id(id);
-               return { rand: n.style('border-color'), schrift: n.style('color') };
-             };
-             return { anker: f('t1'), nachbar: f('t2'), neu: f('t3') };
+             const cy = window.kgView.cy;
+             const s = getComputedStyle(document.documentElement);
+             const p = document.createElement('span');
+             document.body.appendChild(p);
+             p.style.color = s.getPropertyValue('--label-color').trim();
+             const soll = getComputedStyle(p).color;
+             return cy.nodes('.term').map((n) => ({ist: n.style('color'), soll}));
            }"""
     )
-
-    def hell(wert):
-        zahlen = [int(x) for x in wert.replace("rgb(", "").replace(")", "").split(",")[:3]]
-        return sum(zahlen) / 3
-
-    # Die Schrift ist ÜBERALL weiß — das ist der Gewinn des Rings.
-    for rolle in ("anker", "nachbar", "neu"):
-        assert hell(farben[rolle]["schrift"]) > 200, (rolle, farben[rolle])
-    # Und die drei Ringe tragen drei verschiedene Farben.
-    raender = {farben[k]["rand"] for k in farben}
-    assert len(raender) == 3, raender
-
+    assert farben, "keine Begriffe im Bild"
+    for f in farben:
+        assert f["ist"].replace(" ", "") == f["soll"].replace(" ", ""), (
+            f"die Beschriftung ist eingefaerbt: {f}"
+        )
 
 def test_ruhende_begriffe_treten_zurueck(wall):
     """Farbe ist Funktion: Nur die fünf Begriffe, aus denen das Bild entsteht,

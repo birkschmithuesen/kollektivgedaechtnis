@@ -1,4 +1,4 @@
-import { newNodeIds, toCytoscape, visibleGraph } from './graph-model.js';
+import { boxDaten, newNodeIds, toCytoscape, visibleGraph } from './graph-model.js';
 import { LINE_HEIGHT } from './term-plate.js';
 import { Camera } from './camera.js';
 
@@ -140,12 +140,22 @@ function styleSchwarzplan() {
         'background-color': '#000000',
         'background-opacity': cssVar('--term-plate-idle-opacity', '0.35'),
         'border-width': cssVar('--term-ring-width', '1.5'),
-        'border-color': cssVar('--term-ring-idle', '#6E6656'),
+        // Die Farbe trägt seit dem 2026-09-03 die Häufigkeit (haeufigFarbe).
+        // Unterhalb der Schwelle ist das die Wandfarbe von vorher.
+        'border-color': (ele) => haeufigFarbe(ele),
         'border-opacity': 0.85,
+        // Der Hof leuchtet nur bei den oft Gesagten — und nur so stark, wie
+        // sie oft sind. Unter der Schwelle ist er unsichtbar (Deckkraft 0).
+        'underlay-color': (ele) => haeufigFarbe(ele),
+        'underlay-opacity': (ele) => haeufigGlanz(ele),
+        'underlay-padding': cssVar('--plate-glow-padding', '10'),
+        'underlay-corner-radius': cssVar('--plate-radius-glow', '28'),
         label: 'data(label)',
         color: cssVar('--label-color', '#FFFFFF'),
         'font-family': FF,
-        'font-size': FS,
+        // Die Haeufigkeit steht in der Schriftgroesse (haeufigSchrift).
+        // Ohne Hervorhebung liefert sie den Grundwert aus dem Theme.
+        'font-size': (ele) => haeufigSchrift(ele),
         'text-valign': 'center',
         'text-halign': 'center',
         'text-wrap': 'wrap',
@@ -164,6 +174,64 @@ function styleSchwarzplan() {
        hergibt — ganz ohne Größenänderung, die Birk zu Recht verworfen hat.
        text-outline-width: 0, weil eine schwarze Kontur auf einer Farbtafel
        die Schrift nur verschmutzt. */
+    {
+      // ---------------------------------------------------------------------
+      // Haeufigkeit als GROESSE (Birk, 2026-09-02)
+      // ---------------------------------------------------------------------
+      // 🔴 Warum Groesse und nicht Farbe: Die drei Bauhaus-Farben tragen an
+      // dieser Wand bereits die Traumrollen (rot/blau/gelb, siehe unten). Eine
+      // zweite Bedeutung auf demselben Kanal machte beide unlesbar. Groesse
+      // ist ein freier Kanal und liest sich ohne Legende als „mehr" — so macht
+      // es auch Obsidian, dessen Graphansicht hier Vorbild war.
+      //
+      // `mapData` skaliert linear zwischen zwei Nennungszahlen. Die Obergrenze
+      // ist bewusst niedrig (6): Am Ausstellungstag hatte der haeufigste
+      // Begriff sechs Nennungen, und ein Deckel darueber liesse alles
+      // darunter gleich klein aussehen. Cytoscape klemmt von selbst, ein
+      // Begriff mit zwoelf Nennungen wird also nicht groesser als einer mit
+      // sechs — gewollt, sonst frisst ein Spitzenreiter die Wand.
+      selector: 'node.term',
+      style: {
+        // 🔴 Die TAFEL hat Vorrang. In theme-f ist ein Begriff eine Flaeche,
+        // deren Maße aus der Laenge seines Wortes kommen (`data(boxW)`), und
+        // fcose rechnet mit genau dieser Flaeche. Eine feste Groesse hier
+        // machte alle Tafeln gleich breit — gemessen: „lang" und „kurz" beide
+        // 34 px, und `test_die_tafel_folgt_der_laenge_des_begriffs` wurde rot.
+        //
+        // Wo es keine Tafel gibt (die Punkt-Themes), traegt die Groesse die
+        // Haeufigkeit. Der Kanal ist dort frei, und Obsidian macht es genauso.
+        width: (ele) => ele.data('boxW') ?? punktGroesse(ele),
+        height: (ele) => ele.data('boxH') ?? punktGroesse(ele),
+        // Und der Kanal, der IN BEIDEN Darstellungen frei ist: die Randstaerke.
+        // Sie waechst mit den Nennungen, ohne die Geometrie anzufassen, mit
+        // der das Layout rechnet.
+        'border-width': (ele) => randStaerke(ele),
+      },
+    },
+    {
+      // ---------------------------------------------------------------------
+      // Hervorheben, was zusammenhaengt (Birk, 2026-09-02)
+      // ---------------------------------------------------------------------
+      // Ein Tipp auf einen Knoten laesst ihn und seine direkten Verbindungen
+      // stehen, alles andere tritt zurueck (`nachbarschaft.js`).
+      //
+      // 🔴 NUR ueber Deckkraft, nicht ueber Farbe — aus demselben Grund wie
+      // oben: Die Farben sind belegt. Zuruecktreten heisst hier blasser
+      // werden, nicht anders sein.
+      //
+      // 0.12 ist fuer den Beamer gewaehlt: im Raum noch als „da, aber nicht
+      // gemeint" erkennbar. Darunter verschwindet der Graph und die Wand
+      // wirkt leer.
+      selector: '.abseits',
+      style: { opacity: 0.12 },
+    },
+    {
+      // Das Angetippte und seine Nachbarn bleiben voll da. Eine eigene Regel
+      // und nicht nur „nicht abseits": So kann ein Theme sie zusaetzlich
+      // betonen, ohne die Deckkraft-Regel anzufassen.
+      selector: '.nachbar',
+      style: { opacity: 1 },
+    },
     {
       selector: 'node.term.in-dream',
       style: {
@@ -188,33 +256,21 @@ function styleSchwarzplan() {
       },
     },
 
-    /* Die drei Achsen. Die Schriftfarbe ist NICHT frei wählbar, sondern
-       folgt dem Kontrast auf der jeweiligen Fläche (gemessen, WCAG):
-         auf Rot  #D62828 : Weiß  5.01:1   ok
-         auf Blau #1D4E9C : Weiß  8.01:1   ok
-         auto Gelb #F4C300: Weiß  1.66:1   UNLESBAR -> Schwarz 12.65:1
-       Deshalb trägt Gelb schwarze Schrift. Das ist keine Stilfrage. */
-    {
-      selector: 'node.term.dream-anchor',
-      style: {
-        'border-color': cssVar('--dream-anchor-color', '#D62828'),
-        'underlay-color': cssVar('--dream-anchor-color', '#D62828'),
-      },
-    },
-    {
-      selector: 'node.term.dream-neighbour',
-      style: {
-        'border-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
-        'underlay-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
-      },
-    },
-    {
-      selector: 'node.term.dream-recent',
-      style: {
-        'border-color': cssVar('--dream-recent-color', '#F4C300'),
-        'underlay-color': cssVar('--dream-recent-color', '#F4C300'),
-      },
-    },
+    /* 🔴 DIE DREI TRAUMFARBEN SIND WEG (Birk, 2026-09-03: „die farbige
+       markierung (rot/blau/gelb) soll jetzt weg und auch die dazugehörige
+       legende. bzw. du kannst das color coding jetzt nutzen um häufig genannte
+       begriffe zu highlighten").
+
+       Sie zeigten, welche Begriffe gerade ins Traumbild gehen — eine
+       Unterscheidung, die nur versteht, wer die Kopplung kennt. Die Farbe
+       trägt jetzt die Häufigkeit, und die erklärt sich beim Hinsehen: Was oft
+       gesagt wurde, leuchtet.
+
+       Die Klassen `dream-anchor`/`-neighbour`/`-recent` bleiben am Knoten —
+       sie sind Daten, kein Stil, und `test_export_in_dream.py` prüft sie. Nur
+       gemalt wird nichts mehr daraus.
+
+       Wo die Häufigkeit gemalt wird, steht bei `haeufigFarbe()` weiter unten. */
 
     /* ---- KANTEN: Bögen statt Schnüre -------------------------------------
        unbundled-bezier mit zwei Kontrollpunkten aus edgeCurve(). Weil die
@@ -340,31 +396,15 @@ function style() {
         'z-index': 10,
       },
     },
+    /* Auch hier tragen die drei Bauhaus-Grundfarben seit dem 2026-09-03 nicht
+       mehr die Traumachsen (Birk: „die farbige markierung soll jetzt weg").
+       In dieser Darstellung ist der Begriff ein Punkt mit Schrift daneben —
+       die Häufigkeit steht deshalb in der SCHRIFTFARBE, nicht im Rahmen: Der
+       Punkt verschwindet, sobald ein Portrait davor liegt. */
     {
-      // Die drei Bauhaus-Grundfarben tragen die drei Auswahlachsen aus
-      // `kg2.weighting.select_required`, damit an der Wand ablesbar ist,
-      // WARUM ein Begriff im Bild ist. Rot = Anker (das Zentrum des
-      // Ausschnitts), Blau = seine Nachbarschaft, Gelb = das gerade erst
-      // Gesagte. Punkt UND Schrift nehmen die Farbe an: Der Punkt allein
-      // verschwindet, sobald ein Portrait davor liegt.
-      selector: 'node.term.dream-anchor',
+      selector: 'node.term',
       style: {
-        'background-color': cssVar('--dream-anchor-color', '#D62828'),
-        color: cssVar('--dream-anchor-color', '#D62828'),
-      },
-    },
-    {
-      selector: 'node.term.dream-neighbour',
-      style: {
-        'background-color': cssVar('--dream-neighbour-color', '#1D4E9C'),
-        color: cssVar('--dream-neighbour-color', '#1D4E9C'),
-      },
-    },
-    {
-      selector: 'node.term.dream-recent',
-      style: {
-        'background-color': cssVar('--dream-recent-color', '#F4C300'),
-        color: cssVar('--dream-recent-color', '#F4C300'),
+        color: (ele) => haeufigTextFarbe(ele),
       },
     },
     {
@@ -467,10 +507,158 @@ const PORTRAIT_ZOOM_TOLERANCE = 0.01;
  * 12k..120k on the seeded graph; 480 / 120000 is the cheapest pair the passes
  * below then clear to zero overlaps.
  */
+/** Wie gross ein Begriffs-PUNKT wird: mit den Nennungen (Birk, 2026-09-02).
+ *
+ * „Ausserdem sollen Begriffe, die oft genannt werden, farbig markiert werden"
+ * — als Kanal wurde die GROESSE gewaehlt und nicht die Farbe, weil die drei
+ * Bauhaus-Farben an dieser Wand schon die Traumrollen tragen. Zwei Bedeutungen
+ * auf einem Kanal machten beide unlesbar.
+ *
+ * Der Deckel bei sechs Nennungen ist gemessen: So oft wurde der haeufigste
+ * Begriff am Ausstellungstag genannt. Ohne Deckel frisst ein Spitzenreiter
+ * spaeter die Wand, und alles darunter sieht gleich klein aus.
+ */
+function punktGroesse(ele) {
+  const grund = Number(cssVar('--term-dot', '14')) || 14;
+  const n = Math.max(1, Math.min(6, Number(ele.data('mentions')) || 1));
+  return grund + ((n - 1) / 5) * grund * 1.4;
+}
+
+/** Die Randstaerke traegt die Haeufigkeit dort, wo die Groesse schon vergeben
+ * ist — bei den Tafeln von theme-f. Sie faellt weniger auf als die Groesse,
+ * ist aber der einzige Kanal, der in BEIDEN Darstellungen frei ist. */
+function randStaerke(ele) {
+  const grund = Number(cssVar('--term-ring-width', '1.5')) || 1.5;
+  const n = Math.max(1, Math.min(6, Number(ele.data('mentions')) || 1));
+  return grund * (1 + ((n - 1) / 5) * 1.6);
+}
+
+/** Die drei Schwellen der Häufigkeit (Birk, 2026-09-03: „blau min 3 mal
+ * genannt, gelb öfter, rot am meisten. definiere sinnvolle schwellen").
+ *
+ * 🔴 AN DER ECHTEN VERTEILUNG GEWÄHLT, nicht gerundet. So lagen die 68
+ * Begriffe am Ende des zweiten Ausstellungstages:
+ *
+ *     1× genannt  42        5× 3
+ *     2× genannt   9        6× 2
+ *     3× genannt   5        7× 2
+ *     4× genannt   2        8× 1   9× 1
+ *
+ * Die Masse liegt bei eins und zwei — das ist der Normalfall eines Gesprächs
+ * und trägt keine Farbe. Ab drei wird es ein Thema, und die 16 Begriffe
+ * darüber teilen sich in drei ähnlich große Gruppen:
+ *
+ *     blau   3–4   7 Begriffe    „mehrere haben das gesagt"
+ *     gelb   5–6   5 Begriffe    „das kam immer wieder"
+ *     rot    7+    4 Begriffe    „darum ging es an diesem Tag"
+ *
+ * Rot bleibt damit selten (4 von 68) — eine Auszeichnung, die ein Drittel
+ * trifft, zeichnet nichts mehr aus. */
+const BLAU_AB = 3;
+const GELB_AB = 5;
+const ROT_AB = 7;
+
+/** Womit die Häufigkeit hervorgehoben wird.
+ *
+ * 🔴 UMSCHALTBAR, weil beide Varianten an einem Tag gebaut wurden und Birk sie
+ * vergleichen wollte („nimm das color coding wieder raus. bzw. deaktiviere es,
+ * ich will mir die andere variante angucken"). Wer zurückwill, setzt hier
+ * `'farbe'` — beide Wege sind vollständig und getestet.
+ *
+ *   'groesse'  die Schrift wächst mit der Häufigkeit (seit 2026-09-03 aktiv)
+ *   'farbe'    drei Stufen blau/gelb/rot */
+const HERVORHEBUNG = 'groesse';
+
+/** Die Schriftgröße eines Begriffs — Grundgröße, bis zum Doppelten.
+ *
+ * Warum nicht mehr: Bei 26 px Grund und 52 px Spitze steht der häufigste
+ * Begriff doppelt so groß da wie eine Einmal-Nennung; das ist auf zwölf Meter
+ * deutlich und lässt die Tafel noch in die Fläche passen. Der Deckel liegt
+ * bei denselben 6 Nennungen wie bei Größe und Randstärke — ein einzelner
+ * Spitzenreiter soll die Skala nicht für sich nehmen.
+ *
+ * Unterhalb der ersten Schwelle bleibt die Grundgröße stehen: Was einer gesagt
+ * hat, soll aussehen wie das, was es ist. */
+function haeufigSchrift(ele) {
+  const grund = Number(cssVar('--label-size', '26')) || 26;
+  if (HERVORHEBUNG !== 'groesse') return grund;
+  const n = Number(ele.data('mentions')) || 1;
+  if (n < BLAU_AB) return grund;
+  // 🔴 DIE STUFE MUSS BEI DER SCHWELLE SCHON SICHTBAR SEIN (gefunden durch den
+  // eigenen Test, 2026-09-03): Die erste Fassung rechnete
+  // `(n - BLAU_AB) / (6 - BLAU_AB)` und ergab bei genau drei Nennungen exakt
+  // die Grundgroesse — der Begriff, der eben erst zum Thema geworden ist, sah
+  // aus wie eine Einmal-Nennung. Die Skala setzt deshalb bei 1,3 an und laeuft
+  // bis zum Doppelten.
+  const gedeckelt = Math.min(6, n);
+  const anteil = (gedeckelt - BLAU_AB) / (6 - BLAU_AB);
+  return grund * (1.3 + anteil * 0.7);
+}
+
+/** Die Farbe trägt die Häufigkeit — in drei Stufen, nicht in der Deckkraft.
+ *
+ * Die erste Fassung vom selben Tag arbeitete mit einer Farbe und steigender
+ * Deckkraft. Das ist zurückgenommen (Birk: „nicht die deckkraft, sondern die
+ * farben"): Auf einer Wand, die man aus mehreren Metern liest, ist ein
+ * Farbwechsel auf einen Blick zu sehen, ein Deckkraftunterschied nicht.
+ *
+ * Unterhalb der ersten Schwelle bleibt die Wandfarbe stehen; ein Begriff, den
+ * einer gesagt hat, soll aussehen wie das, was er ist. */
+function haeufigFarbe(ele) {
+  if (HERVORHEBUNG !== 'farbe') return cssVar('--term-ring', '#8a8a8a');
+  const n = Number(ele.data('mentions')) || 1;
+  if (n >= ROT_AB) return cssVar('--haeufig-rot', '#D62828');
+  if (n >= GELB_AB) return cssVar('--haeufig-gelb', '#F4C300');
+  if (n >= BLAU_AB) return cssVar('--haeufig-blau', '#1D4E9C');
+  return cssVar('--term-ring', '#8a8a8a');
+}
+
+/** Die SCHRIFTfarbe eines Begriffs in der Punktdarstellung.
+ *
+ * 🔴 EIGENE FUNKTION und nicht `haeufigFarbe` (gefunden 2026-09-03 durch
+ * `test_every_graph_theme_paints_pure_black_and_pure_white`): Jene liefert bei
+ * abgeschalteter Farbhervorhebung die RINGfarbe `--term-ring` (#8a8a8a) — als
+ * Schriftfarbe eingesetzt stand die Beschriftung dann grau statt weiss auf der
+ * Wand. Ohne Farbhervorhebung gilt hier die Beschriftungsfarbe des Themes,
+ * sonst nichts.
+ *
+ * Warum die Schrift und nicht der Rahmen: In dieser Darstellung ist der
+ * Begriff ein Punkt mit Schrift daneben, und der Punkt verschwindet, sobald
+ * ein Portrait davor liegt. */
+function haeufigTextFarbe(ele) {
+  if (HERVORHEBUNG !== 'farbe') return cssVar('--label-color', '#FFFFFF');
+  return haeufigFarbe(ele);
+}
+
+/** Der Hof: an oder aus, und in derselben Stärke für alle drei Stufen.
+ *
+ * Eine feste Deckkraft, weil die Stufe jetzt in der FARBE steckt — ein
+ * zusätzlicher Verlauf würde zwei Dinge gleichzeitig sagen und beide
+ * schwächer. Er hebt die ausgezeichneten Begriffe vom Grund ab, mehr nicht. */
+function haeufigGlanz(ele) {
+  if (HERVORHEBUNG !== 'farbe') return 0;
+  const n = Number(ele.data('mentions')) || 1;
+  return n >= BLAU_AB ? 0.28 : 0;
+}
+
 export const LAYOUT = {
   name: 'fcose',
   quality: 'proof',
-  randomize: false,
+  // 🔴 randomize: TRUE seit dem 2026-09-02 (Birk, am Ausstellungstag, nachdem
+  // er die neu gewuerfelte Anordnung gesehen hatte: „das sieht gut aus. lass
+  // das so").
+  //
+  // Der Kommentar oben nennt `randomize: false` „THE anti-jump guarantee" —
+  // dieser Preis ist bekannt und bezahlt: Bei jedem neuen Interview sortiert
+  // sich das ganze Netz um, statt nur einen Knoten aufzunehmen. Die
+  // 2,5-Sekunden-Migration macht daraus eine Bewegung statt eines Schnitts.
+  //
+  // Der Prerender und die Tests brauchen die alte Zusage weiter: Sie schiessen
+  // Referenzaufnahmen und vergleichen zwei Laeufe. `?deterministisch=1` gibt
+  // sie ihnen zurueck, ohne die Wand anzufassen.
+  randomize: !new URLSearchParams(
+    typeof window === 'undefined' ? '' : window.location.search,
+  ).has('deterministisch'),
   animate: false,
   fit: false,
   padding: PADDING,
@@ -990,6 +1178,66 @@ const LOOSEN_ATTEMPTS = 8;
  * layout-utilities option shapes a single connected component to an aspect
  * ratio (`desiredAspectRatio` applies to randomized component PACKING only).
  */
+/** Überdeckungen auflösen, mit so wenig Bewegung wie möglich.
+ *
+ * Zwei Werkzeuge im Wechsel, weil keines allein genügt:
+ *
+ *   `separateOverlappingNodes`  schiebt lokal auseinander, hält die Form —
+ *                               steckt aber fest, wenn es zu eng ist
+ *   ein leichtes Spreizen       schafft Luft, hält jedes Verhältnis —
+ *                               bläht aber auf, wenn man es allein macht
+ *
+ * Erst trennen, dann (nur falls nötig) eine Spur spreizen und wieder trennen.
+ * So bleibt die Anordnung so dicht, wie sie sein kann, ohne unlesbar zu sein.
+ *
+ * Der Deckel: Zwei Knoten, die im Kern dieselbe Lage bekommen haben, lassen
+ * sich durch kein Spreizen trennen — ohne Grenze liefe die Schleife ewig.
+ * Acht Runden à 8 % sind höchstens das 1,85-fache. */
+export function loeseUeberdeckungen(cy, { schritt = 1.08, runden = 8 } = {}) {
+  separateOverlappingNodes(cy);
+  for (let i = 0; i < runden; i += 1) {
+    if (ueberlappungen(cy) === 0) return;
+    const bb = cy.nodes().boundingBox();
+    const mx = (bb.x1 + bb.x2) / 2;
+    const my = (bb.y1 + bb.y2) / 2;
+    cy.batch(() => {
+      cy.nodes().forEach((n) => {
+        const at = n.position();
+        n.position({ x: mx + (at.x - mx) * schritt, y: my + (at.y - my) * schritt });
+      });
+    });
+    separateOverlappingNodes(cy);
+  }
+}
+
+/** Wie viele Knotenpaare sich überdecken — Beschriftungen eingerechnet.
+ *
+ * Grob und absichtlich billig: Ein Rechteckschnitt über alle Paare, bei 94
+ * Knoten rund 4400 Vergleiche, das kostet unter einer Millisekunde. Es geht
+ * nicht darum, WIE stark sich zwei überdecken, sondern nur darum, ob es etwas
+ * zu tun gibt.
+ *
+ * Zwei Pixel Toleranz, weil sich Kästchen an ihrer Kante berühren dürfen —
+ * ohne die zählte jede Nachbarschaft als Kollision und die Entzerrung liefe
+ * bei jedem Push. */
+export function ueberlappungen(cy) {
+  const boxen = cy.nodes().map((n) => n.renderedBoundingBox({ includeLabels: true }));
+  let zahl = 0;
+  for (let i = 0; i < boxen.length; i++) {
+    for (let j = i + 1; j < boxen.length; j++) {
+      const a = boxen[i];
+      const b = boxen[j];
+      if (
+        Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 2 &&
+        Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 2
+      ) {
+        zahl += 1;
+      }
+    }
+  }
+  return zahl;
+}
+
 export function settlePlacement(cy, { inkFraction = null } = {}) {
   // Die Zieldichte ist THEMENABHAENGIG — der Kommentar an TARGET_INK_FRACTION
   // sagt es selbst: „der Kliff bewegt sich mit dem Theme". Der Wert 0.35 ist
@@ -1629,7 +1877,9 @@ export function createGraphView(
     const arriving = newNodeIds(present, view);
     const returning = arriving.filter((id) => !placed.has(id) && lastSeen.has(id));
     const fresh = arriving.filter((id) => !placed.has(id) && !lastSeen.has(id));
-    const toAdd = toCytoscape(view).filter((el) => cy.$id(el.data.id).length === 0);
+    const toAdd = toCytoscape(view, {
+      schriftFuer: (node) => haeufigSchrift({ data: (k) => node[k] }),
+    }).filter((el) => cy.$id(el.data.id).length === 0);
     if (toAdd.length) cy.add(toAdd);
 
     // Die Hervorhebung der Traumbegriffe muss auch an Knoten nachgezogen
@@ -1656,6 +1906,78 @@ export function createGraphView(
         element.data('in_dream', soll);
         element.data('dream_role', node.dream_role || '');
       }
+    }
+
+    // 🔴 UND AUS DEMSELBEN GRUND: Etikett, Haeufigkeit und Tafelmass eines
+    // Begriffs, der schon haengt (Birk, 2026-09-03).
+    //
+    // Gefunden an der Wand: „Der Node existiert jetzt nicht mehr. Er war
+    // vorher von Maxi Schaeffe und hat sich nun mit René Gabriel connected und
+    // dabei ein neues Label bekommen. Dieses neue Label war aber noch nicht im
+    // Node." — Am Knoten stand das alte Wort, waehrend die Tafel daneben schon
+    // das neue zeigte. Zwei Anzeigen desselben Begriffs, die sich
+    // widersprechen.
+    //
+    // Die Ursache ist dieselbe wie oben: `toCytoscape` setzt diese Felder nur
+    // beim ANLEGEN, und `toAdd` filtert alles heraus, was es schon gibt. Ein
+    // Begriff aendert sein Etikett aber jedes Mal, wenn zwei zusammengelegt
+    // werden — also mehrmals am Tag.
+    //
+    // `mentions` gehoert dazu und wiegt genauso schwer: Die Groesse und die
+    // Randstaerke der Tafel haengen daran (`punktGroesse`, `randStaerke`, Birk
+    // 2026-09-02: „Begriffe, die oft genannt werden, sollen farbig markiert
+    // werden"). Ohne das Nachziehen friert ein Begriff auf der Haeufigkeit
+    // ein, die er beim ersten Erscheinen hatte, und waechst nie mit.
+    //
+    // Das Tafelmass zuletzt, und nur bei einer Aenderung: Es wird gemessen
+    // (`boxDaten` -> `termBox`), und das ist die teuerste Rechnung hier.
+    for (const node of view.nodes) {
+      if (node.type !== 'term') continue;
+      const element = cy.$id(node.id);
+      if (element.length === 0) continue;
+      const label = node.label || '';
+      if (element.data('label') !== label) {
+        element.data('label', label);
+        const mass = boxDaten(label, haeufigSchrift(element));
+        if (mass.boxW !== undefined) element.data('boxW', mass.boxW);
+        if (mass.boxH !== undefined) element.data('boxH', mass.boxH);
+      }
+      const mentions = node.mentions || 0;
+      if (element.data('mentions') !== mentions) {
+        element.data('mentions', mentions);
+        // 🔴 Traegt die Schrift die Haeufigkeit, aendert eine neue Nennung auch
+        // das Mass der Tafel — sonst stuende der groessere Text in der alten
+        // Kiste (gefunden beim Umbau am 2026-09-03).
+        const mass = boxDaten(node.label || '', haeufigSchrift(element));
+        if (mass.boxW !== undefined) element.data('boxW', mass.boxW);
+        if (mass.boxH !== undefined) element.data('boxH', mass.boxH);
+      }
+    }
+
+    // 🔴 UND WENN TAFELN GEWACHSEN SIND, MUSS ENTZERRT WERDEN (Birk,
+    // 2026-09-03: „die größeren begriffe überlappen sich mit profilbildern und
+    // anderen begriffen").
+    //
+    // Seit die Schrift die Häufigkeit trägt, ändert eine neue Nennung die
+    // GRÖSSE einer Tafel — die Positionen daneben stammen aber aus einem
+    // Layout, das mit der alten gerechnet hat. `settlePlacement` läuft sonst
+    // nur nach einem vollen Layout (`migrate`), und das gibt es bei einem
+    // Push ohne neue Knoten nicht. Gemessen am Bestand des Tages: 4
+    // überlappende Paare vorher, 34 nachher.
+    //
+    // Geprüft wird das ERGEBNIS und nicht, ob sich Daten geändert haben: Beim
+    // ersten Aufbau kommen die Positionen gespeichert vom Kern, es gibt also
+    // kein „vorher" zu vergleichen — die Überlappung ist trotzdem da. So
+    // heilt sich das Bild auch nach einem Umbau wie dem heutigen von selbst.
+    if (!migration && ueberlappungen(cy) > 0) {
+      // 🔴 `separateOverlappingNodes` und NICHT `settlePlacement` (gemessen
+      // 2026-09-03): Jenes normalisiert die Dichte und zieht die Wolke auf ein
+      // Zielseitenverhaeltnis — in der Bedeutungsansicht blies das ein eben
+      // erst auf 1905x2072 zusammengeruecktes Netz wieder auf 6013x3393 auf,
+      // also genau das, was Birk mit „das netz sollte dichter werden" meinte.
+      // Hier ist ohnehin nur zu tun, was sich beruehrt: auseinanderschieben.
+      loeseUeberdeckungen(cy);
+      persist();
     }
 
     // Aus demselben Grund muss ein NACHGEREICHTES Portrait nachgezogen werden
@@ -1895,3 +2217,102 @@ export function createGraphView(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Zwei Anordnungen, ein Knopf (Birk, 2026-09-02)
+// ---------------------------------------------------------------------------
+//
+// 🔴 „Unsere Kraft behauptet soziale Nähe und nicht semantische Nähe. Es wäre
+// cool, im Graph mit Button zwischen sozialer und semantischer Nähe hin- und
+// herschalten zu können."
+//
+// SOZIAL ist, was das Layout hier rechnet: zwei Begriffe liegen beieinander,
+// weil dieselben Menschen sie gesagt haben (fcose, Federn und Abstossung).
+// SEMANTISCH kommt aus dem Kern (`kg/semantik.py`, t-SNE über die Embeddings):
+// beieinander liegt, was dasselbe MEINT — auch wenn es von verschiedenen
+// Menschen kam.
+//
+// Der Wechsel ist kein Sprung, sondern die vorhandene Migration: dieselbe
+// 2,5-Sekunden-Fahrt, mit der ein neues Interview ins Netz gleitet. Was man
+// dabei sieht, IST die Aussage — welche Begriffe sich aus der sozialen Ordnung
+// lösen und zu ihresgleichen wandern.
+
+/** Hat der Graph überhaupt eine semantische Anordnung? Ohne Embeddings, mit zu
+ * wenigen Begriffen oder nach einer gescheiterten Rechnung liefert der Kern
+ * keine — dann darf der Knopf gar nicht erst erscheinen. */
+export function hatSemantischeLage(cy) {
+  return cy.nodes().some((n) => typeof n.data('sx') === 'number');
+}
+
+/** Die Knoten auf die semantische bzw. soziale Anordnung setzen.
+ *
+ * Knoten OHNE semantische Lage (ein Begriff, dessen Embedding noch nicht
+ * erzeugt ist; eine Person ohne Begriffe) bleiben, wo sie sind, statt in die
+ * Mitte zu fallen — dort lägen sie auf einem Haufen und sähen aus wie eine
+ * Aussage, die sie nicht sind. */
+export function setzeAnordnung(cy, semantisch) {
+  if (!semantisch) {
+    // Zurück: das soziale Layout neu rechnen zu lassen wäre teuer und
+    // brächte durch `randomize: true` obendrein eine ANDERE Anordnung als
+    // die, von der man kam. Deshalb die gemerkten Positionen.
+    cy.nodes().forEach((n) => {
+      const zuhause = n.scratch('_sozial');
+      if (zuhause) n.position({ ...zuhause });
+    });
+    return;
+  }
+  cy.nodes().forEach((n) => {
+    // Beim ERSTEN Wechsel merken, wo der Knoten sozial stand.
+    if (!n.scratch('_sozial')) n.scratch('_sozial', { ...n.position() });
+    const sx = n.data('sx');
+    const sy = n.data('sy');
+    if (typeof sx === 'number' && typeof sy === 'number') n.position({ x: sx, y: sy });
+  });
+  // 🔴 AUFRAEUMEN, aber OHNE die Anordnung zu verzerren (Birk sah es an der
+  // Wand, 2026-09-02: „in der semantischen Ansicht ueberlappten die
+  // Beschriftungen" — und am 2026-09-03: „wenn ich die sortierung nach
+  // bedeutung anklicke sind einige begriffe ganz weit aussen und machen den
+  // graphen unnoetig gross").
+  //
+  // 🔴 HIER STAND `settlePlacement(cy)` MIT DER BEGRUENDUNG, es fasse „die
+  // Knotenorte selbst nicht an, es verschiebt nur die Beschriftungen".
+  // GEMESSEN AM LAUFENDEN NETZ (2026-09-03) STIMMT DAS NICHT:
+  //
+  //     vor  settlePlacement:  5430 x 1408
+  //     nach settlePlacement:  7286 x 4111      Hoehe verdreifacht
+  //     alle 92 Knoten bewegt, der weiteste um 1541 Einheiten
+  //
+  // `settlePlacement` normalisiert die Dichte und zieht die Wolke auf ein
+  // Zielseitenverhaeltnis (`frameToAspect`). Die semantische Wolke ist flach —
+  // sie wurde dabei auseinandergerissen, und einzelne Knoten flogen auf das
+  // Neunfache des mittleren Abstands hinaus.
+  //
+  // Das darf hier nicht passieren: Bei der Bedeutungslage SIND die Abstaende
+  // die Aussage.
+  //
+  // 🔴 UND GLEICHMAESSIGES SPREIZEN IST AUCH FALSCH — der zweite Versuch vom
+  // selben Tag. Es haelt zwar jedes Verhaeltnis, kann eine Ueberdeckung in der
+  // dichten Mitte aber nur aufloesen, indem es ALLES aufblaeht: Am Bild
+  // gemessen blieb innen die Ueberlappung und aussen wuchs der Leerraum
+  // (Birk: „alles ist zu weit auseinander. das netz sollte dichter werden").
+  //
+  // Was wirkt, ist BEIDES ABWECHSELND (gemessen 2026-09-03):
+  //
+  //   nur trennen:   94 -> 85 -> 77 Ueberdeckungen, Netz bleibt 1905 breit
+  //
+  // Das Trennen allein kommt nicht durch, weil die Tafeln fuer die Wolke zu
+  // gross sind: Jeder Schub drueckt einen Nachbarn in einen dritten, und die
+  // Schleife steckt fest. Ein wenig Luft loest die Blockade, und danach kommt
+  // das Trennen wieder voran. Deshalb: eine Spur spreizen, trennen, wieder
+  // spreizen — bis nichts mehr uebereinanderliegt.
+  //
+  // 8 % je Runde ist absichtlich wenig: Was reicht, um die Klemme zu loesen,
+  // ohne die Wolke aufzublaehen. Aufhoeren, sobald es frei ist — bei diesem
+  // Bestand nach wenigen Runden.
+  loeseUeberdeckungen(cy);
+  // Und zuletzt die Etiketten, die sich immer noch beruehren koennen: Das ist
+  // der Teil, den der alte Kommentar meinte, und den `declutterLabels` auch
+  // wirklich nur tut.
+  declutterLabels(cy);
+}
+

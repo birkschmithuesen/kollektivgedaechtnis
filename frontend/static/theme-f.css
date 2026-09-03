@@ -167,6 +167,13 @@
   --term-ring-dream-width: 3;
   --term-plate-dream-opacity: 0.55;
 
+  /* Die drei Stufen der Haeufigkeit (Birk, 2026-09-03: „blau min 3 mal
+     genannt, gelb oefter, rot am meisten"). Dieselben drei Bauhaus-Farben,
+     die vorher die Traumachsen trugen — jetzt sagen sie etwas, das man ohne
+     Legende versteht: je waermer, desto oefter gesagt. */
+  --haeufig-blau: var(--bauhaus-blau);
+  --haeufig-gelb: var(--bauhaus-gelb);
+  --haeufig-rot: var(--bauhaus-rot);
   --dream-anchor-color: var(--bauhaus-rot);
   --dream-neighbour-color: var(--bauhaus-blau);
   --dream-recent-color: var(--bauhaus-gelb);

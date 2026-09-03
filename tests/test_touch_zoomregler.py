@@ -382,9 +382,49 @@ def test_uebersicht_ist_weiterhin_der_ganze_rueckweg(flaeche):
     assert flaeche.evaluate("window.kgView.camera.handoverActive") is True
     # Und die Kalibrierung der Station ist dabei nicht angefasst worden.
     assert flaeche.evaluate("window.kgView.camera.minLabelPx") == 40
+    # 🔴 ERST NACH DER FAHRT (gemessen 2026-09-03): `resetZoom()` setzt den
+    # Griff sofort auf 0 — und `showZoom` (touch-controls.js) führt ihn danach
+    # JEDEN FRAME dem Kamerazoom nach, damit er nie etwas anderes anzeigt als
+    # das, was zu sehen ist. Solange der Handover läuft, gewinnt also die
+    # Fahrt, und der Griff wandert mit ihr nach links: 0,80 → 0,78 → … → 0.
+    #
+    # Beide Regeln sind richtig und widersprechen sich nur WÄHREND der Fahrt.
+    # Geprüft wird deshalb das Ende: Steht die Wand auf der Übersicht, steht
+    # der Griff am linken Anschlag. Die Mutationsprobe hält den Test scharf —
+    # ohne `resetZoom()` bleibt er bei 0,8 stehen, weil der Zoom dann gar nicht
+    # erst zurückfährt.
+    flaeche.wait_for_function(
+        "() => window.kgView.camera.handoverActive === false", timeout=15000
+    )
     assert flaeche.evaluate("document.getElementById('touch-zoom').value") == "0"
     assert flaeche.evaluate("window.kgTouch.autonomy.manual") is False
     assert flaeche.evaluate("window.kgFetches") == []
+
+
+def test_uebersicht_setzt_den_griff_sofort_zurueck(flaeche):
+    """🔴 Der zweite Teil desselben Auftrags, und er braucht einen eigenen Test
+    (Mutationsprobe, 2026-09-03).
+
+    Der Test darueber prueft das ERGEBNIS: Steht die Wand auf der Uebersicht,
+    steht der Griff links. Das erfuellt sich aber auch ohne `resetZoom()` —
+    `showZoom` fuehrt den Griff waehrend der Fahrt ohnehin nach unten mit, und
+    am Ende der Fahrt sind beide Wege gleich. Der Test dort ist fuer diese eine
+    Frage also blind, und das faellt nur auf, wenn man es prueft.
+
+    Hier wird deshalb der SOFORTIGE Sprung gemessen — das ist, was Birks
+    Begruendung meint: „Sonst stuende sein Griff nach dem Rueckfall bei 4x,
+    waehrend die Wand die Uebersicht zeigt" (touch-autonomy.js). Gemessen wird
+    ohne laufende Fahrt, denn nur dann sind die beiden Regeln unterscheidbar.
+    """
+    _ziehen(flaeche, 0.8)
+    assert flaeche.evaluate("document.getElementById('touch-zoom').value") == "0.8"
+
+    # Ohne den Umweg ueber „Uebersicht": genau der Griff, den `onRelease` tut.
+    flaeche.evaluate("() => window.kgTouch.controls.resetZoom()")
+
+    assert flaeche.evaluate("document.getElementById('touch-zoom').value") == "0", (
+        "der Griff bleibt stehen, wo der letzte Besucher ihn gelassen hat"
+    )
 
 
 def test_der_griff_ist_fuer_einen_finger_gebaut(flaeche):
@@ -394,6 +434,12 @@ def test_der_griff_ist_fuer_einen_finger_gebaut(flaeche):
     mehr, weil ein Finger dort nicht einmal treffen, sondern während einer
     ziehenden Bewegung auf der Bahn bleiben muss — auf einem IR-Panel, das
     Kontakte über dem Glas meldet, die schwerere Aufgabe.
+
+    🔴 SEIT DEM 2026-09-03 STEHT ER SENKRECHT (Birk: „den regler doch wieder
+    einblenden, aber dezenter am linken rand und vertikal unter dem qr code
+    über den buttons"). Damit sind die Achsen getauscht: Die BREITE ist jetzt
+    die Trefferzone, die HÖHE der Weg. Die beiden Zahlen bleiben, was sie
+    waren — sie wechseln nur die Seite.
     """
     masse = flaeche.eval_on_selector(
         "#touch-zoom",
@@ -402,8 +448,8 @@ def test_der_griff_ist_fuer_einen_finger_gebaut(flaeche):
              return { hoehe: kasten.height, breite: kasten.width };
            }""",
     )
-    assert masse["hoehe"] >= 48, f"die Trefferzone ist zu flach: {masse}"
-    assert masse["breite"] >= 240, f"der Reglerweg ist zu kurz: {masse}"
+    assert masse["breite"] >= 48, f"die Trefferzone ist zu schmal: {masse}"
+    assert masse["hoehe"] >= 240, f"der Reglerweg ist zu kurz: {masse}"
 
 
 def test_der_regler_liegt_in_der_bestehenden_bedienleiste(flaeche):
@@ -412,3 +458,66 @@ def test_der_regler_liegt_in_der_bestehenden_bedienleiste(flaeche):
     assert flaeche.evaluate(
         "document.getElementById('touch-zoom').closest('.touch-controls') !== null"
     )
+
+
+def test_der_regler_steht_senkrecht_am_linken_rand(flaeche):
+    """🔴 BIRK, 2026-09-03: „den regler doch wieder einblenden, aber dezenter am
+    linken rand und vertikal unter dem qr code über den buttons."
+
+    Vorgeschichte in einem Satz: Am selben Tag erst ausgeblendet, dann so
+    zurückgeholt. Er lag vorher rechts in der Bedienleiste — dort, wo seit der
+    Tafel kein Platz mehr ist.
+
+    Geprüft wird die LAGE zueinander und nicht auf feste Pixelwerte: Wandert
+    der QR-Code oder wächst die Leiste, soll der Test die Reihenfolge
+    einfordern, nicht eine Zahl von heute.
+    """
+    lage = flaeche.evaluate(
+        """() => {
+             const kasten = (s) => {
+               const el = document.querySelector(s);
+               if (!el) return null;
+               const b = el.getBoundingClientRect();
+               return {oben: b.top, unten: b.bottom, links: b.left, rechts: b.right,
+                       breite: b.width, hoehe: b.height};
+             };
+             return {
+               regler: kasten('.touch-zoom'),
+               qr: kasten('.qr-hinweis'),
+               leiste: kasten('.touch-controls'),
+               anzeige: getComputedStyle(document.querySelector('.touch-zoom')).display,
+               richtung: getComputedStyle(document.querySelector('.touch-zoom')).flexDirection,
+             };
+           }"""
+    )
+    assert lage["anzeige"] != "none", "der Regler ist nicht zu sehen"
+    # Senkrecht: hoeher als breit, und die Huelle stapelt statt zu reihen.
+    assert lage["regler"]["hoehe"] > lage["regler"]["breite"], (
+        f"der Regler liegt weiterhin waagerecht: {lage['regler']}"
+    )
+    assert lage["richtung"].startswith("column"), lage["richtung"]
+    # Am linken Rand, auf einer Linie mit dem QR-Code.
+    assert abs(lage["regler"]["links"] - lage["qr"]["links"]) < 40, (
+        f"Regler und QR-Code stehen nicht auf einer Linie: {lage}"
+    )
+    # Unter dem Code …
+    assert lage["regler"]["oben"] >= lage["qr"]["unten"], (
+        "der Regler liegt ueber oder auf dem QR-Code"
+    )
+    # … und ueber der Bedienleiste mit den Knoepfen.
+    assert lage["regler"]["unten"] <= lage["leiste"]["oben"] + 1, (
+        "der Regler ragt in die Knopfleiste"
+    )
+
+
+def test_der_regler_haelt_sich_zurueck_bis_ihn_jemand_anfasst(flaeche):
+    """„dezenter" — er soll da sein, ohne die Wand zu beanspruchen.
+
+    Halbe Deckkraft im Ruhezustand, volle beim Anfassen. Das ist der
+    Unterschied zwischen einem Bedienelement, das eine Ausstellungsfläche
+    teilt, und einem, das sie besetzt.
+    """
+    ruhe = flaeche.eval_on_selector(
+        ".touch-zoom", "(el) => parseFloat(getComputedStyle(el).opacity)"
+    )
+    assert 0.2 < ruhe < 1, f"der Regler ist nicht zurueckhaltend: {ruhe}"

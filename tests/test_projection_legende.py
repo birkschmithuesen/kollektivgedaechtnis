@@ -20,6 +20,22 @@ Der zweite und wichtigere Teil: Die Farben werden aus dem GELADENEN
 Stylesheet gelesen. Ein zweiter Satz Farbwerte im Code liefe auseinander,
 sobald jemand die Palette anfasst — und dann erklärte die Legende Farben,
 die an der Wand nicht mehr vorkommen. Das wäre schlimmer als keine Legende.
+
+## 🔴 Seit dem 2026-09-03 hängt sie nicht mehr an der Wand
+
+Birk, am Ende des zweiten Ausstellungstages: „die farbige markierung
+(rot/blau/gelb) soll jetzt weg und auch die dazugehörige legende. bzw. du
+kannst das color coding jetzt nutzen um häufig genannte begriffe zu
+highlighten."
+
+Damit ist der Anlass für die Legende entfallen: Die drei Traumachsen werden
+nicht mehr gemalt, und die eine Farbe, die geblieben ist (oft Gesagtes),
+erklärt sich beim Hinsehen.
+
+`legende.js` bleibt im Repo, und die Prüfungen an ihrem Quelltext bleiben es
+auch — wer den Farbcode zurückholt, braucht beides wieder. Was sich geändert
+hat, ist nur der Ort: Geprüft wird der BAUSTEIN, nicht mehr die Wand. Und ein
+Test hält fest, dass die Wand jetzt keine trägt.
 """
 
 import re
@@ -48,110 +64,111 @@ def _eintraege(page):
     )
 
 
-def test_die_drei_achsen_stehen_mit_birks_worten_da(wand):
-    eintraege = _eintraege(wand)
-    assert [e["wort"] for e in eintraege] == [
-        "oft genannt",
-        "Nachbarn",
-        "vor Kurzem gesagt",
-    ]
+def test_auf_der_wand_haengt_keine_legende_mehr(wand):
+    """🔴 BIRK, 2026-09-03: „die farbige markierung (rot/blau/gelb) soll jetzt
+    weg und auch die dazugehörige legende."
 
+    Sie deutete die drei Traumachsen. Die werden nicht mehr gemalt — eine
+    Legende zu Farben, die es nicht gibt, wäre schlimmer als keine (derselbe
+    Satz stand vorher im Kopf dieser Datei, nur andersherum gemeint).
 
-def test_jeder_punkt_traegt_die_farbe_die_der_graph_benutzt(wand):
-    """Der eigentliche Zweck: die Legende muss DIESELBEN Farben zeigen wie die
-    Begriffe an der Wand. Deshalb gegen die CSS-Variablen des Themes geprüft
-    und nicht gegen fest notierte Werte — ein Test mit eigenen Farbwerten
-    bliebe grün, während die Legende längst etwas anderes erklärt."""
-    aus_theme = wand.evaluate(
-        """() => {
-             const s = getComputedStyle(document.documentElement);
-             const p = document.createElement('span');
-             document.body.appendChild(p);
-             // Über den Umweg eines echten Elements, damit der Vergleich in
-             // derselben Einheit (rgb(...)) läuft wie die gemessenen Punkte.
-             return ['--dream-anchor-color', '--dream-neighbour-color', '--dream-recent-color']
-               .map((v) => {
-                 p.style.background = s.getPropertyValue(v).trim();
-                 return getComputedStyle(p).backgroundColor;
-               });
-           }"""
-    )
-    assert [e["farbe"] for e in _eintraege(wand)] == aus_theme
-
-
-def test_die_legende_ist_keine_bedienung(wand):
-    """Die Konzeptgrenze: keine Klickfläche, kein Kasten, kein Titel.
-
-    `pointer-events: none` ist der load-bearing Teil — die Wand ist auf der
-    Touchfläche bedienbar, und eine Einblendung unten links darf einer
-    Besucherin niemals eine Berührung wegnehmen."""
-    stil = wand.evaluate(
-        """() => {
-             const l = document.querySelector('.dream-legende');
-             const s = getComputedStyle(l);
-             return {
-               pointer: s.pointerEvents,
-               hintergrund: s.backgroundColor,
-               rahmen: s.borderStyle,
-               knoepfe: l.querySelectorAll('button, a, input').length,
-               ueberschriften: l.querySelectorAll('h1,h2,h3,h4,h5,h6').length,
-             };
-           }"""
-    )
-    assert stil["pointer"] == "none", "die Legende fängt Berührungen ab"
-    assert stil["knoepfe"] == 0, "die Legende ist bedienbar geworden"
-    assert stil["ueberschriften"] == 0, "die Legende hat eine Überschrift bekommen"
-    # Kein Kasten: durchsichtiger Hintergrund, kein sichtbarer Rahmen.
-    assert stil["hintergrund"] in ("rgba(0, 0, 0, 0)", "transparent")
-    assert stil["rahmen"] == "none"
-
-
-def test_die_legende_verdeckt_das_zitat_nicht(wand):
-    """Unten Mitte liegt das Zitat, unten links die Legende. Überschnitten sie
-    sich, verdeckte die kleinere Einblendung die größere Aussage.
-
-    Das Zitat muss dafür ERST SICHTBAR GEMACHT werden. Die erste Fassung dieses
-    Tests maß die Karte im Ruhezustand — und die ist dann 0x0 Pixel groß
-    (gemessen: x=0 y=0 b=0 h=0, opacity 0), weil sie erst beim Antippen einer
-    Person Inhalt und Ausdehnung bekommt. Mit einem Rechteck ohne Fläche kann
-    sich nichts überschneiden, also war der Test grün, egal wo die Legende lag:
-    ein Mutant, der sie mitten über die Zitatkarte schob, überlebte ihn.
-
-    Deshalb wird hier ein echtes Zitat eingeblendet und dann gemessen.
+    Geprüft wird am gerenderten Baum, nicht an `window.kgLegende`: Ob die
+    Variable null ist, sagt nichts darüber, ob unten links noch etwas steht.
     """
-    wand.evaluate(
-        """() => {
-             const q = document.querySelector('.quote-overlay');
-             // `hidden` ist das Attribut, mit dem quote-overlay.js die Karte
-             // wegnimmt (panel.hidden = true) — ohne es zu loesen bleibt sie
-             // 0x0 gross, auch mit der Klasse `visible`.
-             q.hidden = false;
-             q.querySelector('.quote-text').textContent =
-               'Ein Satz von der Laenge, wie ihn die Wand an einem vollen Tag wirklich zeigt, mit Umbruch.';
-             const n = q.querySelector('.quote-name');
-             n.hidden = false;
-             n.textContent = 'Testperson';
-             q.classList.add('visible');
-           }"""
+    assert wand.evaluate("() => document.querySelectorAll('.dream-legende').length") == 0, (
+        "unten links hängt weiterhin eine Legende"
     )
-    masse = wand.evaluate(
-        """() => {
-             const l = document.querySelector('.dream-legende').getBoundingClientRect();
-             const q = document.querySelector('.quote-overlay').getBoundingClientRect();
-             return {
-               flaeche: q.width * q.height,
-               ueberlappt: !(l.right < q.left || q.right < l.left ||
-                             l.bottom < q.top || q.bottom < l.top),
-             };
-           }"""
+
+
+def test_die_drei_farben_werden_nicht_mehr_gemalt(wand):
+    """Die Gegenprobe zur Legende: Auch am NETZ trägt keine der drei
+    Traumachsen mehr eine eigene Farbe.
+
+    Sonst stünde die Erklärung nicht mehr da, während die Sache selbst weiter
+    zu sehen wäre — und niemand könnte sie deuten. Die Klassen bleiben am
+    Knoten (sie sind Daten, `test_export_in_dream.py` prüft sie), aber sie
+    schlagen sich in keinem Stil mehr nieder.
+    """
+    quelle = wand.evaluate("() => fetch('static/projection.js').then(r => r.text())")
+    for selektor in ("node.term.dream-anchor", "node.term.dream-neighbour",
+                     "node.term.dream-recent"):
+        assert f"selector: '{selektor}'" not in quelle, (
+            f"{selektor} malt weiterhin eine eigene Farbe"
+        )
+
+
+def test_die_haeufigkeit_steht_in_der_schriftgroesse(wand):
+    """🔴 BIRK, 2026-09-03, nach dem Farbversuch: „ändere die hervorhebung von
+    oft genannten begriffen zu größe der schrift und nimm das color coding
+    wieder raus. bzw. deaktiviere es, ich will mir die andere variante
+    angucken."
+
+    Beide Varianten sind gebaut und stehen unter `HERVORHEBUNG` in
+    projection.js — aktiv ist die Größe. Der Test prüft die aktive Variante am
+    gerenderten Knoten; `test_die_farbvariante_bleibt_vollstaendig` daneben
+    hält fest, dass der andere Weg nicht verrottet.
+
+    Die Schwellen sind dieselben wie bei der Farbe, an der echten Verteilung
+    des Tages gewählt: ab 3 wächst die Schrift, bei 6 ist der Deckel.
+    """
+    stufen = [("einmal", 1), ("zweimal", 2), ("drei", 3), ("fuenf", 5), ("neun", 9)]
+    graph = {
+        "version": 1, "generated_at": 1000.0, "max_terms": 99,
+        "nodes": [
+            {"id": "p1", "type": "person", "name": "A", "portrait": None,
+             "created_at": 1.0, "hidden": False, "x": -600, "y": 0}
+        ] + [
+            {"id": name, "type": "term", "label": f"{name}", "mentions": n,
+             "created_at": 2.0, "hidden": False, "x": i * 220 - 500, "y": 200}
+            for i, (name, n) in enumerate(stufen)
+        ],
+        "edges": [{"id": "e1", "source": "p1", "target": "drei", "evidence": "x"}],
+        "quotes": [],
+    }
+    wand.evaluate("(g) => window.kgView.update(g, 99)", graph)
+    wand.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+
+    mass = wand.evaluate("""(namen) => {
+      const cy = window.kgView.cy;
+      const raus = {};
+      for (const n of namen) {
+        const k = cy.$id(n);
+        raus[n] = {schrift: parseFloat(k.style('font-size')),
+                   breite: k.data('boxW'), hoehe: k.data('boxH')};
+      }
+      return raus;
+    }""", [n for n, _ in stufen])
+
+    # Unter der Schwelle: die Grundgroesse, fuer ein- wie zweimal dieselbe.
+    assert mass["einmal"]["schrift"] == mass["zweimal"]["schrift"], mass
+    # Darueber waechst sie mit jeder Stufe …
+    assert mass["drei"]["schrift"] > mass["einmal"]["schrift"], mass
+    assert mass["fuenf"]["schrift"] > mass["drei"]["schrift"], mass
+    # … bis zum Deckel: neunmal ist nicht groesser als sechsmal.
+    assert mass["neun"]["schrift"] <= mass["fuenf"]["schrift"] * 2, mass
+
+    # 🔴 UND DIE TAFEL WAECHST MIT. Ohne das stuende der groessere Text in der
+    # alten Kiste und ragte hinaus — der Grund, warum `termBox` seit heute die
+    # Schriftgroesse entgegennimmt.
+    assert mass["neun"]["hoehe"] > mass["einmal"]["hoehe"], (
+        f"die Tafel bleibt klein, waehrend die Schrift waechst: {mass}"
     )
-    # Erst beweisen, dass ueberhaupt etwas Messbares da ist — sonst prüft der
-    # Test wieder nichts (genau der Fehler, den die Fassung davor hatte).
-    assert masse["flaeche"] > 10000, (
-        f"die Zitatkarte hat keine Ausdehnung ({masse['flaeche']} px²) — "
-        "der Überlappungstest würde nichts messen"
-    )
-    assert not masse["ueberlappt"], "Legende und Zitatkarte überschneiden sich"
+
+
+def test_die_farbvariante_bleibt_vollstaendig():
+    """Der andere Weg ist deaktiviert, nicht ausgebaut — Birk wollte beide
+    vergleichen koennen („bzw. deaktiviere es").
+
+    Geprueft am Quelltext und nicht am Bild: Die Variante ist per Definition
+    gerade nicht zu sehen. Was sie braucht, muss trotzdem da sein — sonst
+    faellt beim Zurueckschalten auf, dass die Haelfte fehlt.
+    """
+    quelle = Path("frontend/static/projection.js").read_text(encoding="utf-8")
+    for teil in ("const BLAU_AB", "const GELB_AB", "const ROT_AB",
+                 "haeufigFarbe", "haeufigGlanz", "--haeufig-blau",
+                 "--haeufig-gelb", "--haeufig-rot"):
+        assert teil in quelle, f"die Farbvariante ist unvollstaendig: {teil} fehlt"
+    assert "const HERVORHEBUNG = " in quelle, "der Schalter zwischen beiden fehlt"
 
 
 def test_ein_theme_ohne_farbcodierung_bekommt_keine_legende(page, static_server):

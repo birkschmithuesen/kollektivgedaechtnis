@@ -22,6 +22,8 @@ export function attachQuoteOverlay(
     visibleMs = VISIBLE_MS,
     setTimer = (fn, ms) => window.setTimeout(fn, ms),
     clearTimer = (id) => window.clearTimeout(id),
+    //: Die Karte aufbauen, aber nicht auf Tipps hoeren — siehe unten.
+    stumm = false,
   } = {},
 ) {
   const panel = document.createElement('figure');
@@ -152,12 +154,23 @@ export function attachQuoteOverlay(
     return true;
   }
 
-  view.cy.on('tap', 'node.person', (event) => {
-    belegListe.hidden = true;
-    belegListe.replaceChildren();
-    show(event.target.id());
-  });
-  view.cy.on('tap', 'node.term', (event) => showTerm(event.target.id()));
+  // 🔴 NUR WENN NICHT STUMM — und diese Bedingung fehlte zuerst (gefunden am
+  // gerenderten Bild, 2026-09-02): Die Option war deklariert und wurde von
+  // projection.html auch gesetzt, aber nirgends gelesen. Die Karte hoerte also
+  // weiter mit, und beim Antippen standen BEIDE da: die Tafel rechts und die
+  // Karte quer ueber dem Netz, auf demselben hervorgehobenen Knoten. Genau der
+  // Zustand, gegen den die Tafel gebaut wurde.
+  //
+  // Der Hintergrund-Tipp unten bleibt in jedem Fall gebunden: Blendet der
+  // Zyklus von sich aus ein Zitat ein, muss man es auch wegtippen koennen.
+  if (!stumm) {
+    view.cy.on('tap', 'node.person', (event) => {
+      belegListe.hidden = true;
+      belegListe.replaceChildren();
+      show(event.target.id());
+    });
+    view.cy.on('tap', 'node.term', (event) => showTerm(event.target.id()));
+  }
   // Background tap = "done reading".
   //
   // Do NOT rewrite this as `cy.on('tap', 'core', …)`. Cytoscape's 'core'
@@ -171,6 +184,29 @@ export function attachQuoteOverlay(
   // explicit target check is the form that actually distinguishes the two.
   view.cy.on('tap', (event) => {
     if (event.target === view.cy) hide();
+  });
+
+  // 🔴 Die Karte nimmt seit 2026-09-02 Zeigereignisse an, damit man in ihr
+  // ROLLEN kann (Birk: „ein klick auf den graphen dahinter bringt zurück, aber
+  // ein scrollen in der karte scrollt eben"). Damit faengt sie aber auch
+  // Tipps ab, die dem Graphen galten — genau das, was `pointer-events: none`
+  // vorher verhindert hat.
+  //
+  // Deshalb hier die Unterscheidung, die das CSS nicht treffen kann: Ein
+  // TIPP auf die Karte schliesst sie, als waere er hinter ihr gelandet. Ein
+  // ZIEHEN laesst sie in Ruhe und rollt. Gemessen wird ueber die zurueckgelegte
+  // Strecke, nicht ueber die Zeit — ein langsamer Tipp ist ein Tipp, ein
+  // schnelles Wischen ist keiner.
+  const TIPP_WEG_PX = 12;
+  let start = null;
+  panel.addEventListener('pointerdown', (e) => {
+    start = { x: e.clientX, y: e.clientY };
+  });
+  panel.addEventListener('pointerup', (e) => {
+    if (!start) return;
+    const weg = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    start = null;
+    if (weg <= TIPP_WEG_PX) hide();
   });
 
   return {

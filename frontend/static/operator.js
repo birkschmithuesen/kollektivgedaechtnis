@@ -256,6 +256,30 @@ function restoreDraft(list, draft) {
  * falscher Stand nicht stehen bleibt. */
 const INTERVIEW_ERWARTUNG_MS = 5000;
 
+/** Wie lange „Interview beenden" nachlaeuft, bevor es wirklich beendet.
+ *
+ * 🔴 Birk, 2026-09-02, nach einem echten Schaden an der Wand: „Ich will das
+ * Interview schon recht zeitig beenden, um dann mit den Menschen reden zu
+ * koennen." Genau das ist an diesem Tag schiefgegangen — p14 (Martin Kranz)
+ * wurde mitten in seiner Antwort auf die letzte Frage gestoppt. Den Rest
+ * sprach er zu Ende, das Transkript-Final kam sechs Minuten spaeter, und weil
+ * `kg/transcript.py` allein nach dem Zeitstempel schneidet, landeten drei
+ * seiner Begriffe („Grosse Kueche", „Verzicht auf Keller", „Weniger Raum,
+ * mehr Natur") bei der NAECHSTEN Person.
+ *
+ * Acht Sekunden sind Birks Zahl (zuerst 6, am selben Tag auf 8 erhoeht). Sie
+ * decken die gemessene STT-Laufzeit ab: an diesem Tag 2,8 bis 7,7 s „from
+ * speech end to final" (`~/kg-logs/stt.log`), im Mittel rund 4 s — 6 s haetten
+ * den langsamsten Fall knapp verfehlt. Ein noch laengerer Nachlauf faenge
+ * mehr, hielte aber auch das Mikrofon laenger fuer die naechste Person offen
+ * — und das ist derselbe Fehler in die andere Richtung.
+ *
+ * Ueberschreibbar fuer die Tests, damit sie nicht acht Sekunden schlafen. */
+const STOP_NACHLAUF_MS = 8000;
+let stopNachlauf = null;      // laufender Timer, oder null
+let stopNachlaufBis = 0;      // wann er ablaeuft (fuer die Anzeige)
+let stopNachlaufTakt = null;  // der Sekundentakt der Anzeige
+
 // Was der letzte Druck bewirken sollte (`true`/`false`), oder `null`: keine
 // offene Erwartung, es gilt allein der Server.
 let interviewErwartet = null;
@@ -307,6 +331,15 @@ function zeigeInterviewSchalter(state) {
   // gemeint, sondern „unbekannt", und dann muss auch der Startknopf zu sein.
   document.getElementById('interview-start').disabled = interviewSendet || laeuft !== false;
   document.getElementById('interview-stop').disabled = interviewSendet || laeuft !== true;
+  // 🔴 Endet das Interview waehrend des Nachlaufs auf einem ANDEREN Weg (der
+  // Schalter am Mikrofon, ein Zeitablauf), muss der Timer weg. Sonst schlaegt
+  // er sechs Sekunden spaeter zu und beendet das NAECHSTE Interview — das
+  // waere derselbe Schaden, gegen den der Nachlauf gebaut ist, nur eine
+  // Person weiter.
+  if (stopNachlauf !== null && laeuft !== true) {
+    abbrechenNachlauf();
+    zeigeInterviewMeldung('Interview endete anderweitig — Nachlauf abgebrochen', false);
+  }
 }
 
 /** Einen der beiden Knöpfe ausführen. `gewuenscht` ist der Wert, den der Knopf
@@ -356,8 +389,70 @@ function schalteInterview(gewuenscht) {
   });
 }
 
-document.getElementById('interview-start').addEventListener('click', () => schalteInterview(true));
-document.getElementById('interview-stop').addEventListener('click', () => schalteInterview(false));
+/** „Interview beenden" mit Nachlauf — und ein zweiter Druck bricht ihn ab.
+ *
+ * Warum abbrechen und nicht sofort beenden: Ein versehentlicher Druck ist der
+ * haeufigere Fall, und der Abbruch ist die Richtung, in der nichts kaputtgeht.
+ * Wer wirklich sofort beenden will, wartet sechs Sekunden — wer versehentlich
+ * gedrueckt hat, haette ein Interview verloren.
+ *
+ * Der Nachlauf ueberlebt kein Neuladen der Seite. Das ist Absicht: Ein Timer,
+ * der einen Reload uebersteht, beendete ein Interview, von dem der Mensch vor
+ * dem Schirm nichts mehr weiss. Nach einem Reload laeuft das Interview weiter
+ * — sichtbar, und der Knopf ist wieder da. */
+function beendeMitNachlauf() {
+  if (stopNachlauf !== null) {
+    abbrechenNachlauf();
+    zeigeInterviewMeldung('Beenden abgebrochen — das Interview laeuft weiter', false);
+    return;
+  }
+  const dauer = window.kgOperator.stopNachlaufMs;
+  if (!(dauer > 0)) {
+    schalteInterview(false);
+    return;
+  }
+  // 🔴 ZUERST das Satzende ausloesen, dann erst warten (Birk, 2026-09-02):
+  // „Das Problem ist der VAD. Wenn keine Stille kommt, weil weiter geredet
+  // wird, wird das Letztgesagte trotzdem nicht genommen." Der VAD schliesst
+  // einen Chunk erst nach 700 ms Stille ab — wird durchgeredet, kommt dieser
+  // Moment nie, und blosses Warten half deshalb gar nichts.
+  //
+  // Ohne `await`: Der Nachlauf laeuft ab dem Druck, nicht ab der Antwort.
+  // Scheitert der Aufruf, sagt der Kern es im Log und der Nachlauf endet
+  // trotzdem — ein Interview, das wegen eines toten Endpunkts NICHT endet,
+  // waere schlimmer als ein verlorener letzter Satz.
+  post('/api/stt/satzende', {}).catch(() => {});
+  stopNachlaufBis = Date.now() + dauer;
+  const knopf = document.getElementById('interview-stop');
+  const anzeigen = () => {
+    const rest = Math.max(0, Math.ceil((stopNachlaufBis - Date.now()) / 1000));
+    knopf.textContent = `Beenden in ${rest} s — klicken zum Abbrechen`;
+  };
+  anzeigen();
+  stopNachlaufTakt = window.setInterval(anzeigen, 250);
+  stopNachlauf = window.setTimeout(() => {
+    abbrechenNachlauf();
+    schalteInterview(false);
+  }, dauer);
+  zeigeInterviewMeldung('Das Mikrofon laeuft noch — der letzte Satz kommt mit', false);
+}
+
+function abbrechenNachlauf() {
+  if (stopNachlauf !== null) window.clearTimeout(stopNachlauf);
+  if (stopNachlaufTakt !== null) window.clearInterval(stopNachlaufTakt);
+  stopNachlauf = null;
+  stopNachlaufTakt = null;
+  document.getElementById('interview-stop').textContent = 'Interview beenden';
+}
+
+document.getElementById('interview-start').addEventListener('click', () => {
+  // Ein Start waehrend des Nachlaufs hebt ihn auf: Wer startet, will kein
+  // Beenden mehr, und ein Timer, der danach zuschlaegt, beendete das gerade
+  // begonnene Interview.
+  abbrechenNachlauf();
+  schalteInterview(true);
+});
+document.getElementById('interview-stop').addEventListener('click', beendeMitNachlauf);
 
 function render(graph, state) {
   lastGraph = graph;
@@ -507,7 +602,7 @@ document.getElementById('camera-speed').addEventListener('change', (event) =>
   post('/api/camera_speed', { factor: Number(event.target.value) }),
 );
 
-window.kgOperator = { render, showTranscript };
+window.kgOperator = { render, showTranscript, stopNachlaufMs: STOP_NACHLAUF_MS };
 
 let graph = { nodes: [], edges: [], quotes: [] };
 let state = {

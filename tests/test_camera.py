@@ -620,3 +620,69 @@ def test_a_hand_back_on_the_wall_lifts_the_ceiling_again_at_once(camera):
     camera.evaluate("window.cam.setMode('manual')")
 
     assert camera.evaluate("window.cam.portraitCapBlend") == 0
+
+
+def test_die_fahrt_bevorzugt_die_meistgenannten_begriffe(page, static_server):
+    """🔴 BIRK, 2026-09-03: „bei der automatischen kamerafahrt sollten die
+    meist genannten begriffe angefahren werden."
+
+    Die Gewichtung gab es schon (`ROAM.degreeBias`), sie war mit 2,0 aber zu
+    schwach: Am Bestand des Tages gerechnet — 66 Begriffe — kamen die sechs
+    haeufigsten zusammen auf 58 % der Fahrten. Mit 3,0 sind es 76 %.
+
+    Nicht hoeher: Bei 4,0 kaeme in einer Stunde praktisch keine Einmal-Nennung
+    mehr vor, und die Wand zeigte nur noch ihre eigene Spitze. Genau das
+    prueft die zweite Behauptung unten.
+
+    Gemessen wird ueber viele Ziehungen mit festem Zufall, nicht an einer
+    einzelnen: Die Auswahl IST zufaellig, nur eben gewichtet.
+    """
+    page.goto(f"{static_server}/frontend/projection.html?theme=f&deterministisch=1")
+    page.wait_for_function("window.kgView !== undefined", timeout=30000)
+
+    graph = {
+        "version": 1, "generated_at": 1000.0, "max_terms": 99,
+        "nodes": [
+            {"id": "p1", "type": "person", "name": "A", "portrait": None,
+             "created_at": 1.0, "hidden": False, "x": 0, "y": 0},
+            {"id": "oft", "type": "term", "label": "Oft gesagt", "mentions": 9,
+             "created_at": 2.0, "hidden": False, "x": 400, "y": 0},
+            {"id": "mittel", "type": "term", "label": "Mittel", "mentions": 3,
+             "created_at": 2.0, "hidden": False, "x": 0, "y": 400},
+            {"id": "selten", "type": "term", "label": "Selten", "mentions": 1,
+             "created_at": 2.0, "hidden": False, "x": -400, "y": 0},
+        ],
+        "edges": [{"id": "e1", "source": "p1", "target": "oft", "evidence": "x"}],
+        "quotes": [],
+    }
+    page.evaluate("(g) => window.kgView.update(g, 99)", graph)
+    page.wait_for_function("() => window.kgView.layoutPending === false", timeout=60000)
+
+    verteilung = page.evaluate("""() => {
+      const c = window.kgView.camera;
+      const zaehler = {};
+      for (let i = 0; i < 600; i++) {
+        const ziel = c._pickTarget();
+        if (!ziel) continue;
+        const id = ziel.id();
+        zaehler[id] = (zaehler[id] || 0) + 1;
+      }
+      return zaehler;
+    }""")
+
+    oft = verteilung.get("oft", 0)
+    mittel = verteilung.get("mittel", 0)
+    selten = verteilung.get("selten", 0)
+    gesamt = oft + mittel + selten
+    assert gesamt > 400, f"zu wenige Ziehungen ausgewertet: {verteilung}"
+
+    # Neunmal gesagt schlaegt dreimal, dreimal schlaegt einmal.
+    assert oft > mittel > selten, f"die Haeufigkeit schlaegt sich nicht durch: {verteilung}"
+    # Deutlich, nicht knapp: 9^3 zu 1^3 sind 729 zu 1.
+    assert oft > 3 * mittel, f"der Vorrang ist zu schwach: {verteilung}"
+    # Aber der seltene kommt vor. Eine Wand, die nur noch ihre Spitze zeigt,
+    # waere das andere Extrem.
+    assert selten > 0, (
+        "die Einmal-Nennung kommt in 600 Fahrten kein einziges Mal dran — "
+        "der Vorrang ist zu hart"
+    )

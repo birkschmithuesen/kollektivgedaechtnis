@@ -78,6 +78,27 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
   overview.textContent = 'Übersicht';
   bar.appendChild(overview);
 
+  // 🔴 Der Umschalter zwischen den beiden Anordnungen (Birk, 2026-09-02):
+  // „unsere Kraft behauptet soziale Nähe und nicht semantische Nähe. Es wär
+  // cool als Feature, das noch im Graph mit Button zwischen sozialer Nähe und
+  // semantischer Nähe hin- und herschalten zu können."
+  //
+  // Er wird HIER gebaut, aber nicht hier verdrahtet: Was beim Druck geschieht,
+  // weiss nur projection.html — dort liegen `setzeAnordnung` und die Kamera.
+  // Diese Datei baut die Leiste, sie kennt den Graphen nicht.
+  //
+  // Verborgen, bis der Kern eine semantische Lage mitliefert; projection.html
+  // haengt sich an `add` und entscheidet das bei jedem neuen Knoten neu. Ein
+  // Knopf, der nichts tut, ist schlimmer als keiner.
+  const naehe = document.createElement('button');
+  naehe.id = 'touch-naehe';
+  naehe.className = 'touch-button';
+  // Der Knopf nennt das ZIEL, nicht den Zustand: Zu sehen sind die Gespräche,
+  // gedrückt führt er zur Bedeutung.
+  naehe.textContent = 'Bedeutung';
+  naehe.hidden = true;
+  bar.appendChild(naehe);
+
   // Der Regler sitzt in einer Hülle mit den beiden Marken − und +. Keine
   // Beschriftung „Zoom": Zwei Zeichen an den Enden sagen dasselbe in jeder
   // Sprache und nehmen der Leiste keine Ruhe.
@@ -190,6 +211,10 @@ export function createTouchControls(container, { onOverview, onZoom } = {}) {
   return {
     element: bar,
     zoom: regler,
+    /** Der Umschalter zwischen sozialer und semantischer Anordnung.
+     *  `projection.html` haengt sich hier ein und zeigt ihn nur, wenn der
+     *  Graph ueberhaupt eine semantische Lage mitbringt. */
+    naeheKnopf: naehe,
     resetZoom: reglerZuruecksetzen,
     showZoom: reglerAnzeigen,
     /** Ob gerade jemand am Griff zieht. Die Nachfuehrung fragt das, bevor sie

@@ -743,6 +743,9 @@ def test_jeder_interviewknopf_sendet_einen_festen_absoluten_wert(ui):
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/interview_switch", {"on": True}]
 
     ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    # Ohne Nachlauf, sonst pruefte dieser Test die Wartezeit statt den Wert.
+    # Dass es den Nachlauf gibt, belegen die Tests weiter unten.
+    ui.evaluate("() => { window.kgOperator.stopNachlaufMs = 0; }")
     ui.click("#interview-stop")
     assert ui.evaluate("window.kgFetches.at(-1)") == ["/api/interview_switch", {"on": False}]
 
@@ -929,6 +932,8 @@ def test_der_stop_knopf_beendet_nur_und_startet_nie(ui):
     senden als den einen Wert, der auf ihm steht.
     """
     ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    # Ohne Nachlauf: geprueft wird der gesendete WERT, nicht die Wartezeit.
+    ui.evaluate("() => { window.kgOperator.stopNachlaufMs = 0; }")
     ui.click("#interview-stop")
     ui.wait_for_function("document.getElementById('interview-start').disabled === false")
     # Der Server bestaetigt das Ende, danach beginnt das naechste Interview.
@@ -944,3 +949,83 @@ def test_der_stop_knopf_beendet_nur_und_startet_nie(ui):
     assert all(eintrag[1] == {"on": False} for eintrag in gesendet), (
         f"der Knopf hat etwas anderes als on:false gesendet: {gesendet}"
     )
+
+
+# --- Der Nachlauf beim Beenden (Birk, 2026-09-02) ---------------------------
+
+
+SCHALTBEFEHLE = "window.kgFetches.filter(f => f[0] === '/api/interview_switch')"
+
+
+def test_beenden_laeuft_nach_und_sendet_nicht_sofort(ui):
+    """🔴 Aus einem echten Schaden an der Wand (2026-09-02).
+
+    p14 (Martin Kranz) wurde mitten in seiner Antwort auf die letzte Frage
+    gestoppt. Er sprach zu Ende, das Transkript-Final kam Minuten spaeter, und
+    weil `kg/transcript.py` allein nach dem Zeitstempel schneidet, landeten
+    drei seiner Begriffe bei der NAECHSTEN Person.
+
+    Birk will den Knopf trotzdem frueh druecken koennen („um dann mit den
+    Menschen reden zu koennen") — also darf nicht der Mensch warten, sondern
+    der Knopf.
+    """
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    ui.evaluate("() => { window.kgFetches.length = 0; window.kgOperator.stopNachlaufMs = 400; }")
+
+    ui.click("#interview-stop")
+    # Sofort nach dem Druck ist kein SCHALTBEFEHL gesendet. Der Aufruf an
+    # /api/stt/satzende geht dagegen genau jetzt raus — er ist der Grund, aus
+    # dem der Nachlauf ueberhaupt etwas bringt.
+    assert ui.evaluate(SCHALTBEFEHLE + ".length") == 0
+    assert ui.evaluate("window.kgFetches.some(f => f[0] === '/api/stt/satzende')"), (
+        "das Satzende wurde nicht ausgeloest — dann faengt der Nachlauf nur "
+        "die Faelle mit Sprechpause"
+    )
+    # Und der Knopf sagt, was gerade passiert.
+    beschriftung = ui.eval_on_selector("#interview-stop", "el => el.textContent")
+    assert "Abbrechen" in beschriftung or "abbrechen" in beschriftung, beschriftung
+
+    ui.wait_for_function(SCHALTBEFEHLE + ".length > 0")
+    assert ui.evaluate(SCHALTBEFEHLE + ".at(-1)") == ["/api/interview_switch", {"on": False}]
+
+
+def test_ein_zweiter_druck_bricht_den_nachlauf_ab(ui):
+    """Der Weg zurueck. Ein versehentlicher Druck ist der haeufigere Fall, und
+    der Abbruch ist die Richtung, in der nichts kaputtgeht — anders als bei
+    „sofort beenden", wo ein Fehlgriff ein Interview kostet."""
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    ui.evaluate("() => { window.kgFetches.length = 0; window.kgOperator.stopNachlaufMs = 400; }")
+
+    ui.click("#interview-stop")
+    ui.click("#interview-stop")
+
+    assert ui.evaluate(SCHALTBEFEHLE + ".length") == 0
+    assert ui.eval_on_selector("#interview-stop", "el => el.textContent") == "Interview beenden"
+
+    # 🔴 Und der Timer ist WIRKLICH weg, nicht nur die Beschriftung zurueck.
+    # Diese Zeile fand eine Mutationsprobe: Mit einer falschen Timer-Referenz
+    # (`stopNachlauf = 1`) sah der Abbruch im Moment des Klicks genauso aus,
+    # das Interview endete aber Sekunden spaeter trotzdem.
+    ui.wait_for_timeout(700)
+    assert ui.evaluate(SCHALTBEFEHLE + ".length") == 0, (
+        "der abgebrochene Nachlauf hat doch noch gesendet"
+    )
+
+
+def test_endet_das_interview_anderweitig_faellt_der_nachlauf_weg(ui):
+    """🔴 Sonst beendet der Timer das NAECHSTE Interview.
+
+    Der Schalter am Mikrofon kann waehrend des Nachlaufs beenden. Liefe der
+    Timer weiter, schluege er Sekunden spaeter zu — und die naechste Person
+    saesse vor einem Mikrofon, das gerade zugegangen ist. Das waere derselbe
+    Schaden, gegen den der Nachlauf gebaut ist, nur eine Person weiter."""
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, LAEUFT])
+    ui.evaluate("() => { window.kgFetches.length = 0; window.kgOperator.stopNachlaufMs = 3000; }")
+    ui.click("#interview-stop")
+
+    # Der Server meldet: kein Interview mehr (der Schalter am Mikrofon).
+    ui.evaluate("(args) => window.kgOperator.render(args[0], args[1])", [GRAPH, STATE])
+
+    assert ui.eval_on_selector("#interview-stop", "el => el.textContent") == "Interview beenden"
+    ui.wait_for_timeout(600)
+    assert ui.evaluate(SCHALTBEFEHLE + ".length") == 0, "der Timer hat trotzdem gesendet"

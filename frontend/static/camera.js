@@ -146,7 +146,20 @@ const ROAM = {
   // Prefer well-connected terms: the wall is about what people share, so the
   // traversal should dwell where sharing actually happened. Degree 1 nodes are
   // still reachable, just far less often.
-  degreeBias: 2.0,
+  //
+  // 🔴 VON 2,0 AUF 3,0 (Birk, 2026-09-03: „bei der automatischen kamerafahrt
+  // sollten die meist genannten begriffe angefahren werden"). Am Bestand des
+  // Tages gerechnet (66 Begriffe), Anteil an allen Fahrten:
+  //
+  //     Bias   die sechs haeufigsten   die 41 Einmal-Nennungen
+  //     2,0            57,9 %                  7,5 %
+  //     3,0            75,9 %                  1,3 %      <- gewaehlt
+  //     4,0            85,8 %                  0,2 %
+  //
+  // Nicht hoeher: Bei 4,0 kaeme in einer Stunde Fahrt praktisch keine
+  // Einmal-Nennung mehr vor, und die Wand zeigte nur noch ihre eigene Spitze.
+  // Was einer gesagt hat, soll seltener drankommen — nicht nie.
+  degreeBias: 3.0,
   // Handing the view back: how long the camera takes to travel from the
   // close-up a visitor left behind to the view the automatic mode wants.
   //
@@ -189,12 +202,27 @@ const DREAM = {
   // Begriffe sind das Material, die Portraits sind, wer es gesagt hat.
   withPersons: true,
   // Wie lange die Kamera nach einem Auslöser im Traumgebiet bleibt, bevor sie
-  // wieder frei durchs ganze Netz wandert. Ein Traum entsteht alle 4-5 Minuten
-  // (kg2 `min_interval_s: 240`), eine Runde aus Fahrt und Rast dauert 9,4 s —
-  // in vier Minuten also rund 25 Stationen. Ohne Begrenzung sähe die Wand
+  // wieder frei durchs ganze Netz wandert. Ohne Begrenzung sähe die Wand
   // stundenlang nur dieses eine Gebiet; ohne Bindung wäre sie nach zehn
   // Sekunden wieder irgendwo und die Kopplung praktisch wirkungslos.
-  holdMs: 240000,
+  //
+  // 🔴 240000 -> 60000 am 2026-09-02, 11:50, im laufenden Betrieb (Birk:
+  // „mach das so"). Gemessen an der Wand, während sie lief:
+  //
+  //   Vollansicht      21 Knoten   2058 x 1187
+  //   Traumausschnitt   9 Knoten   1319 x  983   -> 1,56x enger
+  //
+  // Die alten vier Minuten waren genau der Traumtakt (kg2 `min_interval_s:
+  // 240`). Beides gleich lang heisst: das nächste Gebiet gilt, bevor das
+  // vorige abläuft — die Wand kam praktisch NIE zur Vollansicht zurück.
+  // Verschärft dadurch, dass `aimCameraAtDream()` in `settle()` läuft, also
+  // bei JEDER Migration und nicht nur bei einem neuen Traum: jedes
+  // Interview-Ende setzte die vier Minuten neu.
+  //
+  // Eine Minute hält das Erzählmoment („das Netz wandert dorthin, wo das
+  // nächste Bild herkommt") und gibt die übrigen drei Minuten dem ganzen Netz
+  // zurück. Bei 9,4 s je Runde sind das immer noch rund 6 Stationen im Gebiet.
+  holdMs: 60000,
   // „Erst den Traum erklären, dann immer mehr Kontext geben“ (Birk,
   // 2026-08-31) — dieser Gedanke ist am 2026-09-01 an der Wand VERWORFEN
   // worden, nachdem Birk ihn im Betrieb gesehen hat:
@@ -1131,7 +1159,23 @@ export class Camera {
       candidates = this.cy.nodes('.term').filter((n) => n.id() !== this._roam?.targetId);
     }
     if (candidates.empty()) return null;
-    const weights = candidates.map((n) => Math.pow(n.degree(false) || 1, ROAM.degreeBias));
+    // 🔴 `mentions` und nicht `degree` (2026-09-03): Beide zaehlen bei einem
+    // Begriff dasselbe — wie viele Menschen ihn gesagt haben —, aber `mentions`
+    // ist der Wert, den der Kern dafuer fuehrt und den auch die Schriftgroesse
+    // an der Wand traegt. Damit faehrt die Kamera nachweislich das an, was
+    // gross geschrieben steht, statt einer zweiten Zaehlung zu folgen, die
+    // irgendwann auseinanderlaufen kann. Rueckfall auf `degree`, wenn das Feld
+    // fehlt (aeltere Graphen, Testaufbauten).
+    // 🔴 Defensiv, weil die Tests dieser Datei mit Attrappen arbeiten, die nur
+    // `degree()` kennen (gefunden 2026-09-03: `n.data is not a function` in
+    // sieben Tests). Ein Zaehlwert, den es nicht gibt, faellt auf den anderen
+    // zurueck — beide meinen bei einem Begriff dieselbe Zahl.
+    const wieOft = (n) => {
+      const m = typeof n.data === 'function' ? Number(n.data('mentions')) : NaN;
+      if (Number.isFinite(m) && m > 0) return m;
+      return (typeof n.degree === 'function' ? n.degree(false) : 0) || 1;
+    };
+    const weights = candidates.map((n) => Math.pow(wieOft(n), ROAM.degreeBias));
     const total = weights.reduce((a, b) => a + b, 0);
     let roll = this._random() * total;
     for (let i = 0; i < weights.length; i += 1) {
