@@ -99,6 +99,12 @@ def beispielgraph() -> dict:
 
     Eine Person OHNE Portrait ist Absicht und kein Füllmaterial: wer sich
     gegen ein Foto entscheidet, ist der Normalfall, nicht der Fehlerfall.
+
+    🔴 `sx`/`sy` (die BEDEUTUNGSLAGE) kommen seit dem 2026-09-03 dazu — der
+    Kern liefert sie für praktisch jeden Knoten (gemessen an der öffentlichen
+    Seite: 76 von 76). Sie sind hier bewusst ganz andere Zahlen als `x`/`y`:
+    Wären sie ähnlich, könnte kein Test unterscheiden, welche Anordnung gerade
+    gilt — und genau das ist die Frage.
     """
     return {
         "version": 1,
@@ -114,6 +120,8 @@ def beispielgraph() -> dict:
                 "hidden": False,
                 "x": -400.0,
                 "y": 120.0,
+                "sx": 132.0,
+                "sy": -530.0,
             },
             {
                 "id": "p2",
@@ -124,6 +132,8 @@ def beispielgraph() -> dict:
                 "hidden": False,
                 "x": 350.0,
                 "y": -260.0,
+                "sx": 664.0,
+                "sy": -5.000000000000028,
             },
             {
                 "id": "p3",
@@ -134,18 +144,27 @@ def beispielgraph() -> dict:
                 "hidden": False,
                 "x": 60.0,
                 "y": 420.0,
+                "sx": -288.0,
+                "sy": -208.0,
             },
             {
                 "id": "t1",
                 "type": "term",
                 "label": "Genossenschaftliches Wohnen",
                 "mentions": 4,
+                # Was inhaltlich danebenliegt (kg/semantik.py, Kosinus ueber
+                # die vollen Vektoren). Der echte Export liefert es fuer
+                # praktisch jeden Begriff — gemessen am 2026-09-03 auf der
+                # oeffentlichen Seite: 54 von 55.
+                "verwandt": ["Bodenpreise deckeln", "Mietshaeuser-Syndikat"],
                 "created_at": 1788290500.0,
                 "hidden": False,
                 "in_dream": True,
                 "dream_role": "anchor",
                 "x": -120.0,
                 "y": -80.0,
+                "sx": 412.0,
+                "sy": -334.0,
             },
             {
                 "id": "t2",
@@ -157,6 +176,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": 240.0,
                 "y": 200.0,
+                "sx": 20.0,
+                "sy": -82.0,
             },
             {
                 "id": "t3",
@@ -168,6 +189,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": -300.0,
                 "y": -320.0,
+                "sx": 748.0,
+                "sy": -460.0,
             },
             # Vier weitere Begriffe mit langen Beschriftungen. Nicht Beiwerk:
             # DREI kurze Tafeln passen auf 390 px auch dann noch, wenn der
@@ -185,6 +208,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": -420.0,
                 "y": 20.0,
+                "sx": 272.0,
+                "sy": -544.0,
             },
             {
                 "id": "t5",
@@ -196,6 +221,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": 420.0,
                 "y": 60.0,
+                "sx": 216.0,
+                "sy": 44.0,
             },
             {
                 "id": "t6",
@@ -207,6 +234,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": 120.0,
                 "y": -400.0,
+                "sx": 860.0,
+                "sy": -166.0,
             },
             {
                 "id": "t7",
@@ -218,6 +247,8 @@ def beispielgraph() -> dict:
                 "in_dream": False,
                 "x": -60.0,
                 "y": 300.0,
+                "sx": -120.0,
+                "sy": -292.0,
             },
         ],
         "edges": [
@@ -231,12 +262,28 @@ def beispielgraph() -> dict:
             {"id": "e2", "source": "p2", "target": "t1",
              "evidence": "Wir haben eine Genossenschaft gegründet"},
             {"id": "e3", "source": "p2", "target": "t2"},
-            {"id": "e4", "source": "p3", "target": "t3"},
-            {"id": "e5", "source": "p1", "target": "t3"},
-            {"id": "e6", "source": "p1", "target": "t4"},
+            # 🔴 Belegstellen an einem ZWEITEN gemeinsamen Begriff (2026-09-03):
+            # Ohne sie taucht bei „Teilt Themen mit" niemand auf, und die
+            # Abschnitte des Blattes blieben ungeprueft. p1 und p3 teilen t3,
+            # p1 und p2 teilen t1 — zwei Nachbarschaften, wie an der Wand.
+            {"id": "e4", "source": "p3", "target": "t3",
+             "evidence": "Boden ist keine Ware wie andere"},
+            {"id": "e5", "source": "p1", "target": "t3",
+             "evidence": "wem der Grund gehoert, entscheidet alles"},
+            {"id": "e6", "source": "p1", "target": "t4",
+             "evidence": "mehr Baeume auf den Plaetzen"},
             {"id": "e7", "source": "p2", "target": "t5"},
             {"id": "e8", "source": "p3", "target": "t6"},
             {"id": "e9", "source": "p3", "target": "t7"},
+        ],
+        "widersprueche": [
+            {
+                "titel": "Mehr Grün versus verdichtetes Bauen",
+                "eine": {"begriff": "Mehr Platz zwischen Häusern",
+                         "beleg": "Mira: ein bisschen mehr Platz zwischen den Häusern"},
+                "andere": {"begriff": "Bodenpreise deckeln",
+                           "beleg": "Jonas: effizienter Land und Materialien nutzen"},
+            }
         ],
         "quotes": [
             {"id": "q1", "person_id": "p1", "text": "Ich will mehr Grün zwischen den Häusern."},
@@ -658,3 +705,422 @@ def test_ein_tipp_auf_ein_gesicht_zeigt_weiter_das_zitat(handy):
     text = handy.evaluate("() => document.getElementById('blatt').innerText")
     assert "Ich will mehr Grün zwischen den Häusern." in text
     assert "mira" in text.lower()
+
+
+# --- Hervorhebung und das reichere Blatt (2026-09-03) ------------------------
+#
+# Birk: „der spiegel soll auch die neue ansicht bekommen mit der seitenleiste
+# und den highlights."
+#
+# Beides gab es an der Wand seit dem Vortag, am Telefon nicht: Ein Tipp zeigte
+# ein Zitat, aber das Netz blieb, wie es war, und wovon eine Person sonst
+# sprach oder mit wem sie Themen teilt, stand nirgends.
+
+
+def _tipp(seite, knoten_id: str) -> None:
+    """Auf einen Knoten tippen — auf demselben Weg wie die Tests darueber.
+
+    Ein echter Mausklick auf die gerenderte Position trifft hier nicht: `#cy`
+    liegt unter Kopf- und Fusszeile, die Koordinaten waeren also gegen das
+    Fenster zu rechnen, nicht gegen die Zeichenflaeche. Am Handy tippt ohnehin
+    ein Finger auf den Knoten, und genau das ist `emit('tap')`.
+    """
+    seite.evaluate("(id) => window.kgSpiegel.cy.getElementById(id).emit('tap')", knoten_id)
+    seite.wait_for_timeout(400)
+
+
+def test_ein_tipp_hebt_die_nachbarschaft_hervor(handy):
+    """🔴 Was zum Angetippten gehoert, bleibt hell — der Rest tritt zurueck.
+
+    Geprueft wird die gerechnete Deckkraft am Element, nicht die Klasse: Eine
+    Klasse ohne Regel im Cytoscape-Stylesheet waere gesetzt und wirkungslos,
+    und genau das ist bei Knoten auf einem <canvas> die naheliegende Falle —
+    eine CSS-Regel in graph.css kann sie nicht erreichen.
+    """
+    _tipp(handy, "t1")
+    d = handy.evaluate("""() => {
+      const cy = window.kgSpiegel.cy, n = cy.$id('t1');
+      const nah = n.closedNeighborhood();
+      const fern = cy.elements().difference(nah);
+      return {
+        nahHell: nah.every((e) => e.style('opacity') > 0.9),
+        fernBlass: fern.length > 0 && fern.every((e) => e.style('opacity') < 0.3),
+        fernZahl: fern.length,
+      };
+    }""")
+    assert d["fernZahl"] > 0, "im Testnetz liegt nichts ausserhalb — der Test prueft nichts"
+    assert d["nahHell"], "das Angetippte und seine Verbindungen sind nicht hervorgehoben"
+    assert d["fernBlass"], "der Rest des Netzes tritt nicht zurueck"
+
+
+def test_der_hintergrundtipp_nimmt_die_hervorhebung_zurueck(handy):
+    """Sonst bliebe das Netz blass stehen, ohne dass noch etwas erklaert wird."""
+    _tipp(handy, "t1")
+    assert handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length") > 0
+
+    handy.evaluate("() => window.kgSpiegel.cy.emit('tap')")  # ins Leere
+    handy.wait_for_timeout(400)
+
+    assert handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length") == 0, (
+        "das Netz bleibt blass, obwohl nichts mehr ausgewaehlt ist"
+    )
+
+
+def test_ein_begriff_zeigt_alle_stimmen_mit_ueberschrift(handy):
+    """Der eigentliche Gewinn: dieselbe Sache in verschiedenen Worten.
+
+    Bisher stand die Belegliste ohne Ueberschrift da — man sah Saetze, aber
+    nicht, zu welchem Begriff sie gehoeren und wie viele Menschen ihn sagten.
+    """
+    _tipp(handy, "t1")
+    assert handy.eval_on_selector("#blatt-titel", "e => e.textContent") == (
+        "Genossenschaftliches Wohnen"
+    )
+    text = handy.eval_on_selector("#blatt", "e => e.textContent")
+    assert "Von 2 Menschen gesagt" in text
+    assert "Das Haus gehört allen zusammen" in text
+    assert "Wir haben eine Genossenschaft gegründet" in text
+
+
+def test_ein_begriff_zeigt_was_inhaltlich_danebenliegt(handy):
+    """Die Verbindung, die das Netz NICHT ziehen kann.
+
+    Im Netz haengt nur aneinander, was dieselbe Person gesagt hat. Was sich
+    inhaltlich nahesteht, kommt aus den Embeddings und stand am Telefon
+    bisher nirgends.
+    """
+    _tipp(handy, "t1")
+    chips = handy.eval_on_selector_all("#blatt .chip", "e => e.map(x => x.textContent)")
+    assert "Bodenpreise deckeln" in chips, chips
+    assert "Mietshaeuser-Syndikat" in chips, chips
+
+
+def test_eine_person_zeigt_wovon_sie_sprach(handy):
+    """Ein Zitat ist EIN Satz. Was jemand sonst noch sagte, stand am Telefon
+    nirgends — obwohl es in denselben Daten liegt."""
+    _tipp(handy, "p1")
+    text = handy.eval_on_selector("#blatt", "e => e.textContent")
+    assert "Wovon die Rede war" in text
+    assert "Genossenschaftliches Wohnen" in text
+    assert "Das Haus gehört allen zusammen" in text
+    # Und das Zitat bleibt, wo es war.
+    assert "Ich will mehr Grün zwischen den Häusern." in text
+
+
+def test_eine_person_zeigt_mit_wem_sie_themen_teilt(handy):
+    """Das macht die Naehe LESBAR, die das Bild nur andeutet: Wer im Netz
+    nebeneinander steht, tut das genau deswegen — aber niemand sieht, mit WEM
+    und WORUEBER."""
+    _tipp(handy, "p1")
+    text = handy.eval_on_selector("#blatt", "e => e.textContent")
+    assert "Teilt Themen mit" in text
+    # p1 teilt t3 mit Jonas (p3) und t1 mit p2, der keinen Namen hat.
+    assert "Jonas" in text
+    assert "Ohne Namen" in text, "eine Person ohne Namen faellt aus der Liste"
+
+
+def test_das_blatt_wechselt_sauber_zwischen_person_und_begriff(handy):
+    """Zweimal hintereinander tippen ist der Normalfall — und der Zustand des
+    vorigen Blattes darf nicht stehenbleiben.
+
+    Die Abschnitte einer Person („Teilt Themen mit") haben an einem Begriff
+    nichts zu suchen, und der Titel eines Begriffs nicht ueber einem Portrait.
+    """
+    _tipp(handy, "p1")
+    assert "Teilt Themen mit" in handy.eval_on_selector("#blatt", "e => e.textContent")
+
+    _tipp(handy, "t1")
+    text = handy.eval_on_selector("#blatt", "e => e.textContent")
+    assert "Teilt Themen mit" not in text, "Reste der Personenansicht stehen am Begriff"
+    assert handy.evaluate("() => document.getElementById('blatt-titel').hidden") is False
+
+    _tipp(handy, "p1")
+    assert handy.evaluate("() => document.getElementById('blatt-titel').hidden") is True, (
+        "der Begriffstitel steht noch ueber der Person"
+    )
+
+
+def test_die_hervorhebung_ueberlebt_den_naechsten_push(handy):
+    """🔴 GEMESSEN 2026-09-03, und der Grund, warum das erste Bild richtig
+    aussah und die Seite trotzdem falsch war.
+
+    `update()` setzt die Klassen jedes vorhandenen Elements neu
+    (`vorhanden.classes(...)`) und warf `.abseits` damit weg. Der Spiegel holt
+    alle drei Sekunden — die Hervorhebung ueberlebte also keine drei Sekunden,
+    waehrend das Blatt daneben stehen blieb und weiter etwas erklaerte.
+
+    Ein Fehler, den nur ein Test faengt, der den Push wirklich ausloest.
+    """
+    _tipp(handy, "t1")
+    vorher = handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length")
+    assert vorher > 0
+
+    # Derselbe Graph noch einmal — genau das tut der Spiegel im Takt.
+    handy.evaluate("""() => {
+      const g = window.kgSpiegel;
+      return fetch('/api/graph').then(r => r.json()).then((d) => g.update(d, 20));
+    }""")
+    handy.wait_for_timeout(500)
+
+    nachher = handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length")
+    assert nachher == vorher, (
+        f"der naechste Push loescht die Hervorhebung: {vorher} -> {nachher}"
+    )
+
+
+def test_die_auswahl_liegt_nicht_unter_dem_blatt(handy):
+    """🔴 GEMESSEN 2026-09-03 auf 390x844, und nur am Bild zu sehen.
+
+    Das Blatt nimmt am Telefon bis zu 72 % der Hoehe. Das Netz lag bei
+    y=248..562, das geoeffnete Blatt ab y=236 — die hervorgehobene
+    Nachbarschaft war vollstaendig verdeckt. Das Blatt erklaerte etwas, das
+    niemand sehen konnte, und die Hervorhebung daneben war sinnlos.
+
+    Dieselbe Antwort wie auf der grossen Flaeche: Das Netz weicht aus, statt
+    ueberdeckt zu werden.
+
+    Geprueft wird gegen das WIRKLICH gerenderte Blatt, nicht gegen eine Zahl
+    aus dem Stylesheet: ob es unten liegt oder ab 900 px rechts, entscheidet
+    das CSS.
+    """
+    _tipp(handy, "t1")
+    handy.wait_for_timeout(600)  # das Fassen laeuft nach der Uebergangszeit
+
+    d = handy.evaluate("""() => {
+      const cy = window.kgSpiegel.cy;
+      const feld = window.kgSpiegel.freiesFeld();
+      const nah = cy.$id('t1').closedNeighborhood().nodes();
+      const passt = (b) => b.x1 >= feld.x - 2 && b.x2 <= feld.x + feld.w + 2
+                        && b.y1 >= feld.y - 2 && b.y2 <= feld.y + feld.h + 2;
+      const drin = nah.filter((n) => passt(n.renderedBoundingBox({includeLabels: true})));
+      const raus = nah.filter((n) => !passt(n.renderedBoundingBox({includeLabels: true})))
+        .map((n) => { const b = n.renderedBoundingBox({includeLabels: true});
+          return [n.id(), Math.round(b.x1), Math.round(b.y1), Math.round(b.x2), Math.round(b.y2)]; });
+      return {feld, gesamt: nah.length, drin: drin.length, raus,
+              zoom: Math.round(cy.zoom() * 1000) / 1000};
+    }""")
+    assert d["feld"]["h"] < 700, (
+        f"das Blatt steht nicht offen, der Test prueft nichts: {d['feld']}"
+    )
+    assert d["drin"] == d["gesamt"], (
+        f"nur {d['drin']} von {d['gesamt']} hervorgehobenen Knoten liegen im "
+        f"freien Feld {d['feld']} (zoom {d['zoom']}) — draussen: {d['raus']}"
+    )
+
+
+def test_der_hintergrundtipp_gibt_das_ganze_netz_zurueck(handy):
+    """Der Weg zurueck: Ohne Auswahl gilt wieder das ganze Bild.
+
+    Sonst bliebe die Ansicht fuer immer auf dem letzten Angetippten stehen."""
+    _tipp(handy, "t1")
+    handy.wait_for_timeout(600)
+    eng = handy.evaluate("() => window.kgSpiegel.cy.zoom()")
+
+    handy.evaluate("() => window.kgSpiegel.cy.emit('tap')")
+    handy.wait_for_timeout(900)
+
+    weit = handy.evaluate("() => window.kgSpiegel.cy.zoom()")
+    assert weit < eng, f"das Bild geht nicht wieder auf: {eng} -> {weit}"
+
+
+# --- Zwei Anordnungen am Telefon (2026-09-03) -------------------------------
+#
+# Birk: „der spiegel soll auch die beiden verschiedenen organisationsarten
+# (menschen / bedeutung) zulassen. der default soll bedeutung sein."
+
+
+def test_der_spiegel_zeigt_zuerst_die_bedeutung(handy):
+    """🔴 Die Vorgabe, und sie ist eine Entscheidung: Am Telefon sieht man einen
+    Ausschnitt und selten das Ganze — dann traegt die inhaltliche Nachbarschaft
+    mehr als die soziale. Wer nebeneinander steht, sagt Verwandtes, und das
+    erklaert sich von selbst. Die grosse Wand hat den Platz fuer das andere Bild.
+    """
+    assert handy.evaluate("() => window.kgSpiegel.semantisch") is True
+
+    # 🔴 Die Anordnung FOLGT der Bedeutungslage — sie ist ihr nicht gleich.
+    # Seit dem 2026-09-03 raeumt `loeseUeberdeckungen` danach auf und verschiebt
+    # einzelne Knoten so weit, wie es zum Lesen noetig ist. Ein Test auf exakte
+    # Gleichheit verboete genau diese Bewegung; geprueft wird deshalb die
+    # ORDNUNG: Was in der Bedeutungslage links liegt, liegt es auch im Bild.
+    d = handy.evaluate("""() => {
+      const cy = window.kgSpiegel.cy;
+      const n = cy.nodes().filter(x => x.data('sx') !== null && x.data('sx') !== undefined);
+      const rang = (werte) => {
+        const sortiert = [...werte].map((w, i) => [w, i]).sort((a, b) => a[0] - b[0]);
+        const r = new Array(werte.length);
+        sortiert.forEach(([, i], platz) => { r[i] = platz; });
+        return r;
+      };
+      const soll = rang(n.map(x => x.data('sx')));
+      const ist = rang(n.map(x => x.position('x')));
+      // Spearman: 1 = dieselbe Reihenfolge, 0 = kein Zusammenhang.
+      const m = soll.length;
+      let d2 = 0;
+      for (let i = 0; i < m; i++) d2 += (soll[i] - ist[i]) ** 2;
+      return {geprueft: m, rho: 1 - (6 * d2) / (m * (m * m - 1))};
+    }""")
+    assert d["geprueft"] > 0, "das Testnetz traegt keine semantische Lage"
+    assert d["rho"] > 0.9, (
+        f"die Anordnung folgt der Bedeutungslage nicht (Rangkorrelation {d['rho']:.2f})"
+    )
+
+
+def test_der_knopf_schaltet_auf_die_gespraeche_um(handy):
+    """Beide Sichten auf dasselbe Netz: wer mit wem etwas gesagt hat (x/y) und
+    was inhaltlich nebeneinander gehoert (sx/sy)."""
+    handy.locator("#anordnung").click()
+    handy.wait_for_timeout(1200)  # die Bewegung ist gewollt sanft
+
+    assert handy.evaluate("() => window.kgSpiegel.semantisch") is False
+    # Dieselbe Regel wie oben: die Ordnung zaehlt, nicht der exakte Ort.
+    d = handy.evaluate("""() => {
+      const cy = window.kgSpiegel.cy;
+      const n = cy.nodes().filter(x => x.data('gx') !== null && x.data('gx') !== undefined);
+      const rang = (werte) => {
+        const sortiert = [...werte].map((w, i) => [w, i]).sort((a, b) => a[0] - b[0]);
+        const r = new Array(werte.length);
+        sortiert.forEach(([, i], platz) => { r[i] = platz; });
+        return r;
+      };
+      const soll = rang(n.map(x => x.data('gx')));
+      const ist = rang(n.map(x => x.position('x')));
+      const m = soll.length;
+      let d2 = 0;
+      for (let i = 0; i < m; i++) d2 += (soll[i] - ist[i]) ** 2;
+      return {geprueft: m, rho: 1 - (6 * d2) / (m * (m * m - 1))};
+    }""")
+    assert d["rho"] > 0.9, (
+        f"die Anordnung folgt der Gespraechslage nicht (Rangkorrelation {d['rho']:.2f})"
+    )
+
+
+def test_der_knopf_nennt_das_ziel_nicht_den_zustand(handy):
+    """Wie an der grossen Wand: Ein Knopf sagt, wohin er fuehrt. „Bedeutung"
+    waehrend die Bedeutung schon zu sehen ist, waere eine Falle."""
+    assert handy.locator("#anordnung").inner_text() == "Gespräche"
+
+    handy.locator("#anordnung").click()
+    handy.wait_for_timeout(1200)
+
+    assert handy.locator("#anordnung").inner_text() == "Bedeutung"
+
+
+def test_die_anordnung_ueberlebt_den_naechsten_push(handy):
+    """🔴 Derselbe Fallstrick wie bei der Hervorhebung: `update()` setzt die
+    Positionen jedes Knotens neu aus `x/y`. Ohne Nachziehen waere die
+    Bedeutungslage nach drei Sekunden wieder weg — und niemand haette gesehen,
+    warum das Bild zurueckspringt."""
+    handy.locator("#anordnung").click()   # auf Gespraeche
+    handy.wait_for_timeout(1200)
+    handy.locator("#anordnung").click()   # und zurueck auf Bedeutung
+    handy.wait_for_timeout(1200)
+
+    handy.evaluate("""() => {
+      const g = window.kgSpiegel;
+      return fetch('/api/graph').then(r => r.json()).then((d) => g.update(d, 20));
+    }""")
+    handy.wait_for_timeout(600)
+
+    d = handy.evaluate("""() => {
+      const cy = window.kgSpiegel.cy;
+      const n = cy.nodes().filter(x => x.data('sx') !== null && x.data('sx') !== undefined);
+      const rang = (werte) => {
+        const sortiert = [...werte].map((w, i) => [w, i]).sort((a, b) => a[0] - b[0]);
+        const r = new Array(werte.length);
+        sortiert.forEach(([, i], platz) => { r[i] = platz; });
+        return r;
+      };
+      const soll = rang(n.map(x => x.data('sx')));
+      const ist = rang(n.map(x => x.position('x')));
+      const m = soll.length;
+      let d2 = 0;
+      for (let i = 0; i < m; i++) d2 += (soll[i] - ist[i]) ** 2;
+      return {geprueft: m, rho: 1 - (6 * d2) / (m * (m * m - 1))};
+    }""")
+    assert d["rho"] > 0.9, (
+        f"der Push wirft die Anordnung um (Rangkorrelation {d['rho']:.2f})"
+    )
+
+
+def test_ohne_bedeutungslage_gibt_es_keinen_knopf(page, spiegel, tmp_path):
+    """Frueh am Tag rechnet der Kern noch keine semantische Lage (zu wenige
+    Begriffe). Ein Knopf, der dann nichts tut, ist schlimmer als keiner."""
+    page.goto(f"{spiegel}/graph")
+    page.wait_for_function(
+        "() => window.kgSpiegel && window.kgSpiegel.cy.nodes('.person').length > 0", timeout=30000
+    )
+    ohne = beispielgraph()
+    for n in ohne["nodes"]:
+        n.pop("sx", None)
+        n.pop("sy", None)
+    page.evaluate("(d) => window.kgSpiegel.update(d, 20)", ohne)
+    page.wait_for_timeout(500)
+
+    assert page.evaluate("() => window.kgSpiegel.hatBeideLagen()") is False
+    assert page.locator("#anordnung").is_hidden()
+
+
+# --- Die Widerspruchstafel am Telefon (2026-09-03) --------------------------
+
+
+def test_der_knopf_zeigt_die_kontraeren_positionen(handy):
+    """🔴 BIRK, 2026-09-03: „die widerspruchstafel soll sich dort per button
+    einblenden lassen."
+
+    An der Wand steht sie von selbst da, sobald niemand etwas antippt. Am
+    Telefon gibt es keinen Ruhezustand — jeder Aufruf ist Absicht, also
+    braucht es den Knopf.
+    """
+    assert handy.locator("#reibung").is_visible(), "der Knopf fehlt"
+
+    handy.locator("#reibung").click()
+    handy.wait_for_timeout(500)
+
+    assert handy.evaluate("() => document.getElementById('blatt').classList.contains('offen')")
+    assert handy.eval_on_selector("#blatt-titel", "e => e.textContent") == "Konträre Positionen"
+    text = handy.eval_on_selector("#blatt", "e => e.textContent")
+    assert "Mehr Grün versus verdichtetes Bauen" in text
+    assert "ein bisschen mehr Platz zwischen den Häusern" in text
+    # Zwei Seiten, jede mit ihrer Kante — die Gegenueberstellung soll man
+    # sehen, bevor man liest.
+    assert handy.eval_on_selector_all(".gegen li.seite", "e => e.length") == 2
+    farben = handy.eval_on_selector_all(
+        ".gegen li.seite", "e => e.map(x => getComputedStyle(x).borderLeftColor)"
+    )
+    assert farben[0] != farben[1], f"beide Seiten tragen dieselbe Farbe: {farben}"
+
+
+def test_die_widerspruchstafel_hebt_nichts_im_netz_hervor(handy):
+    """Sie meint den ganzen Tag, nicht einen Knoten.
+
+    Bliebe eine Hervorhebung von vorher stehen, zeigte das Netz auf etwas, das
+    mit der Tafel daneben nichts zu tun hat.
+    """
+    _tipp(handy, "t1")
+    assert handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length") > 0
+
+    handy.locator("#reibung").click()
+    handy.wait_for_timeout(500)
+
+    assert handy.evaluate("() => window.kgSpiegel.cy.elements('.abseits').length") == 0, (
+        "das Netz bleibt blass, obwohl die Tafel den ganzen Tag meint"
+    )
+
+
+def test_ohne_widersprueche_gibt_es_keinen_knopf(page, spiegel):
+    """Frueh am Tag hat der Kern noch keine gerechnet — ein Knopf, der eine
+    leere Tafel oeffnet, ist schlechter als keiner."""
+    page.goto(f"{spiegel}/graph")
+    page.wait_for_function(
+        "() => window.kgSpiegel && window.kgSpiegel.cy.nodes('.person').length > 0", timeout=30000
+    )
+    ohne = beispielgraph()
+    ohne["widersprueche"] = []
+    page.evaluate("(d) => window.kgSpiegel.update(d, 20)", ohne)
+    page.wait_for_timeout(400)
+    # Der Knopf haengt am Datenweg, nicht am Graphen — also ueber `aufDaten`.
+    page.evaluate("""(d) => {
+      document.getElementById('reibung').hidden = (d.widersprueche || []).length === 0;
+    }""", ohne)
+
+    assert page.locator("#reibung").is_hidden()

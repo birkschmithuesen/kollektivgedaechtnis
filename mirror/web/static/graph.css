@@ -116,10 +116,189 @@
   color: var(--dim);
 }
 
+/* ---- Die Abschnitte im Blatt (2026-09-03) ---------------------------
+   Birk: „der spiegel soll auch die neue ansicht bekommen mit der seitenleiste
+   und den highlights."
+
+   Eine Spalte, eine Leserichtung, Hierarchie aus GROESSE und ABSTAND statt aus
+   Rahmen und Kaesten — dasselbe Prinzip wie auf der grossen Flaeche, nur auf
+   Handybreite. Nichts hier laedt zum Tippen ein; es wird gelesen. */
+
+#blatt .titel {
+  margin: 12px 0 0;
+  font-size: 21px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+#blatt .titel[hidden] { display: none; }
+
+/* Die Abschnittsmarke: klein, gesperrt, mit einer feinen Linie darunter, die
+   die Seite ordnet, ohne einen Kasten zu bauen. */
+#blatt .marke {
+  margin: 20px 0 8px;
+  padding-bottom: 5px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--linie);
+}
+
+#blatt #blatt-mehr ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#blatt #blatt-mehr li {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+#blatt #blatt-mehr li b { font-weight: 600; }
+/* Die Belegstelle gehoert zum Eintrag darueber: eingerueckt, kleiner, mit
+   einer Linie, die sie als Zitat ausweist statt als eigenen Punkt. */
+#blatt #blatt-mehr li span {
+  display: block;
+  margin-top: 3px;
+  padding-left: 9px;
+  border-left: 2px solid var(--linie);
+  font-size: 14px;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--dim);
+}
+
+/* Verwandte Begriffe: keine Liste, sondern Marken — sie sind Nachbarn, keine
+   Aufzaehlung, und die Form soll das sagen. */
+#blatt .verwandt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#blatt .chip {
+  padding: 4px 10px;
+  border: 1px solid var(--linie);
+  border-radius: 100px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--dim);
+}
+
+/* 🔴 AB HIER EINE SEITENLEISTE, nicht mehr ein Blatt von unten.
+   Am Telefon ist unten richtig: dort ist die Flaeche hoch und schmal, und der
+   Daumen liegt am unteren Rand. Auf einem breiten Schirm — der Rechner, von
+   dem aus die Seite gezeigt wird — waere ein Blatt ueber der halben Hoehe
+   dagegen genau das Problem, gegen das die Tafel an der Wand gebaut wurde: Es
+   laege ueber dem, was es erklaert. 900 px ist die Breite, ab der eine Spalte
+   von 380 px daneben passt, ohne dem Netz zu wenig zu lassen. */
+/* 🔴 820 px statt 900 (Birk, 2026-09-03: „wenn ich den graphen im browser
+   oeffne … werden diese wie im mobile view unten angezeigt").
+   Gemessen war die Seitenleiste bei 1440 px korrekt rechts — wer den Browser
+   aber nur halb aufzieht, landete unter der alten Schwelle und bekam die
+   Telefonansicht. 820 px faengt auch ein halbiertes Fenster auf einem
+   1680er-Schirm. */
+@media (min-width: 820px) {
+  #blatt {
+    left: auto;
+    top: 0;
+    bottom: 0;
+    /* Ein Drittel der Flaeche, hoechstens 380 px: Bei 820 px Fenster waeren
+       feste 380 px fast die Haelfte, und das Netz bliebe ein Streifen. */
+    width: min(380px, 34vw);
+    max-height: none;
+    border-top: none;
+    border-left: 1px solid var(--linie);
+    border-radius: 0;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+    transform: translateX(101%);
+  }
+  #blatt.offen { transform: translateX(0); }
+  /* Der Griff meint „schieb mich hoch" — an einer Seitenleiste sagt er das
+     Falsche. */
+  #blatt .griff { display: none; }
+}
+
 /* ---- Fusszeile: die Legende der drei Farben ------------------------- */
 
 /* Ohne sie ist die Farbe an der Wand erklärt (durch den Raum, durch die
    Begleitung) und am Handy nicht. Winzig, ausserhalb jeder Bedienung. */
+/* Der Umschalter zwischen Gespraechen und Bedeutung (2026-09-03).
+   Oben rechts: Unten liegt das Blatt, links die Legende, und der Daumen
+   erreicht die obere Ecke am Telefon schlechter — was gut ist, denn dieser
+   Knopf soll nicht versehentlich getroffen werden. Er wechselt das ganze Bild.
+   44 px Mindesthoehe ist das Mass, das `--tap` in mirror.css fuer alles
+   Antippbare setzt. */
+#anordnung {
+  position: absolute;
+  right: calc(10px + var(--safe-right));
+  top: 10px;
+  z-index: 15;
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid var(--linie);
+  border-radius: 100px;
+  background: rgba(23, 24, 28, 0.82);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  /* Damit er ueber dem Netz nicht verschwindet, wenn dahinter Helles liegt. */
+  backdrop-filter: blur(6px);
+}
+#anordnung[hidden] { display: none; }
+
+/* Der zweite Knopf sitzt unter dem ersten — dieselbe Spalte, damit die obere
+   rechte Ecke eine Ordnung behaelt und nicht zwei Dinge nebeneinander
+   konkurrieren. */
+#reibung {
+  position: absolute;
+  right: calc(10px + var(--safe-right));
+  top: 56px;
+  z-index: 15;
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid var(--linie);
+  border-radius: 100px;
+  background: rgba(23, 24, 28, 0.82);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+#reibung[hidden] { display: none; }
+#reibung:active { background: rgba(40, 42, 48, 0.92); }
+@media (min-width: 820px) {
+  main:has(#blatt.offen) #reibung { right: calc(min(380px, 34vw) + 10px + var(--safe-right)); }
+}
+
+/* Die zwei Seiten eines Widerspruchs: untereinander, jede mit ihrer Kante.
+   Dieselben zwei Bauhaus-Farben wie an der Wand — hier ohne
+   Bedeutungskonflikt, weil auf dem Blatt kein Netz liegt. */
+#blatt .gegen li.seite {
+  padding-left: 10px;
+  border-left: 3px solid var(--linie);
+}
+#blatt .gegen li.seite-eine { border-left-color: #D62828; }
+#blatt .gegen li.seite-andere { border-left-color: #1D4E9C; }
+#blatt .gegen li.seite span {
+  border-left: none;
+  padding-left: 0;
+}
+#anordnung:active { background: rgba(40, 42, 48, 0.92); }
+
+/* Neben der Seitenleiste rueckt er mit — sonst laege er darunter.
+   🔴 `:has()` und NICHT `#blatt.offen ~ #anordnung`: Der Geschwister-Kombinator
+   sieht nur nach RECHTS im Dokument, und der Knopf steht vor dem Blatt. Das
+   war der erste Entwurf und haette nie gegriffen. */
+@media (min-width: 820px) {
+  main:has(#blatt.offen) #anordnung { right: calc(min(380px, 34vw) + 10px + var(--safe-right)); }
+}
+
 #legende {
   position: absolute;
   left: calc(10px + var(--safe-left));

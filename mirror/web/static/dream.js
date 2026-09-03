@@ -10,10 +10,34 @@
 /** Wie viele Miniaturen der Streifen höchstens trägt. Die Station schickt
  *  ihren eigenen Wert mit (`strip_max`); dies ist die Obergrenze fürs Handy —
  *  jede Miniatur ist ein Bild, das über ein Konferenz-WLAN geladen wird. */
-const MAX_MINIATUREN = 24;
+const MAX_MINIATUREN = 40;
+
+// ---------------------------------------------------------------------------
+// Die Slideshow (Birk, 2026-09-02, am Abend des Ausstellungstags)
+// ---------------------------------------------------------------------------
+// 🔴 „Die Träume sollten als Slideshow mit Überblendung durchlaufen."
+//
+// Der Anlass: Am Abend werden keine Interviews mehr geführt, es entsteht also
+// kein neuer Traum mehr. Die Seite zeigte dann stundenlang EIN Bild — den
+// letzten Traum von 16:59. Die Slideshow macht aus dem Bestand des Tages
+// wieder etwas, das läuft.
+//
+// Sie greift NUR, wenn nichts Neues mehr kommt: Sobald die Station einen
+// frischen Traum schickt, springt die Anzeige dorthin und beginnt von vorn.
+// Ein Abend ohne Interviews ist der Regelfall dieser Schleife, ein Abend mit
+// welchen unterbricht sie ohne Zutun.
+
+/** Wie lange ein Bild steht, bevor das nächste aufblendet. Birks Vorgabe. */
+const BILD_DAUER_MS = 8000;
+
+/** Die Blende. Dieselbe Länge wie an der Wand (`default_fade_ms` in kg2) —
+ *  wer beides an einem Abend sieht, soll denselben Rhythmus erkennen.
+ *  Muss zur `transition` in dream.css passen. */
+const BLENDE_MS = 1200;
 
 export function createTraumAnsicht(wurzel = document) {
   const bild = wurzel.getElementById('bild');
+  const bildBlende = wurzel.getElementById('bild-blende');
   const satz = wurzel.getElementById('satz');
   const streifen = wurzel.getElementById('streifen');
   const warten = wurzel.getElementById('warten');
@@ -85,23 +109,111 @@ export function createTraumAnsicht(wurzel = document) {
     streifen.hidden = traeume.length === 0;
   }
 
+  // --- Die Slideshow -------------------------------------------------------
+  //
+  // `alleTraeume` ist der Vorrat in der Reihenfolge, in der die Träume
+  // entstanden sind — der aktuelle zuletzt. `stelle` zeigt auf das gerade
+  // Sichtbare, `oben` sagt, welche der beiden Bildebenen vorn liegt.
+  let alleTraeume = [];
+  let stelle = 0;
+  let oben = bild;
+  let unten = bildBlende;
+  let uhr = null;
+
+  /** Ein Bild einblenden, das andere darunter stehen lassen.
+   *
+   * Der Kern der Blende: Das NEUE Bild wird unsichtbar geladen, erst nach
+   * `load` sichtbar geschaltet und dann eingeblendet. Ohne das Warten auf
+   * `load` blendet die Seite auf ein Bild, das noch gar nicht da ist — über
+   * ein Konferenz-WLAN sieht man dann eine Sekunde lang nichts. */
+  function blendeAuf(traum) {
+    if (!traum || !traum.image) return;
+    satz.textContent = traum.sentence || '';
+    unten.alt = traum.sentence || '';
+
+    const zeigen = () => {
+      unten.hidden = false;
+      unten.style.opacity = '0';
+      // Ein Frame Pause, sonst fasst der Browser Setzen und Ändern zu einem
+      // Schritt zusammen und es gibt keine Blende, sondern einen Schnitt.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          unten.style.opacity = '1';
+          oben.style.opacity = '0';
+        });
+      });
+      window.setTimeout(() => {
+        oben.hidden = true;
+        const merk = oben;
+        oben = unten;
+        unten = merk;
+      }, BLENDE_MS);
+    };
+
+    if (unten.src.endsWith(traum.image) && unten.complete) {
+      zeigen();
+    } else {
+      unten.hidden = true;
+      unten.onload = zeigen;
+      unten.src = traum.image;
+    }
+  }
+
+  function weiter() {
+    if (alleTraeume.length < 2) return;
+    stelle = (stelle + 1) % alleTraeume.length;
+    blendeAuf(alleTraeume[stelle]);
+  }
+
+  function starteSchleife() {
+    if (uhr !== null) window.clearInterval(uhr);
+    // Unter zwei Bildern gibt es nichts durchzublättern — dann bleibt die
+    // Seite genau so stehen, wie sie es vor der Slideshow tat.
+    if (alleTraeume.length < 2) {
+      uhr = null;
+      return;
+    }
+    uhr = window.setInterval(weiter, BILD_DAUER_MS);
+  }
+
   return {
     schliesseLupe,
+    /** Für Tests und für den Fall, dass die Seite im Hintergrund liegt. */
+    stoppeSchleife() {
+      if (uhr !== null) window.clearInterval(uhr);
+      uhr = null;
+    },
     applyState(zustand) {
       const aktuell = zustand && zustand.current ? zustand.current : null;
+
+      // 🔴 Der Vorrat für die Slideshow: die Historie in ihrer Entstehungs-
+      // reihenfolge, der aktuelle Traum zuletzt. `history` kommt ältestes
+      // zuerst (kg2/server.py), also ist die Reihenfolge schon richtig.
+      const vorrat = ((zustand && zustand.history) || [])
+        .filter((tr) => tr && tr.image)
+        .concat(aktuell && aktuell.image ? [aktuell] : []);
+      const vorratSchluessel = vorrat.map((tr) => tr.id).join(',');
+      if (vorratSchluessel !== alleTraeume.map((tr) => tr.id).join(',')) {
+        alleTraeume = vorrat;
+        starteSchleife();
+      }
 
       if (aktuell && aktuell.image) {
         if (aktuell.image !== gezeigt) {
           gezeigt = aktuell.image;
-          // Der Traumsatz IST die Bildbeschreibung — dasselbe, was daneben
-          // steht, aber für den, der das Bild nicht sieht.
-          bild.alt = aktuell.sentence || '';
-          bild.src = aktuell.image;
+          // 🔴 Ein NEUER Traum unterbricht die Schleife und wird gezeigt: Was
+          // gerade entstanden ist, hat Vorrang vor dem Durchblättern. Danach
+          // läuft die Slideshow von dieser Stelle aus weiter.
+          stelle = Math.max(0, alleTraeume.length - 1);
+          blendeAuf(aktuell);
+          starteSchleife();
         }
       } else {
         gezeigt = null;
         bild.hidden = true;
+        bildBlende.hidden = true;
         bild.removeAttribute('src');
+        bildBlende.removeAttribute('src');
       }
 
       satz.textContent = aktuell ? aktuell.sentence || '' : '';
@@ -109,6 +221,12 @@ export function createTraumAnsicht(wurzel = document) {
 
       // Neueste zuerst: `history` kommt ältestes zuerst (kg2/server.py), und am
       // Handy wischt man von links nach rechts in die Vergangenheit.
+      // 🔴 Mehr Miniaturen (Birk, 2026-09-02): „du kannst die anzahl erhöhen
+      // sodass sie die komplette untere breite ausfüllt." Der Streifen ist
+      // waagerecht wischbar und traegt sie ohnehin; die Grenze schuetzt nur
+      // ein schwaches Telefon vor zwei Dutzend gleichzeitigen Ladungen —
+      // und die Miniaturen laden `lazy`, also kosten die hinteren nichts,
+      // solange niemand dorthin wischt.
       const verlauf = ((zustand && zustand.history) || [])
         .filter((t) => t && t.image && (!aktuell || t.id !== aktuell.id))
         .slice(-MAX_MINIATUREN)

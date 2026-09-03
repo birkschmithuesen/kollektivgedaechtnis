@@ -130,6 +130,15 @@ html, body {
   font-size: 4.1vh;
   line-height: 1.34;
   letter-spacing: 0.005em;
+  /* 🔴 DREI ZEILEN BLEIBEN DREI ZEILEN (Birk, 2026-09-02): Seit dem Haiku
+     stehen im Satz zwei „\n". `textContent` gibt sie an den Browser weiter,
+     aber HTML macht daraus ohne diese Zeile ein Leerzeichen — das Gedicht
+     stuende als eine lange Zeile da, und `text-wrap: balance` braeche sie an
+     einer beliebigen Stelle um.
+     `pre-line` und nicht `pre`: Es soll NUR an den Umbruechen umbrechen,
+     Einrueckungen und doppelte Leerzeichen aber weiter zusammenfassen. Ein
+     Prosasatz ohne „\n" sieht damit aus wie vorher. */
+  white-space: pre-line;
   text-wrap: balance;
   text-shadow: 0 0.2vh 1.2vh rgba(0, 0, 0, 0.55);
 }
@@ -149,6 +158,10 @@ html, body {
   font-size: 4.4vh;
   line-height: 1.3;
   text-align: center;
+  /* Wie bei #sentence: Der Typewriter zeigt DENSELBEN Satz, waehrend das Bild
+     entsteht. Ohne das stuende das Haiku dort einzeilig und spraenge beim
+     Uebergang ins Dreizeilige. */
+  white-space: pre-line;
   text-shadow: 0 0.2vh 1.4vh rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }

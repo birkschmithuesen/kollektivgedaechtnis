@@ -1,10 +1,84 @@
-# Stand 2026-09-02, Morgen — Whisper-Ausfall und Aufsicht
+# Stand 2026-09-02, Abend — der Ausstellungstag und was daraus wurde
 
 **Das ist das EINE Dokument, mit dem eine neue Session anfängt.** Es sagt, was
 läuft, was ungeprüft ist und was zuerst zu tun wäre. Alles Ältere liegt unter
 `docs/archiv/` und ist erledigt.
 
-**Festival: NEW bauhaus, 2./3. September 2026, Weimarhalle — morgen.**
+**Festival: NEW bauhaus, 2./3. September 2026, Weimarhalle — Tag 1 gelaufen.**
+
+---
+
+## 0. 🔴 Der Ausstellungstag: 21 Interviews, und was dabei gebaut wurde
+
+Der erste Tag ist durch. Alles hier ist **im Betrieb** entstanden, meist weil
+Birk am Gerät stand und etwas sah, das nicht stimmte. Die Reihenfolge ist die,
+in der es passiert ist.
+
+### Was am laufenden System repariert wurde (Daten, kein Code)
+
+| Was | Wie oft |
+|---|---|
+| **Foto der falschen Person zugeordnet** | 4× von Hand repariert, dann behoben (siehe unten) |
+| Interview zu spät gestartet, Name fehlte | 1× (`started_at` zurückgesetzt, Name kam) |
+| Zwei Interviews waren dieselbe Person | 1× zusammengeführt (p12/p13) |
+| Begriffe, die nicht zur Person gehörten | 3× umgehängt (Martin Kranz ↔ Mirjam Philipp) |
+| Belegstellen zu lang, zu kurz oder leer | 7× bereinigt |
+
+Alle Sicherungen liegen in `~/kg-archiv/`, eine je Eingriff.
+
+### 🔴 Die drei Fehler, die dabei gefunden wurden
+
+**1. `fold_term` verlor die Belegstellen.** Beim Zusammenlegen zweier Begriffe
+las es nur `person_id` und `created_at` — die `evidence` blieb liegen. Drei
+echte gingen verloren und ließen sich nur aus einer Sicherung zurückholen. Das
+betraf **jeden** Merge, auch die automatischen nach jedem Interview.
+Behoben, mit Test und Mutationsprobe.
+
+**2. Das gespeicherte Transkript war verstümmelt.** `pipeline.py` schnitt es
+bei `interview_end_index` ab — einem Index, den dasselbe Modell schätzt.
+Steffens Transkript brach mitten im Wort ab („also aus historischer Sicht
+tatsä"), 1490 Zeichen für ein fünfminütiges Gespräch. Von 91 Belegstellen
+ließen sich 26 im gespeicherten Transkript nicht wiederfinden — **sie waren
+nicht erfunden, nur unauffindbar.** Jetzt wird der volle Text gespeichert; der
+Index wirkt weiter dort, wo er hingehört (`extract()` wendet ihn intern an).
+
+**3. Der Traumanker zeigte auf die falsche Person.** `last_person_id` war die
+zuletzt BEGONNENE Person — und wenn ein Traum entstand, hatte längst die
+nächste angefangen, die naturgemäß noch keine Begriffe hat. Damit fiel die
+ganze Verankerung am letzten Gespräch aus, und der Anker landete beim
+Tagessieger. Kein Randfall: Ein Traum entsteht alle 240 s, ein Interview dauert
+5–10 Minuten. Jetzt sucht er die letzte Person **mit Begriffen**.
+
+### Was neu gebaut wurde
+
+| | wo |
+|---|---|
+| **Foto-60-Sekunden-Regel** — ein Foto später als 60 s nach Interviewende gehört der nächsten Person und wird geparkt | `kg/core.py` |
+| **VAD-Satzende** — der Stop-Knopf löst ein Satzende aus, statt auf eine Sprechpause zu warten | `kg/vad_satzende.py`, `/api/stt/satzende` |
+| **8-Sekunden-Nachlauf** am Beenden-Knopf, mit Abbruch durch zweiten Druck | `frontend/static/operator.js` |
+| **Haiku statt Prosasatz** unter dem Traumbild | `kg2/haiku.py`, `kg2/silben.py` |
+| **Slideshow** der Traumbilder, an der Wand und auf dem Spiegel | `frontend2/`, `mirror/web/` |
+| **Hervorhebung** der Nachbarschaft beim Antippen | `frontend/static/nachbarschaft.js` |
+| **Die Tafel** — geteilte Fläche mit Zitat, Stimmen, verwandten Begriffen, Widersprüchen | `frontend/static/tafel.js` |
+| **Semantische Anordnung** — zweite Position aus den Embeddings | `kg/semantik.py` |
+| **Widersprüche des Tages** — LLM-Aufruf nach jedem Interview | `kg/widerspruch.py` |
+| **Sicherung in die Cloud** | `scripts/sichern-in-cloud.sh` |
+
+### 🔴 Was eine neue Session zuerst wissen muss
+
+- **`randomize: true`** im Layout (Birks Entscheidung, nachdem er die neu
+  gewürfelte Anordnung gesehen hatte). Der Determinismus, den Prerender und
+  Tests brauchen, kommt über `?deterministisch=1` zurück.
+- **Der Bedeutungs-Umschalter ist abgeschaltet** (`SEMANTIK_ANZEIGEN = false`
+  in `projection.html`). Der Kern liefert `sx`/`sy` weiter; es fehlt allein die
+  Schaltfläche. Grund: Die Darstellung war noch nicht fertig — inzwischen sind
+  die Portraits entzerrt, der Knopf könnte zurück.
+- **Zwei Belegstellen sind unbelegbar** (Danielas „auch mit Lehm", Steffens „In
+  jedem Fall die, die es betrifft"). Sie stehen in den verstümmelten
+  Transkripten nicht — nicht erfinden.
+- **`scikit-learn` ist neu im Projekt** (für die semantische Anordnung).
+
+---
 
 > Vorher lesen, in dieser Reihenfolge:
 > `AGENTS.md` (kurz) → `docs/ARBEITSREGELN-ausstellungsrechner.md` (vollständig,
@@ -1400,6 +1474,298 @@ erwünscht — die Kategorie ist also keine Störung, ihre Unzuverlässigkeit sc
   Birk hat das ausdrücklich so entschieden.
 
 ---
+
+## 2s. Die Tafel: drei Fehler, die nur das gerenderte Bild zeigte (2026-09-02, nachts)
+
+Gebaut war die Tafel (der eigene Bereich neben dem Netz) am Abend. Die Suite war
+grün — **1589 Tests, kein einziger rot.** Beim Nachmessen am laufenden Kern
+standen dann drei Fehler im Bild, die kein Test gesehen hatte. Alle drei haben
+dieselbe Ursache: **Der Testgraph hat fünf Knoten, die Wand hat 76.**
+
+### Fehler 1: Die Wand erklärte einen Knoten, den niemand sah
+
+Gemessen: angetippter Knoten bei x=1615 auf einer 1286 px breiten Fläche —
+also außerhalb. Die hervorgehobene Nachbarschaft war zu 1/5 im Bild.
+
+Ursache: Beim Aufgehen fasste die Tafel über `uebersicht()`, und das rahmt das
+**ganze** Netz. Bei fünf Knoten ist das dasselbe Bild; bei 76 passt das Netz
+nicht mehr lesbar ins Feld, die Wand zeigt einen Ausschnitt — und der
+angetippte Knoten kann darin fehlen.
+
+Behoben: `camera.focus(gewaehlt.closedNeighborhood())` statt `uebersicht()`.
+Gefasst wird jetzt genau das, was auch leuchtet. `focus()` ändert den Modus
+nicht — die Wand bleibt so bedienbar, wie der Operator sie gestellt hat.
+
+Nachgemessen am echten Netz, im Modus `manual` mit nötiger Fahrt:
+**Knoten und alle 5 Nachbarn im Bild, stabil über 17,5 s** (vorher: draußen
+nach 8,5 s).
+
+### Fehler 2: Beim Rückfall blieb die Auswahl stehen
+
+Nach 30 s ohne Berührung nimmt die Wand sich zurück und fährt wieder los. Die
+Tafel erklärte weiter einen bestimmten Knoten, der binnen Sekunden aus dem Bild
+fuhr. Behoben über `onRelease` in projection.html: Der Ruhezustand tritt an die
+Stelle der Auswahl, sonst geht die Tafel zu.
+
+### Fehler 3: `stumm` war deklariert und wurde nie gelesen
+
+Beim Antippen standen **beide** da: die Tafel rechts und die Zitatkarte quer
+über dem Netz, auf demselben Knoten. Genau der Zustand, gegen den die Tafel
+gebaut wurde ("da aktuell gehighlightete Knoten von dem Zitatfenster überdeckt
+werden").
+
+Die Option existierte in `quote-overlay.js`, projection.html setzte sie auch —
+aber keine Zeile las sie aus. **Gebaut, plausibel, wirkungslos.** Jetzt hängen
+die beiden Tap-Horcher daran; der Hintergrund-Tipp bleibt in jedem Fall
+gebunden, damit ein vom Zyklus eingeblendetes Zitat wegtippbar bleibt.
+
+### Dazu: Die Tafel war unlesbar klein
+
+Gemessen bei 1920 px: Die Wand ist auf `camera_min_label` = 14 kalibriert, ihre
+Knoten standen bei **14,6 px**. Die Belegstellen auf der Tafel standen bei
+**6,8 px**, die Abschnittsmarken bei **5,2 px**.
+
+Ursache war dieselbe wie am 2026-09-02 bei der Zitatkarte ("das Zitat im
+Touchscreen ist viel zu klein"): Alles hing an `--quote-scale`, und der steht
+auf 0,4, weil die **Karte** zu viel Fläche nahm. Die Tafel nimmt keine — sie
+hat ihre eigene.
+
+Jetzt dieselbe Trennung wie bei der Karte: **Schrift an `--quote-schrift`,
+Fläche an `--quote-scale`.** Die zwei kleinsten Grade sind angehoben (13 → 18
+für die Marken, 17 → 19 für die Belege), damit auch der kleinste Text über der
+Grenze der Wand bleibt. Ergebnis: Name 27,2 px, Zitat 21,6 px, Belege 15,2 px,
+Marken 14,4 px — **nichts mehr unter 14.** Die Portraits hängen ebenfalls an
+der Schrift: Sie stehen im Lesefluss, und ein Kopf, dessen Bild kleiner ist als
+der Name daneben, kippt.
+
+### Was daraus für Tests folgt
+
+Der Testgraph mit fünf Knoten kann diese Fehlerklasse **nicht** zeigen: Dort
+passt immer alles ins Bild, und "die Auswahl ist sichtbar" fällt mit "alles ist
+sichtbar" zusammen. `tests/test_tafel.py` hat deshalb jetzt ein **eigenes
+großes Netz** (72 Knoten, weit gespannt) mit den kalibrierten Werten der Wand
+(`camera_min_label` 14, Operator-Modus `pan`) — und einen Test, der als
+Vorbedingung prüft, dass die Kamera darin überhaupt fahren **muss**. Fällt der,
+prüfen alle darunter nichts mehr.
+
+Ehrlich vermerkt und im Code so dokumentiert: Zwei der Verhaltenstests fangen
+den Rückbau trotzdem nicht — ohne Kern gibt es keinen `state`-Push, die Wand
+bleibt nach `uebersicht()` in der Vollansicht. Bewiesen wird der Fix von einem
+Test, der die **Entscheidung** misst (worauf wird gefasst, und mit wie vielen
+Elementen), plus zwei Verhaltenstests über den Modus. Alle Mutationsproben
+(`if (false)`, `focus(alle)`, `focus(nur der Knoten)`, `stumm` ignorieren,
+`stumm` zu breit, Schrift zurück an den Flächenregler) werden gefangen.
+
+**Für Birk: Es genügt, die Wandseite neu zu laden.** Geändert sind nur
+Frontend-Dateien (`tafel.js`, `quote-overlay.js`, `base.css`,
+`projection.html`) — kein Neustart von Kern oder Traumdienst nötig.
+
+## 2t. Nachgereicht am 2026-09-03: Idle, Nachziehen, Spiegel, Slideshow
+
+### Ohne Auswahl keine Seitenleiste
+
+Birk: „nimm den part 'woran sich der tag reibt' wieder raus. in der idle
+ansicht soll keine seitenleiste da sein." Der Ruhezustand ist weg — die Tafel
+geht auf, wenn jemand antippt, und sonst nicht.
+
+Die Widersprüche werden **weiter berechnet** (`kg/widerspruch.py`, nach jedem
+Interview) und stehen in `graph.json`; sie werden nur nicht mehr eingeblendet.
+Der Block in `tafel.js` bleibt stehen, ein Aufruf über die API zeigt ihn wieder.
+Wer ihn ganz los will: der Test in `test_tafel.py`, `zeigeWidersprueche` in
+`tafel.js`, die `.tafel-widerspruch*`-Regeln in `base.css`, der LLM-Aufruf in
+`kg/pipeline.py` — in dieser Reihenfolge.
+
+### 🔴 Neue Interviews erreichten die offene Tafel nicht
+
+Birks Frage („hast du geprüft, dass es mit neu hinzukommenden interviews auch
+alles richtig einsortiert und auch die zusatzinfo pro knoten in der seitenleiste
+aktualisiert?") war berechtigt: Hatte ich nicht, und es war kaputt. Gemessen:
+Der Graph wuchs von 5 auf 7 Knoten, die offene Tafel blieb unverändert stehen —
+`oeffne()` lief nur beim Antippen.
+
+| | vorher | jetzt |
+|---|---|---|
+| Neuer Begriff bei offener Person | fehlte | steht drin |
+| „Teilt Themen mit" | blieb stehen | wächst mit |
+| Neue Stimme an offenem Begriff | fehlte | kommt dazu |
+| Zusammengelegter Begriff (`fold_term`) | leere Tafel, leerer Titel | geht zu |
+
+Beim Nachziehen bleibt die **Rollposition** erhalten und die **Kamera fährt
+nicht** — wer liest, wird nicht gestört. Beides ist geprüft.
+
+Eine Falle dabei, fast hineingelaufen: `begriff()`/`person()` lieferten für
+jede beliebige id ein Objekt. Die naheliegende Prüfung wäre `namen.has(id)`
+gewesen — und hätte jede Person **ohne erkannten Namen** um ihre Tafel gebracht
+(die Namenserkennung fällt regelmäßig aus, §2h). Es gibt jetzt eine eigene
+Personenmenge und einen Test dafür.
+
+### Der Spiegel bekommt Hervorhebung und Seitenleiste
+
+Birk: „der spiegel soll auch die neue ansicht bekommen mit der seitenleiste und
+den highlights." Der Spiegel ist bewusst eigenständig gebaut, also dort
+nachgebaut statt importiert (dieselbe Linie wie bei den Kanten, §2 oben).
+
+Die Daten waren schon da — gemessen an der öffentlichen Seite: `verwandt` bei
+54 von 55 Begriffen, `evidence` an 112 von 112 Kanten, 21 Zitate, 3
+Widersprüche. Es war reine Frontend-Arbeit.
+
+Das Blatt zeigt jetzt bei einer **Person** Portrait, Name, Zitat, „Wovon die
+Rede war" (Begriffe mit Belegstelle) und „Teilt Themen mit"; bei einem
+**Begriff** den Titel, „Von N Menschen gesagt" mit allen Stimmen und „Liegt
+inhaltlich daneben". Ab 900 px Fensterbreite steht es als **Seitenleiste**
+rechts statt als Blatt von unten.
+
+Drei Fehler dabei, alle nur am Bild oder durch einen Test zu sehen:
+
+1. **Das Blatt deckte das Netz zu.** Auf 390×844 lag das Netz bei y=248..562,
+   das geöffnete Blatt ab y=236 — die Hervorhebung war vollständig verdeckt.
+   Der Spiegel fasst jetzt auf das Feld, das das Blatt übrig lässt.
+2. **Die Hervorhebung überlebte keine drei Sekunden.** `update()` setzt die
+   Klassen jedes Elements neu (`vorhanden.classes(...)`) und warf `.abseits`
+   weg; der Spiegel holt alle drei Sekunden. Das erste Bild sah richtig aus,
+   weil der Screenshot vor dem nächsten Push fiel.
+3. **Die Frist zum Fassen war nicht zu erraten.** Nach 260 ms war das Blatt
+   noch 501 px hoch, nach 650 ms 400 — seine Höhe kommt aus dem Inhalt. Ein
+   Zähler im Rumpf bewies, dass `fasseAuf` lief; falsch war, was es maß.
+   Gefasst wird jetzt wiederholt, bis das Feld ruht.
+
+**Ausgerollt am 2026-09-03** nach `~/kg-mirror/mirror/web/` auf herkules
+(Sicherungen unter `~/backups/kg-mirror-web-<zeitstempel>/`). Der Weg ist `scp`,
+kein Git — dort liegt kein Repo. Ein Neustart ist nicht nötig: Seiten und
+statische Dateien kommen direkt von der Platte, beide mit
+`Cache-Control: no-cache, must-revalidate`.
+
+### Zwei Anordnungen auch am Telefon, Vorgabe Bedeutung
+
+Birk: „der spiegel soll auch die beiden verschiedenen organisationsarten
+(menschen / bedeutung) zulassen. der default soll bedeutung sein."
+
+Beide Lagen kommen ohnehin im Graphen an (`x/y` aus den Gesprächen, `sx/sy` aus
+der Bedeutung — gemessen: 76 von 76 Knoten tragen beide). Der Knopf sitzt oben
+rechts über dem Netz, nicht in der Kopfzeile: Die Kopfzeile wechselt die SEITE,
+dieser Knopf die Sicht auf dasselbe Netz. Er nennt das Ziel, nicht den Zustand,
+und verschwindet, solange der Kern noch keine Bedeutungslage gerechnet hat.
+
+Warum Bedeutung als Vorgabe: Am Telefon sieht man einen Ausschnitt und selten
+das Ganze — dann trägt die inhaltliche Nachbarschaft mehr als die soziale. Die
+Wand hat den Platz für das andere Bild.
+
+Drei Fallstricke, alle über Tests gefunden:
+
+1. **`update()` setzt die Positionen bei jedem Push aus `x/y` zurück** — ohne
+   Nachziehen wäre die Bedeutungslage nach drei Sekunden wieder weg. Derselbe
+   Mechanismus wie bei der Hervorhebung, dieselbe Antwort: eine Stelle, die
+   nach jedem Push wieder anordnet.
+2. **`graph.cy.on(...)` vor `const graph = …`** — die Konstante lag noch in der
+   temporalen Todeszone, die Seite brach beim Laden ab und `window.kgSpiegel`
+   erschien nie. Nur daran zu sehen, dass jeder Browsertest in einen Timeout
+   lief.
+3. **`add`/`remove` genügt nicht als Auslöser**: Kommt derselbe Knoten mit
+   anderen Daten wieder (früh am Tag ohne Bedeutungslage), ändert sich am
+   Bestand nichts. `update()` sendet deshalb ein eigenes `kg-aktualisiert`.
+
+Und ein CSS-Fehler, der nie gegriffen hätte: `#blatt.offen ~ #anordnung` sieht
+nur nach rechts im Dokument, der Knopf steht aber davor. Jetzt `:has()`.
+
+### Slideshow-Schalter im Traum-Bedienpult
+
+Birk: „der traum operator braucht noch einen button um die automatische
+slideshow an/aus zu setzen." Bis dahin ging das nur über `?slideshow=0`, also
+an jeder Fläche einzeln und nur beim Laden.
+
+`slideshow` läuft jetzt wie `typewriter` durch Konfiguration, Server, Pult und
+Wand — **Vorgabe an**, weil am Abend sonst stundenlang ein Bild stünde. Ein
+Neustart überstimmt die Hand am Pult nicht. Abschalten wirkt **sofort**, nicht
+erst beim nächsten Traum: Wer den Haken wegnimmt, will das Bild halten, das
+gerade zu sehen ist. `?slideshow=0` bleibt daneben bestehen — damit stellt man
+EINE Fläche still (eine Aufnahme), ohne den anderen etwas wegzunehmen.
+
+Dabei gefunden: **Der laufende Traum stand doppelt in der Schleife.** `history`
+enthält ihn bereits, angehängt wurde er ein zweites Mal — die Wand blieb
+sechzehn statt acht Sekunden auf demselben Bild, und bei einem einzigen Traum
+blätterte sie zwischen ihm und sich selbst.
+
+## 2u. Der Nachmittag des 2026-09-03: vier Funde von Birk an der Wand
+
+### 🔴 Ein Knoten mit veraltetem Etikett — und zwei Fehler dahinter
+
+Birk: „Der Node existiert jetzt nicht mehr. Er war vorher von Maxi Schäffe und
+hat sich nun mit René Gabriel connected und dabei ein neues Label bekommen.
+Dieses neue Label war aber noch nicht im Node."
+
+Am Knoten stand das alte Wort, während die Tafel daneben schon das neue zeigte.
+Die Ursache: `toCytoscape` setzt `label` nur beim ANLEGEN, und der
+Aktualisierungszweig filtert alles heraus, was es schon gibt (`toAdd`). Ein
+Begriff ändert sein Etikett aber jedes Mal, wenn zwei zusammengelegt werden —
+also mehrmals am Tag.
+
+Dieselbe Ursache traf zwei weitere Felder:
+
+| Feld | vorher | jetzt |
+|---|---|---|
+| `label` | blieb das alte | wird nachgezogen |
+| `mentions` | fror auf dem ersten Wert ein | wächst mit |
+| `boxW`/`boxH` | Maß zum alten Wort | wird neu gemessen |
+
+`mentions` ist der stillere und wog schwer: Größe und Randstärke der Tafeln
+hängen daran (Birk, 2026-09-02: „Begriffe, die oft genannt werden, sollen
+farbig markiert werden"). Ein von zehn Menschen genannter Begriff sah am Ende
+des Tages aus wie eine Einmal-Nennung. Beide Mutationsproben gefangen.
+
+### Das Zusammenlegen arbeitet in beide Richtungen falsch
+
+**Zu streng:** Antje Simons sechs Begriffe waren alle Einmal-Nennungen, obwohl
+es Partner gab. Von Hand zusammengelegt (über `fold_term`, nicht per SQL — die
+Stelle trägt Aliase und Belegstellen korrekt mit):
+
+    Menschen mitnehmen               -> Involvierung der Menschen (4)
+    basisdemokratische Entwicklungen -> Stimmrecht vom Volk (5)
+    Flächeneffizienz                 -> Naturierung statt Flächenverbrauch (7)
+
+Holzbau, planende Fähigkeiten und radikaler Ansatz bleiben allein — dazu gibt
+es im Netz wirklich nichts.
+
+**Zu großzügig:** „Verzicht auf Keller" sammelte vier Belege, von denen zwei
+nicht vom Keller handelten (Martin Kranz über Schlaf- und Aufenthaltsräume,
+René Gabriel über Wohnflächen-Verringerung). Neuer Begriff **„kleinere
+Wohnflächen"** angelegt, die beiden Belege dorthin — Wortlaut unverändert, nur
+die Zuordnung.
+
+**Offen:** Das Verfahren selbst (`kg/merging.py`) ist nicht angefasst. Beide
+Fehlerrichtungen werden wiederkommen, solange dort nichts geschieht.
+
+### Nur das letzte Interview im Traumbild
+
+Birk: „ändere die auswahl der begriffe für den traum prompt so, dass nur das
+letzte interview visualisiert wird."
+
+Zwei Stellen in `kg2/weighting.py`:
+
+1. `select_required` — die drei Stufen waren ein VORRANG; gab es zu wenige
+   eigene Begriffe, füllte die Auswahl aus dem ganzen Tag auf, und die
+   Tagesspitze gewann. Jetzt ein Filter mit Rückfall (Schwelle: die Hälfte der
+   verlangten Menge, damit ein abgebrochenes Interview kein Bild aus einem Wort
+   ergibt).
+2. `render_material` — der Block „Geteilte Begriffe" zeigte die Tagesspitze,
+   unabhängig davon, ob die letzte Person davon je etwas gesagt hat.
+
+🔴 Der erste Versuch saß HINTER `haeufigste`/`juengste` und war wirkungslos:
+Beide Listen sind dort längst aus dem vollen Bestand gebaut, und die
+Auffüllzweige ziehen aus ihnen. Gemessen: Die Tagesspitze stand weiter im Bild.
+
+Die Haiku-Negativliste (`zuletzt_gezeigt`, cycle.py) bleibt: Sie liefert nichts
+ins Bild, sondern hält Wiederholungen fern — bei dünnerem Material wird sie
+wichtiger, nicht unwichtiger.
+
+### 🔴 Ein Live-Ausfall, selbst verursacht
+
+`git checkout frontend/static/touch-controls.js`, um eine Testmutation
+zurückzunehmen — die Datei hatte unversionierte Änderungen. Damit war der
+„Bedeutung"-Knopf weg, auf den projection.html zugreift; die Seite brach beim
+Aufbau ab und blieb LEER. Aus den Tests rekonstruiert.
+
+**Regel daraus: nie `git checkout` auf eine modifizierte Datei.** Mutationsproben
+laufen über eine Kopie im Scratchpad und werden von dort zurückgespielt.
 
 ## 3. 🔴 Was NICHT geprüft ist
 

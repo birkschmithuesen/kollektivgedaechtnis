@@ -152,6 +152,67 @@ export function createDreamView(root) {
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Die Slideshow (Birk, 2026-09-02, am Abend des Ausstellungstags)
+  // ---------------------------------------------------------------------
+  // 🔴 „Die Träume sollten als Slideshow mit Überblendung durchlaufen."
+  //
+  // Der Anlass: Am Abend werden keine Interviews mehr geführt, es entsteht
+  // also kein neuer Traum. Die Wand zeigte dann stundenlang EIN Bild. Die
+  // Schleife macht aus dem Bestand des Tages wieder etwas, das läuft.
+  //
+  // Sie baut auf dem, was schon da ist: `showImage` blendet über zwei Frames
+  // kreuz (--fade-ms, vom Operator einstellbar), und `blaetterId` sagt der
+  // Wand ohnehin schon, dass gerade nicht der jüngste Traum zu sehen ist.
+  // Die Slideshow ist damit nur ein automatisches Blättern — kein zweiter
+  // Mechanismus neben dem, den eine Hand am Streifen bedient.
+  const SLIDESHOW_MS = 8000;
+  // Abschaltbar über `?slideshow=0`. Der Regelfall an einem Tag MIT Interviews
+  // ist, dass ohnehin alle paar Minuten ein neuer Traum kommt und die Schleife
+  // unterbricht — aber wer die Wand bewusst auf einem Bild stehen lassen will
+  // (eine Aufnahme, eine Präsentation), soll das ohne Codeänderung können.
+  // 🔴 ZWEI SCHALTER, und der Bedienpult-Schalter gewinnt (Birk, 2026-09-03:
+  // „der traum operator braucht noch einen button um die automatische
+  // slideshow an/aus zu setzen").
+  //
+  // `?slideshow=0` bleibt: Damit stellt man EINE Flaeche still, ohne den
+  // anderen etwas wegzunehmen — etwa fuer eine Aufnahme. Der Schalter am
+  // Bedienpult gilt fuer alle und ist der Weg, den eine Hand im Raum nimmt.
+  // Aus bleibt aus, sobald einer von beiden es sagt.
+  const slideshowUrlAn =
+    new URLSearchParams(window.location.search).get('slideshow') !== '0';
+  let slideshowStateAn = true;
+  const slideshowAn = () => slideshowUrlAn && slideshowStateAn;
+  let autoUhr = null;
+  let autoReihe = [];
+  let autoStelle = 0;
+
+  function autoWeiter() {
+    if (autoReihe.length < 2) return;
+    autoStelle = (autoStelle + 1) % autoReihe.length;
+    const traum = autoReihe[autoStelle];
+    if (!traum || !traum.image) return;
+    // Der letzte der Reihe IST der laufende Traum — dann ist das Blättern
+    // vorbei und die Wand steht wieder auf dem Aktuellen.
+    blaetterId = traum.id === letzteLiveId ? null : traum.id;
+    currentId = traum.id;
+    stopTypewriter();
+    showImage(traum.image, traum.sentence, false);
+    sentence.textContent = traum.sentence || '';
+    strip.querySelectorAll('li').forEach((li) => {
+      li.classList.toggle('gewaehlt', li.dataset.traum === blaetterId);
+    });
+  }
+
+  function starteSlideshow() {
+    if (autoUhr !== null) window.clearInterval(autoUhr);
+    autoUhr = null;
+    // Unter zwei Bildern gibt es nichts durchzublättern; die Wand bleibt
+    // dann genau so stehen, wie sie es ohne die Slideshow täte.
+    if (!slideshowAn() || autoReihe.length < 2) return;
+    autoUhr = window.setInterval(autoWeiter, SLIDESHOW_MS);
+  }
+
   function stopTypewriter() {
     clearInterval(typeTimer);
     typewriter.hidden = true;
@@ -163,6 +224,31 @@ export function createDreamView(root) {
     root.style.setProperty('--strip-ratio', String(state.strip_ratio));
     const wasTypewriterEnabled = typewriterEnabled;
     typewriterEnabled = Boolean(state.typewriter);
+    // Fehlt das Feld (aelterer Kern), bleibt es bei „an" — das ist, was die
+    // Wand vor diesem Schalter tat.
+    const vorher = slideshowStateAn;
+    slideshowStateAn = state.slideshow !== false;
+    if (slideshowStateAn !== vorher) {
+      // 🔴 ABGESCHALTET HEISST ZURUECK ZUM JUENGSTEN TRAUM (Birk, 2026-09-03:
+      // „wenn ich beim traum slideshow deaktiviere, soll es automatisch zum
+      // letzten (aktuellsten) bild gehen").
+      //
+      // Zuerst hielt das Abschalten die Wand dort an, wo die Schleife gerade
+      // stand — also auf einem beliebigen Traum von irgendwann am Tag. Wer den
+      // Haken wegnimmt, will aber nicht IRGENDEIN Bild festhalten, sondern das
+      // aktuelle: Es ist der Traum des zuletzt gefuehrten Gespraechs, und das
+      // ist der Zustand, in dem die Wand steht, wenn niemand blaettert.
+      //
+      // `blaetterId = null` ist derselbe Griff, mit dem weiter unten ein
+      // wirklich neuer Traum das Blaettern beendet — kein zweiter Mechanismus
+      // daneben. Der Rest von `applyState` zeigt dann `state.current`.
+      if (!slideshowStateAn && blaetterId !== null) {
+        blaetterId = null;
+        strip.querySelectorAll('li').forEach((li) => li.classList.remove('gewaehlt'));
+      }
+      // `starteSlideshow()` raeumt die laufende Uhr selbst ab.
+      starteSlideshow();
+    }
     if (wasTypewriterEnabled && !typewriterEnabled) {
       // Turning it off is a switch, not a rebuild (Finding 4, spec §6): a
       // build in progress must stop where it stands. Without this, a build
@@ -171,6 +257,28 @@ export function createDreamView(root) {
       stopTypewriter();
     }
     renderStrip(state.history || []);
+
+    // Der Vorrat für die Slideshow: die Historie in Entstehungsreihenfolge,
+    // der laufende Traum zuletzt.
+    //
+    // 🔴 NUR, WENN ER NICHT SCHON DRIN IST (gefunden 2026-09-03): `history`
+    // enthält den laufenden Traum bereits — `dream_state()` schneidet sie aus
+    // derselben Tabelle. Angehängt stand er zweimal in der Reihe, und die Wand
+    // blieb sechzehn statt acht Sekunden auf demselben Bild stehen. Bei einem
+    // EINZIGEN Traum ergab das sogar eine Schleife von ihm auf sich selbst:
+    // zwei Einträge, also lief die Uhr, und alle acht Sekunden wurde dasselbe
+    // Bild neu eingeblendet — auf einer Wand ein Flackern ohne Sinn.
+    const reihe = (state.history || []).filter((tr) => tr && tr.image);
+    const laufend = state.current;
+    if (laufend && laufend.image && !reihe.some((tr) => tr.id === laufend.id)) {
+      reihe.push(laufend);
+    }
+    const schluessel = reihe.map((tr) => tr.id).join(',');
+    if (schluessel !== autoReihe.map((tr) => tr.id).join(',')) {
+      autoReihe = reihe;
+      autoStelle = Math.max(0, autoReihe.length - 1);
+      starteSlideshow();
+    }
 
     const dream = state.current;
     if (!dream) {
@@ -194,6 +302,12 @@ export function createDreamView(root) {
     if (istNeu && blaetterId !== null) {
       blaetterId = null;
       strip.querySelectorAll('li').forEach((li) => li.classList.remove('gewaehlt'));
+    }
+    if (istNeu) {
+      // Ein wirklich neuer Traum hat Vorrang: Die Wand zeigt ihn und blättert
+      // von dort aus weiter. Sonst liefe die Schleife über ihn hinweg.
+      autoStelle = Math.max(0, autoReihe.length - 1);
+      starteSlideshow();
     }
     if (blaetterId !== null) {
       // Jemand sieht sich gerade einen frueheren Traum an: Bild und Satz
@@ -259,6 +373,30 @@ export function createDreamView(root) {
     },
     get fading() {
       return fading;
+    },
+    /** Ob die Wand gerade von selbst weiterblaettert.
+     *
+     * Pruefnaht wie `fading` daneben: Die Schleife laeuft im 8-Sekunden-Takt,
+     * und ein Test, der auf einen Wechsel wartet, kostet acht Sekunden je
+     * Behauptung. Gefragt wird deshalb, ob die Uhr laeuft — das ist genau die
+     * Entscheidung, die der Schalter am Bedienpult trifft. */
+    get slideshowLaeuft() {
+      return autoUhr !== null;
+    },
+    /** Wie viele Stationen die Schleife hat. Pruefnaht neben der obigen: Ob
+     * der laufende Traum doppelt in der Reihe steht, ist an der Wand erst nach
+     * acht Sekunden Stillstand zu sehen — hier in einer Zahl. */
+    get slideshowStationen() {
+      return autoReihe.length;
+    },
+    /** Die Schleife auf eine bestimmte Station stellen.
+     *
+     * Pruefnaht: Von selbst braucht die Schleife acht Sekunden je Schritt, und
+     * ein Test, der auf den zweiten Traum warten will, kostete sechzehn.
+     * Gerufen wird genau das, was die Uhr sonst ruft. */
+    blaettereFuerDenTest(stelle) {
+      autoStelle = (stelle - 1 + autoReihe.length) % autoReihe.length;
+      autoWeiter();
     },
   };
 }

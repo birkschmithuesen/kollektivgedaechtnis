@@ -38,7 +38,44 @@
  *  Vergleich: `--tap` in mirror.css ist 44 px). 120 px ist derselbe Deckel,
  *  den die Wand fuehrt (PORTRAIT_MAX_PX in projection.js) — ein Gesicht darf
  *  bei zwei Personen im Netz nicht den halben Schirm fuellen. */
-const ZIEL = {
+/** Ab welcher Fensterbreite die Laptop-Maße gelten.
+ *
+ * Dieselbe Schwelle, ab der auch das Blatt zur Seitenleiste wird (graph.css):
+ * Wo eine Spalte von 380 px daneben passt, ist der Schirm kein Telefon mehr.
+ * Eine Zahl an zwei Stellen wäre eine zu viel — sie steht hier, weil das CSS
+ * sie nicht ausrechnen kann und JavaScript sie ohnehin braucht. */
+const LAPTOP_AB = 820;
+
+/** Die Maße der großen Fläche (Birk, 2026-09-03: „es sollte als mobile view
+ *  und als laptop ansicht (so wie projektion) sein").
+ *
+ * Sie sind die der Wand (`frontend/static/theme-f.css`), auf den Spiegel
+ * übertragen: 26er Schrift statt 13,5, Portraits von 235 statt 110. Am Laptop
+ * sitzt niemand mit dem Gesicht 30 cm vor dem Schirm — dort gilt derselbe
+ * Leseabstand wie im Raum, und dieselbe Bildsprache. */
+const ZIEL_LAPTOP = {
+  // 🔴 DIE BILDSPRACHE DER WAND, NICHT IHRE PIXEL (gemessen 2026-09-03):
+  // Mit den Wandwerten (26 px Schrift, 235er Portraits) passte das Netz nicht
+  // mehr ins Bild — man sah einen Ausschnitt, und die Knöpfe verschwanden
+  // hinter Tafeln.
+  //
+  // Der Grund ist die Fläche: Die Wand hat 1920x1080 und wird aus drei Metern
+  // gelesen, ein Laptop 1440x900 aus einem halben. Das sind 56 % der Fläche
+  // bei einem Bruchteil des Abstands. Die Werte hier sind die der Wand mal
+  // rund 0,72 — dieselben Verhältnisse untereinander, auf die kleinere Fläche
+  // gebracht.
+  schrift: 19,
+  personModell: 170,
+  personMin: 46,
+  personMax: 190,
+  ringAnteil: 0.045,
+  // Polster 0,4 und Radius 0,7 der Schrifthöhe, wie an der Wand.
+  tafelPolster: 8,
+  tafelRadius: 13,
+  tafelMaxBreite: 190,
+};
+
+const ZIEL_MOBIL = {
   schrift: 13.5,
   personModell: 110,
   personMin: 30,
@@ -60,6 +97,23 @@ const ZIEL = {
      haengt LABEL_ABSTAND_PX unten, und der ist am echten Graphen eingestellt. */
   tafelMaxBreite: 150,
 };
+
+/** Die Maße, die gerade gelten.
+ *
+ * 🔴 EINE FUNKTION und keine Konstante: Die Wahl hängt an der Fensterbreite,
+ * und die ändert sich beim Drehen eines Tablets ebenso wie beim Ziehen eines
+ * Browserfensters. Ein einmal gelesener Wert wäre danach falsch — und zwar
+ * still, weil das Bild einfach weiter mit den alten Maßen rechnet.
+ *
+ * Der Zugriff kostet nichts Messbares: `innerWidth` ist ein Feld, kein Layout. */
+function ziel() {
+  const breit = typeof window !== 'undefined' && window.innerWidth >= LAPTOP_AB;
+  return breit ? ZIEL_LAPTOP : ZIEL_MOBIL;
+}
+
+// Für die Stellen, die weiterhin einen festen Bezug brauchen (Vorgabewerte in
+// Signaturen). Sie lesen die mobilen Maße; wer die geltenden will, ruft `ziel()`.
+const ZIEL = ZIEL_MOBIL;
 
 /** Wie viel Platz eine Beschriftung auf dem Schirm braucht, damit die nächste
  *  daneben und nicht darauf liegt. Aus `tafelMaxBreite` heraus
@@ -87,14 +141,34 @@ const MAX_START_ZOOM = 2.5;
 const MIN_BEGRIFFE = 10;
 /** Obergrenze: darüber liegen die Beschriftungen auch auf einem Tablet
  *  übereinander. */
-const MAX_BEGRIFFE = 40;
+// Der Deckel, der uebrig bleibt: An der Station laufen selten mehr als
+// hundert Begriffe zusammen, und eine Zahl im Code verhindert, dass ein
+// fehlerhafter Push die Seite mit Tausenden lahmlegt.
+const MAX_BEGRIFFE = 200;
 
-/** Wie viele Begriffe auf diesen Schirm passen. Aus der KURZEN Seite
- *  gerechnet, damit das Querformat nicht plötzlich doppelt so voll wird —
- *  gedreht wird das Gerät, nicht die Lesbarkeit. */
+/** Wie viele Begriffe der Spiegel zeigt.
+ *
+ * 🔴 SEIT DEM 2026-09-03 ALLE, auch am Telefon (Birk: „zeige im handy auch 66
+ * positionen an und nimm dafür den traum weg").
+ *
+ * Vorher wurde aus der kurzen Bildschirmseite gerechnet — auf 390 px ergab das
+ * `round(390/22) = 18` Begriffe, also gut ein Viertel des Bestands. Die
+ * Begrenzung war als Lesbarkeitsschutz gedacht und stammt aus einer Zeit, in
+ * der sich die Tafeln am Telefon noch überlagerten. Beides ist seither
+ * anders: Die Überdeckungen werden aufgelöst (`loeseUeberdeckungen`), und wer
+ * etwas genauer sehen will, zoomt.
+ *
+ * Der Zuschnitt bleibt trotzdem an EINER Stelle stehen und wird nicht
+ * herausgerissen: Der Regler an der Station (`max_terms`) begrenzt weiterhin,
+ * und wer die Grenze zurückholen will, ändert diese Zeile.
+ *
+ * `breite`/`hoehe` bleiben in der Signatur — die Seite ruft mit ihnen, und ein
+ * geänderter Aufruf wäre eine zweite Stelle, die man beim nächsten Umbau
+ * vergisst. */
 export function begriffsZahl(breite, hoehe) {
-  const kurz = Math.min(breite || 0, hoehe || 0);
-  return Math.max(MIN_BEGRIFFE, Math.min(MAX_BEGRIFFE, Math.round(kurz / 22)));
+  void breite;
+  void hoehe;
+  return MAX_BEGRIFFE;
 }
 
 /** Die Rangfolge der Wand, hier noch einmal: geteilte Begriffe zuerst,
@@ -181,7 +255,35 @@ const _messFlaeche = document.createElement('canvas').getContext('2d');
 const _messCache = new Map();
 
 /** Die Tafelgrösse einer Beschriftung in BILDSCHIRM-Pixeln, inkl. Polster. */
-export function tafelMass(text, schriftPx = ZIEL.schrift, maxBreite = ZIEL.tafelMaxBreite) {
+/** Ab wie vielen Nennungen die Schrift waechst — dieselben Schwellen wie an
+ *  der Wand (frontend/static/projection.js). Drei: Zwei Menschen sind eine
+ *  Uebereinstimmung, drei sind ein Thema. */
+const OFT_AB = 3;
+
+/** Die Schriftgroesse eines Begriffs in Zielpixeln.
+ *
+ * 🔴 MITSKALIEREND (Birk, 2026-09-03: „mach mitskalieren"): Der Wert geht
+ * durch denselben `/ z`-Teiler wie `ZIEL.schrift`, wird also beim Zoomen
+ * genauso festgenagelt wie alles andere. Damit bleibt das Verhaeltnis
+ * „oft gesagt = groesser" bei jedem Zoom gleich sichtbar, statt sich beim
+ * Herauszoomen einzuebnen.
+ *
+ * Grundgroesse bis zum Doppelten, Deckel bei sechs Nennungen — ein einzelner
+ * Spitzenreiter soll die Skala nicht fuer sich nehmen. Die Skala setzt bei
+ * 1,3 an, damit ein Begriff, der eben erst zum Thema geworden ist, nicht
+ * aussieht wie eine Einmal-Nennung. */
+export function haeufigSchrift(mentions) {
+  const n = Number(mentions) || 1;
+  const Z = ziel();
+  if (n < OFT_AB) return Z.schrift;
+  const gedeckelt = Math.min(6, n);
+  return Z.schrift * (1.3 + ((gedeckelt - OFT_AB) / (6 - OFT_AB)) * 0.7);
+}
+
+export function tafelMass(text, schriftPx, maxBreite) {
+  const Z = ziel();
+  schriftPx = schriftPx || Z.schrift;
+  maxBreite = maxBreite || Z.tafelMaxBreite;
   const schluessel = `${text}|${schriftPx}|${maxBreite}`;
   const treffer = _messCache.get(schluessel);
   if (treffer) return treffer;
@@ -206,8 +308,8 @@ export function tafelMass(text, schriftPx = ZIEL.schrift, maxBreite = ZIEL.tafel
     breiteste = Math.max(breiteste, _messFlaeche.measureText(zeile).width);
   }
   const mass = {
-    w: Math.ceil(breiteste) + 2 * ZIEL.tafelPolster,
-    h: Math.ceil(Math.max(1, zeilen.length) * schriftPx * ZEILENHOEHE) + 2 * ZIEL.tafelPolster,
+    w: Math.ceil(breiteste) + 2 * ziel().tafelPolster,
+    h: Math.ceil(Math.max(1, zeilen.length) * schriftPx * ZEILENHOEHE) + 2 * ziel().tafelPolster,
   };
   _messCache.set(schluessel, mass);
   return mass;
@@ -221,7 +323,11 @@ function elemente(sicht) {
     // undefiniertes `data(boxW)` waere zu diesem Zeitpunkt ein Knoten ohne
     // Ausdehnung — der Ausschnitt saesse dann daneben. Der Wert gilt fuer
     // Zoom 1; `skaliere()` rechnet ihn jeden Frame auf den echten Zoom um.
-    const mass = n.type === 'term' ? tafelMass(n.label || '') : null;
+    // Die Tafel wird mit der Schrift gemessen, die sie tragen wird — sonst
+    // stuende der groessere Text in der alten Kiste (derselbe Fehler wie an
+    // der Wand, 2026-09-03).
+    const mass =
+      n.type === 'term' ? tafelMass(n.label || '', haeufigSchrift(n.mentions)) : null;
     const element = {
       data: {
         id: n.id,
@@ -229,6 +335,17 @@ function elemente(sicht) {
         portrait: n.portrait || '',
         boxW: mass ? mass.w : undefined,
         boxH: mass ? mass.h : undefined,
+        // 🔴 BEIDE Lagen mitfuehren (Birk, 2026-09-03: „der spiegel soll auch
+        // die beiden verschiedenen organisationsarten (menschen / bedeutung)
+        // zulassen"). `x/y` ist die Lage aus den Gespraechen — wer mit wem
+        // etwas gesagt hat. `sx/sy` ist die Lage aus der Bedeutung: was
+        // inhaltlich nebeneinander gehoert, auch wenn es niemand zusammen
+        // gesagt hat. Der Kern rechnet beide und liefert beide.
+        gx: n.x, gy: n.y,
+        sx: n.sx, sy: n.sy,
+        // Wie viele Menschen den Begriff gesagt haben — traegt seit dem
+        // 2026-09-03 die Schriftgroesse (`haeufigSchrift`).
+        mentions: n.mentions || 0,
       },
       classes:
         n.type === 'person'
@@ -370,9 +487,24 @@ const STIL = [
   // ziehen will, aendert drei Werte statt der Datenstruktur.
   //
   // `#BEB497` ist `--licht` aus theme-f.css, dieselbe Farbe wie im Saal.
-  { selector: 'node.dream-anchor', style: { color: '#BEB497', 'border-color': '#BEB497' } },
-  { selector: 'node.dream-neighbour', style: { color: '#BEB497', 'border-color': '#BEB497' } },
-  { selector: 'node.dream-recent', style: { color: '#BEB497', 'border-color': '#BEB497' } },
+  /* 🔴 DIE DREI TRAUMROLLEN FAERBEN NICHTS MEHR (Birk, 2026-09-03, zuerst an
+     der Wand: „die farbige markierung (rot/blau/gelb) soll jetzt weg … bzw. du
+     kannst das color coding jetzt nutzen um häufig genannte begriffe zu
+     highlighten"). Am Spiegel trugen alle drei ohnehin dieselbe Farbe, seit
+     die Legende hier verborgen ist — sie unterschieden also nichts mehr.
+     Die Klassen bleiben am Knoten: Sie sind Daten und werden vom Empfaenger
+     geprueft, nur gemalt wird nichts mehr daraus.
+     Die Haeufigkeit steht seither in der SCHRIFTGROESSE (`haeufigSchrift`). */
+  // --- Nachbarschaft: was zum Angetippten gehoert, und was zuruecktritt ----
+  //
+  // 🔴 IM CYTOSCAPE-STYLESHEET und nicht in graph.css: Knoten und Kanten
+  // werden auf ein <canvas> gezeichnet, es gibt fuer sie keine CSS-Regel, die
+  // greifen koennte. Eine Klasse im Stylesheet ist der einzige Weg.
+  //
+  // Zurueckgetreten heisst blass, nicht weg: Das Netz soll als Ganzes stehen
+  // bleiben — man soll sehen, WOVOR die Auswahl haengt. 0,12 ist der Wert, bei
+  // dem die Umrisse gerade noch erkennbar sind.
+  { selector: '.abseits', style: { opacity: 0.12 } },
   {
     selector: 'edge.link',
     style: {
@@ -414,8 +546,10 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
     // gleich gross bleibt. Alles, was hier durch `z` geteilt wird, ist am
     // Schirm festgenagelt; was nicht geteilt wird, folgt der Dichte des Netzes.
     const z = cy.zoom() || 1;
+    // Die geltenden Zielmaße — am Laptop die der Wand, am Telefon die kleinen.
+    const Z = ziel();
     const person =
-      Math.min(ZIEL.personMax, Math.max(ZIEL.personMin, ZIEL.personModell * z)) / z;
+      Math.min(Z.personMax, Math.max(Z.personMin, Z.personModell * z)) / z;
     // 🔴 Ring und Echo auf 0 — wie `--ring-width` und `--ring-echo-width` im
     // Theme, das der Plenarsaal erbt. Die Breite wird trotzdem HIER gesetzt
     // und nicht nur oben im Stilblatt weggelassen: Cytoscape behaelt sonst,
@@ -432,14 +566,17 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
       // gecacht), geteilt wird je Frame — so bleibt die Tafel exakt so gross
       // wie ihre Schrift, bei jedem Zoom.
       for (const knoten of cy.nodes('.term')) {
-        const mass = tafelMass(knoten.data('label') || '');
+        const mass = tafelMass(
+          knoten.data('label') || '',
+          haeufigSchrift(knoten.data('mentions')),
+        );
         knoten.data({ boxW: mass.w / z, boxH: mass.h / z });
       }
       cy.nodes('.term').style({
-        'font-size': ZIEL.schrift / z,
-        'corner-radius': ZIEL.tafelRadius / z,
+        'font-size': (ele) => haeufigSchrift(ele.data('mentions')) / z,
+        'corner-radius': Z.tafelRadius / z,
         'border-width': (ele) => (ele.hasClass('in-dream') ? 2.5 : 1.5) / z,
-        'text-max-width': `${ZIEL.tafelMaxBreite / z}px`,
+        'text-max-width': `${Z.tafelMaxBreite / z}px`,
       });
       cy.edges().style({ width: 1.2 / z });
     });
@@ -533,6 +670,24 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
    *  Stelle, an der die Seite aufschlägt. */
   function ersteAnsicht() {
     einpassen();
+    // 🔴 HIER STAND EIN VERSUCH, AM LAPTOP IMMER DAS GANZE NETZ ZU ZEIGEN
+    // (Birk, 2026-09-03: „als laptop ansicht (so wie projektion)") — und er
+    // ist ZURUECKGENOMMEN, weil die Messung ihn widerlegt hat:
+    //
+    //     ohne den Zweig unten, 1440x900:  730 Ueberdeckungen, Zoom 0,062
+    //     mit ihm:                           0 Ueberdeckungen, lesbarer Ausschnitt
+    //
+    // Der Grund ist derselbe wie ueberall hier: Schrift und Portraits haengen
+    // an einer festen BILDSCHIRMgroesse. Zoomt man heraus, ruecken sie
+    // zusammen, ohne kleiner zu werden — bei 92 Knoten liegt am Ende alles
+    // uebereinander. `loeseUeberdeckungen` kann das nicht auffangen, weil
+    // jedes Auseinanderschieben das Netz wieder groesser macht und der
+    // naechste Fit es erneut zusammenzieht.
+    //
+    // Der Zweig unten ist also kein Notbehelf, sondern die Antwort auf genau
+    // diese Frage: Lieber ein lesbarer Ausschnitt als ein vollstaendiges Bild,
+    // in dem nichts zu entziffern ist. Wer das Ganze sehen will, zoomt heraus
+    // — dann ist es seine Entscheidung.
     const noetig = lesbarerZoom();
     if (noetig === null || cy.zoom() >= noetig) return;
     const ziel = Math.min(noetig, MAX_START_ZOOM);
@@ -565,23 +720,350 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
     const jetzt = Date.now();
     if (jetzt - letzterHintergrundTipp < 320) einpassen();
     letzterHintergrundTipp = jetzt;
+    hervorheben(null);
     aufPerson(null);
+    // Zurueck aufs Ganze — sonst bliebe die Ansicht auf dem letzten
+    // Angetippten stehen, obwohl nichts mehr ausgewaehlt ist.
+    window.setTimeout(einpassen, 260);
   });
   // Der unfilterte Tipp plus Zielprüfung oben ist die Form, die Hintergrund und
   // Knoten wirklich unterscheidet — Cytoscapes 'core'-Selektor tut in diesem
   // Bundle das Gegenteil seines Namens (gemessen 2026-08-26,
   // frontend/static/quote-overlay.js).
-  cy.on('tap', 'node.person', (ereignis) => aufPerson(ereignis.target.id()));
+  /** Fassen, sobald das Blatt wirklich steht.
+   *
+   * 🔴 SO OFT, BIS DAS FELD RUHT — und nicht einmal nach einer geschaetzten
+   * Frist (gemessen 2026-09-03 auf 390x844): Nach 260 ms war das Blatt noch
+   * 501 px hoch, nach 650 ms 400. `fasseAuf` lief also, rechnete mit einem
+   * Feld, das es gleich nicht mehr gab, und p1 stand danach 76 px unter der
+   * Kante. Ein Zaehler im Rumpf bewies dabei, dass die Funktion lief — der
+   * Fehler lag nicht am Aufruf, sondern an dem, was sie mass.
+   *
+   * Warum die Frist nicht zu erraten ist: Die Hoehe des Blattes kommt aus
+   * seinem INHALT (`max-height: 72%`), und der steht erst, wenn die Abschnitte
+   * gebaut sind — mal drei Zeilen, mal dreissig. Gewartet wird deshalb auf das
+   * Ergebnis, nicht auf die Uhr.
+   *
+   * Die Collection wird ERST HIER geholt und nicht beim Tippen: Ein Push
+   * dazwischen kann Elemente ersetzt haben, und eine gehaltene Collection
+   * zeigte dann auf Knoten, die nicht mehr im Netz stehen. */
+  function nachFassen(knoten, versuche = 10) {
+    const id = knoten.id();
+    let letzte = null;
+    const schritt = () => {
+      const jetzt = cy.getElementById(id);
+      if (!jetzt.length) return;
+      const feld = freiesFeld();
+      fasseAuf(jetzt.closedNeighborhood());
+      // Ruht das Feld, ist die Rechnung endgueltig — sonst noch einmal.
+      const ruht =
+        letzte !== null && Math.abs(feld.w - letzte.w) < 1 && Math.abs(feld.h - letzte.h) < 1;
+      letzte = feld;
+      if (!ruht && --versuche > 0) window.setTimeout(schritt, 80);
+    };
+    window.setTimeout(schritt, 80);
+  }
+
+  /** Der Teil der Zeichenflaeche, den das Blatt NICHT verdeckt.
+   *
+   *  🔴 WOZU (gemessen 2026-09-03 auf 390x844): Das Blatt nimmt am Telefon bis
+   *  zu 72 % der Hoehe. Das Netz lag bei y=248..562, das geoeffnete Blatt ab
+   *  y=236 — die hervorgehobene Nachbarschaft war vollstaendig verdeckt, und
+   *  das Blatt erklaerte etwas, das niemand sehen konnte. Dasselbe Problem hat
+   *  die grosse Flaeche mit ihrer Tafel, und dieselbe Antwort: Das Netz weicht
+   *  aus, statt ueberdeckt zu werden.
+   *
+   *  Gemessen am wirklich gerenderten Blatt und nicht an der Regel im
+   *  Stylesheet: Ob es unten liegt oder seit dem Umbruch bei 900 px rechts,
+   *  entscheidet das CSS — hier zaehlt nur, welches Rechteck uebrig bleibt. */
+  function freiesFeld() {
+    const flaeche = container.getBoundingClientRect();
+    const blatt = document.getElementById('blatt');
+    const feld = { x: 0, y: 0, w: flaeche.width, h: flaeche.height };
+    if (!blatt || !blatt.classList.contains('offen')) return feld;
+    const b = blatt.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) return feld;
+    // Waagerecht oder senkrecht daneben — je nachdem, welche Kante es teilt.
+    const seitlich = b.width < flaeche.width * 0.9;
+    if (seitlich) feld.w = Math.max(80, b.left - flaeche.left);
+    else feld.h = Math.max(80, b.top - flaeche.top);
+    return feld;
+  }
+
+  /** Auf eine Auswahl fassen — in das Feld, das das Blatt uebrig laesst.
+   *
+   *  Cytoscape kann kein ungleiches Polster, deshalb in drei Schritten: erst
+   *  fassen wie gewohnt, dann den Zoom um das Verhaeltnis der Felder kuerzen,
+   *  zuletzt den Mittelpunkt der Auswahl in die Mitte des freien Feldes
+   *  schieben. */
+  function fasseAuf(eles) {
+    if (!eles || !eles.length) return;
+    // 🔴 IN RUNDEN, aus demselben Grund wie `einpassen()`: `skaliere()` haelt
+    // Portraits und Tafeln gegen den Zoom lesbar — sie werden also GROESSER,
+    // wenn herausgezoomt wird. Eine einzelne Rechnung passt deshalb auf
+    // Groessen, die es danach nicht mehr gibt (gemessen 2026-09-03: 2 von 3
+    // hervorgehobenen Knoten lagen anschliessend doch unter dem Blatt).
+    let vorher = 0;
+    for (let runde = 0; runde < EINPASS_RUNDEN; runde++) {
+      const feld = freiesFeld();
+      cy.fit(eles, 24);
+      skaliere();
+      // 🔴 IN BILDSCHIRMPIXELN messen und nicht im Modell (gemessen
+      // 2026-09-03: p1 lag 76 px unter der Feldkante). `skaliere()` haelt
+      // Portraits und Tafeln auf einer festen Pixelgroesse — ihr Mass IM
+      // MODELL waechst also beim Herauszoomen, und eine Modellbox sagt danach
+      // nichts mehr darueber, wie viel Platz sie auf dem Schirm brauchen.
+      let rb = eles.renderedBoundingBox({ includeLabels: true });
+      const eng = Math.min(feld.w / rb.w, feld.h / rb.h, 1);
+      if (eng < 0.999) {
+        cy.zoom(cy.zoom() * eng);
+        skaliere();
+      }
+      // Erst jetzt schieben — nach dem letzten `skaliere()`, sonst waere die
+      // Mitte wieder die von vorher.
+      rb = eles.renderedBoundingBox({ includeLabels: true });
+      cy.panBy({
+        x: feld.x + feld.w / 2 - (rb.x1 + rb.x2) / 2,
+        y: feld.y + feld.h / 2 - (rb.y1 + rb.y2) / 2,
+      });
+      const jetzt = cy.zoom();
+      if (vorher && Math.abs(jetzt - vorher) / vorher < EINPASS_GENAUIGKEIT) break;
+      vorher = jetzt;
+    }
+  }
+
+  /** Wie viele Knotenpaare sich ueberdecken, Beschriftungen eingerechnet. */
+  function ueberdeckungen() {
+    const boxen = cy.nodes().map((n) => n.boundingBox({ includeLabels: true }));
+    let zahl = 0;
+    for (let i = 0; i < boxen.length; i++) {
+      for (let j = i + 1; j < boxen.length; j++) {
+        const a = boxen[i];
+        const b = boxen[j];
+        if (
+          Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 2 &&
+          Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 2
+        ) {
+          zahl += 1;
+        }
+      }
+    }
+    return zahl;
+  }
+
+  /** Ueberdeckungen aufloesen — trennen und ein wenig spreizen im Wechsel.
+   *
+   * 🔴 BEIDES, weil keines allein genuegt (an der Wand gemessen, 2026-09-03):
+   * Lokales Trennen haelt die Form, steckt aber fest, sobald es eng wird —
+   * jeder Schub drueckt einen Nachbarn in einen dritten. Ein wenig Luft loest
+   * die Klemme, und danach kommt das Trennen wieder voran. Spreizen allein
+   * blaeht dagegen die ganze Wolke auf.
+   *
+   * Am Telefon wiegt das schwerer als an der Wand: Die Flaeche ist klein, und
+   * seit die Schrift die Haeufigkeit traegt, sind die Tafeln unterschiedlich
+   * gross geworden. */
+  function loeseUeberdeckungen({ schritt = 1.08, runden = 8 } = {}) {
+    trenneUeberlappende();
+    for (let i = 0; i < runden; i += 1) {
+      if (ueberdeckungen() === 0) return;
+      const bb = cy.nodes().boundingBox();
+      const mx = (bb.x1 + bb.x2) / 2;
+      const my = (bb.y1 + bb.y2) / 2;
+      cy.batch(() => {
+        cy.nodes().forEach((n) => {
+          const at = n.position();
+          n.position({ x: mx + (at.x - mx) * schritt, y: my + (at.y - my) * schritt });
+        });
+      });
+      trenneUeberlappende();
+    }
+  }
+
+  /** Kollidierende Knoten auseinanderschieben, je Durchgang die halbe
+   *  Ueberdeckung — wer mit mehreren zugleich kollidiert, schoesse sonst auf
+   *  jedem einzeln ueber das Ziel hinaus. */
+  function trenneUeberlappende(durchgaenge = 60) {
+    const ns = cy.nodes();
+    if (ns.length < 2) return;
+    for (let d = 0; d < durchgaenge; d += 1) {
+      const boxen = ns.map((n) => n.boundingBox({ includeLabels: true }));
+      const schub = ns.map(() => ({ x: 0, y: 0 }));
+      let etwas = false;
+      for (let i = 0; i < boxen.length; i += 1) {
+        for (let j = i + 1; j < boxen.length; j += 1) {
+          const a = boxen[i];
+          const b = boxen[j];
+          const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
+          const h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+          if (w <= 0 || h <= 0) continue;
+          etwas = true;
+          // Auf der kuerzeren Achse trennen: der kuerzeste Weg aus der
+          // Ueberdeckung heraus.
+          const ax = (a.x1 + a.x2) / 2;
+          const ay = (a.y1 + a.y2) / 2;
+          const bx = (b.x1 + b.x2) / 2;
+          const by = (b.y1 + b.y2) / 2;
+          let vx = 0;
+          let vy = 0;
+          if (w < h) vx = (ax <= bx ? -w : w) * 0.25;
+          else vy = (ay <= by ? -h : h) * 0.25;
+          schub[i].x += vx;
+          schub[i].y += vy;
+          schub[j].x -= vx;
+          schub[j].y -= vy;
+        }
+      }
+      if (!etwas) return;
+      cy.batch(() => {
+        ns.forEach((n, i) => {
+          const at = n.position();
+          n.position({ x: at.x + schub[i].x, y: at.y + schub[i].y });
+        });
+      });
+    }
+  }
+
+  /** Das Angetippte und seine direkten Verbindungen bleiben hell, der Rest
+   *  tritt zurueck.
+   *
+   *  `closedNeighborhood()` ist genau die richtige Menge: der Knoten selbst,
+   *  seine Kanten und was daran haengt. Bei einer Person sind das ihre
+   *  Begriffe, bei einem Begriff alle, die ihn gesagt haben — also in beiden
+   *  Faellen das, was das Blatt daneben aufzaehlt. Beide zeigen dasselbe. */
+  let hervorgehoben = null;
+  // 🔴 BEDEUTUNG IST DIE VORGABE (Birk, 2026-09-03: „der default soll bedeutung
+  // sein"). Am Telefon sieht man einen Ausschnitt und selten das Ganze — dann
+  // traegt die inhaltliche Nachbarschaft mehr als die soziale: Wer nebeneinander
+  // steht, sagt Verwandtes, und das erklaert sich von selbst. Die Wand hat den
+  // Platz fuer das andere Bild.
+  let semantisch = true;
+
+  /** Die Knoten auf die gewaehlte Anordnung setzen.
+   *
+   * EINE Stelle fuer beide Wege — sie wird beim Aufbau, bei jedem Push und beim
+   * Umschalten gerufen. Sonst setzte `update()` die Positionen aus `x/y` zurueck
+   * und die Bedeutungslage waere nach drei Sekunden wieder weg (derselbe
+   * Fallstrick wie bei den Klassen, siehe `hervorhebungErneuern`).
+   *
+   * Ein Knoten ohne die gewaehlte Lage bleibt, wo er ist: Frueh am Tag gibt es
+   * noch keine semantische Rechnung, und ein Sprung auf (0,0) waere schlimmer
+   * als die alte Lage. */
+  function anordnen({ sanft = false } = {}) {
+    cy.batch(() => {
+      cy.nodes().forEach((n) => {
+        const x = semantisch ? n.data('sx') : n.data('gx');
+        const y = semantisch ? n.data('sy') : n.data('gy');
+        if (x === null || x === undefined || y === null || y === undefined) return;
+        if (sanft) n.animate({ position: { x, y } }, { duration: 450, easing: 'ease-in-out' });
+        else n.position({ x, y });
+      });
+    });
+  }
+
+  /** Ob es ueberhaupt etwas umzuschalten gibt. Frueh am Tag rechnet der Kern
+   * noch keine Bedeutungslage — dann waere ein Knopf, der nichts tut,
+   * schlimmer als keiner. */
+  function hatBeideLagen() {
+    return cy.nodes().some((n) => n.data('sx') !== null && n.data('sx') !== undefined);
+  }
+
+  function hervorheben(knoten) {
+    // 🔴 DIE ID MERKEN, nicht die Collection: Ein Push kann Elemente ersetzen,
+    // und eine gehaltene Collection zeigte danach auf Knoten, die es nicht
+    // mehr gibt.
+    hervorgehoben = knoten && knoten.length ? knoten.id() : null;
+    cy.elements().removeClass('abseits');
+    if (!hervorgehoben) return;
+    const nah = knoten.closedNeighborhood();
+    cy.elements().difference(nah).addClass('abseits');
+  }
+
+  /** Die Hervorhebung nach einem Push wiederherstellen.
+   *
+   * 🔴 GEMESSEN 2026-09-03: `update()` setzt die Klassen jedes vorhandenen
+   * Elements neu (`vorhanden.classes(...)`) — und warf `.abseits` damit weg.
+   * Der Spiegel holt alle drei Sekunden; die Hervorhebung ueberlebte also
+   * keine drei Sekunden, waehrend das Blatt daneben stehen blieb. Beim ersten
+   * Messen sah es richtig aus, weil der Screenshot vor dem naechsten Push fiel.
+   *
+   * Ist der Knoten inzwischen weg (zusammengelegt, weggefiltert), faellt die
+   * Hervorhebung ganz — dasselbe wie ein Tipp ins Leere. */
+  function hervorhebungErneuern() {
+    if (!hervorgehoben) return;
+    const knoten = cy.getElementById(hervorgehoben);
+    if (!knoten.length) {
+      hervorgehoben = null;
+      cy.elements().removeClass('abseits');
+      return;
+    }
+    hervorheben(knoten);
+  }
+
+  cy.on('tap', 'node.person', (ereignis) => {
+    const knoten = ereignis.target;
+    hervorheben(knoten);
+    aufPerson(knoten.id());
+    // 🔴 NACH `aufPerson`: Erst dann steht das Blatt offen, und erst dann
+    // weiss `freiesFeld()`, wie viel Platz bleibt. Davor gefasst, rahmte es
+    // auf die ganze Flaeche — also genau auf den Bereich, der gleich verdeckt
+    // ist. Die 260 ms sind die Uebergangszeit des Blattes (graph.css) plus
+    // ein Frame Luft.
+    nachFassen(knoten);
+  });
   // 🔴 Und auf einen BEGRIFF (Birk, 2026-09-02). Gemessen am echten Stand auf
   // 390x844: Ein Fingertipp auf ein Portrait landete auf einem BEGRIFF — vier
   // Knoten lagen an derselben Stelle uebereinander. Begriffe waren nicht
   // anklickbar, also passierte gar nichts, und die Seite wirkte tot.
-  cy.on('tap', 'node.term', (ereignis) => aufBegriff(ereignis.target.id()));
+  cy.on('tap', 'node.term', (ereignis) => {
+    const knoten = ereignis.target;
+    hervorheben(knoten);
+    aufBegriff(knoten.id());
+    nachFassen(knoten);
+  });
 
   return {
     cy,
     einpassen,
     ersteAnsicht,
+    hervorheben,
+    hatBeideLagen,
+    /** Alles neu messen, weil sich die Zielmaße geaendert haben.
+     *
+     * Die Tafelmasse stecken in den Knotendaten (`boxW`/`boxH`) und werden
+     * beim Aufbau einmal gerechnet — nach einem Wechsel zwischen mobilen und
+     * Laptop-Massen sind sie falsch. Danach neu anordnen, aufraeumen und
+     * einpassen, in dieser Reihenfolge. */
+    neuVermessen() {
+      cy.batch(() => {
+        cy.nodes('.term').forEach((n) => {
+          const mass = tafelMass(n.data('label') || '', haeufigSchrift(n.data('mentions')));
+          n.data({ boxW: mass.w, boxH: mass.h });
+        });
+      });
+      anordnen();
+      skaliere();
+      if (ueberdeckungen() > 0) loeseUeberdeckungen();
+      einpassen();
+    },
+    get semantisch() {
+      return semantisch;
+    },
+    /** Umschalten zwischen den beiden Anordnungen. Sanft, weil ein Sprung von
+     * siebzig Knoten auf einmal nicht zu lesen ist — man soll sehen, WOHIN
+     * etwas wandert. */
+    setzeAnordnung(nachBedeutung) {
+      if (semantisch === nachBedeutung) return;
+      semantisch = nachBedeutung;
+      anordnen({ sanft: true });
+      // Erst wenn die Bewegung steht — sonst raeumte es Positionen auf, die
+      // sich gerade noch veraendern (die Animation laeuft 450 ms).
+      window.setTimeout(() => {
+        if (ueberdeckungen() > 0) loeseUeberdeckungen();
+        einpassen();
+      }, 500);
+    },
+    fasseAuf,
+    freiesFeld,
     /** Ein vollständiger Graph, wie er vom Spiegel kommt. */
     update(graph, obergrenze) {
       const sicht = ansicht(graph, obergrenze);
@@ -622,7 +1104,26 @@ export function createMobileGraph(container, { aufPerson = () => {}, aufBegriff 
 
       // Erst die Masse, dann der Ausschnitt: `ersteAnsicht()` misst die
       // Abstaende der Tafeln, und die haengen an ihrer Groesse.
+      // Erst die Lage, dann die Masse: `skaliere()` und `ersteAnsicht()`
+      // rechnen beide mit den Positionen.
+      anordnen();
       skaliere();
+      // 🔴 NACH `skaliere()`: Die Tafelmasse haengen an der Schriftgroesse und
+      // die an der Haeufigkeit — vorher gemessen waeren es die Masse von
+      // gestern. Und nur, wenn es etwas zu tun gibt: Der Vergleich kostet
+      // nichts, das Verschieben schon.
+      if (ueberdeckungen() > 0) loeseUeberdeckungen();
+      // 🔴 EIN EIGENES EREIGNIS, weil `add`/`remove` hier nicht genuegt
+      // (gefunden 2026-09-03): Kommt derselbe Knoten mit ANDEREN Daten wieder —
+      // etwa ohne Bedeutungslage, weil der Kern sie frueh am Tag noch nicht
+      // rechnet —, aendert sich am Bestand der Elemente nichts, und die Seite
+      // erfuehre nie davon. Wer auf den Stand des Netzes reagieren will, hoert
+      // hierauf und nicht auf einen bestimmten Datenweg.
+      cy.emit('kg-aktualisiert');
+      // Und die Hervorhebung zurueckholen, die `classes(...)` oben mitgenommen
+      // hat — sonst steht das Blatt offen vor einem Netz, in dem nichts mehr
+      // hervorgehoben ist (gemessen 2026-09-03).
+      hervorhebungErneuern();
       if (ersteZeichnung && cy.nodes().length) {
         ersteZeichnung = false;
         ersteAnsicht();

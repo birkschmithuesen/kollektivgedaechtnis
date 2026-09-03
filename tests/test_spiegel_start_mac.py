@@ -25,10 +25,17 @@ gegen die laufende Station haben Graph, Traum UND alle drei echten Portraits
 (`1788297712_app595.png` u.a.) übertragen. Es fehlte nur der Prozess, der das
 im Betrieb tut.
 
-🔴 Dieses Skript steht ABSICHTLICH NICHT in `scripts/start-station.sh`. Es
-schiebt Interviewdaten ins öffentliche Netz — das ist Birks Entscheidung, kein
-Nebeneffekt eines Sammelstarts. `test_der_uploader_haengt_nicht_am_sammelstart`
-hält das fest, damit es niemand später „aufräumt".
+🔴 SEIT 2026-09-02, 11:20 läuft dieses Skript im Sammelstart MIT (Birk, am
+Ausstellungstag: „baue ihn auch in die start routine ein"). Vorher war die
+Trennung absichtlich, und ihr Grund gilt weiter — hier gehen Portraits und
+Zitate von Menschen ins öffentliche Netz. Geändert hat sich nur, WER die
+Entscheidung trägt: nicht mehr ein getippter Schalter, sondern eine Zeile in
+`start-station.sh`, die auf Birks Ansage steht.
+
+Was die alte Regel schützen sollte, prüfen die Tests unten weiter: dass
+niemand UNBEMERKT veröffentlicht. Der Start sagt es in Rot, `--ohne-spiegel`
+schaltet es in einem Wort ab, und der Abholer — der beim Spiegel LÖSCHEN darf —
+bleibt aus.
 """
 
 from __future__ import annotations
@@ -180,18 +187,15 @@ def test_im_skript_steht_kein_token():
 # --- Was er NICHT tun darf ---------------------------------------------------
 
 
-def test_der_uploader_laeuft_nicht_ohne_schalter():
-    """🔴 Birks Entscheidung, nicht unsere.
+def test_der_uploader_laeuft_im_sammelstart_mit():
+    """🔴 Birks Ansage am Ausstellungstag (2026-09-02, 11:20).
 
-    `start-station.sh` startet die Station im Haus. Der Uploader schiebt
-    Interviewdaten ins ÖFFENTLICHE Netz. Wer beides in einen Knopf legt, nimmt
-    Birk die Entscheidung ab, ob heute veröffentlicht wird.
-
-    Seit 2026-09-02 kann man ihn mit `--mit-spiegel` MITstarten. Das ist kein
-    Bruch dieser Regel, sondern ihre Erfüllung mit weniger Fenstern: Ein
-    getippter Schalter IST die Entscheidung — ausdrücklicher sogar als ein
-    zweites Fenster, das man aufmacht und dann vergisst. Was geschützt werden
-    muss, ist nicht das Fenster, sondern dass es NIE VON SELBST passiert.
+    Vorgeschichte in einem Satz: Der Uploader lief hier NICHT mit, weil er
+    Interviewdaten ins öffentliche Netz schiebt. Am Ausstellungstag hiess das
+    zweimal, dass der QR-Code auf der Wand ins Leere führte — einmal früh
+    (`docs/STAND.md` §4z: der Spiegel zeigte die Simulationsdaten), einmal um
+    11:20 nach einem Neustart. Birk hat daraufhin entschieden, dass er
+    mitläuft.
 
     🔴 Geprüft wird durch AUSFÜHREN, nicht durch Lesen des Quelltextes. Die
     Vorgängerfassung suchte Textmuster wie `"./scripts/spiegel-start-mac.sh &"`.
@@ -201,17 +205,39 @@ def test_der_uploader_laeuft_nicht_ohne_schalter():
     das dieser Test verhindern soll.
     """
     ohne = _trocken()
+    assert "Uploader (spiegel-start-mac.sh)" in ohne, ohne
+
+
+def test_ohne_spiegel_bleibt_er_aus():
+    """🔴 Der Rest der alten Regel, und er trägt sie allein.
+
+    Dass der Spiegel Vorgabe ist, darf nicht heissen, dass man ihn nicht mehr
+    los wird. Wer heute NICHT veröffentlichen will — ein Probelauf, eine
+    Person, die es sich anders überlegt hat — braucht dafür ein Wort und keinen
+    Eingriff in ein Skript.
+
+    Zugleich der Gegenbeweis zum Test oben: ohne diesen wäre er auch dann
+    grün, wenn `--ohne-spiegel` gar nichts täte.
+    """
+    ohne = _trocken("--ohne-spiegel")
     assert "kein Uploader" in ohne, ohne
     assert "Uploader (spiegel-start-mac.sh)" not in ohne, ohne
 
 
-def test_mit_schalter_laeuft_er_mit():
-    """Der Gegenbeweis: Ohne ihn wäre der Test oben auch dann grün, wenn der
-    Schalter gar nichts täte."""
+def test_der_abholer_haengt_nicht_am_spiegel():
+    """Zwei Dienste, zwei Entscheidungen — und der Abholer ist der schärfere.
+
+    Er darf beim Spiegel LÖSCHEN und braucht dafür das starke Token. Dass der
+    Spiegel jetzt von selbst mitläuft, zieht ihn NICHT mit."""
+    assert "kein Abholer" in _trocken(), "der Abholer laeuft ungefragt mit"
+    assert "kein Abholer" in _trocken("--mit-spiegel"), "--mit-spiegel zieht den Abholer mit"
+
+
+def test_der_alte_schalter_bricht_nicht_ab():
+    """`--mit-spiegel` war über einen Tag lang der Weg. Wer ihn aus Gewohnheit
+    tippt, soll die Station starten und nicht eine Fehlermeldung lesen."""
     mit = _trocken("--mit-spiegel")
     assert "Uploader (spiegel-start-mac.sh)" in mit, mit
-    # Der Abholer hängt nicht mit dran: zwei Schalter, zwei Entscheidungen.
-    assert "kein Abholer" in mit, mit
 
 
 def _trocken(*schalter) -> str:

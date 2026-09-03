@@ -45,18 +45,31 @@ STT_PORT=5051
 rot()  { printf '\033[31m%s\033[0m\n' "$*"; }
 grau() { printf '\033[2m%s\033[0m\n' "$*"; }
 
-# --- Was nach DRAUSSEN geht: aus, bis du es sagst ----------------------------
-# 🔴 Die Voreinstellung ist und bleibt AUS. Der Uploader schiebt Portraits und
-# Zitate von Menschen ins oeffentliche Netz, der Abholer darf beim Spiegel
-# LOESCHEN. Beides ist Birks Entscheidung, kein Nebeneffekt eines Startknopfs.
+# --- Was nach DRAUSSEN geht --------------------------------------------------
+# 🔴 SPIEGEL AN, ABHOLER AUS -- Birks Entscheidung am 2026-09-02, 11:20, am
+# Ausstellungstag: „baue ihn auch in die start routine ein, dass ich ihn beim
+# naechsten manuellen start auch mit starte."
 #
-# Ein getippter Schalter IST diese Entscheidung -- ausdruecklicher sogar als
-# ein zweites Fenster, das man aufmacht und dann vergisst. Was die Trennung
-# schuetzen soll, ist nicht das Fenster, sondern dass es nie von selbst
-# passiert. `tests/test_spiegel_start_mac.py` und `tests/test_abholer_start_mac.py`
-# pruefen genau das -- und zwar durch AUSFUEHREN (`--trocken`), nicht durch
-# Lesen des Quelltextes.
-MIT_SPIEGEL=0
+# Vorher stand der Spiegel hier auf AUS. Der Grund dafuer gilt weiter und ist
+# nicht widerlegt -- der Uploader schiebt Portraits und Zitate von Menschen ins
+# oeffentliche Netz. Was sich geaendert hat, ist WER entscheidet: Nicht mehr
+# der Schalter traegt die Entscheidung, sondern diese Zeile, und sie steht auf
+# Birks ausdrueckliche Ansage. Der Ausstellungstag laeuft, die Wand traegt
+# einen QR-Code auf genau diese Seite; ein vergessener Schalter hiess an
+# diesem Tag: der QR-Code fuehrt ins Leere. Genau das war heute frueh der Fall
+# (`docs/STAND.md` §4z: „Der Spiegel zeigte die Simulationsdaten").
+#
+# 🔴 Was die Regel schuetzen sollte, bleibt geschuetzt: dass niemand
+# UNBEMERKT veroeffentlicht. Deshalb sagt das Skript beim Start in Rot, dass
+# der Spiegel laeuft, und `--ohne-spiegel` schaltet ihn in einem Wort ab.
+#
+# Der ABHOLER bleibt aus. Er darf beim Spiegel LOESCHEN (starkes Token) und
+# ist kein Teil dieser Ansage. Zwei Dienste, zwei Entscheidungen.
+#
+# `tests/test_spiegel_start_mac.py` und `tests/test_abholer_start_mac.py`
+# pruefen das -- durch AUSFUEHREN (`--trocken`), nicht durch Lesen des
+# Quelltextes.
+MIT_SPIEGEL=1
 MIT_ABHOLER=0
 TROCKEN=0
 
@@ -64,15 +77,17 @@ hilfe() {
   cat <<'ENDE'
 Aufruf: ./scripts/start-station.sh [Schalter]
 
-  (ohne)            Spracherkennung, Kern, Traum. Nichts geht nach draussen.
+  (ohne)            Spracherkennung, Kern, Traum -- UND den Uploader zum
+                    oeffentlichen Spiegel.
+                    🔴 Damit sind Portraits und Zitate oeffentlich sichtbar.
 
-  --mit-spiegel     zusaetzlich den Uploader: Graph, Traum und Portraits
-                    hoch auf kollektivgedaechtnis.flashclash.de.
-                    🔴 Damit werden Interviewdaten oeffentlich.
+  --ohne-spiegel    ohne den Uploader. Nichts geht dann nach draussen.
+  --mit-spiegel     (Vorgabe, seit 2026-09-02) -- der Schalter bleibt, damit
+                    eine getippte Gewohnheit nicht als Fehler abbricht.
   --mit-abholer     zusaetzlich den Abholer: Fotos, die Handys OHNE Tailnet
                     beim Spiegel eingeworfen haben, herunter an die Station.
                     Braucht ein offenes Interview, sonst 409.
-  --mit-allem       beides.
+  --mit-allem       Spiegel und Abholer.
 
   --trocken         nur sagen, was gestartet wuerde. Startet nichts.
   --hilfe           dieser Text.
@@ -86,7 +101,8 @@ ENDE
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --mit-spiegel) MIT_SPIEGEL=1 ;;
+    --mit-spiegel)  MIT_SPIEGEL=1 ;;
+    --ohne-spiegel) MIT_SPIEGEL=0 ;;
     --mit-abholer) MIT_ABHOLER=1 ;;
     --mit-allem)   MIT_SPIEGEL=1; MIT_ABHOLER=1 ;;
     --trocken)     TROCKEN=1 ;;
@@ -228,8 +244,20 @@ starte_draussen() {
 }
 
 if [ "$MIT_SPIEGEL" = 1 ]; then
-  rot "  ! Der Spiegel ist AN — ab jetzt gehen Portraits und Zitate ins oeffentliche Netz."
-  starte_draussen "Spiegel-Upload" "./scripts/spiegel-start-mac.sh" "$LOGS/spiegel.log"
+  # 🔴 Erst nachsehen, ob schon einer laeuft. `spiegel-start-mac.sh` bleibt
+  # einzeln aufrufbar, und seit der Spiegel hier VORGABE ist, treffen sich die
+  # beiden Wege zwangslaeufig. Zwei Uploader gegen denselben Spiegel gab es am
+  # 2026-09-02 schon (docs/STAND.md §3, PID 5348 + 11508): sie ueberschreiben
+  # sich gegenseitig und fuehren zwei getrennte `mirror-uploaded.json`-Staende,
+  # also laedt jeder hoch, was der andere gerade als erledigt abhakte.
+  if pgrep -fi "mirror\.uploader" >/dev/null 2>&1; then
+    grau "  Spiegel-Upload laeuft bereits (eigenes Fenster) — kein zweiter gestartet."
+    rot  "  ! Der Spiegel ist AN — Portraits und Zitate sind im oeffentlichen Netz."
+  else
+    rot "  ! Der Spiegel ist AN — ab jetzt gehen Portraits und Zitate ins oeffentliche Netz."
+    grau "    Nicht gewollt? Strg-C, dann: ./scripts/start-station.sh --ohne-spiegel"
+    starte_draussen "Spiegel-Upload" "./scripts/spiegel-start-mac.sh" "$LOGS/spiegel.log"
+  fi
 fi
 if [ "$MIT_ABHOLER" = 1 ]; then
   starte_draussen "Foto-Abholer" "./scripts/abholer-start-mac.sh" "$LOGS/abholer.log"
@@ -253,15 +281,14 @@ grau "  ?touch=1 ist nicht optional — ohne den Parameter gibt es weder"
 grau "  Zoomregler noch Bedienleiste. theme=f ist das Layout vom 2026-09-01."
 grau "  Beenden: Strg-C. Mitlesen: tail -f $LOGS/station.log"
 echo ""
-# 🔴 HINWEIS, KEIN AUFRUF. Beide Dienste unten gehen nach DRAUSSEN und laufen
-# deshalb bewusst nicht mit: der Uploader schiebt Interviewdaten ins
-# oeffentliche Netz, der Abholer darf beim Spiegel loeschen (er braucht das
-# starke Token). Ob das heute passiert, entscheidet Birk, nicht eine
-# Startreihenfolge. Genannt werden sie trotzdem — wer sie sucht, sucht sie
-# hier. `tests/test_spiegel_start_mac.py` und `tests/test_abholer_start_mac.py`
-# halten fest, dass sie nicht aufgerufen werden.
+# 🔴 HINWEIS, KEIN AUFRUF — fuer das, was gerade NICHT nach draussen geht.
+# Seit 2026-09-02 laeuft der Spiegel als Vorgabe mit; genannt wird er hier also
+# nur noch nach `--ohne-spiegel`. Der Abholer bleibt aus (er darf beim Spiegel
+# loeschen und braucht das starke Token) und steht deshalb immer hier.
+# `tests/test_spiegel_start_mac.py` und `tests/test_abholer_start_mac.py`
+# halten beides fest.
 if [ "$MIT_SPIEGEL" = 0 ] || [ "$MIT_ABHOLER" = 0 ]; then
-  grau "  Nach draussen — laeuft nur auf Ansage, entweder als Schalter hier:"
+  grau "  Nach draussen — laeuft NICHT, entweder als Schalter hier:"
   [ "$MIT_SPIEGEL" = 0 ] && grau "    --mit-spiegel   Graph, Traum und Portraits an den oeffentlichen Spiegel"
   [ "$MIT_ABHOLER" = 0 ] && grau "    --mit-abholer   Fotos vom Spiegel holen (Handys ohne Tailnet)"
   grau "  … oder als eigenes Fenster, wenn du es getrennt an- und ausschalten willst:"

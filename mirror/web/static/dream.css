@@ -23,16 +23,33 @@
   justify-content: center;
 }
 
-#bild {
+/* 🔴 Der Rahmen wird zur Bühne mit ZWEI Ebenen (Birk, 2026-09-02): „die
+   träume sollten als slideshow mit überblendung durchlaufen". Beide Bilder
+   liegen übereinander, das obere blendet auf — dazwischen gibt es kein Loch,
+   in dem die Fläche kurz leer wäre. */
+#bild-rahmen { position: relative; }
+
+#bild,
+#bild-blende {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
-  /* Das Bild ist die Hauptsache; ein Erscheinen ohne Übergang wirkt am Handy
-     wie ein Umschaltfehler. */
-  transition: opacity 400ms ease;
+  /* 1,2 s, dieselbe Länge wie die Blende an der Wand (`default_fade_ms` in
+     kg2). Wer beides an einem Abend sieht, soll denselben Rhythmus erkennen. */
+  transition: opacity 1200ms ease;
 }
-#bild[hidden] { display: none; }
+/* Die zweite Ebene liegt genau auf der ersten. `position: absolute` in einem
+   Flex-Rahmen zentriert nicht von selbst — deshalb die vier Nullen plus
+   `margin: auto`, das ein absolut gesetztes Element mittig hält. */
+#bild-blende {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  pointer-events: none;
+}
+#bild[hidden],
+#bild-blende[hidden] { display: none; }
 
 #satz {
   flex: 0 0 auto;

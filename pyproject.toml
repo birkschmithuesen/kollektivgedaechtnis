@@ -24,6 +24,7 @@ dependencies = [
     # die mitgelieferten Kaskadendateien entfernt. kg/photos.py faengt das ab
     # und warnt -- aber es faellt dann wieder auf den mittigen Schnitt zurueck.
     "opencv-python-headless>=4.10,<5",
+    "scikit-learn>=1.9.0",
 ]
 
 [dependency-groups]

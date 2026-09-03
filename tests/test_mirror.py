@@ -348,15 +348,46 @@ def test_ein_alter_stand_wird_als_alt_gemeldet(daten, token):
 
 
 def test_beide_seiten_und_ihre_dateien_werden_ausgeliefert(client):
+    """Von jeder Ansicht kommt man zur anderen und zurueck zur Startseite.
+
+    🔴 GEAENDERT AM 2026-09-03: Vorher standen BEIDE Reiter auf BEIDEN Seiten,
+    also auch der Link auf die Seite, auf der man schon ist. Die Graph-Seite
+    hat seither keine Kopfnavigation mehr (Birk: „zeige im handy auch 66
+    positionen an und nimm dafür den traum weg") — die 44 px oben gehoeren
+    jetzt dem Netz.
+
+    Was der Test seither sichert, ist die Sache dahinter und nicht die Form:
+    Aus einer Sackgasse darf keine Seite werden. Der Weg zur ANDEREN Ansicht
+    muss da sein, der auf sich selbst nicht.
+    """
     for weg in ("/graph", "/traum"):
         antwort = client.get(weg)
         assert antwort.status_code == 200
         assert "viewport-fit=cover" in antwort.text
-        # Beide Reiter stehen auf beiden Seiten — seit der Startseite auf der
-        # Wurzel liegt, zeigt der Netz-Reiter auf /graph.
-        assert 'href="/graph"' in antwort.text and 'href="/traum"' in antwort.text
-        # Und von beiden geht es zurück zur Startseite und zur Transparenz.
-        assert 'href="/"' in antwort.text and 'href="/transparenz"' in antwort.text
+        # 🔴 Was bleiben MUSS: der Weg zurueck zur Startseite. Von dort sind
+        # beide Ansichten erreichbar, keine Seite ist also eine Sackgasse.
+        assert 'href="/"' in antwort.text, f"von {weg} fuehrt kein Weg zur Startseite"
+
+    # 🔴 UND WAS BEWUSST FEHLT (Birk, 2026-09-03: „traum komplett weg auch aus
+    # dem fuß"): Aus dem Netz heraus fuehrt kein Weg mehr zum Traum. Die
+    # Netzansicht ist das, was von der Ausstellung bleibt; der Traum lief live
+    # und braucht dort keinen Reiter mehr.
+    #
+    # Als Behauptung und nicht als Luecke im Test: Ein spaeterer Umbau, der ihn
+    # versehentlich zurueckbringt, faellt hier auf.
+    netz = client.get("/graph").text
+    assert 'href="/traum"' not in netz, (
+        "aus der Netzansicht fuehrt wieder ein Weg zum Traum"
+    )
+    # Umgekehrt bleibt er: Wer auf der Traumseite steht, kommt zum Netz.
+    traum = client.get("/traum").text
+    assert 'href="/graph"' in traum, "von der Traumseite fuehrt kein Weg zum Netz"
+    # Und von beiden geht es zur Transparenzseite.
+    for weg in ("/graph", "/traum"):
+        assert 'href="/transparenz"' in client.get(weg).text, (
+            f"von {weg} fuehrt kein Weg zur Transparenzseite"
+        )
+
     for datei in (
         "/static/mirror.css",
         "/static/seite.css",
@@ -402,21 +433,23 @@ def test_seiten_und_stilblaetter_werden_nicht_stillschweigend_gecacht(client, pf
     assert "no-cache" in steuerung, f"{pfad} darf nicht ohne Rückfrage gecacht werden"
 
 
-def test_die_wurzel_ist_die_startseite_und_zeigt_auf_beide_ansichten(client):
+def test_die_wurzel_ist_die_startseite_und_fuehrt_zum_netz(client):
     """Ohne jede Aufnahme. Die Startseite ist der Wegweiser im Flur — sie muss
-    dastehen, auch wenn die Station gar nicht verbunden ist."""
+    dastehen, auch wenn die Station gar nicht verbunden ist.
+
+    🔴 NUR NOCH ZUM NETZ (Birk, 2026-09-03: „traum komplett weg"). Der Traum
+    lief LIVE: Nach jedem Interview entstand ein neues Bild. Was bleibt, ist
+    der Graph — ein Knopf, der auf ein stehendes letztes Bild zeigt, verspricht
+    etwas, das die Arbeit nicht mehr ist. Die Seite `/traum` gibt es weiter,
+    sie wird nur nicht mehr beworben.
+    """
     antwort = client.get("/")
     assert antwort.status_code == 200
-    assert "viewport-fit=cover" in antwort.text
-    assert 'href="/graph"' in antwort.text
-    assert 'href="/traum"' in antwort.text
-    assert "Das Kollektivgedächtnis" in antwort.text
-    assert "Der Kollektivtraum" in antwort.text
-    # Der Weg zum langen Text ist von hier aus da.
+    assert 'href="/graph"' in antwort.text, "die Startseite fuehrt nicht zum Netz"
+    assert 'href="/traum"' not in antwort.text, (
+        "die Startseite bewirbt wieder den Traum"
+    )
     assert 'href="/transparenz"' in antwort.text
-    # Und der Graph liegt jetzt woanders, nicht mehr auf der Wurzel.
-    assert "cytoscape" not in antwort.text
-
 
 def test_die_graphansicht_liegt_auf_graph(client):
     antwort = client.get("/graph")

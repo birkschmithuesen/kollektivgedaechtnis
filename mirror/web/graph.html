@@ -15,19 +15,38 @@
 
 <!-- Die beiden Reiter bleiben: zwischen Netz und Traum wechselt man, ohne den
      Umweg über die Startseite. Der Weg zurück steht unten in der Fusszeile. -->
-<nav id="kopf">
-  <a href="/graph" aria-current="page">Netz</a>
-  <a href="/traum">Traum</a>
-</nav>
+<!-- 🔴 KEINE KOPFNAVIGATION MEHR AUF DIESER SEITE (Birk, 2026-09-03: „zeige
+     im handy auch 66 positionen an und nimm dafür den traum weg").
+     Sie nahm oben rund 44 px, und das ist am Telefon der Platz, den jetzt das
+     Netz braucht. Der Traum bleibt erreichbar — die Startseite verlinkt ihn,
+     und der Fuss unten fuehrt dorthin zurueck. Weggenommen ist der Weg von
+     HIER, nicht die Seite. -->
 <div id="alter" role="status" hidden></div>
 
 <main>
   <div id="cy"></div>
 
+  <!-- Der Hinweis erscheint nur, wenn gar keine Aufnahme vorliegt — nicht,
+       wenn die Station lediglich nicht mehr sendet. Nach der Ausstellung ist
+       das der Normalfall und kein Fehler (Birk, 2026-09-03). -->
   <div class="warten" id="warten">
-    <div>Die Station ist gerade nicht verbunden.</div>
-    <small>Sobald sie wieder sendet, erscheint das Netz hier von selbst.</small>
+    <div>Hier war noch kein Gespräch.</div>
+    <small>Sobald ein Gespräch aufgenommen wurde, erscheint das Netz hier.</small>
   </div>
+
+  <!-- 🔴 Der Umschalter zwischen den beiden Anordnungen (Birk, 2026-09-03).
+       Er sitzt UEBER dem Netz und nicht in der Kopfzeile: Die Kopfzeile
+       wechselt die SEITE (Netz / Traum), dieser Knopf wechselt die Sicht auf
+       dasselbe Netz. Zwei verschiedene Dinge gehoeren nicht nebeneinander.
+       Verborgen, solange der Kern noch keine Bedeutungslage gerechnet hat —
+       ein Knopf, der nichts tut, ist schlimmer als keiner. -->
+  <button id="anordnung" type="button" hidden>Gespräche</button>
+  <!-- 🔴 Die Widersprueche des Tages, auf Knopfdruck (Birk, 2026-09-03: „die
+       widerspruchstafel soll sich dort per button einblenden lassen").
+       An der Wand stehen sie von selbst da, sobald niemand etwas antippt —
+       hier nicht: Am Telefon gibt es keinen Ruhezustand, jeder Aufruf ist
+       Absicht. Verborgen, solange der Kern keine gerechnet hat. -->
+  <button id="reibung" type="button" hidden>Konträre Positionen</button>
 
   <div id="legende" hidden>
     <span class="anker">im Bild: Anker</span>
@@ -46,6 +65,7 @@
          staende zwischen ihnen — als haette die Person ihren eigenen Namen
          gesagt. Dieselbe Aufteilung wie an der Wand (quote-overlay.js:
          <figcaption> ueber <blockquote>). -->
+    <h2 class="titel" id="blatt-titel" hidden></h2>
     <p class="name" id="blatt-name" hidden></p>
     <blockquote id="blatt-zitat"></blockquote>
     <p class="kein-zitat" id="blatt-leer" hidden>Von dieser Person ist kein Zitat hinterlegt.</p>
@@ -60,12 +80,21 @@
        ausgelieferten Seiten, damit niemand aus Versehen einen echten Pfad
        daraus macht. An der Wand wird parallel gebaut. -->
     <ul class="belege" id="blatt-belege" hidden></ul>
+    <!-- Die Abschnitte, die aus dem GANZEN Graphen entstehen und nicht aus
+         dem angetippten Knoten allein: wovon eine Person sonst noch sprach,
+         mit wem sie Themen teilt, was einem Begriff inhaltlich nahesteht.
+         Wird bei jedem Tipp neu gebaut. -->
+    <div id="blatt-mehr"></div>
   </aside>
 </main>
 
 <footer id="fuss">
   <a href="/">Start</a>
   <span aria-hidden="true">·</span>
+  <!-- 🔴 KEIN WEG ZUM TRAUM MEHR VON HIER (Birk, 2026-09-03: „traum komplett
+       weg auch aus dem fuß"). Die Seite `/traum` gibt es weiter und die
+       Startseite verlinkt sie — aus dem Netz heraus fuehrt kein Weg mehr
+       dorthin. -->
   <a href="/transparenz">Was wo läuft</a>
 </footer>
 
@@ -96,8 +125,58 @@
   // einen Begriff wie gemeint hat; derselbe Begriff kann bei zwei Menschen
   // zwei Dinge heissen, und genau das soll man sehen koennen.
   let belege = new Map();
+  // term_id -> Label. Fuer die Zeilen „wovon die Rede war": Ein Beleg ohne den
+  // Begriff, zu dem er gehoert, ist nur ein Satzfetzen.
+  let etiketten = new Map();
+  // person_id -> [{ term_id, evidence }] — dieselben Kanten, andere Richtung.
+  let jePerson = new Map();
+  // term_id -> [Label, …]: was inhaltlich danebenliegt, auch wenn es niemand
+  // zusammen gesagt hat. Kommt fertig aus dem Graphen.
+  let verwandte = new Map();
+  // Die Widersprüche des Tages (kg/widerspruch.py) — kommen im selben Dokument
+  // wie die Knoten und können deshalb nie älter sein als das Netz.
+  let widersprueche = [];
 
-  /** Die Belegstellen eines Begriffs, eine Zeile je Person. */
+  const mehrEl = document.getElementById('blatt-mehr');
+  const titelEl = document.getElementById('blatt-titel');
+
+  /** Ein Abschnitt: eine Marke und darunter, was dazugehoert. */
+  function abschnitt(marke) {
+    const p = document.createElement('p');
+    p.className = 'marke';
+    p.textContent = marke;
+    mehrEl.appendChild(p);
+  }
+
+  /** Eine Zeile: fett der Begriff, darunter eingerueckt die Belegstelle. */
+  function zeile(liste, kopf, unter) {
+    const li = document.createElement('li');
+    const b = document.createElement('b');
+    b.textContent = kopf;
+    li.appendChild(b);
+    if (unter) {
+      const span = document.createElement('span');
+      span.textContent = unter;
+      li.appendChild(span);
+    }
+    liste.appendChild(li);
+  }
+
+  function liste(klasse) {
+    const ul = document.createElement('ul');
+    ul.className = klasse;
+    mehrEl.appendChild(ul);
+    return ul;
+  }
+
+  /** Ein Begriff: wer ihn gesagt hat, mit den eigenen Worten — und was
+   *  inhaltlich danebenliegt.
+   *
+   *  🔴 Der eigentliche Gewinn dieser Flaeche: dieselbe Sache in verschiedenen
+   *  Worten, untereinander. „Entruempeln statt Neubau" heisst bei dem einen
+   *  „lieber im Keller aufraeumen", bei der anderen „die Systeme nutzen, die
+   *  wir schon haben". Das stand hier bisher ohne Ueberschrift und ohne die
+   *  Zahl derer, die es sagten. */
   function zeigeBegriff(begriffId) {
     const eintraege = (belege.get(begriffId) || []).filter((e) => e.evidence);
     if (!eintraege.length) {
@@ -110,23 +189,38 @@
     nameEl.hidden = true;
     zitatEl.hidden = true;
     leerEl.hidden = true;
+    belegeEl.hidden = true;
     belegeEl.replaceChildren();
+    mehrEl.replaceChildren();
+
+    const label = etiketten.get(begriffId) || '';
+    titelEl.textContent = label;
+    titelEl.hidden = label === '';
+
+    abschnitt(
+      eintraege.length === 1 ? 'Einmal gesagt' : `Von ${eintraege.length} Menschen gesagt`,
+    );
+    const ul = liste('stimmen');
     for (const eintrag of eintraege) {
-      const zeile = document.createElement('li');
-      const wer = (namen.get(eintrag.person_id) || '').trim();
-      if (wer) {
-        const marke = document.createElement('span');
-        marke.className = 'beleg-name';
-        marke.textContent = wer;
-        zeile.appendChild(marke);
-      }
-      const was = document.createElement('span');
-      was.className = 'beleg-text';
-      was.textContent = eintrag.evidence;
-      zeile.appendChild(was);
-      belegeEl.appendChild(zeile);
+      zeile(ul, (namen.get(eintrag.person_id) || '').trim() || 'Ohne Namen', eintrag.evidence);
     }
-    belegeEl.hidden = false;
+
+    // Was inhaltlich danebenliegt — auch wenn es niemand zusammen gesagt hat.
+    // Genau die Verbindung, die das Netz nicht ziehen kann: Dort haengt nur
+    // aneinander, was dieselbe Person gesagt hat.
+    const nachbarn = verwandte.get(begriffId) || [];
+    if (nachbarn.length) {
+      abschnitt('Liegt inhaltlich daneben');
+      const reihe = document.createElement('div');
+      reihe.className = 'verwandt';
+      for (const wort of nachbarn) {
+        const span = document.createElement('span');
+        span.className = 'chip';
+        span.textContent = wort;
+        reihe.appendChild(span);
+      }
+      mehrEl.appendChild(reihe);
+    }
     blatt.classList.add('offen');
   }
 
@@ -142,6 +236,8 @@
     }
     belegeEl.hidden = true;
     belegeEl.replaceChildren();
+    mehrEl.replaceChildren();
+    titelEl.hidden = true;
     const portrait = portraits.get(personId);
     bild.hidden = !portrait;
     if (portrait) bild.src = portrait;
@@ -155,10 +251,96 @@
     zitatEl.textContent = zitat || '';
     zitatEl.hidden = !zitat;
     leerEl.hidden = Boolean(zitat);
+
+    // Wovon diese Person sonst noch sprach — mit der Stelle, an der sie es
+    // sagte. Ein Begriff ist eine Verdichtung; was wirklich gesagt wurde,
+    // steht nur hier.
+    const eigene = (jePerson.get(personId) || []).filter((e) => e.evidence);
+    if (eigene.length) {
+      abschnitt('Wovon die Rede war');
+      const ul = liste('begriffe');
+      for (const e of eigene) zeile(ul, etiketten.get(e.term_id) || '', e.evidence);
+    }
+
+    // „Teilt Themen mit": Das macht die Naehe LESBAR, die das Bild nur
+    // andeutet. Wer im Netz nebeneinander steht, tut das genau deswegen —
+    // aber niemand sieht, mit WEM und WORUEBER.
+    const meine = new Set(eigene.map((e) => e.term_id));
+    const zaehler = new Map();
+    const gemeinsam = new Map();
+    for (const tid of meine) {
+      for (const b of belege.get(tid) || []) {
+        if (b.person_id === personId) continue;
+        zaehler.set(b.person_id, (zaehler.get(b.person_id) || 0) + 1);
+        // Nicht `liste` nennen: so heisst die Funktion oben, die ein <ul>
+        // baut — eine Verschattung mitten in einer Schleife ist genau die
+        // Sorte Falle, die spaeter niemand mehr sieht.
+        const bisher = gemeinsam.get(b.person_id) || [];
+        bisher.push(etiketten.get(tid) || '');
+        gemeinsam.set(b.person_id, bisher);
+      }
+    }
+    const nahe = [...zaehler.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    if (nahe.length) {
+      abschnitt('Teilt Themen mit');
+      const ul = liste('nahe');
+      for (const [pid] of nahe) {
+        zeile(ul, (namen.get(pid) || '').trim() || 'Ohne Namen',
+              (gemeinsam.get(pid) || []).join(' · '));
+      }
+    }
     blatt.classList.add('offen');
   }
 
-  document.getElementById('blatt-zu').addEventListener('click', () => zeigePerson(null));
+  /** Die konträren Positionen — dieselbe Gegenüberstellung wie an der Wand,
+   *  auf die Blattbreite gebracht. */
+  function zeigeWidersprueche() {
+    if (!widersprueche.length) return;
+    bild.hidden = true;
+    nameEl.hidden = true;
+    zitatEl.hidden = true;
+    leerEl.hidden = true;
+    belegeEl.hidden = true;
+    belegeEl.replaceChildren();
+    mehrEl.replaceChildren();
+    titelEl.textContent = 'Konträre Positionen';
+    titelEl.hidden = false;
+
+    for (const paar of widersprueche) {
+      abschnitt(paar.titel);
+      // Zwei Seiten UNTEREINANDER und nicht nebeneinander: Am Telefon ist die
+      // Spalte zu schmal für zwei — die Gegenüberstellung trägt hier die
+      // Reihenfolge und die farbige Kante, nicht die Anordnung.
+      const ul = liste('gegen');
+      for (const [seite, klasse] of [[paar.eine, 'eine'], [paar.andere, 'andere']]) {
+        const li = document.createElement('li');
+        li.className = `seite seite-${klasse}`;
+        const b = document.createElement('b');
+        b.textContent = seite.begriff;
+        li.appendChild(b);
+        const span = document.createElement('span');
+        span.textContent = seite.beleg;
+        li.appendChild(span);
+        ul.appendChild(li);
+      }
+    }
+    // Nichts im Netz ist ausgewählt — die Tafel meint den ganzen Tag.
+    graph.hervorheben(null);
+    blatt.classList.add('offen');
+  }
+
+  const reibungKnopf = document.getElementById('reibung');
+  reibungKnopf.addEventListener('click', zeigeWidersprueche);
+
+  document.getElementById('blatt-zu').addEventListener('click', () => {
+    zeigePerson(null);
+    // Sonst bliebe das Netz blass zurueck, ohne dass noch etwas erklaert wird.
+    graph.hervorheben(null);
+    // Und das Bild ginge nicht wieder aufs Ganze — es stuende weiter auf dem
+    // Ausschnitt, der zum eben geschlossenen Blatt gehoerte. 260 ms ist die
+    // Uebergangszeit des Blattes; vorher waere die Flaeche noch die alte.
+    window.setTimeout(graph.einpassen, 260);
+  });
 
   const graph = createMobileGraph(document.getElementById('cy'), {
     aufPerson: zeigePerson,
@@ -166,9 +348,41 @@
   });
   window.kgSpiegel = graph;
 
+  const anordnungKnopf = document.getElementById('anordnung');
+  function knopfNachfuehren() {
+    anordnungKnopf.hidden = !graph.hatBeideLagen();
+    // Der Knopf nennt das ZIEL, nicht den Zustand — wie an der grossen Wand.
+    anordnungKnopf.textContent = graph.semantisch ? 'Gespräche' : 'Bedeutung';
+  }
+  anordnungKnopf.addEventListener('click', () => {
+    graph.setzeAnordnung(!graph.semantisch);
+    knopfNachfuehren();
+  });
+  // 🔴 AM GRAPHEN und nicht nur am Datenweg (2026-09-03): Frueh am Tag gibt es
+  // noch keine Bedeutungslage, spaeter schon — der Knopf muss also mit jedem
+  // hinzukommenden Knoten neu entscheiden, ob es ihn gibt. `add` ist das
+  // Ereignis, das Cytoscape dabei ohnehin feuert; eine Nachfuehrung, die nur
+  // im SSE-Zweig steht, greift bei jedem anderen Weg nicht (gefunden ueber
+  // `test_ohne_bedeutungslage_gibt_es_keinen_knopf`). Dieselbe Loesung wie an
+  // der grossen Wand.
+  graph.cy.on('add remove kg-aktualisiert', knopfNachfuehren);
+  knopfNachfuehren();
+
+
   verbindeSpiegel({
     art: 'graph',
-    alterEl: document.getElementById('alter'),
+    // 🔴 KEINE ALTERSMELDUNG MEHR (Birk, 2026-09-03: „es kommt am anfang noch
+    // die meldung keine verbindung zur station. das kann weg. es soll ja ein
+    // persistierter endstand sein").
+    //
+    // Sie war fuer den laufenden Betrieb gedacht: Wer am Telefon einen Stand
+    // von vor zwanzig Minuten sieht, soll das wissen. Seit die Ausstellung
+    // vorbei ist, ist der Stand nicht veraltet, sondern fertig — und ein
+    // „kein Kontakt zur Station" behauptete einen Fehler, wo keiner ist.
+    //
+    // `null` und nicht das Element: `verbindeSpiegel` prueft darauf und
+    // ueberspringt die Anzeige ganz (mirror.js, `if (!alterEl) return`).
+    alterEl: null,
     aufDaten: (daten) => {
       if (!daten || !Array.isArray(daten.nodes)) return;
       zitate = new Map((daten.quotes || []).map((q) => [q.person_id, q.text]));
@@ -176,12 +390,24 @@
         daten.nodes.filter((n) => n.type === 'person' && n.portrait).map((n) => [n.id, n.portrait]),
       );
       belege = new Map();
+      jePerson = new Map();
       for (const kante of daten.edges || []) {
         if (!kante || !kante.evidence) continue;
         const liste = belege.get(kante.target) || [];
         liste.push({ person_id: kante.source, evidence: kante.evidence });
         belege.set(kante.target, liste);
+        const meine = jePerson.get(kante.source) || [];
+        meine.push({ term_id: kante.target, evidence: kante.evidence });
+        jePerson.set(kante.source, meine);
       }
+      etiketten = new Map(
+        daten.nodes.filter((n) => n.type === 'term').map((n) => [n.id, n.label || '']),
+      );
+      verwandte = new Map(
+        daten.nodes
+          .filter((n) => n.type === 'term' && Array.isArray(n.verwandt) && n.verwandt.length)
+          .map((n) => [n.id, n.verwandt]),
+      );
       namen = new Map(
         daten.nodes
           .filter((n) => n.type === 'person' && (n.name || '').trim())
@@ -193,6 +419,10 @@
       const passend = begriffsZahl(window.innerWidth, window.innerHeight);
       const grenze = Math.min(passend, Math.max(1, Number(daten.max_terms) || passend));
       graph.update(daten, grenze);
+
+      widersprueche = Array.isArray(daten.widersprueche) ? daten.widersprueche : [];
+      reibungKnopf.hidden = widersprueche.length === 0;
+      knopfNachfuehren();
 
       const leer = daten.nodes.length === 0;
       warten.hidden = !leer;
@@ -216,5 +446,18 @@
   // Zahl der Begriffe neu; der Ausschnitt wird sofort wieder auf ein lesbares
   // Mass gebracht, statt bis dahin schief zu stehen.
   window.addEventListener('orientationchange', () => window.setTimeout(graph.ersteAnsicht, 350));
+  // 🔴 Und beim Ziehen des Fensters (Birk, 2026-09-03: Laptop-Ansicht neben
+  // der mobilen). Ueberschreitet die Breite die Schwelle, gelten andere
+  // Zielmasse — Schrift, Portraits, Tafeln. Ohne dieses Nachmessen behielte
+  // das Bild die Masse, mit denen es geladen wurde, und ein am Telefon
+  // geoeffneter, dann aufgezogener Browser bliebe winzig.
+  let letzteBreite = window.innerWidth;
+  window.addEventListener('resize', () => {
+    const jetztBreit = window.innerWidth >= 820;
+    const vorherBreit = letzteBreite >= 820;
+    letzteBreite = window.innerWidth;
+    if (jetztBreit === vorherBreit) return;
+    graph.neuVermessen();
+  });
 </script>
 </html>

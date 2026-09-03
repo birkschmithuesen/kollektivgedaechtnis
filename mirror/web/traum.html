@@ -20,6 +20,13 @@
       <!-- Der Alternativtext wird auf den Traumsatz gesetzt, sobald einer da
            ist (dream.js): das Bild IST der Satz, nur anders. -->
       <img id="bild" alt="" hidden>
+      <!-- Die zweite Ebene für die Überblendung (Birk, 2026-09-02): „die
+           träume sollten als slideshow mit überblendung durchlaufen".
+           Zwei Bilder und nicht eines, weil ein Wechsel von `src` das alte
+           Bild sofort wegnimmt — dazwischen stünde ein Loch, und genau das
+           soll die Blende ja verdecken. Die beiden tauschen bei jedem
+           Wechsel ihre Rollen. -->
+      <img id="bild-blende" alt="" aria-hidden="true" hidden>
     </div>
     <div id="satz"></div>
     <ul id="streifen" aria-label="Die letzten Träume" hidden></ul>

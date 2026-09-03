@@ -405,7 +405,17 @@ def _launch_chromium(playwright):
 
 
 def _open_projection(page, base_url: str, theme: str, migration_ms: int | None = None) -> None:
-    query = f"theme={theme}"
+    # 🔴 `deterministisch=1` (2026-09-02): Die Wand laeuft seit diesem Tag mit
+    # `randomize: true` — Birk hat die neu gewuerfelte Anordnung gesehen und
+    # behalten. Fuer die Wand ist das richtig; fuer diese Aufnahmen waere es
+    # das Ende ihrer Aussage.
+    #
+    # Der Prerender vergleicht Stufen (A-D beim selben Seed) und zwei kalte
+    # Laeufe gegeneinander. Wuerfelt das Layout, vergleicht er zwei
+    # verschiedene Anordnungen und misst die Zufaelligkeit statt der
+    # Aenderung, die er zeigen soll. `test_two_cold_runs_produce_the_same_
+    # placement` und `…same_motion` halten genau das fest.
+    query = f"theme={theme}&deterministisch=1"
     if migration_ms:
         query += f"&migration={migration_ms}"
     page.goto(f"{base_url}/projection?{query}")

@@ -88,6 +88,9 @@ function render(state) {
   document.getElementById('strip-ratio').value = String(state.strip_ratio);
   document.getElementById('strip-max').value = String(state.strip_max);
   document.getElementById('typewriter').checked = Boolean(state.typewriter);
+  // Vorgabe an, nicht aus: Fehlt das Feld (aelterer Kern), soll der Haken
+  // zeigen, was die Wand dann tut — und die blaettert.
+  document.getElementById('slideshow').checked = state.slideshow !== false;
 
   // One button that says what it will DO, not what the state IS — the operator
   // is reaching for it in a hurry.
@@ -254,6 +257,9 @@ document
 document
   .getElementById('typewriter')
   .addEventListener('change', (event) => display({ typewriter: event.target.checked }));
+document
+  .getElementById('slideshow')
+  .addEventListener('change', (event) => display({ slideshow: event.target.checked }));
 
 document.getElementById('dream-now').addEventListener('click', () => post('/api/dream_now'));
 document
